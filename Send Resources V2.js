@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Send Resources New
+// @name         Send Resources V2
 // @namespace    blackcat8438
 // @version      10.2
 // @description  Attempts to automate all the routine tasks in ikariam, like transporting wine
