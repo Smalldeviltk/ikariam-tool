@@ -406,35 +406,64 @@ function main() {
 
   window.enterValue = function (resource, queueObj) {
     setTimeout(function () {
-      if (document.querySelector("#textfield_wine") !== null) {
-        // either pick totalShips/actionPoints or 20, whatever is smaller.
-        // let numberOfShips = Math.min(Math.floor(document.querySelector("#js_GlobalMenu_freeTransporters").innerHTML / Number(document.querySelector("#js_GlobalMenu_maxActionPoints").innerHTML)), 20);
-        let numberOfShips = Number(
-          document.querySelector("#js_GlobalMenu_freeTransporters").innerHTML
-        );
-        if (
-          document.querySelector("#js_GlobalMenu_freeTransporters").innerHTML >=
-          numberOfShips
-        ) {
-          // find the right resource selector slider and set it to 5k, then click the send button
+      let isMerchant = document.querySelector("#textfield_wine") !== null;
+      let isFreighter =
+        document.querySelector("#selectedFreightersInput") !== null;
+
+      if (isMerchant || isFreighter) {
+        let numberOfShips = 0;
+        let capacityPerShip = 0;
+
+        if (isMerchant) {
+          numberOfShips = Number(
+            document.querySelector("#js_GlobalMenu_freeTransporters").innerHTML
+          );
+          capacityPerShip = getPerShipCapacity();
+        } else if (isFreighter) {
+          numberOfShips = Number(
+            document.querySelector("#js_GlobalMenu_freeFreighters").innerHTML
+          );
+          capacityPerShip = getFreighterCapacity();
+
+          // Freighter cần điền số tàu vào input
+          const freighterInput = document.querySelector(
+            "#selectedFreightersInput"
+          );
+          if (freighterInput && numberOfShips > 0) {
+            freighterInput.value = numberOfShips;
+            freighterInput.dispatchEvent(new Event("input", { bubbles: true }));
+            freighterInput.dispatchEvent(
+              new Event("change", { bubbles: true })
+            );
+          }
+        }
+
+        if (numberOfShips > 0) {
           let resourceID = "#textfield_" + resource;
-          // Set how much we send. Pick whatever is smaller of localStorage and what we can send right now.
-          const capacity = getPerShipCapacity() * numberOfShips;
+          const capacity = capacityPerShip * numberOfShips;
+
+          // điền resource
           document.querySelector(resourceID).value = Math.min(
             capacity,
             queueObj.amount
           );
-
           let sentAmount = Math.min(capacity, queueObj.amount);
 
+          // click submit
           setTimeout(function () {
             document.querySelector("#submit").click();
           }, 500);
+
+          // sau khi gửi xong
           finishSendResource(function () {
-            // close window when stuff is sent
-            logInfo("Sent " + sentAmount + " " + resource);
+            logInfo(
+              "Sent " +
+                sentAmount +
+                " " +
+                resource +
+                (isMerchant ? " [Merchant]" : " [Freighter]")
+            );
             queueObj.amount -= sentAmount;
-            // update queue and save Resource JSON
             if (queueObj.amount <= 0) {
               resourcesJson.queue.shift();
             }

@@ -10854,11 +10854,9 @@ window.calibratePerShipCapacity = function () {
 
   let btn = document.createElement("button");
   btn.innerText = "Calibrate Cargo";
-  btn.style.margin = "5px";
-  btn.style.padding = "4px 8px";
-  btn.style.borderRadius = "6px";
-  btn.style.background = "#4caf50";
-  btn.style.color = "#fff";
+  btn.className = "button";
+  btn.style.padding = "2px 10px";
+  btn.style.color = "#542c0f";
   btn.onclick = () => {
     calibratePerShipCapacity();
   };
