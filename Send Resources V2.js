@@ -407,40 +407,36 @@ function main() {
   window.enterValue = function (resource, queueObj) {
     setTimeout(function () {
       let isMerchant = document.querySelector("#textfield_wine") !== null;
-      let isFreighter =
-        document.querySelector("#selectedFreightersInput") !== null;
 
-      if (isMerchant || isFreighter) {
-        let numberOfShips = 0;
-        let capacityPerShip = 0;
+      if (isMerchant) {
+        let numberOfMerchantShips = Number(
+          document.querySelector("#js_GlobalMenu_freeTransporters").innerHTML
+        );
+        let numberOfFreighters = Number(
+          document.querySelector("#js_GlobalMenu_freeFreighters").innerHTML
+        );
 
-        if (isMerchant) {
-          numberOfShips = Number(
-            document.querySelector("#js_GlobalMenu_freeTransporters").innerHTML
-          );
-          capacityPerShip = getPerShipCapacity();
-        } else if (isFreighter) {
-          numberOfShips = Number(
-            document.querySelector("#js_GlobalMenu_freeFreighters").innerHTML
-          );
-          capacityPerShip = getFreighterCapacity();
-
-          // Freighter cần điền số tàu vào input
-          const freighterInput = document.querySelector(
-            "#selectedFreightersInput"
-          );
-          if (freighterInput && numberOfShips > 0) {
-            freighterInput.value = numberOfShips;
-            freighterInput.dispatchEvent(new Event("input", { bubbles: true }));
-            freighterInput.dispatchEvent(
-              new Event("change", { bubbles: true })
-            );
-          }
-        }
-
-        if (numberOfShips > 0) {
+        if (numberOfMerchantShips > 0 || numberOfFreighters > 0) {
           let resourceID = "#textfield_" + resource;
-          const capacity = capacityPerShip * numberOfShips;
+
+          let capacityPerShip = numberOfMerchantShips
+            ? getPerShipCapacity()
+            : getFreighterCapacity();
+          const capacity = numberOfMerchantShips
+            ? capacityPerShip * numberOfMerchantShips
+            : capacityPerShip * numberOfFreighters;
+
+          // check if no merchant is available, use freighters instead
+          if (numberOfMerchantShips <= 0) {
+            setTimeout(function () {
+              const maxFreighterBtn = document.querySelector(
+                "#slider_freighters_max"
+              );
+              if (maxFreighterBtn) {
+                maxFreighterBtn.click(); // để Trading Post tự set số Freighter tối đa
+              }
+            }, 500);
+          }
 
           // điền resource
           document.querySelector(resourceID).value = Math.min(
@@ -623,8 +619,10 @@ function main() {
         startPauseProcess();
         document.querySelector("#js_cityLink > a").click();
       } else if (
-        document.querySelector("#js_GlobalMenu_freeTransporters").innerHTML >
-          0 &&
+        (document.querySelector("#js_GlobalMenu_freeTransporters").innerHTML >
+          0 ||
+          document.querySelector("#js_GlobalMenu_freeFreighters").innerHTML >
+            0) &&
         resourcesJson.isStart === true &&
         resourcesJson.queue &&
         resourcesJson.queue.length > 0
@@ -904,10 +902,24 @@ function main() {
         minShipNeeded += 1;
       }
     }
+    let minFreightersNeeded = 0;
+    for (let i = 0; i < listReceiver.length; i++) {
+      if (Number(listReceiver[i].winePerHour) > 50000) {
+        minFreightersNeeded += 2;
+      } else {
+        minFreightersNeeded += 1;
+      }
+    }
     var availableShips = document.querySelector(
       "#js_GlobalMenu_freeTransporters"
     ).innerHTML;
-    if (availableShips < minShipNeeded) {
+    var availableFreighters = document.querySelector(
+      "#js_GlobalMenu_freeFreighters"
+    ).innerHTML;
+    if (
+      availableShips < minShipNeeded &&
+      availableFreighters < minFreightersNeeded
+    ) {
       alert("Not enough ship!");
       return;
     }
