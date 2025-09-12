@@ -16,8 +16,6 @@
 // @require      http://ajax.googleapis.com/ajax/libs/jqueryui/1.9.1/jquery-ui.min.js
 // @grant        unsafeWindow
 // @license              GPL version 3 or any later version; http://www.gnu.org/copyleft/gpl.html
-// @downloadURL https://update.greasyfork.org/scripts/526258/Send%20Resources.user.js
-// @updateURL https://update.greasyfork.org/scripts/526258/Send%20Resources.meta.js
 // ==/UserScript==
 var resourcesJson = {};
 function main() {
