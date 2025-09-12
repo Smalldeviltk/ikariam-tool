@@ -24,8 +24,6 @@
 // @version              0.4
 //
 // @license              GPL version 3 or any later version; http://www.gnu.org/copyleft/gpl.html
-// @downloadURL https://update.greasyfork.org/scripts/526239/Qu%E1%BA%A3n%20l%C3%BD%20Ika%20Perseus%20-VN-.user.js
-// @updateURL https://update.greasyfork.org/scripts/526239/Qu%E1%BA%A3n%20l%C3%BD%20Ika%20Perseus%20-VN-.meta.js
 // ==/UserScript==
 
 /***********************************************************************************************************************
