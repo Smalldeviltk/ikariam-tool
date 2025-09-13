@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Send Resources V2
 // @namespace    Smalldevil
-// @version      2.0
+// @version      20.0
 // @description  Attempts to automate all the routine tasks in ikariam, like transporting wine
 // @author       Beta
 // @exclude      http://board.*.ikariam.gameforge.com*
