@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Send Resources V2
-// @namespace    blackcat8438
-// @version      10.2
+// @namespace    Smalldevil
+// @version      2.0
 // @description  Attempts to automate all the routine tasks in ikariam, like transporting wine
-// @author       blackcat8438
+// @author       Beta
 // @exclude      http://board.*.ikariam.gameforge.com*
 // @exclude      http://*.ikariam.gameforge.*/board
 // @include	     https://s59-en.ikariam.gameforge.com*
@@ -1621,6 +1621,89 @@ function main() {
     }
   };
 
+  // =======================================================
+  // CALIBRATE PER SHIP CAPACITY (Trading Port / Workshop)
+  // =======================================================
+  window.calibratePerShipCapacity = function () {
+    let perShip = null;
+    let freighterCap = null;
+
+    // --- Cách 1: Trading Port (object transportConfig) ---
+    try {
+      if (typeof transportConfig === "object") {
+        if (transportConfig.maxCapacityPerTransport) {
+          perShip = parseInt(transportConfig.maxCapacityPerTransport, 10);
+        }
+        if (transportConfig.freighterCapacity) {
+          freighterCap = parseInt(transportConfig.freighterCapacity, 10);
+        }
+      }
+    } catch (e) {
+      console.warn("Không lấy được từ transportConfig:", e);
+    }
+
+    // --- Cách 2: Workshop (DOM parse) ---
+    try {
+      const unitBlocks = document.querySelectorAll("div.units.clearboth");
+      unitBlocks.forEach((block) => {
+        // Merchant Ships
+        if (block.querySelector('[title="Merchant Ships"]')) {
+          const desc = block.querySelector(".upgrade_desc");
+          if (desc) {
+            const txt = desc.textContent.trim();
+            const m = txt.match(/\((\d+)\)/);
+            if (m) {
+              const nextLevel = parseInt(m[1], 10);
+              const currentLevel = nextLevel - 1;
+              perShip = 500 + currentLevel * 20;
+            }
+          }
+        }
+        // Freighter
+        if (block.querySelector('[title="Freighter"]')) {
+          const desc = block.querySelector(".upgrade_desc");
+          if (desc) {
+            const txt = desc.textContent.trim();
+            const m = txt.match(/\((\d+)\)/);
+            if (m) {
+              const nextLevel = parseInt(m[1], 10);
+              const currentLevel = nextLevel - 1;
+              freighterCap = 50000 + currentLevel * 500;
+            }
+          }
+        }
+      });
+    } catch (e) {
+      console.warn("Không parse được Workshop DOM:", e);
+    }
+
+    // --- Lưu kết quả ---
+    if (perShip) {
+      localStorage.setItem("ika_perShipCapacity", perShip);
+    }
+    if (freighterCap) {
+      localStorage.setItem("ika_freighterCapacity", freighterCap);
+    }
+
+    if (perShip || freighterCap) {
+      alert(
+        "Đã calibrate!\n" +
+          (perShip ? "Merchant Ship: " + perShip : "") +
+          (freighterCap ? "\nFreighter: " + freighterCap : "")
+      );
+      console.log(
+        "ika_perShipCapacity =",
+        perShip,
+        "ika_freighterCapacity =",
+        freighterCap
+      );
+    } else {
+      alert(
+        "Không lấy được thông tin cargo. Hãy mở Trading Port hoặc Workshop rồi bấm lại."
+      );
+    }
+  };
+
   // Create an observer instance linked to the callback function
   var observer = new MutationObserver(callback);
 
@@ -1681,6 +1764,10 @@ $("#userscript").append(
 );
 $("#userscript").append(
   '<button class="button" onclick="startScanBuilding(0);" id="btnStartScanBuilding">Scan</button>'
+);
+
+$("#userscript").append(
+  '<button class="button" onclick="calibratePerShipCapacity();" id="calibratePerShipCapacity">Calibrate Cargo</button>'
 );
 
 $("#customDiv").append(
