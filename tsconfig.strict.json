@@ -1,0 +1,14 @@
+{
+  "//": "Full strict mode, applied only to the hand-written code. The mechanically ported src/empire-overview/** is checked by the base tsconfig.json instead — see README, 'Type strictness'.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noImplicitThis": true,
+    "useUnknownInCatchVariables": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  },
+  "include": ["src/env.d.ts", "src/core/**/*.ts", "src/send-resources/**/*.ts"]
+}

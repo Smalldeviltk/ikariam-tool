@@ -1,0 +1,33 @@
+{
+  "name": "ikariam-tool",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Userscripts for Ikariam: Empire Overview -VN- + Send Resources",
+  "scripts": {
+    "dev:send": "vite --config build/vite.send-resources.ts",
+    "dev:empire": "vite --config build/vite.empire-overview.ts",
+    "build:userscript": "node build/build.mjs userscript",
+    "build:extension": "node build/build.mjs extension",
+    "build": "node build/build.mjs all",
+    "build:send": "vite build --config build/vite.send-resources.ts",
+    "build:empire": "vite build --config build/vite.empire-overview.ts",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.strict.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write \"src/**/*.ts\" \"build/**/*.ts\""
+  },
+  "devDependencies": {
+    "@types/greasemonkey": "^4.0.7",
+    "@types/jquery": "^3.5.30",
+    "@types/jqueryui": "^1.12.20",
+    "@types/node": "^26.1.2",
+    "happy-dom": "^20.11.1",
+    "jquery": "^2.2.4",
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3",
+    "vite": "^8.1.5",
+    "vite-plugin-monkey": "^8.1.0",
+    "vitest": "^4.1.10"
+  }
+}

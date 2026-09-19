@@ -1,2 +1,19 @@
 .vscode/
 .git/
+*.pem
+*.tmp
+
+node_modules/
+# Build OUTPUT. `build/` next to it is build SOURCE (the Vite
+# configs and the packaging scripts) and is tracked.
+dist/
+sample/
+legacy/
+
+# Live captures from the crawler. They carry the account name, every town
+# and its coordinates, and an `actionRequest` session token lifted out of
+# the page markup. Useful locally, not something to publish.
+tools/output/
+
+So_sanh_2_script_Ikariam.md
+

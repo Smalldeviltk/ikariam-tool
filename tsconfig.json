@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "types": ["vite/client", "jquery", "jqueryui"],
+
+    /* Baseline for the whole repo, including the mechanically ported
+       src/empire-overview/**. The hand-written code is held to full strict mode by
+       tsconfig.strict.json instead — see README, "Type strictness".
+
+       These three stay off only because of the ported legacy code:
+         noImplicitAny    — the original annotated no parameters at all
+         strictNullChecks — querySelector results are used unchecked throughout
+         noImplicitThis   — `X.prototype = { m: function () { this.y } }` is
+                            used everywhere and TS cannot infer `this` there */
+    "strict": true,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "noImplicitThis": false,
+    "useUnknownInCatchVariables": true,
+
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+
+    "paths": {
+      "@core/*": ["./src/core/*"],
+      "@send/*": ["./src/send-resources/*"],
+      "@empire/*": ["./src/empire-overview/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "build/**/*.ts"],
+  "exclude": ["node_modules", "dist", "sample"]
+}
