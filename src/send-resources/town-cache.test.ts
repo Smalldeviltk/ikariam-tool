@@ -19,15 +19,25 @@ function mockModel(wine: number, wineSpendings: number): void {
   };
 }
 
+/**
+ * A city view with buildings but no Wine Press.
+ *
+ * `modelWineConsumption` refuses to answer without the building slots, because
+ * off the city view it cannot tell "no press" from "cannot see the press" and
+ * would otherwise cache the tavern's gross draw.
+ */
+const CITY_VIEW =
+  `<div id="position18" class="position18 building carpentering level50"></div>`;
+
 beforeEach(() => {
   localStorage.clear();
-  document.body.innerHTML = "";
+  document.body.innerHTML = CITY_VIEW;
   delete (window as any).ikariam;
 });
 
 describe("recordCurrentTown", () => {
   it("snapshots the town on screen from ikariam.model", () => {
-    document.body.innerHTML = `<div id="js_cityBread">W-Athens</div>`;
+    document.body.innerHTML = CITY_VIEW + `<div id="js_cityBread">W-Athens</div>`;
     mockModel(32495, 525);
 
     const entry = recordCurrentTown(store);
@@ -39,7 +49,7 @@ describe("recordCurrentTown", () => {
   });
 
   it("normalises a negative wineSpendings to a positive drain", () => {
-    document.body.innerHTML = `<div id="js_cityBread">W-Athens</div>`;
+    document.body.innerHTML = CITY_VIEW + `<div id="js_cityBread">W-Athens</div>`;
     mockModel(1000, -350);
     expect(recordCurrentTown(store)?.consume).toBe(350);
   });
@@ -47,13 +57,13 @@ describe("recordCurrentTown", () => {
   it("records a town that consumes nothing", () => {
     // 0 is a legitimate value (no tavern), so the guard must test for null
     // rather than falsiness or the town would never be recorded.
-    document.body.innerHTML = `<div id="js_cityBread">W-Athens</div>`;
+    document.body.innerHTML = CITY_VIEW + `<div id="js_cityBread">W-Athens</div>`;
     mockModel(0, 0);
     expect(recordCurrentTown(store)).toMatchObject({ stock: 0, consume: 0 });
   });
 
   it("records nothing when the model is unavailable", () => {
-    document.body.innerHTML = `<div id="js_cityBread">W-Athens</div>`;
+    document.body.innerHTML = CITY_VIEW + `<div id="js_cityBread">W-Athens</div>`;
     expect(recordCurrentTown(store)).toBeNull();
     expect(loadTownStats(store)).toEqual({});
   });
@@ -64,7 +74,7 @@ describe("recordCurrentTown", () => {
   });
 
   it("overwrites the previous snapshot for the same town", () => {
-    document.body.innerHTML = `<div id="js_cityBread">W-Athens</div>`;
+    document.body.innerHTML = CITY_VIEW + `<div id="js_cityBread">W-Athens</div>`;
     mockModel(1000, 100);
     recordCurrentTown(store);
     mockModel(2000, 100);
@@ -149,7 +159,7 @@ describe("name and figures come from one source", () => {
     () => {
       // The breadcrumb still shows the previous town while the model has
       // already moved on — exactly what a view swap looks like in flight.
-      document.body.innerHTML = `<div id="js_cityBread">STALE-Corinth</div>`;
+      document.body.innerHTML = CITY_VIEW + `<div id="js_cityBread">STALE-Corinth</div>`;
       (window as any).ikariam = {
         model: {
           currentResources: { wine: 5000 },
@@ -170,7 +180,7 @@ describe("name and figures come from one source", () => {
   );
 
   it("falls back to the breadcrumb when the model has no name", () => {
-    document.body.innerHTML = `<div id="js_cityBread">W-Athens</div>`;
+    document.body.innerHTML = CITY_VIEW + `<div id="js_cityBread">W-Athens</div>`;
     mockModel(1234, 100);
     expect(recordCurrentTown(store)?.stock).toBe(1234);
     expect(loadTownStats(store)["W-Athens"]).toBeTruthy();

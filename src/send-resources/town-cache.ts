@@ -82,9 +82,13 @@ export function recordCurrentTown(store: Store): TownStats | null {
  * did. Projecting keeps a slightly old reading useful instead of discarding it;
  * the result is clamped at zero because a town cannot hold negative wine.
  *
- * Production is deliberately NOT modelled: the game's `wineSpendings` is the net
+ * Production is deliberately NOT modelled: `modelWineConsumption` is the net
  * drain for a consuming town, and wine-producing towns are the sources rather
  * than the receivers, so the projection is only ever applied where it holds.
+ *
+ * That used to say the game's `wineSpendings` was the net drain. It is not —
+ * it is the tavern's gross draw, before the Wine Press. `modelWineConsumption`
+ * now subtracts the press; see its own note for the measurement.
  */
 export function projectedStats(
   store: Store,

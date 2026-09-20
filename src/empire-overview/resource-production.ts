@@ -5,6 +5,7 @@
  * the type annotations are new. Fixes to genuine bugs found during the port are
  * marked inline with a comment explaining the original behaviour.
  */
+import { modelWineConsumption } from "@core/ikariam/model";
 import $ from "./jquery";
 import { Utils } from "./utils";
 import { ikariam } from "./game-api";
@@ -42,16 +43,27 @@ export const ResourceProduction: any = new (function () {
       this.createSpan(newTradegood);
     }
   };
+  /**
+   * FIX (not in the original): the original printed
+   * `model.wineSpendings` straight out, which is the tavern's GROSS draw
+   * before the Wine Press. On a town with a level 40 press the span read -933
+   * while the town actually spent 560. `modelWineConsumption` subtracts the
+   * press; see its note for the measurement. The raw figure is still the
+   * fallback, so a page where the press cannot be read behaves as before.
+   */
+  function wineDrain() {
+    var net = modelWineConsumption();
+    return net === null ? unsafeWindow.ikariam.model.wineSpendings : net;
+  }
   this.updateProd = function () {
     addProd(0, unsafeWindow.ikariam.model.resourceProduction * 3600);
     if (unsafeWindow.ikariam.model.cityProducesWine) {
       addProd(
         1,
-        unsafeWindow.ikariam.model.tradegoodProduction * 3600 -
-          unsafeWindow.ikariam.model.wineSpendings,
+        unsafeWindow.ikariam.model.tradegoodProduction * 3600 - wineDrain(),
       );
     } else {
-      addProd(1, -unsafeWindow.ikariam.model.wineSpendings);
+      addProd(1, -wineDrain());
       addProd(
         unsafeWindow.ikariam.model.producedTradegood,
         unsafeWindow.ikariam.model.tradegoodProduction * 3600,
