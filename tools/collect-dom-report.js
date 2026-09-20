@@ -37,6 +37,11 @@
  *   ikaStop()     stop watching this page
  *   ikaReports    the captures so far
  *
+ *   ikaTestAjaxFetch()   ask the game for a town's data over ajax instead of
+ *                        navigating, and dump the response shape. Defaults to
+ *                        the town you are already in, so nothing changes.
+ *                        Pass a city id to test switching as well.
+ *
  *   ikaTestTownSwitch()  click a town in the dropdown to confirm that doing so
  *                        actually switches town (the one command that acts).
  *                        Navigation wipes the console, so paste this file again
@@ -383,6 +388,16 @@
       ajaxTrace = [{ error: String(e && e.message) }];
     }
 
+    /* ── Results of ikaTestAjaxFetch(), if it has been run ──────────────── */
+    let ajaxProbe = [];
+    try {
+      const raw = localStorage.getItem("ikaAjaxProbe");
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) ajaxProbe = parsed;
+    } catch (e) {
+      ajaxProbe = [{ error: String(e && e.message) }];
+    }
+
     /* ── localStorage keys the scripts own ───────────────────────────────── */
     const interesting =
       /resource|listSender|listReceiver|listAccount|listAutoBuild|ikaGlobalTaskQueue|ika_perShipCapacity|ika_freighterCapacity|isAutoBuildStart|isAutoReload|isSendResourceHidden|reloadedMinute|loggerInfo|\*\*\*/;
@@ -413,6 +428,7 @@
       modelState,
       empireStore,
       ajaxTrace,
+      ajaxProbe,
       storageKeys,
     };
 
@@ -579,6 +595,193 @@
     );
     return json;
   }
+
+  /* ── AJAX endpoint probe ─────────────────────────────────────────────────
+   * Step 1.1 of docs/improvement-plan.md, and the gate on the rest of it.
+   *
+   * IkaEasy loads a town's data without navigating, by asking the game
+   * directly (js/data/city.js:52):
+   *
+   *   GET /?view=townHall&cityId=<id>&position=0&backgroundView=city
+   *       &currentCityId=<id>&actionRequest=<token>&ajax=1
+   *
+   * Doing the same here would replace a 21-second town-by-town walk with a
+   * handful of requests. Before any of that is written the response has to be
+   * SEEN rather than assumed — guessing at things invisible from outside the
+   * page is what cost four rounds on the last bug.
+   *
+   * SAFETY, by design:
+   *   - Hand-invoked only. Never called from watch mode.
+   *   - Exactly ONE request per call. No loop, no retry.
+   *   - Defaults to the town you are already in, so nothing changes
+   *     server-side. Pass another id only to test the switch; it says so first.
+   *   - The response is NOT applied to the page. This observes the mechanism;
+   *     it does not drive the game.
+   */
+  const AJAX_PROBE_KEY = "ikaAjaxProbe";
+
+  /** The per-session token the game requires on every ajax request. */
+  function currentActionRequest() {
+    const model = window.ikariam && window.ikariam.model;
+    return (model && model.actionRequest) || null;
+  }
+
+  /** The city currently selected, read from the game's own model. */
+  function currentCityId() {
+    const model = window.ikariam && window.ikariam.model;
+    const related = model && model.relatedCityData;
+    const selected = related && related.selectedCity;
+    if (selected && related[selected]) {
+      return parseInt(related[selected].id, 10) || null;
+    }
+    return null;
+  }
+
+  /** Summarise one response entry without dumping the whole payload. */
+  function describeAjaxEntry(entry) {
+    if (!Array.isArray(entry)) return { raw: String(entry).slice(0, 60) };
+    const payload = entry[1];
+    const background = payload && payload.backgroundData;
+    const id =
+      payload &&
+      (payload.id != null ? payload.id : background && background.id);
+    return {
+      type: String(entry[0]),
+      hasPayload: payload != null,
+      // The position array is the building layout - the point of the exercise.
+      hasPosition: !!(
+        payload &&
+        (payload.position || (background && background.position))
+      ),
+      cityId: id == null ? null : id,
+      payloadKeys:
+        payload && typeof payload === "object" && !Array.isArray(payload)
+          ? Object.keys(payload).slice(0, 15)
+          : null,
+      backgroundKeys:
+        background && typeof background === "object"
+          ? Object.keys(background).slice(0, 30)
+          : null,
+      // Does the FETCHED town carry its own wine figures, or would they be
+      // inherited from whatever town the page is actually showing? The
+      // response handler deep-merges dataSetForView underneath this payload,
+      // so a missing field here means the current town's number leaks into
+      // every town the scan touches.
+      wineSpendings: (function () {
+        if (payload && payload.wineSpendings !== undefined)
+          return { from: "payload", value: payload.wineSpendings };
+        if (background && background.wineSpendings !== undefined)
+          return { from: "backgroundData", value: background.wineSpendings };
+        return { from: null, value: null };
+      })(),
+      // For comparison: what the page currently believes it is spending.
+      pageWineSpendings: (function () {
+        try {
+          return window.ikariam.model.wineSpendings;
+        } catch (e) {
+          return null;
+        }
+      })(),
+    };
+  }
+
+  window.ikaTestAjaxFetch = async (cityId) => {
+    const actionRequest = currentActionRequest();
+    const here = currentCityId();
+
+    if (!actionRequest) {
+      say("log", "No actionRequest in ikariam.model - open a town view first.");
+      return;
+    }
+    if (!here) {
+      say("log", "Could not read the current city id from ikariam.model.");
+      return;
+    }
+
+    const target = typeof cityId === "number" ? cityId : here;
+    if (target !== here) {
+      say(
+        "log",
+        "NOTE: " +
+          target +
+          " is not the town you are in (" +
+          here +
+          "). " +
+          "This request selects it server-side, exactly as clicking would.",
+      );
+    }
+
+    const params = new URLSearchParams({
+      view: "townHall",
+      cityId: String(target),
+      position: "0",
+      backgroundView: "city",
+      currentCityId: String(target),
+      actionRequest: actionRequest,
+      ajax: "1",
+    });
+    const url = "/index.php?" + params.toString();
+
+    const startedAt = Date.now();
+    const result = {
+      at: new Date().toISOString(),
+      requestedCityId: target,
+      wasCurrentCity: target === here,
+      // The token is per-session; keep it out of anything that gets pasted.
+      url: url.replace(actionRequest, "<actionRequest>"),
+    };
+
+    try {
+      const response = await fetch(url, { credentials: "same-origin" });
+      result.httpStatus = response.status;
+      result.contentType = response.headers.get("content-type");
+
+      const text = await response.text();
+      result.bodyLength = text.length;
+
+      let parsed;
+      try {
+        parsed = JSON.parse(text);
+      } catch (e) {
+        result.parseError = String(e && e.message);
+        result.bodyHead = text.slice(0, 300);
+      }
+
+      if (parsed !== undefined) {
+        result.isArray = Array.isArray(parsed);
+        result.entryCount = Array.isArray(parsed) ? parsed.length : null;
+        result.entries = Array.isArray(parsed)
+          ? parsed.map(describeAjaxEntry)
+          : null;
+        // Does a fresh token come back? If it does, every caller has to re-read
+        // it or the NEXT request silently does nothing.
+        result.actionRequestRotated = currentActionRequest() !== actionRequest;
+      }
+    } catch (e) {
+      result.error = String(e && e.message);
+    }
+
+    result.elapsedMs = Date.now() - startedAt;
+
+    try {
+      const stored = JSON.parse(localStorage.getItem(AJAX_PROBE_KEY) || "[]");
+      const list = Array.isArray(stored) ? stored : [];
+      list.push(result);
+      while (list.length > 5) list.shift();
+      localStorage.setItem(AJAX_PROBE_KEY, JSON.stringify(list));
+    } catch (e) {
+      /* storage full or blocked; the copy on window still stands */
+    }
+
+    window.ikaAjaxProbe = result;
+    say(
+      "log",
+      "AJAX probe finished in " +
+        result.elapsedMs +
+        "ms - see ikaAjaxProbe, then ikaDump()",
+    );
+    return result;
+  };
 
   /* ── Town-switch probe ───────────────────────────────────────────────────
    * The ONLY part of this file that changes anything: it clicks a town in the
@@ -749,6 +952,13 @@
 
   printChecklist();
   say("log", "Watching. When done: ikaDump()   (ikaStop() to stop early)");
+  if (!first.ajaxProbe.length) {
+    say(
+      "log",
+      "AJAX endpoint not probed yet. Run ikaTestAjaxFetch() on a town view - " +
+        "one request, to the town you are already in.",
+    );
+  }
   if (!switchTest) {
     say(
       "log",

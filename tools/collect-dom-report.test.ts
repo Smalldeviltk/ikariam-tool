@@ -387,3 +387,136 @@ describe("ikariam.model probe", () => {
     (window as any).ikaStop?.();
   });
 });
+
+describe("AJAX endpoint probe", () => {
+  /** `ikariam.model` as the live page shapes it. */
+  function installModel(currentId = 297034) {
+    (window as any).ikariam = {
+      model: {
+        actionRequest: "5e6cc2784134cdbd3e916598189ea410",
+        relatedCityData: {
+          selectedCity: `city_${currentId}`,
+          [`city_${currentId}`]: { id: currentId, name: "W-Athens" },
+          city_297035: { id: 297035, name: "M-Corinth" },
+        },
+      },
+    };
+  }
+
+  /** One townHall response, shaped like the ones in the captured ajax trace. */
+  const RESPONSE = [
+    ["updateGlobalData", { backgroundData: { id: 297034, position: [] } }],
+    ["changeView", ["city", "<div></div>"]],
+    ["updateBacklink", null],
+  ];
+
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    installModel();
+    fetchMock = vi.fn(async () => ({
+      status: 200,
+      headers: { get: () => "application/json" },
+      text: async () => JSON.stringify(RESPONSE),
+    }));
+    (globalThis as any).fetch = fetchMock;
+  });
+
+  it("fires exactly one request, to the town you are already in", async () => {
+    run();
+    const result = await (window as any).ikaTestAjaxFetch();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain("view=townHall");
+    expect(url).toContain("cityId=297034");
+    expect(url).toContain("currentCityId=297034");
+    expect(url).toContain("ajax=1");
+    expect(result.wasCurrentCity).toBe(true);
+    (window as any).ikaStop?.();
+  });
+
+  it("keeps the session token out of the stored result", async () => {
+    run();
+    const result = await (window as any).ikaTestAjaxFetch();
+
+    // The URL is what gets pasted back to me; the token must not ride along.
+    expect(result.url).not.toContain("5e6cc278");
+    expect(result.url).toContain("<actionRequest>");
+    (window as any).ikaStop?.();
+  });
+
+  it("summarises the response instead of dumping it", async () => {
+    run();
+    const result = await (window as any).ikaTestAjaxFetch();
+
+    expect(result.isArray).toBe(true);
+    expect(result.entryCount).toBe(3);
+    expect(result.entries[0]).toMatchObject({
+      type: "updateGlobalData",
+      hasPayload: true,
+      hasPosition: true,
+      cityId: 297034,
+    });
+    // An entry with no payload is the shape that broke the board before.
+    expect(result.entries[2]).toMatchObject({
+      type: "updateBacklink",
+      hasPayload: false,
+      hasPosition: false,
+    });
+    (window as any).ikaStop?.();
+  });
+
+  it("says so when asked for a town other than the current one", async () => {
+    run();
+    const result = await (window as any).ikaTestAjaxFetch(297035);
+
+    expect(result.wasCurrentCity).toBe(false);
+    expect(String(fetchMock.mock.calls[0][0])).toContain("cityId=297035");
+    (window as any).ikaStop?.();
+  });
+
+  it("refuses to run without a token rather than sending a broken request", async () => {
+    delete (window as any).ikariam;
+    run();
+    await (window as any).ikaTestAjaxFetch();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    (window as any).ikaStop?.();
+  });
+
+  it("records a failure instead of throwing", async () => {
+    (globalThis as any).fetch = vi.fn(async () => {
+      throw new Error("NetworkError");
+    });
+    run();
+    const result = await (window as any).ikaTestAjaxFetch();
+
+    expect(result.error).toContain("NetworkError");
+    (window as any).ikaStop?.();
+  });
+
+  it("the result reaches the next capture, so ikaDump() carries it", async () => {
+    run();
+    await (window as any).ikaTestAjaxFetch();
+    (window as any).ikaStop?.();
+
+    const report = run();
+    expect(report.ajaxProbe).toHaveLength(1);
+    expect(report.ajaxProbe[0].requestedCityId).toBe(297034);
+    (window as any).ikaStop?.();
+  });
+
+  it("never runs on its own — watch mode must not touch it", async () => {
+    vi.useFakeTimers();
+    try {
+      run();
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      (window as any).ikaStop?.();
+      vi.useRealTimers();
+    }
+  });
+});
