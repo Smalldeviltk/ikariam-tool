@@ -24,6 +24,7 @@ import $ from "./jquery";
 // `database.Init()` calls `$.mergeValues` while loading settings.
 import "./jquery-ext";
 import { reportBug } from "@core/bug-report";
+import { onResponse as onIkariamResponse } from "@core/ikariam/http";
 import { installEmpireDiagnostics } from "./diagnostics";
 import { Constant } from "./constants";
 import { Utils } from "./utils";
@@ -69,6 +70,20 @@ if (debug) {
     },
   };
 }
+
+/**
+ * Feed responses fetched by `core/ikariam/http` into the same subscriber the
+ * live ajax hook feeds.
+ *
+ * Without this, a town loaded over http would update nothing: the board
+ * records from `events("ajaxResponse")`, and that is published by the hook
+ * around the game's own `executeAjaxRequest`, which a plain fetch does not go
+ * through. Registering here means a fetched town and a clicked one arrive by
+ * the same path and are indistinguishable downstream.
+ */
+onIkariamResponse((entries) => {
+  events("ajaxResponse").pub(entries);
+});
 
 // Installed before Init so a throw during startup is still recorded.
 installEmpireDiagnostics(__PACKAGING__, __SCRIPT_VERSION__);

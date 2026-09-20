@@ -126,6 +126,14 @@ function setReadyState(value: "loading" | "complete"): void {
   });
 }
 
+/** Evaluate the entry point, then release the DOM-ready handlers. */
+async function boot(): Promise<void> {
+  await import("./main");
+  setReadyState("complete");
+  document.dispatchEvent(new Event("DOMContentLoaded"));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 describe("Empire Overview startup", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -139,14 +147,6 @@ describe("Empire Overview startup", () => {
   afterEach(() => {
     document.body.innerHTML = "";
   });
-
-  /** Evaluate the entry point, then release the DOM-ready handlers. */
-  async function boot(): Promise<void> {
-    await import("./main");
-    setReadyState("complete");
-    document.dispatchEvent(new Event("DOMContentLoaded"));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
 
   it(
     "REGRESSION: boots without throwing and injects the side-panel button " +
@@ -231,4 +231,62 @@ describe("Empire Overview startup", () => {
     const reports = raw ? JSON.parse(raw) : [];
     expect(reports).toEqual([]);
   });
+});
+
+describe("responses fetched over http", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    localStorage.clear();
+    setReadyState("loading");
+    installPage();
+    installJQuery();
+    installGrants();
+  });
+
+  it(
+    "reach the board recorder even though the fetch happens in the other " +
+      "script's bundle - the board records from the ajaxResponse event, which " +
+      "the game's own ajax hook publishes, and a plain fetch does not go " +
+      "through that hook",
+    async () => {
+      await boot();
+
+      const { events } = await import("./events");
+
+      // Send Resources is a SEPARATE BUNDLE with its own copy of the http
+      // module, and it is the only thing that calls `fetchTown`. Resetting the
+      // registry here reproduces that: without it this test shared one module
+      // instance between subscriber and caller, passed, and said nothing about
+      // the shipped code — where the two copies never met and a scan updated
+      // nothing.
+      vi.resetModules();
+      const { fetchTown, resetHttpState } = await import("@core/ikariam/http");
+      resetHttpState();
+
+      const seen: unknown[] = [];
+      events("updateCityData").sub((cityId: unknown) => seen.push(cityId));
+
+      // Shaped like the response the live probe returned.
+      (globalThis as any).fetch = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        headers: { get: () => "text/html; charset=UTF-8" },
+        text: async () =>
+          JSON.stringify([
+            [
+              "updateGlobalData",
+              {
+                actionRequest: "x",
+                headerData: {},
+                backgroundData: { id: 297034, position: [] },
+              },
+            ],
+          ]),
+      }));
+
+      await fetchTown(297034);
+
+      expect(seen).toContain(297034);
+    },
+  );
 });

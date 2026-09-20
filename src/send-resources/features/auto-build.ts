@@ -37,6 +37,7 @@ import {
   saveAutoBuild,
 } from "../state";
 import { recordCurrentTown } from "../town-cache";
+import { ownTownIds, syncAllTowns } from "./sync-towns";
 import type { AutoBuildAccount, AutoBuildTown } from "../types";
 
 /** How long to wait for the upgrade button before assuming it will not appear. */
@@ -327,6 +328,30 @@ export async function scanBuildings(
         "Stop it first, then scan.",
     );
     return;
+  }
+
+  // Ask the game for every town instead of walking to each one, when the
+  // model is readable. Measured: 2367 ms per town walking, 328-841 ms per
+  // request. The walk stays as the fallback, because it needs nothing but
+  // the page.
+  if (ownTownIds().length > 0) {
+    scanning = true;
+    try {
+      const result = await syncAllTowns();
+      const summary =
+        `Sync finished: ${result.synced}/${result.synced + result.failed.length} ` +
+        `towns in ${(result.elapsedMs / 1000).toFixed(1)}s` +
+        (result.failed.length ? `, failed: ${result.failed.join(", ")}` : "");
+      logInfo(summary);
+      alert(summary);
+      return;
+    } catch (e) {
+      logInfo(
+        `Sync failed, falling back to walking the towns - ${(e as Error)?.message ?? e}`,
+      );
+    } finally {
+      scanning = false;
+    }
   }
 
   scanning = true;

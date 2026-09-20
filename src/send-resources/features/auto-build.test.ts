@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { initState } from "../state";
 import { handleUpgradeBuilding, scanBuildings } from "./auto-build";
+import { resetHttpState } from "@core/ikariam/http";
 import type { Task } from "@core/task-queue";
 
 vi.mock("@core/logger", () => ({
@@ -180,4 +181,93 @@ describe("scanBuildings", () => {
     },
     30_000,
   );
+});
+
+describe("scanBuildings: the fast path", () => {
+  const TOWN_IDS = [297034, 297035];
+
+  beforeEach(() => {
+    localStorage.clear();
+    initState("tester");
+    // The file-level beforeEach installs fake timers. The fast path waits
+    // out a real throttle between requests, so it needs real ones.
+    vi.useRealTimers();
+    resetHttpState();
+    (window as any).alert = vi.fn();
+    document.body.innerHTML =
+      `<div id="js_cityBread">W-Athens</div>` +
+      `<div id="dropDown_js_citySelectContainer"><div class="bg"><ul>` +
+      `<li><a title="W-Athens"> W-Athens</a></li>` +
+      `<li><a title="M-Corinth"> M-Corinth</a></li>` +
+      `</ul></div></div>` +
+      `<div id="js_cityLink"><a></a></div>`;
+  });
+
+  function installModel() {
+    const related: Record<string, unknown> = { selectedCity: "city_297034" };
+    for (const id of TOWN_IDS) {
+      related[`city_${id}`] = { id, name: `T${id}`, relationship: "ownCity" };
+    }
+    (window as any).ikariam = {
+      model: { actionRequest: "token", relatedCityData: related },
+    };
+  }
+
+  it(
+    "asks the game for every town rather than walking to each — 2367 ms per " +
+      "town walking against 328-841 ms per request, measured on the live game",
+    async () => {
+      installModel();
+      const fetchMock = vi.fn(async (url: string) => ({
+        ok: true,
+        status: 200,
+        headers: { get: () => "text/html" },
+        text: async () =>
+          JSON.stringify([
+            [
+              "updateGlobalData",
+              {
+                backgroundData: {
+                  id: Number(
+                    new URL(url, "https://x").searchParams.get("cityId"),
+                  ),
+                  position: [],
+                },
+              },
+            ],
+          ]),
+      }));
+      (globalThis as any).fetch = fetchMock;
+
+      // No clicking: the dropdown anchors carry no handlers in this fixture,
+      // so the walking path could not have produced this result.
+      await scanBuildings();
+
+      expect(fetchMock).toHaveBeenCalledTimes(TOWN_IDS.length);
+      expect(String((window as any).alert.mock.calls.at(-1)[0])).toContain(
+        "Sync finished: 2/2",
+      );
+    },
+    20_000,
+  );
+
+  it("falls back to walking when the model is not readable", async () => {
+    delete (window as any).ikariam;
+    const fetchMock = vi.fn();
+    (globalThis as any).fetch = fetchMock;
+
+    vi.useFakeTimers();
+    try {
+      const done = scanBuildings();
+      await vi.advanceTimersByTimeAsync(120_000);
+      await done;
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(String((window as any).alert.mock.calls.at(-1)[0])).toContain(
+      "Scan finished",
+    );
+  }, 30_000);
 });
