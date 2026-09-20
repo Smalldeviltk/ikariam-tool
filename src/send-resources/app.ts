@@ -64,6 +64,10 @@ import {
 } from "./features/summary-account";
 import { startBarbarianObserver } from "./features/barbarian";
 import {
+  applyTransportStep,
+  startTransportButtonObserver,
+} from "./features/transport-buttons";
+import {
   clearBugs,
   exportBugReport,
   getBugs,
@@ -94,6 +98,7 @@ import {
   togglePanel,
   toggleZoom,
 } from "./ui/panel";
+import { refreshQueueView } from "./ui/queue-view";
 
 /** Queue poll interval in ms. The original used 1000 for the shipping loop. */
 const QUEUE_INTERVAL_MS = 1000;
@@ -129,16 +134,38 @@ function isUiReady(): boolean {
   return true;
 }
 
+/**
+ * Start or stop the shared runner so it matches the two automation switches.
+ *
+ * There is one queue, one runner and one interval, but TWO buttons that turn
+ * automation on: Transport's Start Timer and Build's Start Timer. Each used to
+ * drive the runner directly, which made them fight:
+ *
+ *   - Transport's Stop called `runner.stop()` unconditionally, silently
+ *     halting a running Auto Build while its button still read "Stop Timer".
+ *   - Build's Stop never called `runner.stop()` at all, so queued upgrades
+ *     carried on executing after the button said they had stopped.
+ *   - Build's Start called `runner.start()`, which also began working through
+ *     queued shipments while Transport's button still read "Start Timer".
+ *
+ * So the runner's state is derived here instead of poked from either handler:
+ * it runs while either switch is on, and each button only owns its own flag.
+ * That is the rule the startup path already used (`autoStart || autoBuildStart`),
+ * now applied to the toggles as well.
+ */
+function syncRunnerToFlags(): void {
+  const wanted = isAutoStart() || isFlagTrue(FLAG.isAutoBuildStart);
+  if (wanted && !runner.isRunning) runner.start();
+  else if (!wanted && runner.isRunning) runner.stop();
+}
+
 function toggleQueueRunner(): void {
-  if (runner.isRunning) {
-    runner.stop();
-    setAutoStart(false);
-    setQueueButtonLabel(false);
-  } else {
-    runner.start();
-    setAutoStart(true);
-    setQueueButtonLabel(true);
-  }
+  // Read the flag, not `runner.isRunning` — the runner may well be up for Auto
+  // Build's sake while this switch is off.
+  const running = isAutoStart();
+  setAutoStart(!running);
+  setQueueButtonLabel(!running);
+  syncRunnerToFlags();
 }
 
 function registerUiActions(): void {
@@ -246,13 +273,52 @@ function registerUiActions(): void {
       const running = isFlagTrue(FLAG.isAutoBuildStart);
       setFlag(FLAG.isAutoBuildStart, !running);
       setAutoBuildButtonLabel(!running);
-      if (!running) {
-        enqueueAutoBuild();
-        runner.start();
-      }
+      // Stopping has to take the upgrades back out of the queue as well. The
+      // queue is shared, so leaving them there means Transport's timer carries
+      // on building after the Build button says it stopped. Nothing is lost:
+      // `enqueueAutoBuild` rebuilds them from the saved build list, which is
+      // exactly what it does on the way back in (it clears them first too).
+      if (running) getState().queue.removeType("upgradeBuilding");
+      else enqueueAutoBuild();
+      syncRunnerToFlags();
+      refreshQueueView();
     },
     // The runner navigates too, so the scan needs to know whether it is live.
     "build.scan": () => void scanBuildings(undefined, () => runner.isRunning),
+
+    /* ── Quick amounts on the game's shipment form ── */
+    "transport.add": (element) => {
+      const { ikaResource, ikaShips, ikaKind, ikaSet } = element.dataset;
+      if (!ikaResource) return;
+      applyTransportStep(
+        ikaResource,
+        Number(ikaShips) || 0,
+        ikaKind === "freighter" ? "freighter" : "merchant",
+        ikaSet === "1",
+      );
+    },
+
+    /* ── Queue ── */
+    "queue.remove": (element) => {
+      const id = element.dataset.ikaTask;
+      if (!id) return;
+      getState().queue.removeById(id);
+      refreshQueueView();
+    },
+    "queue.moveToBack": (element) => {
+      const id = element.dataset.ikaTask;
+      if (!id) return;
+      getState().queue.moveToBack(id);
+      refreshQueueView();
+    },
+    "queue.clear": () => {
+      const pending = getState().queue.length;
+      if (pending === 0) return;
+      // Losing a queue by a stray click is worth one confirmation.
+      if (!confirm(`Remove all ${pending} queued task(s)?`)) return;
+      getState().queue.clear();
+      refreshQueueView();
+    },
 
     /* ── Multi-account summary ── */
     "account.update": updateCurrentAccount,
@@ -363,6 +429,7 @@ export function start(): void {
   registerUiActions();
   registerHotkeys();
   startBarbarianObserver();
+  startTransportButtonObserver();
 
   const moved = migrateLegacyQueues();
   if (moved > 0) {
@@ -411,5 +478,5 @@ export function start(): void {
   setAutoBuildButtonLabel(autoBuildStart);
 
   if (autoBuildStart) enqueueAutoBuild();
-  if (autoStart || autoBuildStart) runner.start();
+  syncRunnerToFlags();
 }

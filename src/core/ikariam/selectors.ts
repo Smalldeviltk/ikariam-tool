@@ -33,6 +33,14 @@ export const SEL = {
   position: (n: number) => `#position${n}`,
   cityPositionLink: (n: number) => `#js_CityPosition${n}Link`,
   buildings: "div[id^='position'].building:not(.buildingGround)",
+  /**
+   * The Wine Press. Ikariam's internal name for it is "vineyard".
+   *
+   * Matched by class, not by slot: the position differs from town to town —
+   * one capture has it at `position19`, another at `position20`. Both read
+   * `building vineyard level40` with the tooltip "Wine Press (40)".
+   */
+  winePress: "div[id^='position'].building.vineyard",
   buildingHover: ".hoverable",
   constructionSite: ".constructionSite",
   safehouse: "div.building.safehouse > a",
@@ -70,6 +78,16 @@ export const SEL = {
   /** Finance cells on the Resource tab. */
   currentWood: "#t_currentwood",
   woodIncome: "#t_woodincome > span.Green",
+
+  /**
+   * The game's left menu, and the slots inside it.
+   *
+   * A launcher is appended after the last slot. Empire Overview uses the
+   * same anchor; a live capture found 11 matches, so it is real - but Send
+   * Resources has to cope with a page where it is not.
+   */
+  menuSlots: ".menu_slots",
+  menuSlotExpandable: ".menu_slots > .expandable",
 
   /** Pirate fortress. */
   pirateCaptcha: "#pirateCaptureBox > div > form .captchaImage",

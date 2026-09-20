@@ -29,11 +29,22 @@ export function buildStyles(): string {
 #summaryAccountTable tr:hover { background-color: white; }
 #summaryAccountTable td:hover { color: red; background-color: #f0f0f0; }
 
+/* The wine warning in the panel. Red is "act now", amber is "worth
+   knowing"; the thresholds live in features/wine-warning.ts. */
+.ika-wine-list { margin: 4px 0 0 0; padding: 0; list-style: none; }
+.ika-wine-list li { font-size: 11px; line-height: 15px; }
+.ika-wine-critical { color: #c00000; font-weight: bold; }
+.ika-wine-warning { color: #b36b00; }
+.ika-wine-ok, .ika-wine-unknown { font-size: 11px; color: #5a4632; margin-top: 4px; }
+
 .active { font-weight: bold; }
 .min { border: 1px solid red; }
 th { font-weight: bold; }
 
-#customDiv { display: ${panelDisplay}; }
+/* The window manages its own visibility through the hidden attribute, so it
+   is not listed here: a display rule would either do nothing or fight the
+   toggle. The flag still hides the Empire Overview board, which has no such
+   mechanism of its own. */
 #empireBoard { display: ${panelDisplay}; }
 
 #tdListBuilding tr, #tdQueue tr { border-bottom: 1px solid black; }
@@ -45,7 +56,15 @@ th { font-weight: bold; }
 #autoBuildTable span { float: left; width: 100%; border-bottom: 1px dotted gray; }
 #autoBuildTable th { padding: 2px; }
 
-.zoom { transform: scale(0.7); bottom: -12px !important; left: -188px !important; }
+/* The zoom toggle now scales the window in place rather than nudging a
+   fixed-position panel back onto the screen. */
+.zoom { transform: scale(0.8); transform-origin: top left; }
+.ika-queue-table { font-size: 10px; }
+.ika-queue-table th, .ika-queue-table td { padding: 2px 4px; text-align: left; }
+.ika-queue-table tr.active { background: #efdca8; font-weight: bold; }
+.ika-queue-table button { padding: 0 4px; margin-left: 2px; height: 18px; line-height: 1; }
+.ika-queue-empty { font-style: italic; color: #6b5433; margin: 2px 0 4px; }
+
 .needingShip {
   background: url("cdn/all/both/characters/fleet/40x40/ship_transport_r_40x40.png") no-repeat 0 0;
   background-size: 22px 19px;
