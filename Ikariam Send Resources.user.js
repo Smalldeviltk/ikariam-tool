@@ -251,6 +251,7 @@
 		position: (n) => `#position${n}`,
 		cityPositionLink: (n) => `#js_CityPosition${n}Link`,
 		buildings: "div[id^='position'].building:not(.buildingGround)",
+		winePress: "div[id^='position'].building.vineyard",
 		buildingHover: ".hoverable",
 		constructionSite: ".constructionSite",
 		safehouse: "div.building.safehouse > a",
@@ -737,9 +738,19 @@
 		if (!resources) return null;
 		return numberOrNull(resources[resource]);
 	}
+	function winePressLevel() {
+		if (!qs(SEL.buildings)) return null;
+		const press = qs(SEL.winePress);
+		if (!press) return 0;
+		const match = /\blevel(\d+)\b/.exec(press.className);
+		return match ? Number(match[1]) : 0;
+	}
 	function modelWineConsumption() {
 		const spendings = numberOrNull(getModel()?.wineSpendings);
-		return spendings === null ? null : Math.abs(spendings);
+		if (spendings === null) return null;
+		const press = winePressLevel();
+		if (press === null) return null;
+		return Math.abs(spendings) * (100 - Math.min(100, Math.max(0, press))) / 100;
 	}
 	function modelCurrentCityId() {
 		const selected = (getModel()?.relatedCityData)?.selectedCity;
@@ -1234,7 +1245,12 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
 	var DEFAULT_TIMEOUT_MS = 15e3;
 	var latestToken = null;
 	var lastRequestAt = 0;
-	var handlers$1 = [];
+	var RESPONSE_EVENT = "ika:ajaxResponse";
+	function publishResponse(entries) {
+		try {
+			document.dispatchEvent(new CustomEvent(RESPONSE_EVENT, { detail: entries }));
+		} catch {}
+	}
 	function actionRequestToken() {
 		const model = pageWindow.ikariam?.model;
 		const fromModel = typeof model?.actionRequest === "string" ? model.actionRequest : null;
@@ -1285,9 +1301,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
 		}
 		if (!Array.isArray(parsed)) throw new Error("Ikariam returned JSON that is not a response array");
 		absorbToken(parsed);
-		for (const handler of handlers$1) try {
-			handler(parsed);
-		} catch {}
+		publishResponse(parsed);
 		return parsed;
 	}
 	function fetchTown(cityId, options) {
