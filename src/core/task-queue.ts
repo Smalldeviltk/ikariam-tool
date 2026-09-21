@@ -216,6 +216,15 @@ export class TaskQueue {
 
 /* ─────────────────────────────── Runner ─────────────────────────────────── */
 
+/**
+ * Consecutive throws before a task is given up on.
+ *
+ * High enough that a slow page render never reaches it — the DOM waits inside
+ * the handlers time out at 15s each, so five in a row is over a minute of the
+ * same failure.
+ */
+const DEFAULT_MAX_ERRORS = 5;
+
 export interface TaskRunnerOptions {
   /** Queue poll interval in ms. The original used 1000 for sending. */
   intervalMs?: number;
@@ -226,6 +235,18 @@ export interface TaskRunnerOptions {
   isUiReady?: () => boolean;
   /** Called when the queue empties. The original used this to stop the timer. */
   onDrain?: () => void;
+  /**
+   * How many times one task may throw in a row before it is given up on.
+   *
+   * A throw keeps the task (see the catch in `tick`), which is right for a DOM
+   * that is merely not ready yet and wrong for one that is never going to be.
+   * With no cap the two are indistinguishable and the second case becomes an
+   * endless loop: a stale selector had the shipment handler open the game's
+   * trading-port panel, wait 15s for a destination list that no longer exists,
+   * throw, and do it again a second later — visible to the player as the panel
+   * opening and closing by itself, forever, with a bug record filed each lap.
+   */
+  maxConsecutiveErrors?: number;
   /**
    * How long to pause after every queued task has deferred in a row.
    *
@@ -248,6 +269,14 @@ export class TaskRunner {
   private drained = false;
   /** Consecutive `defer` results, used to detect "nothing is runnable". */
   private deferStreak = 0;
+  /**
+   * Consecutive throws per task id.
+   *
+   * In memory for the same reason as `busy`: a reload is the player's way out
+   * of a wedged queue, and a count that survived one would keep punishing a
+   * task whose real problem was fixed by the reload.
+   */
+  private readonly errorStreaks = new Map<string, number>();
   /** Epoch ms before which ticks are skipped, set when the whole queue defers. */
   private pausedUntil = 0;
 
@@ -320,6 +349,8 @@ export class TaskRunner {
     try {
       const result = await handler(task);
       if (result.status !== "defer") this.deferStreak = 0;
+      // It returned rather than threw, so whatever was wrong before is over.
+      this.errorStreaks.delete(task.id);
 
       switch (result.status) {
         case "done":
@@ -361,9 +392,27 @@ export class TaskRunner {
       // A thrown handler does NOT drop the task: most throws here are the DOM
       // not being ready yet, and the next tick will succeed. A genuinely broken
       // task must return `failed` explicitly.
-      logInfo(`Error while running task ${task.type}: ${(e as Error).message}`);
+      const message = (e as Error)?.message ?? String(e);
+      logInfo(`Error while running task ${task.type}: ${message}`);
       reportBug("task-error", e, { taskType: task.type, taskData: task.data });
       console.error(e);
+
+      // ...but "the next tick will succeed" has to stop being assumed at some
+      // point. A task that has thrown this many times in a row is not waiting
+      // on the DOM, it is broken, and every further lap repeats whatever the
+      // handler did before it threw — which for a shipment means driving the
+      // game's UI. Drop it, the same way an explicit `failed` is dropped.
+      const streak = (this.errorStreaks.get(task.id) ?? 0) + 1;
+      const limit = this.options.maxConsecutiveErrors ?? DEFAULT_MAX_ERRORS;
+      if (streak >= limit) {
+        logInfo(
+          `Task ${task.type} threw ${streak} times in a row, giving up on it: ${message}`,
+        );
+        this.errorStreaks.delete(task.id);
+        this.queue.removeById(task.id);
+      } else {
+        this.errorStreaks.set(task.id, streak);
+      }
     } finally {
       this.busy = false;
     }

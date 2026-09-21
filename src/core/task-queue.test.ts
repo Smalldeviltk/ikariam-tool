@@ -241,6 +241,54 @@ describe("TaskRunner", () => {
     expect(queue.length).toBe(1);
   });
 
+  it(
+    "REGRESSION: gives up on a task that keeps throwing — a stale port " +
+      "selector had the shipment handler reopen the game's transport panel " +
+      "every second forever, and file a bug record each lap",
+    async () => {
+      queue.push(ship("1"));
+      let attempts = 0;
+      const runner = new TaskRunner(queue, {
+        intervalMs: 1000,
+        maxConsecutiveErrors: 3,
+      }).register("sendResource", async () => {
+        attempts++;
+        throw new Error("selector gone");
+      });
+
+      runner.start();
+      await tick(2);
+      // Still trying: two throws is not yet evidence of a broken task.
+      expect(queue.length).toBe(1);
+
+      await tick();
+      expect(queue.length).toBe(0);
+
+      // And it really stops — no further laps against an empty queue.
+      await tick(3);
+      expect(attempts).toBe(3);
+    },
+  );
+
+  it("a throw followed by a normal result clears the error streak", async () => {
+    queue.push(ship("1"));
+    let attempts = 0;
+    const runner = new TaskRunner(queue, {
+      intervalMs: 1000,
+      maxConsecutiveErrors: 3,
+    }).register("sendResource", async () => {
+      attempts++;
+      // Throw, recover, throw, recover: never three in a row, so the task
+      // must survive indefinitely rather than being counted out.
+      if (attempts % 2 === 1) throw new Error("DOM not ready");
+      return { status: "retry" };
+    });
+
+    runner.start();
+    await tick(6);
+    expect(queue.length).toBe(1);
+  });
+
   it("runs one task at a time even when a handler is slow", async () => {
     queue.push(ship("1"));
     queue.push(ship("2"));
