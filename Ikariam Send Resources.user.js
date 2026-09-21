@@ -1110,11 +1110,6 @@
 Sender and receiver are exclusive roles: tick a town to make it a source, or leave it unticked and give it a Wine/h above 0 to make it a receiver. The Load button fills those figures in.` : "The only town set to receive wine is the one you are sending from.\n\nPick a different source, or give another town a Wine/h figure.");
 			return 0;
 		}
-		const { merchants, freighters } = getFreeShips();
-		if (merchants <= 0 && freighters <= 0) {
-			alert("Not enough ships!");
-			return 0;
-		}
 		const plan = planWineRun(fromTown);
 		if (plan.supply <= 0) {
 			alert(`The source town has no spare wine (it must hold more than 500).`);
@@ -1344,6 +1339,8 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
 		};
 	}
 	var UPGRADE_BUTTON_TIMEOUT_MS = 15e3;
+	var TOWN_SETTLE_MS = 1200;
+	var UPGRADE_CONFIRM_TIMEOUT_MS = 1e4;
 	function findAccount(list, accountName) {
 		return list.find((entry) => entry.accountName === accountName);
 	}
@@ -1423,6 +1420,16 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
 		logInfo(`Auto Build: queued ${added} upgrades`);
 		return added;
 	}
+	function slotNumberOf(positionId) {
+		return positionId.match(/\d+/)?.[0] ?? null;
+	}
+	function slotElement(positionId) {
+		const slotNumber = slotNumberOf(positionId);
+		return slotNumber === null ? null : document.getElementById(`position${slotNumber}`);
+	}
+	function isTownBuilding() {
+		return qs(SEL.constructionSite) !== null;
+	}
 	async function handleUpgradeBuilding(task) {
 		const { townName, positionId, buildingName } = task.data;
 		if (!qs(SEL.cityBread)) {
@@ -1441,14 +1448,15 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
 		logInfo(`Going to town ${townName}`);
 		await gotoTown(townNumber);
 		closeGamePopup();
-		if (qs(SEL.constructionSite)) return {
+		await sleep$1(TOWN_SETTLE_MS);
+		if (isTownBuilding()) return {
 			status: "defer",
 			reason: `${townName} is already building`
 		};
 		logInfo(`Start upgrading ${buildingName}`);
 		await sleep$1(500);
 		document.getElementById(positionId)?.click();
-		const slotNumber = positionId.match(/\d+/)?.[0] ?? null;
+		const slotNumber = slotNumberOf(positionId);
 		const button = await waitForElement(SEL.buildingUpgradeButton, { timeoutMs: UPGRADE_BUTTON_TIMEOUT_MS }).then((element) => {
 			const hrefPosition = (element.getAttribute("href") ?? "").match(/[?&]position=(\d+)/)?.[1] ?? null;
 			if (slotNumber !== null && hrefPosition !== null && hrefPosition !== slotNumber) {
@@ -1461,11 +1469,25 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
 			status: "defer",
 			reason: `${buildingName}: upgrade button unavailable (not enough resources?)`
 		};
+		if (isTownBuilding()) return {
+			status: "defer",
+			reason: `${townName} started building meanwhile`
+		};
 		button.click();
+		const started = await waitFor(() => slotElement(positionId)?.classList.contains("constructionSite"), {
+			timeoutMs: UPGRADE_CONFIRM_TIMEOUT_MS,
+			label: `upgrade ${buildingName} in ${townName}`
+		}).catch(() => false);
+		closeGamePopup();
+		if (!started) {
+			logInfo(`${buildingName} in ${townName}: clicked Upgrade but no building site appeared - leaving it queued`);
+			return {
+				status: "defer",
+				reason: `${buildingName}: the upgrade did not start`
+			};
+		}
 		logInfo(`Finished upgrading ${buildingName}`);
 		removeBuildingFromQueue(positionId, buildingName, townName);
-		await sleep$1(1500);
-		closeGamePopup();
 		return { status: "done" };
 	}
 	var SCAN_SETTLE_MS = 1200;
@@ -2711,6 +2733,9 @@ th { font-weight: bold; }
 		setQueueButtonLabel(!running);
 		syncRunnerToFlags();
 	}
+	function startWineRun(fromTown) {
+		if (enqueueWineRun(fromTown) > 0) refreshQueueView();
+	}
 	function registerUiActions() {
 		registerActions({
 			"dialog.close": closeDialog,
@@ -2769,7 +2794,7 @@ th { font-weight: bold; }
 					return;
 				}
 				if (senders.length === 1) {
-					if (enqueueWineRun(senders[0]) > 0) runner.start();
+					startWineRun(senders[0]);
 					return;
 				}
 				openWineSourceDialog();
@@ -2778,7 +2803,7 @@ th { font-weight: bold; }
 				const town = element.dataset.ikaTown;
 				if (!town) return;
 				closeDialog();
-				if (enqueueWineRun(town) > 0) runner.start();
+				startWineRun(town);
 			},
 			"build.settings": openAutoBuildDialog,
 			"build.add": (element) => {
