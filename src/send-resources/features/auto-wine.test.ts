@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { getState, initState } from "../state";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { AUTO_WINE_LABEL, getState, initState, saveReceivers } from "../state";
 import { loadConsumedWine, measuredStats } from "./auto-wine";
 import { saveTownStats } from "../town-cache";
 import {
   buildWineTowns,
+  enqueueWineRun,
   getSourceSupply,
   readWineBoard,
   WINE_RESERVE,
@@ -52,6 +53,8 @@ beforeEach(() => {
   // account store, so state has to exist.
   localStorage.clear();
   initState("tester");
+  // Several of the paths under test explain themselves through `alert`.
+  (window as any).alert = vi.fn();
 });
 
 describe("readWineBoard", () => {
@@ -190,6 +193,54 @@ describe("measuredStats", () => {
 
   it("returns null when neither source knows the town", () => {
     expect(measuredStats("Athens")).toBeNull();
+  });
+});
+
+describe("enqueueWineRun", () => {
+  /** The global menu's ship counters, with the whole fleet at sea. */
+  const noIdleShips =
+    `<span id="js_GlobalMenu_freeTransporters">0</span>` +
+    `<span id="js_GlobalMenu_freeFreighters">0</span>`;
+
+  it(
+    "REGRESSION: queues the run even with no idle ships — refusing to queue " +
+      "threw the whole plan away, and the shipment handler already waits for " +
+      "the fleet to come home",
+    () => {
+      document.body.innerHTML =
+        townDropdown(TOWNS) +
+        noIdleShips +
+        renderBoard([
+          boardRow("Athens", "32,495", "-525"),
+          boardRow("Sparta", "100", "-300"),
+        ]);
+      saveReceivers([{ townNumber: "1", winePerHour: "300" }]);
+
+      expect(enqueueWineRun("0")).toBe(1);
+
+      const queued = getState().queue.listOfType("sendResource");
+      expect(queued).toHaveLength(1);
+      expect(queued[0].data).toMatchObject({
+        origin: "0",
+        destination: "1",
+        resource: "wine",
+        label: AUTO_WINE_LABEL,
+      });
+    },
+  );
+
+  it("still refuses when the source town has nothing to spare", () => {
+    document.body.innerHTML =
+      townDropdown(TOWNS) +
+      noIdleShips +
+      renderBoard([
+        boardRow("Athens", "100", "-525"),
+        boardRow("Sparta", "100", "-300"),
+      ]);
+    saveReceivers([{ townNumber: "1", winePerHour: "300" }]);
+
+    expect(enqueueWineRun("0")).toBe(0);
+    expect(getState().queue.length).toBe(0);
   });
 });
 

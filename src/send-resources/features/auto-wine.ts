@@ -15,7 +15,7 @@ import { qs, qsa } from "@core/dom";
 import { logInfo } from "@core/logger";
 import { getCurrentTownName } from "@core/ikariam/globals";
 import { SEL } from "@core/ikariam/selectors";
-import { getFreeShips, parseAmount, readCurrentWine } from "../game-state";
+import { parseAmount, readCurrentWine } from "../game-state";
 import { getTownList, getTownNameFromList } from "../navigation";
 import {
   AUTO_WINE_LABEL,
@@ -183,6 +183,12 @@ export function planWineRun(fromTown: string) {
  * Any pending Auto Wine shipments are cleared first: a new run recomputes the
  * split from current stock, so leftovers from an earlier plan would double-ship.
  * Manual shipments (no label) are untouched.
+ *
+ * Ship availability is deliberately NOT checked here. Queueing and shipping are
+ * separate steps: `handleSendResource` re-reads the idle ships when it actually
+ * runs and returns `retry` while there are none, so a task queued with the whole
+ * fleet at sea simply waits for it to come home. Refusing to queue at all meant
+ * the plan was lost and the user had to remember to press Start again later.
  */
 export function enqueueWineRun(fromTown: string): number {
   const configured = loadReceivers();
@@ -206,12 +212,6 @@ export function enqueueWineRun(fromTown: string): number {
             "from.\n\nPick a different source, or give another town a " +
             "Wine/h figure.",
     );
-    return 0;
-  }
-
-  const { merchants, freighters } = getFreeShips();
-  if (merchants <= 0 && freighters <= 0) {
-    alert("Not enough ships!");
     return 0;
   }
 

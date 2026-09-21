@@ -168,6 +168,21 @@ function toggleQueueRunner(): void {
   syncRunnerToFlags();
 }
 
+/**
+ * Plan a wine run and put it in the queue, without starting the runner.
+ *
+ * Auto Wine's Start only ever fills the queue; the Transport switch is what
+ * decides whether anything is sent. Starting the runner from here started
+ * shipping while that switch still read "Start Timer", and because it bypassed
+ * `syncRunnerToFlags` — which derives the runner's state from the two feature
+ * flags — the next Build toggle would stop it again. Same class of bug the
+ * comment above `syncRunnerToFlags` describes, in the one button that was
+ * missed.
+ */
+function startWineRun(fromTown: string): void {
+  if (enqueueWineRun(fromTown) > 0) refreshQueueView();
+}
+
 function registerUiActions(): void {
   registerActions({
     "dialog.close": closeDialog,
@@ -236,7 +251,7 @@ function registerUiActions(): void {
         return;
       }
       if (senders.length === 1) {
-        if (enqueueWineRun(senders[0]) > 0) runner.start();
+        startWineRun(senders[0]);
         return;
       }
       openWineSourceDialog();
@@ -245,7 +260,7 @@ function registerUiActions(): void {
       const town = element.dataset.ikaTown;
       if (!town) return;
       closeDialog();
-      if (enqueueWineRun(town) > 0) runner.start();
+      startWineRun(town);
     },
 
     /* ── Auto build ── */
