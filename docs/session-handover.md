@@ -10,7 +10,28 @@ It deliberately does **not** repeat the feature status. That lives in
 second. [project-summary.md](../project-summary.md) covers what the TypeScript
 port changed and what is still unverified.
 
-Last updated: 21/09/2026.
+Last updated: 22/09/2026.
+
+---
+
+## 0. Read this before touching anything
+
+**Shipping is broken and the cause is known.** The game replaced the trading
+port's destination list; `SEL.dockCities` (`.cities.clearfix > li > a`) matches
+nothing, so every `sendResource` task waits 15 s and throws. Auto Wine, manual
+sends and the Transport timer are all affected. See §2 for the markup and
+`improvement-plan.md` §2.A for the fix.
+
+**Do not press either Start Timer until that is fixed.** The runner now gives
+up on a task after five consecutive throws, so instead of looping forever the
+queue quietly empties — roughly 80 s per task. Queued shipments are recoverable
+(press Auto Wine's Start again); the Auto Build config is not touched.
+
+The capture that unblocks it: one paste of the crawler with `#js_transportPanel`
+open, a second after clicking `a.action_transport` so the shipment form is on
+screen. `portForm.present` is `false` in all five existing captures, so
+`#textfield_*`, `#submit` and `#slider_freighters_max` have never been checked
+against the live game either.
 
 ---
 
@@ -20,8 +41,8 @@ Last updated: 21/09/2026.
 | ----------- | ---------------------------------------------------------------- |
 | Branch      | `refactor`, tracking `origin/refactor`                            |
 | Pushed      | **No.** The work below is committed locally but not pushed        |
-| Uncommitted | Nothing — `git status` is the authority                           |
-| Tests       | 33 files, 410 tests, all passing                                  |
+| Uncommitted | Auto Build / Auto Wine / task-runner fixes — see §8              |
+| Tests       | 33 files, 416 tests, all passing                                  |
 | Typecheck   | Clean (`tsc --noEmit` and the strict config)                      |
 | Build       | `npm run build` produces both the userscripts and the extension   |
 
@@ -73,6 +94,33 @@ from memory.
   `div#position19.building.vineyard.level40`, tooltip "Wine Press (40)". It is
   only readable on the city view, so `modelWineConsumption` returns `null`
   elsewhere rather than silently reporting the gross figure.
+- **The trading port's destination list is now `#js_transportPanel`.** A live
+  page reads `div.transportPanel_city[data-city-id="297035"]` holding
+  `a.transportPanel_actionIcon.action_transport` with
+  `href="?view=transport&destinationCityId=297035"`. The old
+  `ul.cities.clearfix` is gone. Nothing in `sample/` knows about this, IkaEasy
+  V4 included, so there is no reference implementation to copy.
+- **The town dropdown's `selectvalue` IS the city id.** `<li selectvalue="297034"
+  class="ownCity"><a title="W-Athens">` — index 0 maps to 297034. That is the
+  bridge from the dropdown index the tasks store to the `data-city-id` the new
+  panel wants, and it makes `adjustDestinationIndex` obsolete.
+- **`.constructionSite` is a reliable "this town is busy" signal**, but only
+  the class is. Two captures of the same account settle it: a busy town matched
+  it twice with the slot reading `position8 building constructionSite animated`;
+  a free town matched nothing. The class survives opening a building, so it is
+  still readable from a building view.
+- **The upgrade button's `title` is NOT a signal.** It reads
+  `"In building queue!"` in both states. Only the VISIBLE label differs —
+  "Upgrade" when free, "In building queue!" when busy — and that is a
+  translated string. Do not gate on either; use `.constructionSite`.
+- **The breadcrumb and the building slots arrive in separate ajax boxes.**
+  `gotoTown` resolves on the breadcrumb alone, so slots read on that instant can
+  still be the previous town's. The original waited a flat 1000 ms here;
+  `SCAN_SETTLE_MS` and `TOWN_SETTLE_MS` both wait 1200 ms for this.
+- **`ikariam.model` carries `queueETA`, `queueVersion` and `nextETA`.** Present
+  in `modelState.keys` of a live dump. Their VALUES have never been captured, so
+  nothing uses them — but they are almost certainly a sturdier construction
+  signal than scraping a class, and worth one capture if this comes up again.
 
 ---
 
@@ -94,6 +142,20 @@ the bug, proves nothing. Revert the fix, watch the test go red, restore.
 **Verify claims about this codebase against the codebase.** A README claim in
 this project was wrong ("swallowed by an outer try/catch") because it was
 written from recall rather than from the file. Grep first.
+
+**A test that passes against the old code proves nothing, even when it tests
+the right thing.** The first version of the "town is already building" test put
+`.constructionSite` in the DOM from the start and asserted `defer` — which the
+old code also returned, because the bug was never the check, it was WHEN the
+check ran. Rewriting it so the class appears 800 ms after the breadcrumb (which
+is what the game does) is what made it go red. Run the revert before believing
+a green test.
+
+**Selectors copied from the old scripts are assumptions, not facts.** Three of
+them have now been caught: `#BuildTab` (zero matches without Empire Overview),
+the stale `#js_buildingUpgradeButton`, and now the whole trading port. The
+crawler's probe output is the only thing that settles one. `portForm` has never
+been captured at all — treat every selector in that group as unverified.
 
 ---
 
@@ -168,10 +230,29 @@ into an unrelated diff.
 - **Transport and Build share one task runner**, and its running state is
   derived from the two feature flags rather than poked by whichever button was
   pressed last. Two switches over one interval is what made them fight.
+- **Auto Wine's Start only fills the queue.** It does not start the runner and
+  does not check for idle ships. Queueing and shipping are separate steps:
+  `handleSendResource` returns `retry` while the fleet is out, so a plan made
+  with every ship at sea simply waits. Refusing to queue threw the plan away and
+  made the user remember to come back.
+- **An upgrade is not counted as done until the slot becomes a building site.**
+  Clicking the button proves nothing — the game refuses the click while the town
+  is busy and says so only in the UI. The config entry stays put until
+  `#position{N}` carries `constructionSite`.
+- **The trading port's old markup is replaced outright, with no fallback.** A
+  fallback branch nobody can exercise is dead code, not safety.
+- **A handler that throws is retried, but not forever.** `maxConsecutiveErrors`
+  defaults to 5, then the task is dropped like an explicit `failed`. The counter
+  lives in memory so a reload clears it, and any normal return resets it.
 
 ---
 
 ## 6. What is blocked, and on what
+
+**Blocked on a capture, and ahead of everything else: the trading port (§0).**
+Two crawler pastes are needed — one with `#js_transportPanel` open, one with the
+shipment form on screen. Until then no shipment can run, so nothing downstream
+can be tested by hand either.
 
 Two questions in §6 of the plan are unanswered and are blocking real work:
 
@@ -223,3 +304,44 @@ action points in the status line).
   crawler's `ikaTestAjaxFetch` strips the token from the URL it stores.
 - **The crawler is read-only** except for `ikaTestTownSwitch()` and
   `ikaTestAjaxFetch()`, which are hand-invoked only and never run on their own.
+
+- **Two half-fixed things, both in `app.ts`, neither scheduled.**
+  `syncRunnerToFlags` decides whether the runner runs, not what it may run — so
+  Build's Start Timer works through queued shipments while Transport's button
+  still reads "Start Timer". That is the third bullet of the comment above
+  `syncRunnerToFlags`, listed there as fixed; only the "who starts it" half was.
+  And `onDrain` calls `setAutoStart(false)` but leaves `isAutoBuildStart` true
+  with its label unchanged, so after the queue empties the Build button reads
+  "Stop Timer" over a stopped runner and takes two presses to restart.
+
+- **`git apply` of a reverted patch brings CRLF back into the working tree** and
+  prettier (which defaults to LF) then fails those files. This happens on every
+  revert-to-prove-the-test round trip. Run `prettier --write` on just the files
+  you touched — `npm run format` would sweep five files that were already dirty
+  on this branch before any of this work.
+
+---
+
+## 8. Uncommitted work in the tree
+
+Nothing here is committed. `git status` is the authority; this is what it means.
+
+| File | What changed |
+| ---- | ------------ |
+| `core/task-queue.ts` | `maxConsecutiveErrors`, the `errorStreaks` map, give-up path in the `catch` |
+| `core/task-queue.test.ts` | +2 tests |
+| `send-resources/app.ts` | `startWineRun()`; the two wine actions no longer call `runner.start()` |
+| `send-resources/features/auto-wine.ts` | ship gate removed |
+| `send-resources/features/auto-wine.test.ts` | +2 tests |
+| `send-resources/features/auto-build.ts` | `TOWN_SETTLE_MS`, re-check before the click, confirm before dequeuing, `slotNumberOf`/`slotElement`/`isTownBuilding` |
+| `send-resources/features/auto-build.test.ts` | +2 tests, and one existing fixture now marks the slot on click |
+
+`.gitignore` is also modified, and was already so at the start of that session —
+not part of this work.
+
+Each fix was proved the §3 way: revert the source file, watch the new test go
+red, restore. Four of the six new tests went red; the other two are guards
+against a plausible wrong fix, and say so in their names.
+
+`dist/` has NOT been rebuilt since any of this. Per §7, a green test is not
+evidence a feature reached the bundle — grep `dist/` before believing it.

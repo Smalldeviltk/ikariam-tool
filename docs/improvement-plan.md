@@ -1,13 +1,18 @@
 # Kế hoạch cải thiện — UI và tính năng
 
-> Trạng thái: **đang thực hiện.** Cập nhật 21/09/2026.
+> Trạng thái: **đang thực hiện.** Cập nhật 22/09/2026.
 >
 > Đã xong: Phase 1 trừ 1.4 · Phase 2 phần panel (2.1–2.5) · A, B, C.
 > Còn lại: 1.4 · 2.6–2.8 (board, chờ câu hỏi 2) · D, H · toàn bộ E–R.
 >
-> Đợt gần nhất sửa hai lỗi đo được trên game thật: `wineSpendings` là số gộp
-> chưa trừ Wine Press, và cây cầu của 1.3 nối hai bundle không dùng chung
-> module nên scan không cập nhật được board. Chi tiết ở §2.
+> **⚠️ Mọi tính năng gửi hàng đang hỏng.** Game đã đổi UI cảng biển sang
+> `#js_transportPanel`; selector chọn town đích (`.cities.clearfix`) không còn
+> khớp gì. Auto Wine, gửi tay, Transport timer — không cái nào gửi được. Đừng
+> bấm Start Timer cho tới khi sửa xong. Chi tiết và cách sửa ở §2.A.
+>
+> Đợt gần nhất: sửa Auto Build tiêu queue khi nâng cấp không thành, bỏ điều
+> kiện tàu rảnh khỏi lúc nạp queue Auto Wine, và chặn vòng lặp vô hạn khi
+> handler ném lỗi liên tục. Chi tiết ở §2.B.
 >
 > Ký hiệu trong các bảng dưới: ✅ xong · ◐ xong một phần · ⬜ chưa làm ·
 > ⏸ đang chờ quyết định.
@@ -168,6 +173,102 @@ con số riêng và đều đúng.
 **1.1 là cổng chặn cứng.** Phiên trước đã mất ba lượt vì suy luận nghe hợp lý về
 những thứ không quan sát được từ bên ngoài trang.
 
+### 2.A Cảng biển đã đổi UI — mọi lệnh gửi đang hỏng
+
+Selector chọn town đích trong `selectors.ts` là `dockCities:
+".cities.clearfix > li > a"`, bê nguyên từ script cũ (`sample/Send
+Resources.user.js:372`, `legacy/Send Resources V2.js:376`). Game không còn dựng
+markup đó. Bản chụp từ trang thật:
+
+```html
+<div id="js_transportPanel" class="transportPanel variableMainBox">
+  <div class="transportPanel_header variableMainHeader">Transport<div class="close"></div></div>
+  <div class="variableMainContent">
+    <div class="transportPanel_city" data-city-id="297035">
+      <div class="transportPanel_cityName">M-Corinth</div>
+      <div class="transportPanel_actions">
+        <a class="transportPanel_actionIcon action_transport" title="Transport goods"
+           href="?view=transport&destinationCityId=297035"></a>
+```
+
+Hậu quả, quan sát được trên game: `handleSendResource` mở panel rồi chờ 15 giây
+một danh sách không tồn tại, ném lỗi, runner giữ task lại, một giây sau lặp —
+panel tự bật tắt liên tục. Không có lệnh gửi nào từng chạy xong.
+
+Không script nào trong `sample/` biết tới `transportPanel`, kể cả IkaEasy V4.
+Tức là game đổi sau khi tất cả các script tham chiếu được viết; không có nguồn
+nào để chép.
+
+**Panel mới dễ dùng hơn cái cũ.** Nó định danh town bằng `data-city-id` tường
+minh, thay vì bắt đếm vị trí trong danh sách. Cả `adjustDestinationIndex` — sinh
+ra chỉ vì danh sách cảng bỏ qua town nguồn nên mọi chỉ số phía sau lệch một —
+sẽ bị xoá cùng cả lớp lỗi của nó. Ánh xạ chỉ số dropdown → cityId đã có sẵn:
+mỗi `<li>` trong dropdown mang `selectvalue` chính là cityId (xác nhận ở
+`output5.json`: index 0 ↔ `selectvalue="297034"` ↔ W-Athens).
+
+**Chưa sửa được vì còn thiếu số đo.** `portForm.present` là `false` ở cả 5 bản
+capture hiện có, nghĩa là `#textfield_*`, `#submit` và `#slider_freighters_max`
+**chưa từng được đối chiếu với game thật** — chúng cũng chép từ script cũ. Sửa
+xong phần chọn town mà form gửi cũng đã đổi thì chỉ là dời chỗ hỏng.
+
+Cần một capture ở hai màn: lúc `#js_transportPanel` đang mở, và sau khi bấm
+`a.action_transport` để form gửi hiện ra.
+
+Khi có, sửa ở bốn chỗ:
+
+| Chỗ | Việc |
+| --- | ---- |
+| `src/core/ikariam/selectors.ts` | bỏ `dockCities`, thêm nhóm `transportPanel` |
+| `src/send-resources/navigation.ts` | `clickDestinationTown` theo cityId; xoá `adjustDestinationIndex`; truyền timeout tường minh thay vì để mặc định 15 s |
+| `src/send-resources/features/send-resources.ts` | hai chỗ dùng `dockCities` — dòng 131 (đang ném lỗi) và dòng 175 (chờ sau submit, có `.catch` nên chỉ phí 5 s mỗi lần gửi) |
+| `navigation.test.ts` | xoá 4 test của `adjustDestinationIndex`, thêm fixture `transportPanel` |
+
+**Quyết định đã chốt:** thay hẳn, không giữ `.cities.clearfix` làm dự phòng.
+Một nhánh dự phòng không ai kiểm chứng được thì không phải an toàn, chỉ là code
+chết.
+
+### 2.B Auto Build, Auto Wine và vòng lặp của runner
+
+Ba lỗi sửa trong cùng đợt, đều có test chứng minh fail trên code cũ.
+
+**Auto Build tiêu queue dù nâng cấp không thành.** `handleUpgradeBuilding` xoá
+entry khỏi `listAutoBuild` và trả `done` ngay sau `button.click()`, không kiểm
+tra gì. Game từ chối cú click khi town đang xây, entry vẫn mất. Ba nguyên nhân
+cộng lại:
+
+1. `gotoTown` chỉ đợi breadcrumb, mà breadcrumb và `#locations` là hai ajax box
+   khác nhau — đọc slot ngay lúc breadcrumb đổi vẫn thấy town cũ. Thêm
+   `TOWN_SETTLE_MS = 1200`, bằng `SCAN_SETTLE_MS` sẵn có và bằng 1000 ms mà bản
+   gốc từng đợi.
+2. Không kiểm lại ở thời điểm bấm. Mở building là một round trip; view lúc bấm
+   đã khác view lúc kiểm.
+3. Không xác nhận kết quả. Giờ đợi đúng slot `#position{N}` mang class
+   `constructionSite` rồi mới xoá entry; không thấy thì giữ entry và trả
+   `defer`.
+
+**Auto Wine từ chối nạp queue khi không có tàu.** `enqueueWineRun` gọi
+`getFreeShips()` và thoát trước khi push bất cứ gì. Kiểm tra này thừa:
+`handleSendResource` đã trả `retry` khi không có tàu, tức task tự chờ hạm đội về.
+Bỏ gate; nạp queue và gửi hàng là hai việc tách rời.
+
+**Nút Start của Auto Wine không còn khởi động runner.** Trước đây nó gọi
+`runner.start()` thẳng, bỏ qua `syncRunnerToFlags()` và không bật cờ nào — runner
+chạy trong khi nút Transport vẫn ghi "Start Timer", và lần `syncRunnerToFlags()`
+kế tiếp sẽ tắt nó. Đúng loại lỗi mà comment trên `syncRunnerToFlags` nói đã sửa,
+sót lại ở đúng nút này. Giờ Start chỉ nạp queue.
+
+**Handler ném lỗi mãi không có điểm dừng.** `TaskRunner` cố ý giữ task khi
+handler throw, vì phần lớn throw là DOM chưa sẵn sàng. Đúng với DOM chậm, sai
+với DOM sẽ không bao giờ tới — và §2.A là ca thứ hai. Thêm
+`maxConsecutiveErrors` (mặc định 5): quá ngưỡng thì bỏ task, giống hệt đường
+`failed` vốn có. Bộ đếm để trong bộ nhớ, reset khi reload, và bị xoá ngay khi
+handler trả về bình thường.
+
+**Đánh đổi cần biết:** với cảng biển đang hỏng, cap này khiến queue tự cạn thay
+vì lặp vô hạn — mỗi task khoảng 80 giây (5 vòng × 16 giây) rồi biến mất. Các
+task `sendResource` mất đi lấy lại được bằng cách bấm Start lần nữa. Config
+Auto Build thì không mất: `cleanAutoBuildConfig` chỉ loại town có queue rỗng.
+
 ---
 
 ## 3. Phase 2 — UI
@@ -292,19 +393,37 @@ Cột **Build** cho biết tính năng chạy được ở đâu: `US` = userscr
 ## 5. Thứ tự đề xuất
 
 ```
+🔴 TRƯỚC HẾT   §2.A                   cảng biển — mọi lệnh gửi đang hỏng
+
 ✅ Phase 1   1.1, 1.2, 1.3, 1.5     nền móng AJAX
 ✅ Phase 2   2.1 → 2.5              cửa sổ dùng chung + panel
 ✅ Đợt rẻ    A, B, C                nút transport, xem queue, cảnh báo rượu
 
 ⬜ Còn lại, không chờ gì:  1.4, D, H, và nửa sau của 2.4
+⏸ Chờ capture cảng biển:  §2.A
 ⏸ Chờ câu hỏi 2:          2.6, 2.7, 2.8   (đều ở board)
 ⏸ Chờ câu hỏi 3:          E, F, G, I, J, K, L, M, N, O, P, Q, R
 ```
+
+**§2.A đi trước mọi thứ khác.** Thêm tính năng lên một tầng gửi hàng không chạy
+được thì không đo được gì, và mọi thử nghiệm thủ công đều vướng phải nó.
 
 Làm được ngay, không phụ thuộc gì: **1.4** (bỏ nốt việc lái DOM khi đổi town),
 **D** (sọc kho đầy — thuần CSS), **H** (khoá đồng bộ đa tab — hiện **chưa có gì**
 ngăn hai tab cùng lái một tài khoản và gửi trùng), và bổ sung số tàu rảnh +
 action point vào dòng trạng thái cho trọn 2.4.
+
+**Hai việc phát sinh, chưa xếp lịch:**
+
+- **Runner chạy mọi loại task bất kể switch nào đang bật.** `syncRunnerToFlags`
+  quyết định runner *có chạy không*, không quyết định nó *được chạy gì*. Bật
+  Build Start Timer là chạy luôn cả shipment đang xếp hàng, trong khi nút
+  Transport vẫn ghi "Start Timer". Comment ở `app.ts` liệt kê đúng triệu chứng
+  này như một lỗi đã sửa — nhưng bản sửa chỉ đổi *ai được start runner*.
+- **`onDrain` không reset `isAutoBuildStart`.** Khi queue cạn, `setAutoStart(false)`
+  tắt cờ Transport nhưng cờ Build giữ nguyên `true` và nhãn nút không đổi. Nút
+  Build ghi "Stop Timer" trong khi runner đã dừng, và phải bấm hai lần mới chạy
+  lại được.
 
 ---
 
