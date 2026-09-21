@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { initState } from "../state";
-import { handleUpgradeBuilding, scanBuildings } from "./auto-build";
+import { initState, saveAutoBuild } from "../state";
+import {
+  getTownQueue,
+  handleUpgradeBuilding,
+  scanBuildings,
+} from "./auto-build";
 import { resetHttpState } from "@core/ikariam/http";
 import type { Task } from "@core/task-queue";
 
@@ -76,7 +80,14 @@ describe("handleUpgradeBuilding", () => {
     let clicked = false;
     document
       .getElementById("js_buildingUpgradeButton")!
-      .addEventListener("click", () => void (clicked = true));
+      .addEventListener("click", () => {
+        clicked = true;
+        // What the game does when an upgrade actually starts: the slot turns
+        // into a building site. A live capture of a town mid-build reads
+        // `position8 building constructionSite animated`.
+        document.getElementById("position5")!.className =
+          "position5 building constructionSite animated";
+      });
 
     const promise = handleUpgradeBuilding(upgradeTask("js_CityPosition5Link"));
     await vi.advanceTimersByTimeAsync(20_000);
@@ -100,6 +111,93 @@ describe("handleUpgradeBuilding", () => {
     );
     expect(result.status).toBe("retry");
   });
+
+  /** The configured upgrade this account has queued for W-Athens. */
+  function configureQueue(): void {
+    saveAutoBuild([
+      {
+        accountName: "Smalldevil",
+        townList: [
+          {
+            townName: "W-Athens",
+            queue: [
+              {
+                positionId: "js_CityPosition5Link",
+                buildingName: "Warehouse 26",
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+  }
+
+  it(
+    "REGRESSION: waits for the town view to catch up before deciding it is " +
+      "free — the breadcrumb and the building slots arrive in separate ajax " +
+      "boxes, so a busy town read as idle and had its upgrade clicked",
+    async () => {
+      document.body.innerHTML = townView(
+        "W-Athens",
+        "?action=UpgradeExistingBuilding&cityId=297034&position=5&level=25",
+      );
+      configureQueue();
+
+      // The slots land after the breadcrumb, not with it. A live capture of a
+      // busy town reads exactly this on the working slot:
+      // `position8 building constructionSite animated`.
+      setTimeout(() => {
+        const slot = document.createElement("div");
+        slot.id = "position8";
+        slot.className = "position8 building constructionSite animated";
+        document.body.appendChild(slot);
+      }, 800);
+
+      let clicked = false;
+      document
+        .getElementById("js_buildingUpgradeButton")!
+        .addEventListener("click", () => void (clicked = true));
+
+      const promise = handleUpgradeBuilding(
+        upgradeTask("js_CityPosition5Link"),
+      );
+      await vi.advanceTimersByTimeAsync(20_000);
+      const result = await promise;
+
+      expect(result.status).toBe("defer");
+      expect(clicked).toBe(false);
+      expect(getTownQueue("W-Athens")).toHaveLength(1);
+    },
+  );
+
+  it(
+    "REGRESSION: clicking Upgrade without the slot turning into a building " +
+      "site does not consume the queue entry — the game refuses the click " +
+      "while the town is busy, and the queue used to count down anyway",
+    async () => {
+      document.body.innerHTML = townView(
+        "W-Athens",
+        "?action=UpgradeExistingBuilding&cityId=297034&position=5&level=25",
+      );
+      configureQueue();
+
+      let clicked = false;
+      document
+        .getElementById("js_buildingUpgradeButton")!
+        // Deliberately does NOT mark the slot: this is the refused click.
+        .addEventListener("click", () => void (clicked = true));
+
+      const promise = handleUpgradeBuilding(
+        upgradeTask("js_CityPosition5Link"),
+      );
+      await vi.advanceTimersByTimeAsync(40_000);
+      const result = await promise;
+
+      expect(clicked).toBe(true);
+      expect(result.status).toBe("defer");
+      expect(getTownQueue("W-Athens")).toHaveLength(1);
+    },
+  );
 });
 
 describe("scanBuildings", () => {

@@ -16,7 +16,7 @@
  */
 
 import { qs, qsa, waitForElement } from "@core/dom";
-import { sleep } from "@core/async";
+import { sleep, waitFor } from "@core/async";
 import { compareValues } from "@core/format";
 import { getCurrentTownName } from "@core/ikariam/globals";
 import { SEL } from "@core/ikariam/selectors";
@@ -42,6 +42,29 @@ import type { AutoBuildAccount, AutoBuildTown } from "../types";
 
 /** How long to wait for the upgrade button before assuming it will not appear. */
 const UPGRADE_BUTTON_TIMEOUT_MS = 15_000;
+
+/**
+ * How long to let a town's view settle after arriving, before reading its slots.
+ *
+ * `gotoTown` resolves as soon as the BREADCRUMB names the target, and the
+ * breadcrumb is a different ajax box from `#locations` — the game applies them
+ * from one response but not in one paint. Reading the slots on the instant the
+ * breadcrumb flips can therefore still see the PREVIOUS town's buildings, which
+ * is how a busy town passed the "already building" check below and had its
+ * upgrade clicked anyway.
+ *
+ * The original waited a flat 1000 ms here for the same reason, and
+ * `SCAN_SETTLE_MS` further down waits 1200 ms for the sibling case.
+ */
+const TOWN_SETTLE_MS = 1200;
+
+/**
+ * How long to wait for the clicked upgrade to show up as a building site.
+ *
+ * Generous on purpose: the cost of giving up too early is a duplicate upgrade
+ * one lap later, which is worse than the cost of waiting.
+ */
+const UPGRADE_CONFIRM_TIMEOUT_MS = 10_000;
 
 /* ────────────────────── Reading / writing the config ───────────────────── */
 
@@ -181,6 +204,46 @@ export function enqueueAutoBuild(): number {
 
 /* ────────────────────────────── Task handler ───────────────────────────── */
 
+/**
+ * The slot number inside a queue entry's id.
+ *
+ * Entries store the hoverable's id (`js_CityPosition8Link`), while the slot div
+ * it belongs to is `#position8` and the upgrade button's href carries
+ * `position=8`. All three are reached from this one number.
+ */
+function slotNumberOf(positionId: string): string | null {
+  return positionId.match(/\d+/)?.[0] ?? null;
+}
+
+/** The `#positionN` slot div for a queue entry's `js_CityPositionNLink` id. */
+function slotElement(positionId: string): HTMLElement | null {
+  const slotNumber = slotNumberOf(positionId);
+  return slotNumber === null
+    ? null
+    : document.getElementById(`position${slotNumber}`);
+}
+
+/**
+ * Whether this town already has something going up.
+ *
+ * Confirmed against two live captures of the same account. In a town that was
+ * building, `.constructionSite` matched and the slot read
+ * `position8 building constructionSite animated`; in a town that was not, it
+ * matched nothing. The class survives opening a building, so this stays
+ * readable from the building view as well as from the town view — which is what
+ * lets it be re-checked at the moment of the click.
+ *
+ * Deliberately NOT read from the upgrade button's label. In the busy capture it
+ * read "In building queue!" and in the free one "Upgrade", so it does
+ * discriminate — but it is a translated string, and its `title` attribute says
+ * "In building queue!" in BOTH, so the tempting attribute is the useless one.
+ * `ikariam.model` also carries `queueETA` / `nextETA`, which would be sturdier
+ * still; their values have not been captured yet, so they are not used here.
+ */
+function isTownBuilding(): boolean {
+  return qs(SEL.constructionSite) !== null;
+}
+
 export async function handleUpgradeBuilding(
   task: Extract<Task, { type: "upgradeBuilding" }>,
 ): Promise<TaskResult> {
@@ -202,12 +265,13 @@ export async function handleUpgradeBuilding(
   logInfo(`Going to town ${townName}`);
   await gotoTown(townNumber);
   closeGamePopup();
+  await sleep(TOWN_SETTLE_MS);
 
   // A town can only build one thing at a time. `defer`, not `retry`: the
   // original explicitly moved on to the next town here ("This town is
   // inprogress, Next>>"), and holding the head would block every other
   // town's upgrade until this build finished.
-  if (qs(SEL.constructionSite)) {
+  if (isTownBuilding()) {
     return { status: "defer", reason: `${townName} is already building` };
   }
 
@@ -225,7 +289,7 @@ export async function handleUpgradeBuilding(
   // template was something else entirely, left over from an earlier view — its
   // href still pointed at that other building. Clicking it would have upgraded
   // the wrong thing. The href carries `position=N`, so the slot is checkable.
-  const slotNumber = positionId.match(/\d+/)?.[0] ?? null;
+  const slotNumber = slotNumberOf(positionId);
   const button = await waitForElement<HTMLElement>(SEL.buildingUpgradeButton, {
     timeoutMs: UPGRADE_BUTTON_TIMEOUT_MS,
   })
@@ -255,14 +319,58 @@ export async function handleUpgradeBuilding(
     };
   }
 
+  // Last look before committing. Opening the building took a round trip, and
+  // the check on arrival was made against a view that has since been replaced;
+  // a build started in between (by the player, or by the town finishing a
+  // queued one) would otherwise be clicked straight over.
+  if (isTownBuilding()) {
+    return {
+      status: "defer",
+      reason: `${townName} started building meanwhile`,
+    };
+  }
+
   button.click();
+
+  // Do NOT drop the config entry yet.
+  //
+  // This used to remove it and report `done` the instant the click returned,
+  // with nothing checking that anything happened. The game refuses the click
+  // whenever the town is already building, and the entry was consumed all the
+  // same — the queue counted down while no building ever went up, which is the
+  // bug this whole guard exists for.
+  //
+  // A started upgrade turns the slot into a building site, so that is the
+  // receipt. The specific slot is checked rather than any `.constructionSite`,
+  // so a build the player kicked off elsewhere cannot be mistaken for ours.
+  const started = await waitFor(
+    () => slotElement(positionId)?.classList.contains("constructionSite"),
+    {
+      timeoutMs: UPGRADE_CONFIRM_TIMEOUT_MS,
+      label: `upgrade ${buildingName} in ${townName}`,
+    },
+  ).catch(() => false);
+
+  closeGamePopup();
+
+  if (!started) {
+    // Keep the entry. Worst case the upgrade did start and we simply failed to
+    // see it, in which case the next lap finds the town building and defers.
+    logInfo(
+      `${buildingName} in ${townName}: clicked Upgrade but no building site ` +
+        `appeared - leaving it queued`,
+    );
+    return {
+      status: "defer",
+      reason: `${buildingName}: the upgrade did not start`,
+    };
+  }
+
   logInfo(`Finished upgrading ${buildingName}`);
 
   // Drop it from the config so a later re-queue does not repeat it.
   removeBuildingFromQueue(positionId, buildingName, townName);
 
-  await sleep(1500);
-  closeGamePopup();
   return { status: "done" };
 }
 
