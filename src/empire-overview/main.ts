@@ -76,14 +76,53 @@ if (debug) {
  * live ajax hook feeds.
  *
  * Without this, a town loaded over http would update nothing: the board
- * records from `events("ajaxResponse")`, and that is published by the hook
- * around the game's own `executeAjaxRequest`, which a plain fetch does not go
- * through. Registering here means a fetched town and a clicked one arrive by
+ * records from `events("ajaxResponse")`, and that is published from the page
+ * jQuery's `ajaxSuccess` event (see `observeGameResponses`), which a plain
+ * fetch does not go through. Registering here means a fetched town and a clicked one arrive by
  * the same path and are indistinguishable downstream.
  */
 onIkariamResponse((entries) => {
   events("ajaxResponse").pub(entries);
 });
+
+/**
+ * Hear every response the game's own requests bring back, without taking part
+ * in handling them.
+ *
+ * The original replaced `ikariam.controller.executeAjaxRequest` and, whenever
+ * the game passed no callback, substituted its own: build a fresh
+ * `ajax.Responder` from the response and install it as
+ * `controller.ajaxResponder`. That matched the game it was written for. The
+ * live game now keeps ONE responder and feeds every later response to its
+ * `parseResponse` (from its own source, with no callback:
+ * `null === r.ajaxResponder ? r.ajaxResponder = ikariam.getClass(ajax.Responder, e)
+ * : r.ajaxResponder.parseResponse(e)`). Replacing it meant the game's responder
+ * never saw a response again. Seen live: after a manual shipment the header
+ * kept the old resource and idle-ship counts, and refreshed normally with this
+ * script off. The board's shortcut buttons go through the same path, and
+ * leaving the dropdown on the new town with the old town's buildings on screen
+ * is the same kind of half-applied response — expected to be fixed by this
+ * too, not yet confirmed.
+ *
+ * So the game's request path is left alone, and the response is read from
+ * jQuery's global `ajaxSuccess` event instead. That event fires after the
+ * game's own success handler, on the PAGE's jQuery — the one `$.ajax` in the
+ * game's code runs on — not the sandbox copy this script imports as `$`.
+ */
+function observeGameResponses() {
+  var pageJQuery = unsafeWindow.jQuery || unsafeWindow.$;
+  if (typeof pageJQuery !== "function") return;
+  pageJQuery(unsafeWindow.document).ajaxSuccess(function (event, xhr) {
+    var entries;
+    try {
+      entries = JSON.parse(xhr && xhr.responseText);
+    } catch (e) {
+      // Not a game response array (a login page, or a plain HTML fragment).
+      return;
+    }
+    if (Array.isArray(entries)) events("ajaxResponse").pub(entries);
+  });
+}
 
 // Installed before Init so a throw during startup is still recorded.
 installEmpireDiagnostics(__PACKAGING__, __SCRIPT_VERSION__);
@@ -129,26 +168,7 @@ $(function () {
         };
       })(unsafeWindow.ajaxHandlerCallFromForm);
 
-      unsafeWindow.ikariam.controller.executeAjaxRequest = (function (
-        execAjaxRequest,
-      ) {
-        return function cExecuteAjaxRequest() {
-          var args = $.makeArray(arguments);
-          args.push(undefined);
-          if (!args[1]) {
-            args[1] = function customAjaxCallback(responseText) {
-              var responder = unsafeWindow.ikariam.getClass(
-                unsafeWindow.ajax.Responder,
-                responseText,
-              );
-              unsafeWindow.ikariam.controller.ajaxResponder = responder;
-              events("ajaxResponse").pub(responder.responseArray);
-              unsafeWindow.response = responder;
-            };
-          }
-          var ret = execAjaxRequest.apply(this, args);
-        };
-      })(unsafeWindow.ikariam.controller.executeAjaxRequest);
+      observeGameResponses();
     }
     if (!(mod && loc && dat && aj)) {
       // BUG IN THE ORIGINAL (line 10741): the parameters are

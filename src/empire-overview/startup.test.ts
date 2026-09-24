@@ -233,6 +233,207 @@ describe("Empire Overview startup", () => {
   });
 });
 
+describe("responses to the game's own requests", () => {
+  /**
+   * The game's `executeAjaxRequest`, de-minified from the live page's source.
+   *
+   * With no callback it keeps ONE responder: the first response creates it and
+   * every later one goes to its `parseResponse`. That singleton is what the
+   * old hook broke by installing a fresh responder on every response.
+   */
+  function installGameController(jq: any) {
+    const parsed: string[] = [];
+    const responder = {
+      parseResponse: (body: string) => void parsed.push(body),
+    };
+    const controller: any = {
+      ajaxResponder: null,
+      executeAjaxRequest(
+        url: string,
+        callback?: any,
+        data?: unknown,
+        async?: boolean,
+      ) {
+        const self = this;
+        jq.ajax({
+          async: async ?? true,
+          type: "POST",
+          url,
+          data: data ?? null,
+          success(body: string) {
+            if (callback === undefined || callback === null) {
+              if (self.ajaxResponder === null) {
+                self.ajaxResponder = responder;
+                parsed.push(body);
+              } else {
+                self.ajaxResponder.parseResponse(body);
+              }
+            } else {
+              new callback(body);
+            }
+          },
+        });
+      },
+    };
+    (window as any).ikariam.controller = controller;
+    return { controller, responder, parsed };
+  }
+
+  /** Answer every jQuery request with `body`, without touching the network. */
+  function answerAllRequestsWith(jq: any, body: string): void {
+    jq.ajaxTransport("+*", () => ({
+      send: (_headers: unknown, complete: any) =>
+        complete(200, "OK", { text: body }),
+      abort: () => undefined,
+    }));
+  }
+
+  beforeEach(() => {
+    vi.resetModules();
+    localStorage.clear();
+    setReadyState("loading");
+    installPage();
+    installJQuery();
+    installGrants();
+  });
+
+  it(
+    "REGRESSION: leave the game's own responder in charge — the hook used to " +
+      "swap in a fresh responder on every response, so the game's singleton " +
+      "never parsed another one and the header kept the old resource and " +
+      "idle-ship counts after a manual shipment",
+    async () => {
+      const jq = (globalThis as any).jQuery;
+      const game = installGameController(jq);
+      await boot();
+
+      const body = JSON.stringify([
+        [
+          "updateGlobalData",
+          { headerData: {}, backgroundData: { id: 297034 } },
+        ],
+      ]);
+      answerAllRequestsWith(jq, body);
+
+      // What a submitted form does: `ajaxHandlerCallFromForm` passes `null`.
+      (window as any).ikariam.controller.executeAjaxRequest(
+        "index.php",
+        null,
+        "a=1&ajax=1",
+        true,
+      );
+      (window as any).ikariam.controller.executeAjaxRequest(
+        "index.php",
+        null,
+        "a=2&ajax=1",
+        true,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(game.controller.ajaxResponder).toBe(game.responder);
+      expect(game.parsed).toEqual([body, body]);
+    },
+  );
+
+  it("still hand every response array to the board", async () => {
+    const jq = (globalThis as any).jQuery;
+    installGameController(jq);
+    await boot();
+    const { events } = await import("./events");
+
+    const seen: unknown[] = [];
+    events("updateCityData").sub((cityId: unknown) => seen.push(cityId));
+
+    answerAllRequestsWith(
+      jq,
+      JSON.stringify([
+        [
+          "updateGlobalData",
+          { headerData: {}, backgroundData: { id: 297034 } },
+        ],
+      ]),
+    );
+    (window as any).ikariam.controller.executeAjaxRequest(
+      "index.php?view=city&ajax=1",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(seen).toContain(297034);
+  });
+
+  it("ignores a response that is not a game response array", async () => {
+    const jq = (globalThis as any).jQuery;
+    installGameController(jq);
+    await boot();
+    const { events } = await import("./events");
+
+    const published: unknown[] = [];
+    events("ajaxResponse").sub((entries: unknown) => published.push(entries));
+
+    answerAllRequestsWith(jq, "<html>login</html>");
+    (window as any).ikariam.controller.executeAjaxRequest("index.php");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(published).toEqual([]);
+  });
+});
+
+describe("the wrapper around the game's updateGlobalData", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    localStorage.clear();
+    setReadyState("loading");
+    installPage();
+    installJQuery();
+    installGrants();
+  });
+
+  it(
+    "REGRESSION: hands the game every argument and its return value — the " +
+      "wrapper forwarded only the first and returned nothing, and the header " +
+      "stopped refreshing after a manual shipment",
+    async () => {
+      const gameUpdate = vi.fn(() => "game result");
+      (window as any).ikariam.model.updateGlobalData = gameUpdate;
+      await boot();
+
+      const dataSet = { producedTradegood: 1 };
+      const result = (window as any).ikariam.model.updateGlobalData(
+        dataSet,
+        "second",
+        "third",
+      );
+
+      expect(gameUpdate).toHaveBeenCalledWith(dataSet, "second", "third");
+      expect(result).toBe("game result");
+    },
+  );
+
+  it("still runs the game's update when there is no data set", async () => {
+    const gameUpdate = vi.fn();
+    (window as any).ikariam.model.updateGlobalData = gameUpdate;
+    await boot();
+
+    expect(() =>
+      (window as any).ikariam.model.updateGlobalData(undefined),
+    ).not.toThrow();
+    expect(gameUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls the game's update on the model", async () => {
+    let receiver: unknown;
+    (window as any).ikariam.model.updateGlobalData = function (this: unknown) {
+      receiver = this;
+    };
+    await boot();
+
+    const detached = (window as any).ikariam.model.updateGlobalData;
+    detached({ producedTradegood: 1 });
+
+    expect(receiver).toBe((window as any).ikariam.model);
+  });
+});
+
 describe("responses fetched over http", () => {
   beforeEach(() => {
     vi.resetModules();

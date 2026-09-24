@@ -78,12 +78,39 @@ $(function () {
   ResourceProduction.createSpan(3);
   ResourceProduction.createSpan(4);
   ResourceProduction.updateProd();
+  /**
+   * FIX (not in the original): the wrapper is now transparent to the game.
+   *
+   * The original forwarded only `dataSet`, dropped the return value, and ran
+   * `repositionSpan` first with nothing to stop a throw there from skipping
+   * the game's own update. After a manual shipment the header kept the old
+   * resource and idle-ship counts with this script on, and refreshed with it
+   * off. The same kind of wrapper around `executeAjaxRequest` was already
+   * found to break the current game (see `observeGameResponses` in
+   * `main.ts`); this one is made unable to interfere in the same way. Every
+   * argument reaches the game, its return value comes back, and the span
+   * bookkeeping can fail without taking the game's update with it.
+   */
   unsafeWindow.ikariam.model.ResourceProduction_updateGlobalData =
     unsafeWindow.ikariam.model.updateGlobalData;
   unsafeWindow.ikariam.model.updateGlobalData = function (dataSet) {
-    ResourceProduction.repositionSpan(dataSet.producedTradegood);
-    unsafeWindow.ikariam.model.ResourceProduction_updateGlobalData(dataSet);
-    ResourceProduction.updateProd();
+    try {
+      if (dataSet) ResourceProduction.repositionSpan(dataSet.producedTradegood);
+    } catch (e) {
+      // Our span only; the game's update below must still run.
+    }
+    // Called on the model, as the original did, whatever `this` the game used.
+    var result =
+      unsafeWindow.ikariam.model.ResourceProduction_updateGlobalData.apply(
+        unsafeWindow.ikariam.model,
+        arguments,
+      );
+    try {
+      ResourceProduction.updateProd();
+    } catch (e) {
+      // Our span only.
+    }
+    return result;
   };
 });
 
