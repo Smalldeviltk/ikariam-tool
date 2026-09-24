@@ -16,8 +16,7 @@
  * handlers. This is a layout change, not a behaviour change.
  */
 
-import { addStyle, qs, qsa } from "@core/dom";
-import { SEL } from "@core/ikariam/selectors";
+import { addStyle, qs } from "@core/dom";
 import {
   createWindow,
   setWindowFooter,
@@ -84,38 +83,26 @@ function windowContent(): string {
 }
 
 /**
- * Put a way in on the page.
+ * Put a way in on the page: a small fixed button.
  *
- * Preferred: a slot in the game's own left menu, the same anchor Empire
- * Overview uses. A live capture found `.menu_slots > .expandable` matching 11
- * elements, so the anchor is real — but Send Resources has to work on a page
- * where it is not, so a small fixed button is the fallback. Without one of the
- * two there is no way to open the window at all.
+ * It used to go into the game's own left city menu (`.menu_slots`), next to
+ * Empire Overview's entry. That broke the game. With this script on, a manual
+ * shipment left the header showing the old resource and idle-ship counts;
+ * removing just that menu entry from the page, and nothing else, made the
+ * header refresh again. The game's `updateGlobalData` updates that menu
+ * (`updateCurrentCityLeftMenu` -> `cityMenu.update`) before it redraws the
+ * header, and an entry it did not draw itself stops it — a `slotNN` class like
+ * the game's own entries was tried and was not enough. So nothing is added to
+ * the game's menu at all.
  */
 function buildLauncher(onClick: () => void): void {
-  const slots = qsa<HTMLElement>(SEL.menuSlotExpandable);
-  const last = slots[slots.length - 1];
-
-  if (last?.parentElement) {
-    const item = document.createElement("li");
-    item.className = `expandable ${LAUNCHER_CLASS}`;
-    item.innerHTML =
-      `<div class="ika-send-menu-icon image" ` +
-      `style="background-image:url(cdn/all/both/minimized/transport.png);` +
-      `background-position:0 0;background-size:33px auto"></div>` +
-      `<div class="name"><span class="namebox">Send Resources</span></div>`;
-    last.parentElement.appendChild(item);
-    item.addEventListener("click", onClick);
-    return;
-  }
-
-  const fallback = document.createElement("button");
-  fallback.className = `button ${LAUNCHER_CLASS}`;
-  fallback.textContent = "Send Resources";
-  fallback.style.cssText =
+  const launcher = document.createElement("button");
+  launcher.className = `button ${LAUNCHER_CLASS}`;
+  launcher.textContent = "Send Resources";
+  launcher.style.cssText =
     "position:fixed; z-index:1000; left:8px; bottom:8px; cursor:pointer;";
-  fallback.addEventListener("click", onClick);
-  document.body.appendChild(fallback);
+  launcher.addEventListener("click", onClick);
+  document.body.appendChild(launcher);
 }
 
 export function buildPanel(): void {

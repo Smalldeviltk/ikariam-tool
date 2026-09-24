@@ -52,19 +52,27 @@ describe("buildPanel", () => {
     expect(document.querySelectorAll(`.${LAUNCHER_CLASS}`)).toHaveLength(1);
   });
 
-  it("adds its launcher to the game's own menu", () => {
-    document.body.innerHTML += GAME_MENU;
-    buildPanel();
+  it(
+    "REGRESSION: adds nothing to the game's own menu — an entry there stopped " +
+      "the game redrawing the header after a manual shipment, and removing " +
+      "just that entry from the live page fixed it",
+    () => {
+      document.body.innerHTML += GAME_MENU;
+      const before = document.querySelector(".menu_slots")!.innerHTML;
+      buildPanel();
 
-    const launcher = document.querySelector(`.menu_slots > .${LAUNCHER_CLASS}`);
-    expect(launcher).toBeTruthy();
-    expect(launcher!.textContent).toContain("Send Resources");
-  });
+      expect(
+        document.querySelector(`.menu_slots .${LAUNCHER_CLASS}`),
+      ).toBeNull();
+      expect(document.querySelector(".menu_slots")!.innerHTML).toBe(before);
+    },
+  );
 
   it(
-    "falls back to a fixed button when the game menu is absent — without one " +
-      "of the two there is no way to open the window at all",
+    "opens through a fixed button, even when the game menu is on the page — " +
+      "without it there is no way to open the window at all",
     () => {
+      document.body.innerHTML += GAME_MENU;
       buildPanel();
 
       const launcher = document.querySelector<HTMLElement>(
@@ -72,6 +80,7 @@ describe("buildPanel", () => {
       );
       expect(launcher).toBeTruthy();
       expect(launcher!.style.position).toBe("fixed");
+      expect(launcher!.textContent).toContain("Send Resources");
     },
   );
 
