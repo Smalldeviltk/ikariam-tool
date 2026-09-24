@@ -5,6 +5,8 @@
  * marked inline with a comment explaining the original behaviour.
  */
 import { reportBug } from "@core/bug-report";
+import { getCurrentTownName } from "@core/ikariam/globals";
+import { SEL } from "@core/ikariam/selectors";
 import { describeEntry, trace } from "./ajax-trace";
 import $ from "./jquery";
 import { Constant } from "./constants";
@@ -15,6 +17,35 @@ import { database } from "./database";
 import { empire } from "./empire";
 import { events } from "./events";
 import { render } from "./render";
+
+/** How long `switchTownFromDropdown` waits for the breadcrumb to change. */
+const TOWN_SWITCH_TIMEOUT_MS = 15_000;
+
+/**
+ * How long the game must stay idle, with the new town's name in the
+ * breadcrumb, before the switch counts as finished.
+ */
+const TOWN_SWITCH_SETTLE_MS = 1200;
+
+/**
+ * Whether the game has a request in flight.
+ *
+ * Read from the game's own markers: its `executeAjaxRequest` goes through the
+ * PAGE's `$.ajax`, which counts open requests in `jQuery.active`, and it
+ * shows `#loadingPreview` from `beforeSend` until the response is handled.
+ */
+function gameIsLoading(): boolean {
+  var pageJQuery = unsafeWindow.jQuery || unsafeWindow.$;
+  if (
+    pageJQuery &&
+    typeof pageJQuery.active === "number" &&
+    pageJQuery.active > 0
+  ) {
+    return true;
+  }
+  var loading = document.getElementById("loadingPreview");
+  return !!loading && loading.style.display === "block";
+}
 
 export const ikariam: any = {
   _View: null,
@@ -47,10 +78,51 @@ export const ikariam: any = {
     }
     return {};
   },
-  loadUrl: function (ajax, mainView, params) {
+  /**
+   * FIX (not in the original): a link that opens a view of ANOTHER town,
+   * followed from the city view, now switches town the game's own way first.
+   *
+   * The original sent `action=header&function=changeCurrentCity` over ajax
+   * and opened the target view in the same request. On the live game that
+   * moves the dropdown and opens the right popup, but the city view behind it
+   * is not redrawn: the board's "to Saw Mill", "to luxury good" and building
+   * level buttons left the old town's buildings on screen under the new
+   * town's name, and the next click in the town went wrong until a reload.
+   * `backgroundView` was only sent when the view TYPE changed, which a
+   * city-to-city jump never does.
+   *
+   * The switch is what the dropdown itself submits (see
+   * `switchTownWithGameForm`), which redraws everything. Once the breadcrumb
+   * names the target, the view is loaded as a same-town link. A town missing
+   * from the dropdown, or a switch that does not land, falls back to a full
+   * page load, which also redraws everything.
+   *
+   * A link that only changes town, with no `view` — the town names, which
+   * Send Resources also clicks to switch town — keeps the original path: it
+   * has always redrawn the new town correctly, and two requests would only
+   * make it slower.
+   */
+  loadUrl: function (ajax, mainView, params, townAlreadySwitched?: boolean) {
     mainView = mainView || ikariam.mainView;
+    if (
+      !townAlreadySwitched &&
+      ajax &&
+      ikariam.viewIsCity &&
+      mainView === "city" &&
+      params.view !== undefined &&
+      params.cityId !== undefined &&
+      String(ikariam.CurrentCityId) !== String(params.cityId)
+    ) {
+      var switching = ikariam.switchTownWithGameForm(
+        params.cityId,
+        function (switched: boolean) {
+          ikariam.loadUrl(switched, mainView, params, switched);
+        },
+      );
+      if (switching) return;
+    }
     var paramList: any = { cityId: ikariam.CurrentCityId };
-    if (ikariam.CurrentCityId !== params.cityId) {
+    if (!townAlreadySwitched && ikariam.CurrentCityId !== params.cityId) {
       paramList.action = "header";
       paramList.function = "changeCurrentCity";
       paramList.actionRequest = unsafeWindow.ikariam.model.actionRequest;
@@ -86,6 +158,80 @@ export const ikariam: any = {
       document.location =
         "javascript:ajaxHandlerCall(" + JSON.stringify(url) + "); void(0);";
     }
+  },
+  /**
+   * Switch town the way the game's dropdown does, then call `done(true)` once the
+   * breadcrumb names the target and the view has had time to settle, or
+   * `done(false)` if it never gets there.
+   *
+   * Returns false, without sending anything, when the page lacks the form or
+   * the dropdown has no entry for `cityId`; the caller then keeps its
+   * original path.
+   *
+   * The dropdown does not switch town from a click on its `<a>`: the first
+   * version of this clicked it, nothing happened, and every board button
+   * waited out the full timeout. What the dropdown actually does is put the
+   * city id into `#js_cityIdOnChange` and submit `#changeCityForm`, which
+   * is exactly how IkaEasy V4 changes town
+   * (`sample/IkaEasy-V4-by-RandGor-Chrome-Web-Store/js/page/common.js`,
+   * `changeCity`, and its `submitForm` page command). The dropdown entry is
+   * still read, but only for the name the breadcrumb will show.
+   *
+   * "Finished" means the breadcrumb names the target AND the game has had no
+   * request in flight for `TOWN_SWITCH_SETTLE_MS`. The first version waited a
+   * flat 1200 ms after the breadcrumb flipped and then opened the view; the
+   * switch was still loading, and what arrived after closed the dialog that
+   * had just opened. If the breadcrumb is right but the game never goes quiet
+   * before the timeout, the view is opened anyway rather than reloading a
+   * page that has already switched.
+   */
+  switchTownWithGameForm: function (
+    cityId: number | string,
+    done: (switched: boolean) => void,
+  ): boolean {
+    if (!/^\d+$/.test(String(cityId))) return false;
+    var anchor = $(
+      SEL.townListContainer + ' > li[selectvalue="' + cityId + '"] > a',
+    ).get(0);
+    if (!anchor) return false;
+    var target = (
+      anchor.getAttribute("title") ||
+      anchor.textContent ||
+      ""
+    ).trim();
+    if (!target) return false;
+
+    var form = document.getElementById("changeCityForm");
+    var cityInput = document.getElementById(
+      "js_cityIdOnChange",
+    ) as HTMLInputElement | null;
+    var submitForm = unsafeWindow.ajaxHandlerCallFromForm;
+    if (!form || !cityInput || typeof submitForm !== "function") return false;
+
+    cityInput.value = String(cityId);
+    submitForm(form);
+
+    var startedAt = Date.now();
+    var quietSince: number | null = null;
+    (function waitForTown() {
+      var arrived = getCurrentTownName() === target;
+      var now = Date.now();
+      if (arrived && !gameIsLoading()) {
+        if (quietSince === null) quietSince = now;
+        if (now - quietSince >= TOWN_SWITCH_SETTLE_MS) {
+          done(true);
+          return;
+        }
+      } else {
+        quietSince = null;
+      }
+      if (now - startedAt > TOWN_SWITCH_TIMEOUT_MS) {
+        done(arrived);
+        return;
+      }
+      setTimeout(waitForTown, 100);
+    })();
+    return true;
   },
   Host: function () {
     if (this._Host == null) {
