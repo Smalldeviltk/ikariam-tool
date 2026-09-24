@@ -27,8 +27,17 @@ import type { WineReceiver } from "../types";
 import { projectedStats } from "../town-cache";
 import { distributeWine, type WineTown } from "./wine-distribution";
 
-/** Wine kept at the source town rather than shipped out. */
-export const WINE_RESERVE = 500;
+/**
+ * Hours of its own consumption the source town keeps back.
+ *
+ * A source town produces wine, so it does not take part in the levelling. It
+ * only has to keep its tavern supplied until production refills the stock, and
+ * one hour of consumption covers that.
+ */
+export const SOURCE_RESERVE_HOURS = 1;
+
+/** Wine kept at the source town when its consumption is not known. */
+export const FALLBACK_WINE_RESERVE = 500;
 
 interface WineBoardRow {
   stock: number;
@@ -113,21 +122,42 @@ export function measuredStats(
  *  2. The town cache — recorded from `ikariam.model` whenever a town is visited,
  *     projected forward from the snapshot. Needs no other script.
  *  3. The hand-entered Wine/h, with stock assumed to be zero.
+ *
+ * Storage capacity only ever comes from the town cache: the board does not
+ * carry it. A town whose capacity is unknown is not capped.
  */
 export function buildWineTowns(
   receivers: readonly WineReceiver[],
   board = readWineBoard(),
 ): WineTown[] {
+  const store = getState().account;
   return receivers.map((receiver) => {
     const townName = townNameOf(receiver.townNumber);
     const measured = measuredStats(townName, board);
-    return {
+    const town: WineTown = {
       townNumber: receiver.townNumber,
       townName,
       stock: measured?.stock ?? 0,
       consume: measured?.consume || Number(receiver.winePerHour) || 0,
     };
+    const capacity = projectedStats(store, townName)?.capacity;
+    if (capacity !== undefined) town.capacity = capacity;
+    return town;
   });
+}
+
+/**
+ * Wine the source town keeps for its own tavern: one hour of its consumption,
+ * or `FALLBACK_WINE_RESERVE` when that consumption is not known.
+ */
+export function getSourceReserve(
+  fromTown: string,
+  board = readWineBoard(),
+): number {
+  const measured = measuredStats(townNameOf(fromTown), board);
+  return measured
+    ? Math.ceil(measured.consume * SOURCE_RESERVE_HOURS)
+    : FALLBACK_WINE_RESERVE;
 }
 
 /**
@@ -142,22 +172,23 @@ export function buildWineTowns(
 export function getSourceSupply(
   fromTown: string,
   board = readWineBoard(),
+  reserve = getSourceReserve(fromTown, board),
 ): number {
   const sourceName = townNameOf(fromTown);
 
   const measured = board.get(sourceName);
-  if (measured) return Math.max(0, measured.stock - WINE_RESERVE);
+  if (measured) return Math.max(0, measured.stock - reserve);
 
   // The source town IS the one on screen: read it live, most accurate of all.
   if (sourceName === getCurrentTownName().trim()) {
-    return Math.max(0, readCurrentWine() - WINE_RESERVE);
+    return Math.max(0, readCurrentWine() - reserve);
   }
 
   // Otherwise fall back to whatever was recorded last time this town was
   // visited. Never the global menu bar — that describes the town on screen, so
   // using it here would plan the whole run against the wrong town's stock.
   const cached = projectedStats(getState().account, sourceName);
-  return cached ? Math.max(0, cached.stock - WINE_RESERVE) : 0;
+  return cached ? Math.max(0, cached.stock - reserve) : 0;
 }
 
 /**
@@ -169,9 +200,11 @@ export function getSourceSupply(
 export function planWineRun(fromTown: string) {
   const board = readWineBoard();
   const receivers = loadReceivers().filter((r) => r.townNumber !== fromTown);
-  const supply = getSourceSupply(fromTown, board);
+  const reserve = getSourceReserve(fromTown, board);
+  const supply = getSourceSupply(fromTown, board, reserve);
   return {
     supply,
+    reserve,
     boardAvailable: board.size > 0,
     ...distributeWine(buildWineTowns(receivers, board), supply),
   };
@@ -218,7 +251,7 @@ export function enqueueWineRun(fromTown: string): number {
   const plan = planWineRun(fromTown);
   if (plan.supply <= 0) {
     alert(
-      `The source town has no spare wine (it must hold more than ${WINE_RESERVE}).`,
+      `The source town has no spare wine (it must hold more than ${plan.reserve}).`,
     );
     return 0;
   }
@@ -236,7 +269,7 @@ export function enqueueWineRun(fromTown: string): number {
         destination: allocation.townNumber,
         resource: "wine",
         amount: allocation.add,
-        reserve: WINE_RESERVE,
+        reserve: plan.reserve,
         label: AUTO_WINE_LABEL,
       },
     });

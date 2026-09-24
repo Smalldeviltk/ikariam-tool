@@ -127,3 +127,74 @@ describe("distributeWine", () => {
     expect(result.allocations.every((a) => Number.isInteger(a.add))).toBe(true);
   });
 });
+
+describe("distributeWine with storage limits", () => {
+  it(
+    "never sends a town more than its storage has room for, and keeps the " +
+      "rest at the source instead of handing it to the other towns",
+    () => {
+      // Uncapped, both towns get 5,000. Small has room for 1,200 only.
+      const uncapped = distributeWine(
+        [town("Small", 1_000, 100), town("Large", 1_000, 100)],
+        10_000,
+      );
+      const capped = distributeWine(
+        [
+          { ...town("Small", 1_000, 100), capacity: 2_200 },
+          town("Large", 1_000, 100),
+        ],
+        10_000,
+      );
+
+      const share = (name: string, result = capped) =>
+        result.allocations.find((a) => a.townName === name)?.add;
+      expect(share("Small", uncapped)).toBe(5_000);
+      expect(share("Small")).toBe(1_200);
+      // Large is not topped up with what Small could not take.
+      expect(share("Large")).toBe(share("Large", uncapped));
+      expect(capped.used).toBe(6_200);
+      expect(capped.unused).toBe(3_800);
+    },
+  );
+
+  it("marks only the towns whose share was trimmed", () => {
+    const result = distributeWine(
+      [
+        { ...town("Small", 1_000, 100), capacity: 2_200 },
+        { ...town("Roomy", 1_000, 100), capacity: 1_000_000 },
+        town("Unknown", 1_000, 100),
+      ],
+      9_000,
+    );
+    const flag = (name: string) =>
+      result.allocations.find((a) => a.townName === name)?.storageFull;
+    expect(flag("Small")).toBe(true);
+    expect(flag("Roomy")).toBe(false);
+    expect(flag("Unknown")).toBe(false);
+  });
+
+  it("sends nothing to a town whose storage is already full", () => {
+    const result = distributeWine(
+      [{ ...town("Full", 5_000, 500), capacity: 5_000 }, town("Other", 0, 10)],
+      1_000,
+    );
+    expect(result.allocations.find((a) => a.townName === "Full")?.add).toBe(0);
+  });
+
+  it("leaves a town whose capacity is unknown uncapped", () => {
+    const result = distributeWine([town("Unknown", 0, 100)], 50_000);
+    expect(result.allocations[0].add).toBe(50_000);
+  });
+
+  it("keeps used + unused equal to the supply when towns are capped", () => {
+    const towns = SAMPLE_TOWNS.map((t) => ({
+      ...t,
+      capacity: t.stock + 1_000,
+    }));
+    const result = distributeWine(towns, SAMPLE_SUPPLY);
+    const sum = result.allocations.reduce((total, a) => total + a.add, 0);
+    expect(sum).toBe(result.used);
+    expect(result.used + result.unused).toBe(SAMPLE_SUPPLY);
+    expect(result.allocations.every((a) => a.add <= 1_000)).toBe(true);
+  });
+});

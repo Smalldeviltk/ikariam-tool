@@ -32,6 +32,12 @@
  * its rounding correction is broken: it reads `arguments[1]` after assigning
  * `totalSupply = 0`, and in sloppy mode `arguments[1]` is aliased to the
  * parameter, so `diff` is never positive and the top-up loop never runs.
+ *
+ * ── Storage limits ──────────────────────────────────────────────────────────
+ * A town is never sent more than its storage has room for. The part a full
+ * town cannot take is NOT handed on to the others: it stays at the source and
+ * is reported in `unused`, to be split on the next run. So `targetHours` is
+ * the level the uncapped towns reach, and a capped town may end below it.
  */
 
 export interface WineTown {
@@ -42,6 +48,8 @@ export interface WineTown {
   stock: number;
   /** Hourly consumption, as a positive number. */
   consume: number;
+  /** Most wine the town can hold. Absent when unknown, and then not enforced. */
+  capacity?: number;
 }
 
 export interface WineAllocation {
@@ -53,15 +61,26 @@ export interface WineAllocation {
   add: number;
   /** Hours it can hold out after receiving. */
   finalHours: number;
+  /**
+   * The town's storage could not take its full share, so `add` was trimmed
+   * and it ends below `targetHours`.
+   */
+  storageFull: boolean;
 }
 
 export interface WineDistributionResult {
-  /** Target hours every non-over-supplied town reaches. */
+  /**
+   * Target hours every non-over-supplied town reaches, bar the ones marked
+   * `storageFull`.
+   */
   targetHours: number;
   allocations: WineAllocation[];
   /** Total actually allocated — never more than `supply`. */
   used: number;
-  /** Supply left over (when every town is already over-supplied). */
+  /**
+   * Supply left over: when every town is already over-supplied, or when a
+   * town's storage could not take its share.
+   */
   unused: number;
 }
 
@@ -88,6 +107,7 @@ export function distributeWine(
         consume: t.consume,
         add: 0,
         finalHours: t.consume > 0 ? t.stock / t.consume : Infinity,
+        storageFull: false,
       })),
       used: 0,
       unused: budget,
@@ -155,6 +175,20 @@ export function distributeWine(
     remaining -= 1;
   }
 
+  // Trim each share to the room left in that town's storage. What is trimmed
+  // is not redistributed — it stays at the source for the next run.
+  const trimmed = new Set<string>();
+  for (const town of active) {
+    if (town.capacity === undefined) continue;
+    const room = Math.max(0, Math.floor(town.capacity - town.stock));
+    const share = add.get(town.townNumber) ?? 0;
+    if (share > room) {
+      add.set(town.townNumber, room);
+      used -= share - room;
+      trimmed.add(town.townNumber);
+    }
+  }
+
   const allocations: WineAllocation[] = towns.map((town) => {
     const amount = activeIds.has(town.townNumber)
       ? (add.get(town.townNumber) ?? 0)
@@ -167,6 +201,7 @@ export function distributeWine(
       add: amount,
       finalHours:
         town.consume > 0 ? (town.stock + amount) / town.consume : Infinity,
+      storageFull: trimmed.has(town.townNumber),
     };
   });
 

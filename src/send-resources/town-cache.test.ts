@@ -73,6 +73,28 @@ describe("recordCurrentTown", () => {
     expect(recordCurrentTown(store)).toBeNull();
   });
 
+  it("records from the ordinal keys the live model uses", () => {
+    document.body.innerHTML = CITY_VIEW + `<div id="js_cityBread">W-Athens</div>`;
+    (window as any).ikariam = {
+      model: {
+        currentResources: { resource: 900, 1: 4321 },
+        maxResources: { resource: 50_000, 1: 60_000 },
+        wineSpendings: 200,
+      },
+    };
+    expect(recordCurrentTown(store)).toMatchObject({
+      stock: 4321,
+      consume: 200,
+      capacity: 60_000,
+    });
+  });
+
+  it("leaves capacity out when the model does not carry it", () => {
+    document.body.innerHTML = CITY_VIEW + `<div id="js_cityBread">W-Athens</div>`;
+    mockModel(1000, 100);
+    expect(recordCurrentTown(store)).not.toHaveProperty("capacity");
+  });
+
   it("overwrites the previous snapshot for the same town", () => {
     document.body.innerHTML = CITY_VIEW + `<div id="js_cityBread">W-Athens</div>`;
     mockModel(1000, 100);
@@ -114,6 +136,13 @@ describe("projectedStats", () => {
       "W-Athens": { stock: 5000, consume: 500, at: now - 3_600_000 },
     });
     expect(projectedStats(store, "W-Athens", now)?.consume).toBe(500);
+  });
+
+  it("carries the recorded capacity through", () => {
+    saveTownStats(store, {
+      "W-Athens": { stock: 5000, consume: 500, capacity: 80_000, at: now },
+    });
+    expect(projectedStats(store, "W-Athens", now)?.capacity).toBe(80_000);
   });
 
   it("discards a snapshot past the age limit", () => {

@@ -216,16 +216,29 @@ export function renderWinePlanPreview(fromTown: string): void {
         <td style="text-align:right">${Math.round(allocation.stock).toLocaleString("en-US")}</td>
         <td style="text-align:right">${Math.round(allocation.consume).toLocaleString("en-US")}</td>
         <td style="text-align:right"><b>${allocation.add.toLocaleString("en-US")}</b></td>
-        <td style="text-align:right">${allocation.finalHours.toFixed(1)}h</td>
+        <td style="text-align:right">${allocation.finalHours.toFixed(1)}h${
+          allocation.storageFull ? " (storage full)" : ""
+        }</td>
       </tr>`,
     )
     .join("");
+
+  // A town whose storage could not take its share ends below the target, so
+  // "everyone" would be untrue as soon as one is capped.
+  const storageFull = plan.allocations.filter((a) => a.storageFull);
+  const levelling =
+    storageFull.length === 0
+      ? `levelling everyone to <b>~${plan.targetHours.toFixed(1)}h</b>.`
+      : `levelling to <b>~${plan.targetHours.toFixed(1)}h</b>, except ` +
+        `${storageFull.map((a) => a.townName).join(", ")}: storage full, ` +
+        `so ${storageFull.length === 1 ? "it ends" : "they end"} lower and ` +
+        `the rest stays at the source for the next run.`;
 
   target.innerHTML = `
     <p><b>Source:</b> ${getTownNameFromList(fromTown)} —
        shipping ${plan.used.toLocaleString("en-US")} wine
        (spare ${plan.supply.toLocaleString("en-US")}, ${plan.unused.toLocaleString("en-US")} left over),
-       levelling everyone to <b>~${plan.targetHours.toFixed(1)}h</b>.</p>
+       ${levelling}</p>
     <table class="fullTable" border="1" cellpadding="4">
       <tr><th>Town</th><th>Stock</th><th>Consume/h</th><th>Send</th><th>Lasts after</th></tr>
       ${rows}

@@ -5,9 +5,10 @@ import { saveTownStats } from "../town-cache";
 import {
   buildWineTowns,
   enqueueWineRun,
+  FALLBACK_WINE_RESERVE,
+  getSourceReserve,
   getSourceSupply,
   readWineBoard,
-  WINE_RESERVE,
 } from "./auto-wine";
 
 /**
@@ -116,6 +117,53 @@ describe("buildWineTowns", () => {
     const [town] = buildWineTowns([{ townNumber: "2", winePerHour: "244" }]);
     expect(town).toMatchObject({ townName: "Corinth", stock: 0, consume: 244 });
   });
+
+  it("takes storage capacity from the town cache even when the board has the town", () => {
+    saveTownStats(getState().account, {
+      Sparta: { stock: 1, consume: 1, capacity: 75_000, at: Date.now() },
+    });
+    const [town] = buildWineTowns([{ townNumber: "1", winePerHour: "0" }]);
+    expect(town).toMatchObject({
+      stock: 21657,
+      consume: 350,
+      capacity: 75_000,
+    });
+  });
+
+  it("leaves capacity out when it has never been recorded", () => {
+    const [town] = buildWineTowns([{ townNumber: "1", winePerHour: "0" }]);
+    expect(town).not.toHaveProperty("capacity");
+  });
+});
+
+describe("getSourceReserve", () => {
+  it("keeps one hour of the source town's own consumption", () => {
+    document.body.innerHTML =
+      townDropdown(TOWNS) +
+      renderBoard([boardRow("Athens", "50,000", "-812.4")]);
+    expect(getSourceReserve("0")).toBe(813);
+  });
+
+  it("uses the town cache when the board lacks the source town", () => {
+    document.body.innerHTML = townDropdown(TOWNS);
+    saveTownStats(getState().account, {
+      Athens: { stock: 9_000, consume: 240, at: Date.now() },
+    });
+    expect(getSourceReserve("0")).toBe(240);
+  });
+
+  it("keeps nothing back for a source town that consumes nothing", () => {
+    document.body.innerHTML = townDropdown(TOWNS);
+    saveTownStats(getState().account, {
+      Athens: { stock: 9_000, consume: 0, at: Date.now() },
+    });
+    expect(getSourceReserve("0")).toBe(0);
+  });
+
+  it("falls back to a fixed reserve when the consumption is unknown", () => {
+    document.body.innerHTML = townDropdown(TOWNS);
+    expect(getSourceReserve("0")).toBe(FALLBACK_WINE_RESERVE);
+  });
 });
 
 describe("getSourceSupply", () => {
@@ -123,11 +171,11 @@ describe("getSourceSupply", () => {
     document.body.innerHTML =
       townDropdown(TOWNS) +
       renderBoard([
-        boardRow("Athens", "50,000", "-500"),
+        boardRow("Athens", "50,000", "-800"),
         boardRow("Sparta", "1,000", "-350"),
       ]);
-    // Athens is index 0 and holds 50,000.
-    expect(getSourceSupply("0")).toBe(50_000 - WINE_RESERVE);
+    // Athens is index 0, holds 50,000 and keeps one hour of its 800/h.
+    expect(getSourceSupply("0")).toBe(50_000 - 800);
   });
 
   it(
@@ -151,7 +199,7 @@ describe("getSourceSupply", () => {
       townDropdown(TOWNS) +
       `<div id="js_cityBread">Athens</div>
        <span id="js_GlobalMenu_wine">10,000</span>`;
-    expect(getSourceSupply("0")).toBe(10_000 - WINE_RESERVE);
+    expect(getSourceSupply("0")).toBe(10_000 - FALLBACK_WINE_RESERVE);
   });
 
   it("never reports a negative supply", () => {
@@ -226,6 +274,43 @@ describe("enqueueWineRun", () => {
         resource: "wine",
         label: AUTO_WINE_LABEL,
       });
+    },
+  );
+
+  it("hands the shipment the source town's one-hour reserve", () => {
+    document.body.innerHTML =
+      townDropdown(TOWNS) +
+      renderBoard([
+        boardRow("Athens", "32,495", "-525"),
+        boardRow("Sparta", "100", "-300"),
+      ]);
+    saveReceivers([{ townNumber: "1", winePerHour: "300" }]);
+
+    enqueueWineRun("0");
+
+    const [queued] = getState().queue.listOfType("sendResource");
+    expect(queued.data).toMatchObject({ reserve: 525, amount: 32_495 - 525 });
+  });
+
+  it(
+    "leaves at the source what a receiver's storage cannot take, rather " +
+      "than shipping it",
+    () => {
+      document.body.innerHTML =
+        townDropdown(TOWNS) +
+        renderBoard([
+          boardRow("Athens", "32,495", "-525"),
+          boardRow("Sparta", "100", "-300"),
+        ]);
+      saveReceivers([{ townNumber: "1", winePerHour: "300" }]);
+      saveTownStats(getState().account, {
+        Sparta: { stock: 100, consume: 300, capacity: 5_100, at: Date.now() },
+      });
+
+      enqueueWineRun("0");
+
+      const [queued] = getState().queue.listOfType("sendResource");
+      expect(queued.data).toMatchObject({ amount: 5_000 });
     },
   );
 

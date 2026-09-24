@@ -21,6 +21,7 @@
 import { getCurrentTownName } from "@core/ikariam/globals";
 import {
   modelCurrentCityName,
+  modelMaxResource,
   modelResource,
   modelWineConsumption,
 } from "@core/ikariam/model";
@@ -36,6 +37,11 @@ export interface TownStats {
   stock: number;
   /** Hourly wine consumption. */
   consume: number;
+  /**
+   * Most wine the town's storage can hold. Absent on snapshots recorded before
+   * it was tracked, and whenever the model did not carry it.
+   */
+  capacity?: number;
   /** Epoch ms of the snapshot. */
   at: number;
 }
@@ -70,6 +76,8 @@ export function recordCurrentTown(store: Store): TownStats | null {
 
   const stats = loadTownStats(store);
   const entry: TownStats = { stock, consume, at: Date.now() };
+  const capacity = modelMaxResource("wine");
+  if (capacity !== null && capacity > 0) entry.capacity = capacity;
   stats[townName] = entry;
   saveTownStats(store, stats);
   return entry;
@@ -102,11 +110,13 @@ export function projectedStats(
   if (age > MAX_AGE_MS) return null;
 
   const drained = (entry.consume * age) / 3_600_000;
-  return {
+  const projected: TownStats = {
     stock: Math.max(0, Math.round(entry.stock - drained)),
     consume: entry.consume,
     at: entry.at,
   };
+  if (entry.capacity !== undefined) projected.capacity = entry.capacity;
+  return projected;
 }
 
 /** Drop snapshots past `MAX_AGE_MS`. Returns how many were removed. */
