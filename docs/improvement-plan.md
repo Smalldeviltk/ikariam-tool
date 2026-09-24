@@ -1,18 +1,24 @@
 # Kế hoạch cải thiện — UI và tính năng
 
-> Trạng thái: **đang thực hiện.** Cập nhật 22/09/2026.
+> Trạng thái: **đang thực hiện.** Cập nhật 25/09/2026.
 >
 > Đã xong: Phase 1 trừ 1.4 · Phase 2 phần panel (2.1–2.5) · A, B, C.
-> Còn lại: 1.4 · 2.6–2.8 (board, chờ câu hỏi 2) · D, H · toàn bộ E–R.
+> Còn lại: 1.4 · 2.6–2.8 (board, chờ câu hỏi 2) · D, H · toàn bộ E–T.
 >
-> **⚠️ Mọi tính năng gửi hàng đang hỏng.** Game đã đổi UI cảng biển sang
-> `#js_transportPanel`; selector chọn town đích (`.cities.clearfix`) không còn
-> khớp gì. Auto Wine, gửi tay, Transport timer — không cái nào gửi được. Đừng
-> bấm Start Timer cho tới khi sửa xong. Chi tiết và cách sửa ở §2.A.
+> **⚠️ Mọi tính năng gửi hàng TỰ ĐỘNG đang hỏng.** Game đã đổi UI cảng biển
+> sang `#js_transportPanel`; selector chọn town đích (`.cities.clearfix`) không
+> còn khớp gì. Auto Wine và Transport timer không gửi được; gửi tay trong game
+> thì vẫn chạy. Đừng bấm Start Timer cho tới khi sửa xong. Chi tiết và cách sửa
+> ở §2.A.
 >
-> Đợt gần nhất: sửa Auto Build tiêu queue khi nâng cấp không thành, bỏ điều
-> kiện tàu rảnh khỏi lúc nạp queue Auto Wine, và chặn vòng lặp vô hạn khi
-> handler ném lỗi liên tục. Chi tiết ở §2.B.
+> Đợt gần nhất (§2.C, **chưa commit**): sửa header không cập nhật sau khi gửi
+> tay, sửa nút trên board chuyển sai town, Auto Wine giữ lại 1 giờ tiêu thụ
+> cho town nguồn và không gửi quá sức chứa kho. Auto Build vẫn còn mất queue
+> khi town đang xây — chưa tìm ra, đang chờ log.
+>
+> Đợt trước (§2.B): sửa Auto Build tiêu queue khi nâng cấp không thành, bỏ
+> điều kiện tàu rảnh khỏi lúc nạp queue Auto Wine, và chặn vòng lặp vô hạn khi
+> handler ném lỗi liên tục.
 >
 > Ký hiệu trong các bảng dưới: ✅ xong · ◐ xong một phần · ⬜ chưa làm ·
 > ⏸ đang chờ quyết định.
@@ -140,6 +146,14 @@ module registry. Giờ response đi qua DOM event `ika:ajaxResponse` trên
 rồi poll breadcrumb. Đây là mục Phase 1 duy nhất còn thiếu; nó không chặn 1.5
 (đo được: gọi `fetchTown` cho town khác **không** làm dịch `selectedCity` phía
 client), nhưng vẫn là nguồn của kiểu hỏng "trang kẹt ở view sai" ở bảng trên.
+
+**Cập nhật 25/09: 1.4 gấp hơn trước.** Đợt §2.C đo được trên game thật rằng
+`click()` vào `<a>` trong dropdown **không** chuyển town. Đó lại chính là đường
+dự phòng của `gotoTown` khi không có board Empire Overview
+(`switchTown` trong `navigation.ts`) — tức là Send Resources chạy một mình
+nhiều khả năng không đổi được town. Cách chuyển town đã chạy được trên game
+thật là đặt `#js_cityIdOnChange` rồi `ajaxHandlerCallFromForm(#changeCityForm)`;
+board giờ dùng đúng cách đó (`switchTownWithGameForm` trong `game-api.ts`).
 
 **Cách kiểm chứng.** Trước và sau, so `empireStore.buildingsKnown` của cả 9 town
 cùng thời gian thực tế (đã có baseline 21 s ở trên). Unit test phát lại một mảng
@@ -269,6 +283,86 @@ vì lặp vô hạn — mỗi task khoảng 80 giây (5 vòng × 16 giây) rồi
 task `sendResource` mất đi lấy lại được bằng cách bấm Start lần nữa. Config
 Auto Build thì không mất: `cleanAutoBuildConfig` chỉ loại town có queue rỗng.
 
+### 2.C Ba lỗi người dùng báo, và Auto Wine (25/09/2026, chưa commit)
+
+Cả ba lỗi dưới đây đều **không nhìn thấy được từ console**: game không báo lỗi
+nào. Lỗi 1 chỉ tìm ra nhờ thử tắt/bật từng phần trên trang thật, không phải
+nhờ đọc code — đọc code đã dẫn sai hướng hai lần.
+
+**Lỗi 1 — gửi tay xong, header không cập nhật tài nguyên và tàu rảnh.**
+✅ Đã tìm ra, đã sửa, **chưa thử lại bằng bản build mới**.
+
+- Tắt cả hai script thì header chạy đúng. Chỉ tắt Send Resources cũng chạy
+  đúng → lỗi ở Send Resources.
+- Gỡ bằng tay từng thứ Send Resources chèn vào trang: gỡ ô "Send Resources" ở
+  menu trái của city (`.menu_slots`) là hết lỗi; gỡ các nút trong form gửi hàng
+  thì không.
+- Cơ chế: `ikariam.model.updateGlobalData` của game cập nhật menu trái
+  (`updateCurrentCityLeftMenu` → `cityMenu.update`) **trước** khi vẽ lại
+  header. Một ô không do game tự vẽ làm bước đó hỏng, nên header không bao giờ
+  được vẽ lại. Thêm class `slot98` cho giống ô của game — không đủ.
+- Sửa: `panel.ts` không chèn gì vào menu của game nữa. Panel mở bằng nút cố
+  định ở góc dưới bên trái.
+
+Hai chỗ sửa trong Empire Overview làm **trước** khi tìm ra nguyên nhân thật,
+vẫn giữ vì đúng với game hiện tại:
+
+- `main.ts` không còn thay `ikariam.controller.executeAjaxRequest`. Code gốc
+  của game (người dùng dán từ console) giữ **một** `ajaxResponder` duy nhất và
+  đưa mọi response sau vào `parseResponse` của nó; bản bọc cũ tạo responder mới
+  mỗi lần và ghi đè lên cái của game. Board giờ nghe response qua sự kiện
+  `ajaxSuccess` của jQuery **trên trang** (`observeGameResponses`), chạy sau
+  khi game xử lý xong.
+- `resource-production.ts`: bản bọc `model.updateGlobalData` giờ chuyển đủ tham
+  số, trả về kết quả của game, và phần span của board không thể chặn hàm gốc.
+
+**Lỗi 2 — nút trên board ("to Saw Mill", "to luxury good", nút level) chuyển
+đúng dropdown nhưng công trình trên màn hình là của town cũ.**
+✅ Đã sửa. Người dùng xác nhận đã sang đúng town; phần "dialog bị đóng vì trang
+còn tải" đã sửa nhưng **chưa được xác nhận**.
+
+- `loadUrl` (`game-api.ts`) gửi `changeCurrentCity` qua ajax cùng lúc mở view
+  đích. Đang ở city view mà nhảy sang city view của town khác thì
+  `backgroundView` không được gửi, nên nền city không vẽ lại. Code này giống hệt
+  script gốc — game đã đổi cách xử lý.
+- Sửa: link mở **view** của town khác đi hai bước. (1) Chuyển town đúng cách
+  dropdown của game làm: đặt `#js_cityIdOnChange` rồi
+  `ajaxHandlerCallFromForm(#changeCityForm)` — cách IkaEasy V4 dùng. (2) Đợi
+  breadcrumb đúng tên **và** game rảnh (`jQuery.active` = 0, `#loadingPreview`
+  ẩn) liên tục 1200 ms, rồi mới mở view. Town không chuyển được sau 15 s thì
+  tải lại cả trang. Link chỉ đổi town (tên town) giữ nguyên một request cũ.
+- Đã thử và **không** chạy: `click()` vào `<a>` của dropdown không chuyển town.
+  Bản đầu làm vậy và mọi nút trên board chờ đủ 15 s.
+
+**Lỗi 3 — Auto Build mất queue khi town đang có công trình nâng cấp.**
+⏸ Chưa tìm ra. Entry chỉ bị xoá khi slot đó mang `constructionSite`
+(`auto-build.ts`), nên hai khả năng đang nghi: trang ở trạng thái lệch kiểu lỗi
+2 làm bước kiểm tra đọc nhầm town, hoặc entry được lưu nhầm sang town khác khi
+bấm **+** lúc breadcrumb đang sai (`addBuildingToQueue` lấy tên từ
+breadcrumb). Cần log panel lúc xảy ra, và biết entry có hiện ở town khác không.
+Lỗi 2 đã sửa có thể kéo theo hết lỗi này — thử lại trước khi đào tiếp.
+
+**Auto Wine.**
+
+- Reserve của town nguồn = **1 giờ tiêu thụ của chính nó** (`getSourceReserve`),
+  thay cho 500 cố định; chưa biết tiêu thụ thì lùi về 500
+  (`FALLBACK_WINE_RESERVE`). Town nguồn tự sản xuất rượu nên không tham gia chia
+  đều — chỉ cần đủ cho tavern trong lúc chờ khai thác.
+- Không gửi quá sức chứa kho của town nhận. Phần kho không nhận được **ở lại
+  town nguồn**, không chia sang town khác, cộng vào `unused` để lượt sau chia.
+  Town chưa biết sức chứa thì không giới hạn. Bảng xem trước đánh dấu
+  "(storage full)" và ghi rõ town nào thấp hơn mức chung.
+- Sức chứa đọc từ `ikariam.model.maxResources`, ghi vào town cache mỗi lần ghé
+  town. Board không có con số này.
+- **Sửa kèm:** `modelResource` tìm key `"wine"`, trong khi capture
+  `output5.json` cho thấy `currentResources` của game thật chỉ có key số
+  `"1"`–`"4"` và `"resource"` (theo `TradeGoodOrdinals` của IkaEasy: wine = 1).
+  Nhiều khả năng town cache chưa từng ghi được rượu trên game thật. Giờ đọc
+  theo tên trước, rồi theo key số. **Giá trị** của các key này chưa từng được
+  capture.
+- Làm tròn theo tàu và rượu tiêu hao lúc đang chở: ghi thành S và T ở §4.2,
+  chưa làm.
+
 ---
 
 ## 3. Phase 2 — UI
@@ -361,6 +455,8 @@ Cột **Build** cho biết tính năng chạy được ở đâu: `US` = userscr
 | P ⬜ | **Chặn phá nhầm thuộc địa không di dời được.** Một hộp xác nhận, tránh mất trắng một thành phố.                                                                                                                                                                                                     | cả hai      | —            |
 | Q ⬜ | **Nút trả lời nhanh / xử lý hiệp ước trong Diplomacy.**                                                                                                                                                                                                                                             | cả hai      | —            |
 | R ⬜ | **Kiểm tra bản mới.** Ta không có cơ chế cập nhật nào — Tampermonkey cần `@updateURL`/`@downloadURL`, extension cài tay thì không có gì.                                                                                                                                                            | cả hai      | —            |
+| S ⬜ | **Auto Wine: làm tròn lượng gửi theo sức chứa tàu.** `distributeWine` chia tới từng đơn vị, nên một chuyến 621 rượu tốn 2 thương thuyền (620/tàu trên server đang test). Làm tròn theo bội số của `ship-capacity.ts` để đỡ tốn tàu, nhất là khi tàu rảnh đang thiếu; phần dư giữ lại town nguồn. | cả hai | 2.A |
+| T ⬜ | **Auto Wine: tính rượu tiêu hao trong lúc chở.** Tới lúc hàng cập bến, town nhận đã uống thêm `consume × thời gian di chuyển`, nên mức giờ thực tế thấp hơn `targetHours`. Cần thời gian di chuyển giữa hai town — Send Resources hiện chưa đọc con số này ở đâu cả. | cả hai | 2.A |
 
 **Đã làm: A, B, C.**
 
@@ -401,8 +497,10 @@ Cột **Build** cho biết tính năng chạy được ở đâu: `US` = userscr
 
 ⬜ Còn lại, không chờ gì:  1.4, D, H, và nửa sau của 2.4
 ⏸ Chờ capture cảng biển:  §2.A
+⏸ Chờ log người dùng:     §2.C lỗi 3 (Auto Build mất queue)
 ⏸ Chờ câu hỏi 2:          2.6, 2.7, 2.8   (đều ở board)
 ⏸ Chờ câu hỏi 3:          E, F, G, I, J, K, L, M, N, O, P, Q, R
+⬜ Ghi lại, chưa cần làm: S, T (Auto Wine)
 ```
 
 **§2.A đi trước mọi thứ khác.** Thêm tính năng lên một tầng gửi hàng không chạy

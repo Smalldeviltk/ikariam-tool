@@ -10,17 +10,22 @@ It deliberately does **not** repeat the feature status. That lives in
 second. [project-summary.md](../project-summary.md) covers what the TypeScript
 port changed and what is still unverified.
 
-Last updated: 22/09/2026.
+Last updated: 25/09/2026.
 
 ---
 
 ## 0. Read this before touching anything
 
-**Shipping is broken and the cause is known.** The game replaced the trading
-port's destination list; `SEL.dockCities` (`.cities.clearfix > li > a`) matches
-nothing, so every `sendResource` task waits 15 s and throws. Auto Wine, manual
-sends and the Transport timer are all affected. See §2 for the markup and
-`improvement-plan.md` §2.A for the fix.
+**Automated shipping is broken and the cause is known.** The game replaced the
+trading port's destination list; `SEL.dockCities` (`.cities.clearfix > li > a`)
+matches nothing, so every `sendResource` task waits 15 s and throws. Auto Wine
+and the Transport timer are affected; a shipment sent by hand in the game goes
+through. See §2 for the markup and `improvement-plan.md` §2.A for the fix.
+
+**The 25/09 round is not committed yet** (§8). It fixed two user-reported bugs
+and reworked part of Auto Wine; the write-up is `improvement-plan.md` §2.C. A
+third bug — Auto Build losing its queue while a town is building — is still
+open and waiting on a log from the user (§6).
 
 **Do not press either Start Timer until that is fixed.** The runner now gives
 up on a task after five consecutive throws, so instead of looping forever the
@@ -40,9 +45,9 @@ against the live game either.
 |             |                                                                  |
 | ----------- | ---------------------------------------------------------------- |
 | Branch      | `refactor`, tracking `origin/refactor`                            |
-| Pushed      | **No.** The work below is committed locally but not pushed        |
-| Uncommitted | Auto Build / Auto Wine / task-runner fixes — see §8              |
-| Tests       | 33 files, 416 tests, all passing                                  |
+| Pushed      | Yes, up to `3228058`; local and remote were in sync on 24/09      |
+| Uncommitted | The whole 25/09 round — see §8                                    |
+| Tests       | 34 files, 452 tests, all passing                                  |
 | Typecheck   | Clean (`tsc --noEmit` and the strict config)                      |
 | Build       | `npm run build` produces both the userscripts and the extension   |
 
@@ -122,6 +127,44 @@ from memory.
   nothing uses them — but they are almost certainly a sturdier construction
   signal than scraping a class, and worth one capture if this comes up again.
 
+Added 25/09. The game's own functions below were read from its live source,
+pasted by the user from the console with both scripts off.
+
+- **`model.currentResources` is keyed by trade-good ordinal, not by name.**
+  `output5.json` lists its keys as `"1"`–`"4"`, `"resource"`, `"citizens"`,
+  `"population"` — no `"wine"`. IkaEasy maps wine = 1, marble = 2, glass = 3,
+  sulfur = 4, wood = `"resource"`. `maxResources` is keyed the same way. Only
+  the keys have been captured, never the values.
+- **The game keeps ONE ajax responder.** `executeAjaxRequest` with no callback
+  does `null === r.ajaxResponder ? r.ajaxResponder = ikariam.getClass(ajax.Responder, e)
+  : r.ajaxResponder.parseResponse(e)`. Anything that replaces that responder
+  cuts the game off from every later response. Its `$.ajax` call does not set
+  `global: false`, so jQuery's `ajaxSuccess` fires for it — on the PAGE's
+  jQuery, not the sandbox copy.
+- **`ajaxHandlerCallFromForm` posts every NAMED form element** (inputs,
+  selects, buttons), with a `null` callback. `<a>` elements are not sent.
+- **Changing town the game's way:** set `#js_cityIdOnChange` to the city id,
+  then `ajaxHandlerCallFromForm(document.getElementById("changeCityForm"))`.
+  This is what the dropdown does and what IkaEasy V4 does (`common.js`,
+  `changeCity`). Confirmed live: the board's buttons now land in the right
+  town this way.
+- **`click()` on a dropdown `<a>` does NOT change town.** Measured: every board
+  button waited out a 15 s timeout when it was tried.
+- **`action=header&function=changeCurrentCity` over ajax, with a `view`,
+  does not redraw the city view** when you are already on a city view. The
+  dropdown and the popup move to the new town; the buildings on screen stay
+  the old town's.
+- **`model.updateGlobalData` updates the left city menu before the header.**
+  Order in its source: the key loop (which calls `updateCurrentCityLeftMenu`
+  → `cityMenu.update` for `cityLeftMenu`), then `updateCurrentCityMenu(a)`,
+  which is what redraws the header counters.
+- **A foreign `<li>` in `.menu_slots` stops the header from refreshing.**
+  Measured by elimination: removing Send Resources' menu entry, and nothing
+  else, made the header update after a manual shipment. Giving it a `slot98`
+  class like the game's own entries was not enough. Empire Overview's
+  `slot99` entry has not been caught doing the same, but nothing proves it is
+  safe either.
+
 ---
 
 ## 3. How this branch works, the hard way
@@ -150,6 +193,17 @@ old code also returned, because the bug was never the check, it was WHEN the
 check ran. Rewriting it so the class appears 800 ms after the breadcrumb (which
 is what the game does) is what made it go red. Run the revert before believing
 a green test.
+
+**When the page misbehaves silently, eliminate on the live page before reading
+code.** The 25/09 header bug had no console error. Reading code produced two
+plausible culprits in Empire Overview, both fixed, neither the cause. What
+found it was cheap: turn one script off, then remove one injected element at a
+time from the running page with a console one-liner. Ask for that first.
+
+**Code carried over from the original scripts was written for an older game.**
+The `executeAjaxRequest` and `updateGlobalData` wrappers, and `loadUrl`'s town
+switch, were all line-for-line ports that had quietly stopped matching the
+live game. "It is the same as the original" is not evidence that it works.
 
 **Selectors copied from the old scripts are assumptions, not facts.** Three of
 them have now been caught: `#BuildTab` (zero matches without Empire Overview),
@@ -245,6 +299,30 @@ into an unrelated diff.
   defaults to 5, then the task is dropped like an explicit `failed`. The counter
   lives in memory so a reload clears it, and any normal return resets it.
 
+Added 25/09:
+
+- **Send Resources adds nothing to the game's own menus.** Its panel opens
+  from a fixed button at the bottom left (`buildLauncher` in `panel.ts`). A
+  menu entry is what broke the header (§2).
+- **Empire Overview observes the game's responses; it does not replace the
+  game's functions.** Responses come from the page jQuery's `ajaxSuccess`
+  (`observeGameResponses` in `main.ts`). The one wrapper left around a game
+  function, `model.updateGlobalData`, forwards every argument and the return
+  value, and its own work cannot stop the game's.
+- **Board links that open a view of another town switch town first**, through
+  `#changeCityForm`, wait for the breadcrumb and for the game to go idle
+  (`jQuery.active`, `#loadingPreview`) for 1200 ms, then open the view. A
+  switch that never lands falls back to a full page load. A link that only
+  changes town keeps its original single request.
+- **Auto Wine's source keeps one hour of its own consumption**
+  (`getSourceReserve`), 500 when that is unknown. The source produces wine, so
+  it does not take part in the levelling. The user chose this.
+- **Wine a receiver's storage cannot take stays at the source.** It is not
+  handed to the other receivers; it waits for the next run. A receiver whose
+  capacity is unknown is not capped. The user chose both.
+- **Rounding shipments to whole ships, and wine drunk while in transit, are
+  noted and deliberately not done** (`improvement-plan.md` §4.2, S and T).
+
 ---
 
 ## 6. What is blocked, and on what
@@ -253,6 +331,14 @@ into an unrelated diff.
 Two crawler pastes are needed — one with `#js_transportPanel` open, one with the
 shipment form on screen. Until then no shipment can run, so nothing downstream
 can be tested by hand either.
+
+**Blocked on the user: Auto Build losing its queue while a town is building.**
+An entry is only dropped once its slot carries `constructionSite`, so the two
+suspects are a check made against a stale view (the kind of half-switched page
+the board bug produced), or an entry filed under the wrong town when **+** is
+pressed while the breadcrumb is wrong (`addBuildingToQueue` names the town from
+the breadcrumb). Needed: the panel log around the loss, and whether the entry
+turns up under another town. The board fix may have cured it — retest first.
 
 Two questions in §6 of the plan are unanswered and are blocking real work:
 
@@ -264,7 +350,11 @@ Two questions in §6 of the plan are unanswered and are blocking real work:
    ones they want. Until then E–R are not started.
 
 Unblocked and ready to pick up: **1.4** (`switchCity`, the last Phase 1 item —
-`gotoTown` still clicks and polls the breadcrumb), **D** (full-warehouse stripe,
+`gotoTown` still clicks and polls the breadcrumb; more urgent since 25/09,
+because its fallback clicks the dropdown `<a>`, which §2 now records as not
+switching town, so Send Resources without Empire Overview probably cannot
+change town at all — `switchTownWithGameForm` in `game-api.ts` is a working
+model), **D** (full-warehouse stripe,
 pure CSS), **H** (cross-tab sync lock — nothing currently stops two tabs driving
 one account and sending twice), and the second half of **2.4** (idle ships and
 action points in the status line).
@@ -284,8 +374,8 @@ action points in the status line).
   Seen twice: once as 28/30 with 5 worker errors, once as a plain green
   "31 passed (31), 384 passed" when the real totals are 33 and 407. Neither was
   reproducible — chaining after `typecheck` was tried three times and did not
-  trigger it. **So a green run only counts if the file total reads 33.** Check
-  the count, not the colour.
+  trigger it. **So a green run only counts if the file total reads 34** (33
+  until `game-api.test.ts` was added on 25/09). Check the count, not the colour.
 - **Disproved, do not chase again:** the wrong per-town wine figures were
   **not** caused by `$.extend(true, {}, dataSetForView, entry[1])` in
   `game-api.ts` leaking the current town's numbers into every fetched town. A
@@ -314,6 +404,13 @@ action points in the status line).
   with its label unchanged, so after the queue empties the Build button reads
   "Stop Timer" over a stopped runner and takes two presses to restart.
 
+- **Not yet confirmed on the live game after a rebuild (25/09):** the header
+  refreshing after a manual shipment with the launcher moved out of the menu,
+  and the board's dialogs staying open now that the switch waits for the game
+  to go idle. Both are covered by tests; neither has been seen working live.
+- **`town-cache.test.ts` and `panel.test.ts` were already off prettier's
+  format before 25/09.** Running `prettier --write` on them reflows unrelated
+  lines; format only what you added, or put the stray reflow back.
 - **`git apply` of a reverted patch brings CRLF back into the working tree** and
   prettier (which defaults to LF) then fails those files. This happens on every
   revert-to-prove-the-test round trip. Run `prettier --write` on just the files
@@ -324,24 +421,38 @@ action points in the status line).
 
 ## 8. Uncommitted work in the tree
 
-Nothing here is committed. `git status` is the authority; this is what it means.
+The 25/09 round. Nothing here is committed; `git status` is the authority. The
+earlier table that stood here described work that has since been committed
+(`1c0548c`, `a7c088a`, `f1dba48`).
 
 | File | What changed |
 | ---- | ------------ |
-| `core/task-queue.ts` | `maxConsecutiveErrors`, the `errorStreaks` map, give-up path in the `catch` |
-| `core/task-queue.test.ts` | +2 tests |
-| `send-resources/app.ts` | `startWineRun()`; the two wine actions no longer call `runner.start()` |
-| `send-resources/features/auto-wine.ts` | ship gate removed |
-| `send-resources/features/auto-wine.test.ts` | +2 tests |
-| `send-resources/features/auto-build.ts` | `TOWN_SETTLE_MS`, re-check before the click, confirm before dequeuing, `slotNumberOf`/`slotElement`/`isTownBuilding` |
-| `send-resources/features/auto-build.test.ts` | +2 tests, and one existing fixture now marks the slot on click |
+| `core/ikariam/model.ts` | `MODEL_RESOURCE_KEY` and `readResourceRecord`: resources read by name, then by trade-good ordinal; new `modelMaxResource` |
+| `core/ikariam/model.test.ts` | +3 tests |
+| `send-resources/town-cache.ts` | snapshots carry an optional `capacity` from `maxResources` |
+| `send-resources/town-cache.test.ts` | +3 tests |
+| `send-resources/features/wine-distribution.ts` | optional `WineTown.capacity`; shares trimmed to free storage, the rest left in `unused`; `storageFull` per allocation |
+| `send-resources/features/wine-distribution.test.ts` | +5 tests |
+| `send-resources/features/auto-wine.ts` | `getSourceReserve` (one hour of the source's consumption, `FALLBACK_WINE_RESERVE` = 500); `WINE_RESERVE` removed; capacity passed through `buildWineTowns` |
+| `send-resources/features/auto-wine.test.ts` | +8 tests |
+| `send-resources/ui/dialogs.ts` | plan preview names the storage-capped towns |
+| `send-resources/ui/panel.ts` | launcher is a fixed button; nothing added to `.menu_slots` |
+| `send-resources/ui/panel.test.ts` | the menu-entry and fixed-button-fallback tests replaced by two: nothing in the game menu, fixed button always |
+| `empire-overview/main.ts` | `executeAjaxRequest` wrapper removed; `observeGameResponses` listens to the page jQuery's `ajaxSuccess` |
+| `empire-overview/resource-production.ts` | `updateGlobalData` wrapper made transparent |
+| `empire-overview/startup.test.ts` | +6 tests (game responder, `updateGlobalData` wrapper) |
+| `empire-overview/game-api.ts` | `loadUrl` two-step switch; `switchTownWithGameForm`; `gameIsLoading` |
+| `empire-overview/game-api.test.ts` | **new file**, 11 tests, created with the user's approval |
+| `docs/improvement-plan.md` | §2.C, rows S and T in §4.2, status header |
 
-`.gitignore` is also modified, and was already so at the start of that session —
-not part of this work.
+`.gitignore` is modified and `docs/So_sanh_2_script_Ikariam.md` is untracked;
+both were so before this round started — not part of this work.
 
-Each fix was proved the §3 way: revert the source file, watch the new test go
-red, restore. Four of the six new tests went red; the other two are guards
-against a plausible wrong fix, and say so in their names.
+Each fix was proved the §3 way where a test could show it: the source file was
+put back to its previous version, the new tests were run and went red, then
+the fix was restored. Tests that also pass on the old code are guards, and
+their names say what they guard.
 
-`dist/` has NOT been rebuilt since any of this. Per §7, a green test is not
-evidence a feature reached the bundle — grep `dist/` before believing it.
+`dist/` was last built by the user on 25/09 at 03:17, BEFORE the idle wait in
+`switchTownWithGameForm`, the `updateGlobalData` wrapper change and the
+launcher move. Per §7, grep `dist/` before believing a fix reached the bundle.
