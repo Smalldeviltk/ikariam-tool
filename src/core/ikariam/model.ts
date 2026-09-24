@@ -39,7 +39,10 @@ export interface RelatedCity {
  * payload for the full list it forwards.
  */
 export interface IkariamModel {
-  /** Current town's stock, keyed by resource name and by numeric id. */
+  /**
+   * Current town's stock. The live game keys it by trade-good ordinal (`"1"`
+   * is wine) and `"resource"` for wood; see `MODEL_RESOURCE_KEY`.
+   */
   currentResources?: Record<string, number>;
   /** Current town's hourly wine consumption. */
   wineSpendings?: number;
@@ -48,6 +51,7 @@ export interface IkariamModel {
   /** Idle freighters. Newer addition; not always present. */
   freeFreighters?: number;
   maxActionPoints?: number;
+  /** Current town's storage limit per resource, keyed like `currentResources`. */
   maxResources?: Record<string, number>;
   /** Every town this account can see, plus a `selectedCity` marker. */
   relatedCityData?: Record<string, RelatedCity | string>;
@@ -97,11 +101,50 @@ export function modelActionPoints(): number | null {
   return numberOrNull(getModel()?.maxActionPoints);
 }
 
+/**
+ * The key the live model files each resource under.
+ *
+ * A live capture (`tools/output/output5.json`) lists `currentResources` with
+ * the keys `"1"`–`"4"` and `"resource"` and no `"wine"` at all, so looking the
+ * name up alone found nothing on the real game. IkaEasy reads the same object
+ * through its `TradeGoodOrdinals` (`sample/IkaEasy-V4-by-RandGor-Chrome-Web-Store/js/const.js`),
+ * which is where these ordinals come from. Only the keys have been captured,
+ * not the values, so the mapping is unverified against a live figure.
+ */
+const MODEL_RESOURCE_KEY: Readonly<Record<string, string>> = {
+  wood: "resource",
+  wine: "1",
+  marble: "2",
+  glass: "3",
+  sulfur: "4",
+};
+
+/** One resource out of a model record, by name first, then by game key. */
+function readResourceRecord(
+  record: Record<string, number> | undefined,
+  resource: string,
+): number | null {
+  if (!record) return null;
+  const byName = numberOrNull(record[resource]);
+  if (byName !== null) return byName;
+  const key = MODEL_RESOURCE_KEY[resource];
+  return key === undefined ? null : numberOrNull(record[key]);
+}
+
 /** Current town's stock of one resource. */
 export function modelResource(resource: string): number | null {
-  const resources = getModel()?.currentResources;
-  if (!resources) return null;
-  return numberOrNull(resources[resource]);
+  return readResourceRecord(getModel()?.currentResources, resource);
+}
+
+/**
+ * Current town's storage limit for one resource.
+ *
+ * Read from `maxResources`, the field IkaEasy uses for warehouse capacity. The
+ * model also carries `maxResourcesWithModifier`, but its meaning has never been
+ * measured, so it is not used.
+ */
+export function modelMaxResource(resource: string): number | null {
+  return readResourceRecord(getModel()?.maxResources, resource);
 }
 
 /**

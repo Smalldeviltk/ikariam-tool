@@ -6,6 +6,7 @@ import {
   modelCurrentCityName,
   modelFreeFreighters,
   modelFreeTransporters,
+  modelMaxResource,
   modelOwnCities,
   modelResource,
   modelWineConsumption,
@@ -113,6 +114,32 @@ describe("counters", () => {
 
   it("returns null for an unknown resource", () => {
     expect(modelResource("nope")).toBeNull();
+  });
+
+  it(
+    "REGRESSION: reads the trade-good ordinal keys the live model uses — a " +
+      'capture lists currentResources as "1"–"4" and "resource", with no ' +
+      '"wine" key, so a name-only lookup found nothing on the real game',
+    () => {
+      installModel({
+        currentResources: { resource: 1000, 1: 32495, 2: 0, 3: 7, 4: 8 },
+      });
+      expect(modelResource("wine")).toBe(32495);
+      expect(modelResource("wood")).toBe(1000);
+      expect(modelResource("marble")).toBe(0);
+      expect(modelResource("glass")).toBe(7);
+      expect(modelResource("sulfur")).toBe(8);
+    },
+  );
+
+  it("reads the storage limit from maxResources", () => {
+    installModel({ maxResources: { resource: 90_000, 1: 120_000 } });
+    expect(modelMaxResource("wine")).toBe(120_000);
+    expect(modelMaxResource("wood")).toBe(90_000);
+  });
+
+  it("returns null for the storage limit when the model omits it", () => {
+    expect(modelMaxResource("wine")).toBeNull();
   });
 
   it("normalises wine consumption to a positive number", () => {
