@@ -58,6 +58,10 @@
       "jQuery not found — check the @require lines in the userscript header",
     );
   installJQueryCompat(jq);
+  function pageJQuery() {
+    const candidate = unsafeWindow.jQuery || unsafeWindow.$;
+    return typeof candidate === "function" ? candidate : void 0;
+  }
   function detectChromium() {
     const nav = window.navigator;
     const brands = nav.userAgentData?.brands;
@@ -113,9 +117,113 @@
       return obj;
     },
   });
-  var STORAGE_KEY = "ikaBugReports";
+  function errorMessage(error) {
+    if (error instanceof Error) return error.message;
+    return String(error);
+  }
+  var DEFAULT_TIMEOUT_MS = 15e3;
+  function waitFor(predicate, options = {}) {
+    const {
+      intervalMs = 200,
+      timeoutMs = DEFAULT_TIMEOUT_MS,
+      label = "waitFor",
+    } = options;
+    const deadline = timeoutMs === Infinity ? Infinity : Date.now() + timeoutMs;
+    return new Promise((resolve, reject) => {
+      let lastError;
+      const tick = () => {
+        let value;
+        try {
+          value = predicate();
+          lastError = void 0;
+        } catch (error) {
+          value = null;
+          lastError = error;
+        }
+        if (value) {
+          resolve(value);
+          return;
+        }
+        if (Date.now() >= deadline) {
+          const reason =
+            lastError === void 0
+              ? ""
+              : ` (last check threw: ${errorMessage(lastError)})`;
+          reject(
+            new Error(`${label}: timed out after ${timeoutMs}ms${reason}`),
+          );
+          return;
+        }
+        setTimeout(tick, intervalMs);
+      };
+      setTimeout(tick, intervalMs);
+    });
+  }
+  function qs(selector, root = document) {
+    return root.querySelector(selector);
+  }
+  var SEL = {
+    accountName: ".avatarName > a.noViewParameters",
+    accountBlock: ".avatarName",
+    townListContainer: "#dropDown_js_citySelectContainer > div.bg > ul",
+    cityBread: "#js_cityBread",
+    changeCityForm: "#changeCityForm",
+    changeCityInput: "#js_cityIdOnChange",
+    loadingIndicator: "#loadingPreview",
+    cityLink: "#js_cityLink > a",
+    backlinkButton: "#js_backlinkButton",
+    globalMenu: {
+      maxActionPoints: "#js_GlobalMenu_maxActionPoints",
+      freeTransporters: "#js_GlobalMenu_freeTransporters",
+      freeFreighters: "#js_GlobalMenu_freeFreighters",
+      wine: "#js_GlobalMenu_wine",
+    },
+    position: (n) => `#position${n}`,
+    cityPositionLink: (n) => `#js_CityPosition${n}Link`,
+    buildings: "div[id^='position'].building:not(.buildingGround)",
+    winePress: "div[id^='position'].building.vineyard",
+    buildingHover: ".hoverable",
+    constructionSite: ".constructionSite",
+    safehouse: "div.building.safehouse > a",
+    buildingUpgradeButton: "#js_buildingUpgradeButton",
+    dockCities: ".cities.clearfix > li > a",
+    resourceField: (resource) => `#textfield_${resource}`,
+    wineField: "#textfield_wine",
+    submit: "#submit",
+    freightersMaxButton: "#slider_freighters_max",
+    setMax: ".setMax",
+    buildTabTownNames: "#BuildTab .city_name > span.clickable",
+    resTabRows: "#ResTab > table > tbody > tr",
+    resTabTownName: "td.city_name > .clickable",
+    resTabWineStock: "td.resource.wine span.current",
+    resTabWineConsumption: "td.resource.wine span.consumption",
+    resTabWineConsumed: "td.resource.wine > span.Red",
+    currentWood: "#t_currentwood",
+    woodIncome: "#t_woodincome > span.Green",
+    barbarianVillageResources: "#barbarianVillage ul.resources",
+    barbarianFleetResources: "#barbarianFleet ul.resources",
+    unitBlocks: "div.units.clearboth",
+    merchantShipTitle: '[title="Merchant Ships"]',
+    freighterTitle: '[title="Freighter"]',
+    upgradeDesc: ".upgrade_desc",
+    container: "#container",
+    footer: "#footer",
+    closeButton: ".close",
+  };
+  var pageWindow = typeof unsafeWindow !== "undefined" ? unsafeWindow : window;
+  function readAccountName() {
+    const anchor = qs(SEL.accountName);
+    if (anchor) return anchor.title || anchor.textContent?.trim() || "";
+    return qs(SEL.accountBlock)?.textContent?.trim() ?? "";
+  }
+  function getCurrentTownName() {
+    return qs(SEL.cityBread)?.textContent?.trim() ?? "";
+  }
+  var BUG_REPORT_STORAGE_KEY = "ikaBugReports";
   var MAX_RECORDS = 50;
   var MAX_STACK = 2e3;
+  var MAX_MESSAGE = 500;
+  var MAX_FINGERPRINT = 300;
   var RESNAPSHOT_INTERVAL_MS = 6e4;
   function isLogWorthy(count) {
     if (count < 1) return false;
@@ -147,7 +255,7 @@
   }
   function load$1() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(BUG_REPORT_STORAGE_KEY);
       const parsed = raw ? JSON.parse(raw) : [];
       return Array.isArray(parsed) ? parsed : [];
     } catch {
@@ -156,13 +264,13 @@
   }
   function save(records) {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+      localStorage.setItem(BUG_REPORT_STORAGE_KEY, JSON.stringify(records));
     } catch {}
   }
   function fingerprintOf(kind, message, stack) {
     return `${kind}|${message}|${(stack?.split("\n").find((line) => /\s+at\s+/.test(line)) ?? "").trim()}`.slice(
       0,
-      300,
+      MAX_FINGERPRINT,
     );
   }
   var reporting = false;
@@ -173,7 +281,7 @@
       const isError = error instanceof Error;
       const message = String(
         (isError ? error.message : error?.message) ?? error ?? "unknown",
-      ).slice(0, 500);
+      ).slice(0, MAX_MESSAGE);
       const stack = isError ? error.stack?.slice(0, MAX_STACK) : void 0;
       const fingerprint = fingerprintOf(kind, message, stack);
       const records = load$1();
@@ -232,59 +340,6 @@
       reportBug("unhandled-rejection", event.reason);
     });
   }
-  function qs(selector, root = document) {
-    return root.querySelector(selector);
-  }
-  var SEL = {
-    accountName: ".avatarName > a.noViewParameters",
-    townListContainer: "#dropDown_js_citySelectContainer > div.bg > ul",
-    cityBread: "#js_cityBread",
-    cityLink: "#js_cityLink > a",
-    backlinkButton: "#js_backlinkButton",
-    globalMenu: {
-      maxActionPoints: "#js_GlobalMenu_maxActionPoints",
-      freeTransporters: "#js_GlobalMenu_freeTransporters",
-      freeFreighters: "#js_GlobalMenu_freeFreighters",
-      wine: "#js_GlobalMenu_wine",
-    },
-    position: (n) => `#position${n}`,
-    cityPositionLink: (n) => `#js_CityPosition${n}Link`,
-    buildings: "div[id^='position'].building:not(.buildingGround)",
-    winePress: "div[id^='position'].building.vineyard",
-    buildingHover: ".hoverable",
-    constructionSite: ".constructionSite",
-    safehouse: "div.building.safehouse > a",
-    buildingUpgradeButton: "#js_buildingUpgradeButton",
-    dockCities: ".cities.clearfix > li > a",
-    resourceField: (resource) => `#textfield_${resource}`,
-    wineField: "#textfield_wine",
-    submit: "#submit",
-    freightersMaxButton: "#slider_freighters_max",
-    setMax: ".setMax",
-    buildTabTownNames: "#BuildTab .city_name > span.clickable",
-    resTabRows: "#ResTab > table > tbody > tr",
-    resTabTownName: "td.city_name > .clickable",
-    resTabWineStock: "td.resource.wine span.current",
-    resTabWineConsumption: "td.resource.wine span.consumption",
-    resTabWineConsumed: "td.resource.wine > span.Red",
-    currentWood: "#t_currentwood",
-    woodIncome: "#t_woodincome > span.Green",
-    menuSlots: ".menu_slots",
-    menuSlotExpandable: ".menu_slots > .expandable",
-    pirateCaptcha: "#pirateCaptureBox > div > form .captchaImage",
-    pirateTable: "#pirateCaptureBox > div > table",
-    pirateActionLinks: ".action > a",
-    barbarianVillageResources: "#barbarianVillage ul.resources",
-    barbarianFleetResources: "#barbarianFleet ul.resources",
-    unitBlocks: "div.units.clearboth",
-    merchantShipTitle: '[title="Merchant Ships"]',
-    freighterTitle: '[title="Freighter"]',
-    upgradeDesc: ".upgrade_desc",
-    container: "#container",
-    footer: "#footer",
-    closeButton: ".close",
-  };
-  var pageWindow = typeof unsafeWindow !== "undefined" ? unsafeWindow : window;
   var RESPONSE_EVENT = "ika:ajaxResponse";
   var listeners = [];
   function onResponse(handler) {
@@ -315,16 +370,15 @@
     };
   }
   function empireContext() {
-    const anyWindow = window;
+    const page = pageWindow;
     return {
       board: boardHealth(),
       isChromium,
       jQuery: jq.fn?.jquery ?? null,
       jQueryUi: jq.ui?.version ?? null,
-      hasIkariamModel: !!anyWindow.ikariam?.model,
-      hasLocalizationStrings:
-        typeof anyWindow.LocalizationStrings !== "undefined",
-      templateView: anyWindow.ikariam?.templateView?.id ?? null,
+      hasIkariamModel: !!page.ikariam?.model,
+      hasLocalizationStrings: typeof page.LocalizationStrings !== "undefined",
+      templateView: page.ikariam?.templateView?.id ?? null,
       bodyId: document.body?.id ?? null,
     };
   }
@@ -340,11 +394,11 @@
     registerContextProvider(empireContext);
     installErrorHandlers();
   }
-  var KEY = "ikaAjaxTrace";
+  var TRACE_STORAGE_KEY = "ikaAjaxTrace";
   var MAX_ENTRIES = 40;
   function load() {
     try {
-      const raw = localStorage.getItem(KEY);
+      const raw = localStorage.getItem(TRACE_STORAGE_KEY);
       const parsed = raw ? JSON.parse(raw) : [];
       return Array.isArray(parsed) ? parsed : [];
     } catch {
@@ -360,7 +414,7 @@
         ...data,
       });
       while (records.length > MAX_ENTRIES) records.shift();
-      localStorage.setItem(KEY, JSON.stringify(records));
+      localStorage.setItem(TRACE_STORAGE_KEY, JSON.stringify(records));
       unsafeWindow.ikaAjaxTrace = records;
     } catch {}
   }
@@ -878,6 +932,9 @@
       return this._consumption || 0;
     },
   };
+  function empireKeyPrefix(accountName) {
+    return `***${accountName}***`;
+  }
   jq(".menu_slots > .expandable:last").after(
     '<li class="expandable slot99 empire_Menu" onclick=""><div class="empire_Menu image" style="background-image: url(cdn/all/both/minimized/weltinfo.png); background-position: 0px 0px; background-size:33px auto"></div></div><div class="name"><span class="namebox">Empire Overview</span></div></li>',
   );
@@ -1052,10 +1109,12 @@
                   city.getResource(resourceName).getConsumption,
                 );
           case "building":
-            var bName = tiptype.shift();
-            var index = parseInt(bName.slice(-1));
-            bName = bName.slice(0, -1);
-            return getBuildingTooltip(city.getBuildingsFromName(bName)[index]);
+            var buildingName = tiptype.shift();
+            var index = parseInt(buildingName.slice(-1));
+            buildingName = buildingName.slice(0, -1);
+            return getBuildingTooltip(
+              city.getBuildingsFromName(buildingName)[index],
+            );
           case "army":
             switch (tiptype.shift()) {
               case "unit":
@@ -3024,15 +3083,15 @@
         var body = "";
         jq.each(database.cities, function (cityId, city) {
           var rowCells = "";
-          var divbarracks = "";
+          var barracksLink = "";
           if (this.getBuildingFromName(Constant.Buildings.BARRACKS))
-            divbarracks =
+            barracksLink =
               '<div class="barracks" data-tooltip="' +
               Constant.LanguageData[lang].to_barracks +
               '&nbsp;{2}" style="cursor:pointer;"></div>';
-          var divshipyard = "&nbsp;";
+          var shipyardLink = "&nbsp;";
           if (this.getBuildingFromName(Constant.Buildings.SHIPYARD))
-            divshipyard =
+            shipyardLink =
               '<div class="shipyard" data-tooltip="' +
               Constant.LanguageData[lang].to_shipyard +
               '&nbsp;{2}" style="cursor:pointer;"></div>';
@@ -3051,8 +3110,8 @@
             city.getId,
             rowCells,
             city._name,
-            divbarracks,
-            divshipyard,
+            barracksLink,
+            shipyardLink,
             cost,
           ]);
         });
@@ -3229,14 +3288,17 @@
           $node = Utils.getClone($row);
         }
         var city = database.getCityFromId(cityId);
-        var data1 = city.military.getUnits.getUnit(type) || 0;
-        var data2 = city.military.getIncomingTotals[type] || 0;
-        var data3 = city.military.getTrainingTotals[type] || 0;
+        var ownUnits = city.military.getUnits.getUnit(type) || 0;
+        var incomingUnits = city.military.getIncomingTotals[type] || 0;
+        var trainingUnits = city.military.getTrainingTotals[type] || 0;
         var cells = $node.find("td." + type);
-        cells.get(0).textContent = Utils.FormatNumToStr(data1, false, 0) || "";
+        cells.get(0).textContent =
+          Utils.FormatNumToStr(ownUnits, false, 0) || "";
         cells = cells.eq(1).children("span");
-        cells.get(0).textContent = Utils.FormatNumToStr(data2, true, 0) || "";
-        cells.get(1).textContent = Utils.FormatNumToStr(data3, true, 0) || "";
+        cells.get(0).textContent =
+          Utils.FormatNumToStr(incomingUnits, true, 0) || "";
+        cells.get(1).textContent =
+          Utils.FormatNumToStr(trainingUnits, true, 0) || "";
         delete this.cityRows.army[cityId];
         if (celllevel) {
           Utils.setClone($row, $node);
@@ -4412,12 +4474,7 @@
       }
     },
   };
-  function readAccountName() {
-    const anchor = document.querySelector(".avatarName > a.noViewParameters");
-    if (anchor) return anchor.title || anchor.textContent?.trim() || "";
-    return document.querySelector(".avatarName")?.textContent?.trim() ?? "";
-  }
-  var EMPIRE_STORAGE_PREFIX = ["", readAccountName(), ""].join("***");
+  var EMPIRE_STORAGE_PREFIX = empireKeyPrefix(readAccountName());
   var empire = {
     version: 1.1831,
     scriptId: 764,
@@ -4471,7 +4528,12 @@
               database.getGlobalData.LastUpdateCheck = jq.now();
               var versionMatch = /@version\s*(.*?)\s*$/m.exec(rt);
               if (!versionMatch) {
-                if (forced) render.toast("Could not read the remote version.");
+                if (forced)
+                  render.toast(
+                    Constant.LanguageData[
+                      database.settings.languageChange.value
+                    ].toast_remoteVersionUnreadable,
+                  );
                 return;
               }
               remote_version = parseFloat(versionMatch[1]);
@@ -6339,6 +6401,20 @@
       return this.setUnit(unitId, count);
     },
   };
+  var TOWN_SWITCH_TIMEOUT_MS = 15e3;
+  var TOWN_SWITCH_POLL_MS = 100;
+  var TOWN_SWITCH_SETTLE_MS = 1200;
+  function gameIsLoading() {
+    if ((pageJQuery()?.active ?? 0) > 0) return true;
+    const loading = qs(SEL.loadingIndicator);
+    return !!loading && loading.style.display === "block";
+  }
+  function languageText() {
+    return Constant.LanguageData[database.settings.languageChange.value];
+  }
+  function updatedPrefix() {
+    return languageText().toast_updated;
+  }
   var ikariam = {
     _View: null,
     _Host: null,
@@ -6369,10 +6445,26 @@
         };
       return {};
     },
-    loadUrl: function (ajax, mainView, params) {
+    loadUrl: function (ajax, mainView, params, townAlreadySwitched) {
       mainView = mainView || ikariam.mainView;
+      if (
+        !townAlreadySwitched &&
+        ajax &&
+        ikariam.viewIsCity &&
+        mainView === "city" &&
+        params.view !== void 0 &&
+        params.cityId !== void 0 &&
+        String(ikariam.CurrentCityId) !== String(params.cityId)
+      ) {
+        if (
+          ikariam.switchTownWithGameForm(params.cityId, function (switched) {
+            ikariam.loadUrl(switched, mainView, params, switched);
+          })
+        )
+          return;
+      }
       var paramList = { cityId: ikariam.CurrentCityId };
-      if (ikariam.CurrentCityId !== params.cityId) {
+      if (!townAlreadySwitched && ikariam.CurrentCityId !== params.cityId) {
         paramList.action = "header";
         paramList.function = "changeCurrentCity";
         paramList.actionRequest = unsafeWindow.ikariam.model.actionRequest;
@@ -6411,6 +6503,44 @@
         document.location =
           "javascript:ajaxHandlerCall(" + JSON.stringify(url) + "); void(0);";
       }
+    },
+    switchTownWithGameForm: function (cityId, done) {
+      if (!/^\d+$/.test(String(cityId))) return false;
+      const anchor = qs(
+        SEL.townListContainer + ' > li[selectvalue="' + cityId + '"] > a',
+      );
+      const target = (
+        anchor?.getAttribute("title") ||
+        anchor?.textContent ||
+        ""
+      ).trim();
+      if (!target) return false;
+      const form = qs(SEL.changeCityForm);
+      const cityInput = qs(SEL.changeCityInput);
+      const submitForm = unsafeWindow.ajaxHandlerCallFromForm;
+      if (!form || !cityInput || typeof submitForm !== "function") return false;
+      cityInput.value = String(cityId);
+      submitForm(form);
+      const arrived = () => getCurrentTownName() === target;
+      let quietSince = null;
+      const settled = () => {
+        if (!arrived() || gameIsLoading()) {
+          quietSince = null;
+          return false;
+        }
+        const now = Date.now();
+        if (quietSince === null) quietSince = now;
+        return now - quietSince >= TOWN_SWITCH_SETTLE_MS;
+      };
+      waitFor(settled, {
+        intervalMs: TOWN_SWITCH_POLL_MS,
+        timeoutMs: TOWN_SWITCH_TIMEOUT_MS,
+        label: `switch to ${target}`,
+      }).then(
+        () => done(true),
+        () => done(arrived()),
+      );
+      return true;
     },
     Host: function () {
       if (this._Host == null) {
@@ -6741,7 +6871,7 @@
         "Current form",
         jq("#palace").find("div.contentBox01h h3.header").get(0).textContent,
       );
-      render.toast("Updated: " + jq("#palace").children(":first").text());
+      render.toast(updatedPrefix() + jq("#palace").children(":first").text());
     },
     parseCulturalPossessions: function (html) {
       var allCulturalGoods = html.match(/iniValue\s:\s(\d*)/g);
@@ -6761,7 +6891,7 @@
           });
         });
       render.toast(
-        "Updated: " + jq("#culturalPossessions_assign > .header").text(),
+        updatedPrefix() + jq("#culturalPossessions_assign > .header").text(),
       );
     },
     parseMuseum: function () {
@@ -6779,7 +6909,7 @@
           culturalGoods: true,
         });
       render.toast(
-        "Updated: " + jq("#tab_museum > div > h3").get(0).textContent,
+        updatedPrefix() + jq("#tab_museum > div > h3").get(0).textContent,
       );
     },
     parseTavern: function () {},
@@ -6956,7 +7086,7 @@
         }
         return completionTime.getTime();
       }
-      render.toast("Updated: " + jq("#js_mainBoxHeaderTitle").text());
+      render.toast(updatedPrefix() + jq("#js_mainBoxHeaderTitle").text());
     },
     transportFormSubmitted: function (data) {
       try {
@@ -7155,7 +7285,7 @@
           );
         transport.returnTime = arrTime.getTime();
         database.getGlobalData.addFleetMovement(transport);
-        render.toast("Updated: Movement added");
+        render.toast(updatedPrefix() + languageText().toast_movementAdded);
         return false;
       } else return true;
     },
@@ -7222,7 +7352,7 @@
         "finances",
         jq("#finances").find("h3#js_mainBoxHeaderTitle").text(),
       );
-      render.toast("Updated: " + jq("#finances").children(":first").text());
+      render.toast(updatedPrefix() + jq("#finances").children(":first").text());
     },
     parseResearchAdvisor: function (data) {
       var changes = [];
@@ -7253,7 +7383,7 @@
         jq("li.points").text().split(":")[0],
       );
       render.toast(
-        "Updated: " + jq("#tab_researchAdvisor").children(":first").text(),
+        updatedPrefix() + jq("#tab_researchAdvisor").children(":first").text(),
       );
     },
     parseAcademy: function (data) {
@@ -7265,7 +7395,7 @@
           research: changed,
         });
       render.toast(
-        "Updated: " + jq("#academy h3#js_mainBoxHeaderTitle").text(),
+        updatedPrefix() + jq("#academy h3#js_mainBoxHeaderTitle").text(),
       );
     },
     parseTownHall: function (data) {
@@ -7289,7 +7419,7 @@
       changes.priests = city.updatePriests(priests);
       changes.research = city.updateResearchers(researchers);
       events(Constant.Events.CITY_UPDATED).pub(ikariam.CurrentCityId, changes);
-      render.toast("Updated: " + jq("#js_TownHallCityName").text());
+      render.toast(updatedPrefix() + jq("#js_TownHallCityName").text());
     },
     parseTemple: function (data) {
       var priests = parseInt(data.js_TempleSlider.slider.ini_value) || 0;
@@ -7466,7 +7596,7 @@
         empire.error("parseMilitaryAdvisor", e);
       }
       render.toast(
-        "Updated: " + jq("#js_MilitaryMovementsFleetMovements h3").text(),
+        updatedPrefix() + jq("#js_MilitaryMovementsFleetMovements h3").text(),
       );
     },
     parseCityMilitary: function () {
@@ -7732,7 +7862,7 @@
         );
       });
       events(Constant.Events.PREMIUM_UPDATED).pub(changes);
-      render.toast("Updated: " + jq("#premium").children(":first").text());
+      render.toast(updatedPrefix() + jq("#premium").children(":first").text());
     },
     FetchAllTowns: function () {
       var _relatedCityData = unsafeWindow.ikariam.model.relatedCityData;
@@ -8277,6 +8407,9 @@
         alert_update1: "Would you like to go to the install page now?",
         alert_daily: "Please enable 'Automatically confirm the daily bonus '",
         alert_wine: "Warning wine > ",
+        toast_updated: "Updated: ",
+        toast_movementAdded: "Movement added",
+        toast_remoteVersionUnreadable: "Could not read the remote version.",
         en: "English",
         phalanx: "Hoplite",
         steamgiant: "Steam Giant",
@@ -10450,10 +10583,10 @@
     },
   });
   function addScript(src) {
-    var scr = document.createElement("script");
-    scr.type = "text/javascript";
-    scr.src = src;
-    document.getElementsByTagName("body")[0].appendChild(scr);
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src = src;
+    document.getElementsByTagName("body")[0].appendChild(script);
   }
   render.LoadCSS = function () {
     GM_addStyle(
@@ -10598,40 +10731,65 @@
     unsafeWindow.ikariam.model.ResourceProduction_updateGlobalData =
       unsafeWindow.ikariam.model.updateGlobalData;
     unsafeWindow.ikariam.model.updateGlobalData = function (dataSet) {
-      ResourceProduction.repositionSpan(dataSet.producedTradegood);
-      unsafeWindow.ikariam.model.ResourceProduction_updateGlobalData(dataSet);
-      ResourceProduction.updateProd();
+      try {
+        if (dataSet)
+          ResourceProduction.repositionSpan(dataSet.producedTradegood);
+      } catch (e) {
+        reportBug("manual", e, { where: "production span: reposition" });
+      }
+      var result =
+        unsafeWindow.ikariam.model.ResourceProduction_updateGlobalData.apply(
+          unsafeWindow.ikariam.model,
+          arguments,
+        );
+      try {
+        ResourceProduction.updateProd();
+      } catch (e) {
+        reportBug("manual", e, { where: "production span: update" });
+      }
+      return result;
     };
   });
   onResponse((entries) => {
     events("ajaxResponse").pub(entries);
   });
+  function observeGameResponses() {
+    const gameJQuery = pageJQuery();
+    if (!gameJQuery) return;
+    gameJQuery(unsafeWindow.document).ajaxSuccess(function (event, xhr) {
+      let entries;
+      try {
+        entries = JSON.parse(xhr && xhr.responseText);
+      } catch (e) {
+        return;
+      }
+      if (Array.isArray(entries)) events("ajaxResponse").pub(entries);
+    });
+  }
   installEmpireDiagnostics("userscript", "2.1.0");
   empire.Init();
   jq(function () {
-    var bgViewId = jq("body").attr("id");
-    if (!(
-      bgViewId === "city" ||
-      bgViewId === "island" ||
-      bgViewId === "worldmap_iso" ||
-      !jq("backupLockTimer").length
-    ))
-      return false;
-    (function init(model, data, local, ajax) {
-      var mod = !!unsafeWindow.ikariam && !!unsafeWindow.ikariam.model,
-        dat =
-          !!unsafeWindow.ikariam &&
-          !!unsafeWindow.ikariam.model.relatedCityData,
-        loc = !!unsafeWindow.LocalizationStrings,
-        aj =
-          !!unsafeWindow.ikariam.controller &&
-          !!unsafeWindow.ikariam.controller.executeAjaxRequest &&
-          !!unsafeWindow.ajaxHandlerCallFromForm;
-      if (dat && !data) events(Constant.Events.CITYDATA_AVAILABLE).pub();
-      if (mod && dat && !model && !data)
+    (function init(
+      modelAnnounced,
+      cityDataAnnounced,
+      stringsAnnounced,
+      ajaxHooked,
+    ) {
+      var hasModel = !!unsafeWindow.ikariam && !!unsafeWindow.ikariam.model;
+      var hasCityData =
+        !!unsafeWindow.ikariam && !!unsafeWindow.ikariam.model.relatedCityData;
+      var hasStrings = !!unsafeWindow.LocalizationStrings;
+      var canHookAjax =
+        !!unsafeWindow.ikariam.controller &&
+        !!unsafeWindow.ikariam.controller.executeAjaxRequest &&
+        !!unsafeWindow.ajaxHandlerCallFromForm;
+      if (hasCityData && !cityDataAnnounced)
+        events(Constant.Events.CITYDATA_AVAILABLE).pub();
+      if (hasModel && hasCityData && !modelAnnounced && !cityDataAnnounced)
         events(Constant.Events.MODEL_AVAILABLE).pub();
-      if (loc && !local) events(Constant.Events.LOCAL_STRINGS_AVAILABLE).pub();
-      if (aj && !ajax) {
+      if (hasStrings && !stringsAnnounced)
+        events(Constant.Events.LOCAL_STRINGS_AVAILABLE).pub();
+      if (canHookAjax && !ajaxHooked) {
         unsafeWindow.ajaxHandlerCallFromForm = (function (
           ajaxHandlerCallFromForm,
         ) {
@@ -10640,28 +10798,13 @@
             return ajaxHandlerCallFromForm.apply(this, arguments);
           };
         })(unsafeWindow.ajaxHandlerCallFromForm);
-        unsafeWindow.ikariam.controller.executeAjaxRequest = (function (
-          execAjaxRequest,
-        ) {
-          return function cExecuteAjaxRequest() {
-            var args = jq.makeArray(arguments);
-            args.push(void 0);
-            if (!args[1])
-              args[1] = function customAjaxCallback(responseText) {
-                var responder = unsafeWindow.ikariam.getClass(
-                  unsafeWindow.ajax.Responder,
-                  responseText,
-                );
-                unsafeWindow.ikariam.controller.ajaxResponder = responder;
-                events("ajaxResponse").pub(responder.responseArray);
-                unsafeWindow.response = responder;
-              };
-            execAjaxRequest.apply(this, args);
-          };
-        })(unsafeWindow.ikariam.controller.executeAjaxRequest);
+        observeGameResponses();
       }
-      if (!(mod && loc && dat && aj))
-        events.scheduleAction(init.bind(null, mod, dat, loc, aj), 1e3);
+      if (!(hasModel && hasStrings && hasCityData && canHookAjax))
+        events.scheduleAction(
+          init.bind(null, hasModel, hasCityData, hasStrings, canHookAjax),
+          1e3,
+        );
       else
         jq("script").each(function (index, script) {
           var match =
