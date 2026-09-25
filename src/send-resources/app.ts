@@ -15,18 +15,20 @@
  */
 
 import { qs } from "@core/dom";
-import { getAccountName } from "@core/ikariam/globals";
+import { getAccountName, getCurrentTownName } from "@core/ikariam/globals";
 import { DIALOG_ID, SEL } from "@core/ikariam/selectors";
 import { installErrorHandlers } from "@core/bug-report";
 import { clearLog, initLogger, logInfo } from "@core/logger";
 import { TaskRunner } from "@core/task-queue";
 
+import { BUG_REPORT, QUEUE_VIEW, SEND_DIALOG, WINE_DIALOG } from "./messages";
 import {
   FLAG,
   getState,
   initState,
   isAutoStart,
   isFlagTrue,
+  loadSenders,
   migrateLegacyQueues,
   saveReceivers,
   saveSenders,
@@ -45,7 +47,6 @@ import {
   collectWineSettings,
   enqueueWineRun,
   loadConsumedWine,
-  loadSenders,
 } from "./features/auto-wine";
 import {
   addBuildingToQueue,
@@ -112,21 +113,29 @@ const STATUS_INTERVAL_MS = 1000;
  */
 const TOWN_SNAPSHOT_INTERVAL_MS = 5_000;
 
-/** Key codes for the hotkeys inherited from the original. */
-const KEY_SPACE = 32;
-const KEY_A = 65;
-const KEY_B = 66;
-const KEY_S = 83;
+/**
+ * Physical keys for the hotkeys inherited from the original. `event.code`
+ * names the key, not the character, so the bindings do not move with the
+ * keyboard layout — which is also what the deprecated `keyCode` numbers the
+ * original used amounted to on a Latin layout.
+ */
+const KEY_TOGGLE_PANEL = "Space";
+const KEY_SEND_ALL_ARMY = "KeyA";
+const KEY_AUTO_BUILD = "KeyB";
+const KEY_SAFEHOUSE = "KeyS";
+
+/** How much of the bug summary fits in the confirmation alert. */
+const BUG_SUMMARY_PREVIEW_CHARS = 800;
 
 let runner: TaskRunner;
 
 /**
  * Whether the UI is ready for another task.
  *
- * This is the precondition `So_sanh_2_script_Ikariam.md` asked for: "check the
- * UI state carefully before starting a new task (no popup, not loading)". This
- * script's OWN popup must block (the user is editing settings); the GAME's
- * popups must not, because tasks close those themselves.
+ * The precondition for every task: check the UI state before starting one
+ * (no popup, not loading). This script's OWN popup must block (the user is
+ * editing settings); the GAME's popups must not, because tasks close those
+ * themselves.
  */
 function isUiReady(): boolean {
   if (qs(`#${DIALOG_ID}`)) return false;
@@ -192,15 +201,15 @@ function registerUiActions(): void {
     "send.add": () => {
       const form = readSendForm();
       if (!form) {
-        alert("Please fill in every field.");
+        alert(SEND_DIALOG.errors.incomplete);
         return;
       }
       if (form.origin === form.destination) {
-        alert("Source and destination are the same!");
+        alert(SEND_DIALOG.errors.sameTown);
         return;
       }
       if (form.amount <= 0) {
-        alert("Amount must be greater than 0!");
+        alert(SEND_DIALOG.errors.noAmount);
         return;
       }
       enqueueSendResource(
@@ -238,7 +247,7 @@ function registerUiActions(): void {
     "wine.preview": () => {
       const senders = loadSenders();
       if (senders.length === 0) {
-        alert("No town is ticked as a wine source!");
+        alert(WINE_DIALOG.noSourceTicked);
         return;
       }
       // With several sources, preview against the first one.
@@ -247,7 +256,7 @@ function registerUiActions(): void {
     "wine.chooseSource": () => {
       const senders = loadSenders();
       if (senders.length === 0) {
-        alert("No town is ticked as a wine source!");
+        alert(WINE_DIALOG.noSourceTicked);
         return;
       }
       if (senders.length === 1) {
@@ -269,7 +278,7 @@ function registerUiActions(): void {
       const { ikaPosition, ikaBuilding } = element.dataset;
       if (!ikaPosition || !ikaBuilding) return;
       addBuildingToQueue(ikaPosition, ikaBuilding);
-      refreshTownQueueCell(qs(SEL.cityBread)?.innerHTML.trim() ?? "");
+      refreshTownQueueCell(getCurrentTownName());
     },
     "build.remove": (element) => {
       const { ikaPosition, ikaBuilding, ikaTown } = element.dataset;
@@ -330,7 +339,7 @@ function registerUiActions(): void {
       const pending = getState().queue.length;
       if (pending === 0) return;
       // Losing a queue by a stray click is worth one confirmation.
-      if (!confirm(`Remove all ${pending} queued task(s)?`)) return;
+      if (!confirm(QUEUE_VIEW.confirmClear(pending))) return;
       getState().queue.clear();
       refreshQueueView();
     },
@@ -350,7 +359,7 @@ function registerUiActions(): void {
     "bug.report": () => {
       const bugs = getBugs();
       if (bugs.length === 0) {
-        alert("No bugs recorded. Nothing to report.");
+        alert(BUG_REPORT.nothingToReport);
         return;
       }
       const report = exportBugReport();
@@ -359,23 +368,21 @@ function registerUiActions(): void {
         ?.writeText(report)
         .then(() =>
           alert(
-            `Copied a report of ${bugs.length} distinct issue(s) to the clipboard.
-
-` + summariseBugs().slice(0, 800),
+            BUG_REPORT.copied(
+              bugs.length,
+              summariseBugs().slice(0, BUG_SUMMARY_PREVIEW_CHARS),
+            ),
           ),
         )
         .catch(() => {
           // Clipboard blocked: fall back to the console, which always works.
           console.log(report);
-          alert(
-            "Clipboard unavailable — the full report was printed to the console " +
-              "(F12). You can also run ikaBugReport().",
-          );
+          alert(BUG_REPORT.clipboardUnavailable);
         });
     },
     "bug.clear": () => {
       clearBugs();
-      alert("Bug reports cleared.");
+      alert(BUG_REPORT.cleared);
     },
 
     /* ── Misc ── */
@@ -402,17 +409,17 @@ function registerHotkeys(): void {
     const tag = (event.target as HTMLElement | null)?.nodeName.toLowerCase();
     if (tag === "input" || tag === "textarea" || tag === "select") return;
 
-    switch (event.which) {
-      case KEY_SPACE:
+    switch (event.code) {
+      case KEY_TOGGLE_PANEL:
         togglePanel();
         break;
-      case KEY_A:
+      case KEY_SEND_ALL_ARMY:
         sendAllArmy();
         break;
-      case KEY_S:
+      case KEY_SAFEHOUSE:
         openSpyBuilding();
         break;
-      case KEY_B:
+      case KEY_AUTO_BUILD:
         openAutoBuildDialog();
         break;
     }

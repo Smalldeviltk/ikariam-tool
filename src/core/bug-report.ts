@@ -22,12 +22,20 @@
  *    localStorage is shared with the queue and the log.
  */
 
-const STORAGE_KEY = "ikaBugReports";
+import { pageWindow } from "./ikariam/globals";
+import { BUGS_NONE_RECORDED } from "./messages";
+
+/** Where recorded bugs are kept. */
+export const BUG_REPORT_STORAGE_KEY = "ikaBugReports";
 
 /** Distinct bugs kept. Repeats of a known bug bump a counter instead. */
 const MAX_RECORDS = 50;
 /** Characters of stack retained per bug. */
 const MAX_STACK = 2000;
+/** Characters of message retained per bug. */
+const MAX_MESSAGE = 500;
+/** Characters of the deduplication key; message plus one stack frame. */
+const MAX_FINGERPRINT = 300;
 /** Context snapshots kept per bug — the first and the most recent are the useful ones. */
 const MAX_CONTEXTS = 3;
 /** How stale the newest snapshot must be before a repeat takes another. */
@@ -102,6 +110,7 @@ export function setBuildInfo(info: BuildInfo): void {
   buildInfo = info;
 }
 
+/** Read back by tests; the report itself reads the stamp directly. */
 export function getBuildInfo(): BuildInfo | null {
   return buildInfo;
 }
@@ -150,7 +159,7 @@ function collectContext(extra?: Record<string, unknown>): BugContext {
 
 function load(): BugRecord[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(BUG_REPORT_STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -160,7 +169,7 @@ function load(): BugRecord[] {
 
 function save(records: BugRecord[]): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    localStorage.setItem(BUG_REPORT_STORAGE_KEY, JSON.stringify(records));
   } catch {
     // Storage full or blocked. Dropping the report is the correct trade —
     // never let bookkeeping break the feature it is watching.
@@ -176,7 +185,7 @@ function save(records: BugRecord[]): void {
  */
 function fingerprintOf(kind: BugKind, message: string, stack?: string): string {
   const frame = stack?.split("\n").find((line) => /\s+at\s+/.test(line)) ?? "";
-  return `${kind}|${message}|${frame.trim()}`.slice(0, 300);
+  return `${kind}|${message}|${frame.trim()}`.slice(0, MAX_FINGERPRINT);
 }
 
 /* ──────────────────────────── Recording ────────────────────────────────── */
@@ -197,7 +206,7 @@ export function reportBug(
       (isError ? error.message : (error as { message?: unknown })?.message) ??
         error ??
         "unknown",
-    ).slice(0, 500);
+    ).slice(0, MAX_MESSAGE);
     const stack = isError ? error.stack?.slice(0, MAX_STACK) : undefined;
 
     const fingerprint = fingerprintOf(kind, message, stack);
@@ -319,17 +328,32 @@ export interface BugReport {
   bugs: BugRecord[];
 }
 
-/** Everything worth knowing about where this is running. */
+/** The parts of a window the environment snapshot looks at. */
+interface InspectedWindow {
+  ikariam?: { model?: unknown };
+  jQuery?: { fn?: { jquery?: string }; ui?: { version?: string } };
+}
+
+/**
+ * Everything worth knowing about where this is running.
+ *
+ * The game is read through `pageWindow`: Empire Overview runs sandboxed, and
+ * its own `window` has no `ikariam`, so reading that always reported the
+ * model as missing. jQuery is read from both, because they differ there — the
+ * sandbox carries the script's own copy with jQuery UI, the page the game's.
+ */
 function environment(): Record<string, unknown> {
-  const anyWindow = window as unknown as Record<string, any>;
+  const page = pageWindow as unknown as InspectedWindow;
+  const own = window as unknown as InspectedWindow;
   return {
     url: location.href,
     view: new URLSearchParams(location.search).get("view"),
     userAgent: navigator.userAgent,
     build: buildInfo,
-    hasIkariamModel: !!anyWindow.ikariam?.model,
-    jQuery: anyWindow.jQuery?.fn?.jquery ?? null,
-    jQueryUi: anyWindow.jQuery?.ui?.version ?? null,
+    hasIkariamModel: !!page.ikariam?.model,
+    pageJQuery: page.jQuery?.fn?.jquery ?? null,
+    scriptJQuery: own.jQuery?.fn?.jquery ?? null,
+    jQueryUi: own.jQuery?.ui?.version ?? null,
     language: navigator.language,
   };
 }
@@ -351,7 +375,7 @@ export function exportBugReport(): string {
 /** One-line summary per bug, for showing in the panel. */
 export function summariseBugs(): string {
   const bugs = load();
-  if (bugs.length === 0) return "No bugs recorded.";
+  if (bugs.length === 0) return BUGS_NONE_RECORDED;
   return bugs
     .slice()
     .sort((a, b) => b.lastAt - a.lastAt)

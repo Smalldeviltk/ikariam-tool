@@ -22,6 +22,8 @@
  * hanging. Pass `timeout: Infinity` to get the old never-give-up behaviour.
  */
 
+import { errorMessage } from "./format";
+
 /** Default poll interval, matching the original 200 ms loops. */
 export const DEFAULT_POLL_INTERVAL_MS = 200;
 
@@ -62,28 +64,34 @@ export function waitFor<T>(
   const deadline = timeoutMs === Infinity ? Infinity : Date.now() + timeoutMs;
 
   return new Promise<T>((resolve, reject) => {
+    // A predicate that throws counts as "not yet": it usually reads DOM the
+    // game has not finished building. The last throw is kept, though, so a
+    // genuine bug in the predicate surfaces in the timeout error instead of
+    // passing for a slow page.
+    let lastError: unknown;
     const tick = () => {
       let value: T | null | undefined | false;
       try {
         value = predicate();
-      } catch {
+        lastError = undefined;
+      } catch (error) {
         value = null;
+        lastError = error;
       }
       if (value) {
         resolve(value as T);
         return;
       }
       if (Date.now() >= deadline) {
-        reject(new Error(`${label}: timed out after ${timeoutMs}ms`));
+        const reason =
+          lastError === undefined
+            ? ""
+            : ` (last check threw: ${errorMessage(lastError)})`;
+        reject(new Error(`${label}: timed out after ${timeoutMs}ms${reason}`));
         return;
       }
       setTimeout(tick, intervalMs);
     };
     setTimeout(tick, intervalMs);
   });
-}
-
-/** Adapt an old callback-style `fn(done)` into a promise. */
-export function promisify(fn: (done: () => void) => void): Promise<void> {
-  return new Promise((resolve) => fn(resolve));
 }

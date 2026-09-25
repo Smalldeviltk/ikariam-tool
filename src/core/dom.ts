@@ -1,6 +1,7 @@
 /** Typed wrappers around `querySelector`, plus small DOM utilities. */
 
 import { waitFor, type WaitForOptions } from "./async";
+import { parseGameNumber } from "./format";
 
 export function qs<T extends Element = HTMLElement>(
   selector: string,
@@ -14,16 +15,6 @@ export function qsa<T extends Element = HTMLElement>(
   root: ParentNode = document,
 ): T[] {
   return Array.from(root.querySelectorAll<T>(selector));
-}
-
-/** Like `qs` but throws when missing. Use for elements that must exist. */
-export function qsStrict<T extends Element = HTMLElement>(
-  selector: string,
-  root: ParentNode = document,
-): T {
-  const el = root.querySelector<T>(selector);
-  if (!el) throw new Error(`Element not found: ${selector}`);
-  return el;
 }
 
 /** Wait until the selector matches at least one element, then return it. */
@@ -94,34 +85,32 @@ export function setInputValue(input: HTMLInputElement, value: string): void {
   input.blur();
 }
 
-/** `"1,234"` / `"1 234"` -> `1234`. Same semantics as the old `stringToNumber`. */
-export function stringToNumber(str: string): number {
-  return parseFloat(str.replace(",", "").replace(" ", ""));
-}
-
-/** Read an element's `innerHTML` as a number. Returns 0 when absent. */
-export function readNumber(selector: string): number {
-  const el = qs(selector);
-  if (!el) return 0;
-  return Number(el.innerHTML.replace(/,/g, "").trim());
-}
-
 /**
- * Read an element's `innerHTML` as a number, or `null` when the element is
- * absent or does not parse.
+ * Read an element's text as a number, or `null` when the element is absent or
+ * does not parse.
  *
- * `readNumber` collapses both of those into 0, which is fine for a display
- * but not for a value another reading is meant to fall back from — a real 0
- * and a missing element have to be told apart.
+ * `null` rather than 0, because this feeds values another reading falls back
+ * from — a real 0 and a missing element have to be told apart. Parsing is
+ * `parseGameNumber`'s.
  */
 export function readNumberOrNull(selector: string): number | null {
   const el = qs(selector);
-  if (!el) return null;
-  const parsed = Number(el.innerHTML.replace(/,/g, "").trim());
-  return Number.isFinite(parsed) ? parsed : null;
+  return el ? parseGameNumber(el.textContent) : null;
 }
 
-/** Read an element's trimmed `innerHTML`. Returns `""` when absent. */
-export function readText(selector: string): string {
-  return qs(selector)?.innerHTML.trim() ?? "";
+const HTML_ESCAPES: Readonly<Record<string, string>> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+};
+
+/**
+ * Escape text for use inside HTML built as a string, in element content or
+ * in a quoted attribute. Town and account names come from the game, and every
+ * template here interpolates them.
+ */
+export function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, (char) => HTML_ESCAPES[char]);
 }

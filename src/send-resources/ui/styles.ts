@@ -4,8 +4,14 @@
  * The original declared three style blocks (`style`, `styleAutoBuild` and
  * `styleExtra`) but only appended `style` to `<head>`; the other two were dead
  * code, which is why the auto-build popup rendered unstyled. They are merged
- * here into one sheet (the union of all three, duplicates collapsed), so the
- * build popup finally gets the CSS that was written for it.
+ * here into one sheet, so the build popup finally gets the CSS that was
+ * written for it. Rules for elements nothing renders any more were dropped.
+ *
+ * Elements that only ever appear inside the settings popup are styled once,
+ * under the popup's id. The original wrote their rules both with and without
+ * that id; the id is kept because it makes the rule outweigh the game's own
+ * popup styles. `.fullTable` is the exception, and appears twice on purpose:
+ * the panel's queue table uses it outside the popup too.
  */
 
 import { DIALOG_ID } from "@core/ikariam/selectors";
@@ -15,15 +21,9 @@ export function buildStyles(): string {
   const panelDisplay = isFlagTrue(FLAG.isSendResourceHidden) ? "none" : "block";
 
   return `
-#divWrapperAuto button { padding: 5px; margin: 0 0 5px 0; height: 24px; font-size: 10px !important; }
-#divWrapperAuto p { font-size: 10px; }
-
 #autoWineTable th, #autoWineTable td { padding: 7px; }
-#resourceTable th, #resourceTable td { padding: 7px; }
 
 .fullTable { width: 100%; overflow: hidden; display: block; }
-.fixTable { max-height: 500px !important; }
-.tableQueue tbody { max-height: 400px; overflow: auto; display: block; }
 
 #summaryAccountTable td, #summaryAccountTable th { padding: 1.5px; }
 #summaryAccountTable tr:hover { background-color: white; }
@@ -46,15 +46,6 @@ th { font-weight: bold; }
    toggle. The flag still hides the Empire Overview board, which has no such
    mechanism of its own. */
 #empireBoard { display: ${panelDisplay}; }
-
-#tdListBuilding tr, #tdQueue tr { border-bottom: 1px solid black; }
-#tdListBuilding tr:last-child, #tdQueue tr:last-child { border: 0; }
-#tdListBuilding, .tdQueue { vertical-align: top; padding: 1px 1px 0 1px; text-align: left; }
-
-#autoBuildTable { overflow: auto; max-height: 501px; }
-#autoBuildTable button { float: right; }
-#autoBuildTable span { float: left; width: 100%; border-bottom: 1px dotted gray; }
-#autoBuildTable th { padding: 2px; }
 
 /* The zoom toggle now scales the window in place rather than nudging a
    fixed-position panel back onto the screen. */

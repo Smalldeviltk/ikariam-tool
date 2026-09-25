@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FLAG, initState, isFlagTrue, setAutoStart, setFlag } from "./state";
 
-vi.mock("@core/logger", () => ({
+// Silence the logger, but keep its other exports (its storage key is read by
+// the data export).
+vi.mock("@core/logger", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@core/logger")>()),
   logInfo: () => {},
   clearLog: () => {},
   initLogger: () => {},
@@ -25,9 +28,6 @@ vi.mock("./ui/actions", async (importOriginal) => {
   return {
     ...actual,
     installActionDispatcher: () => {},
-    registerAction: (name: string, fn: never) => {
-      actions[name] = fn;
-    },
     registerActions: (map: Record<string, never>) => {
       Object.assign(actions, map);
     },

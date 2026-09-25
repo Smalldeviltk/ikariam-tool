@@ -12,7 +12,7 @@
  * jQuery and jQuery UI are loaded by the `@require` lines in the userscript
  * header; see build/vite.empire-overview.ts.
  */
-import $ from "./jquery";
+import $, { pageJQuery } from "./jquery";
 // Side-effect modules. The original was one file, so these ran simply by being
 // in it; after the split nothing imports them for a value, and leaving them out
 // of the graph drops them from the bundle entirely. Each one patches an object
@@ -28,7 +28,6 @@ import { onResponse as onIkariamResponse } from "@core/ikariam/http";
 import { installEmpireDiagnostics } from "./diagnostics";
 import { Constant } from "./constants";
 import { Utils } from "./utils";
-import { addScript } from "./add-script";
 import { database } from "./database";
 import { debug } from "./debug";
 import { empire } from "./empire";
@@ -53,20 +52,11 @@ if (debug) {
     Constant: Constant,
     $: $,
     get tip() {
+      // The original chained `.replace(/\s\s/g, " ")` twelve times to squash
+      // runs of whitespace; one pass over any run does the same.
       return $(".breakdown_table")
         .text()
-        .replace(/\s\s/g, " ")
-        .replace(/\s\s/g, " ")
-        .replace(/\s\s/g, " ")
-        .replace(/\s\s/g, " ")
-        .replace(/\s\s/g, " ")
-        .replace(/\s\s/g, " ")
-        .replace(/\s\s/g, " ")
-        .replace(/\s\s/g, " ")
-        .replace(/\s\s/g, " ")
-        .replace(/\s\s/g, " ")
-        .replace(/\s\s/g, " ")
-        .replace(/\s\s/g, " ");
+        .replace(/\s{2,}/g, " ");
     },
   };
 }
@@ -110,10 +100,10 @@ onIkariamResponse((entries) => {
  * game's code runs on — not the sandbox copy this script imports as `$`.
  */
 function observeGameResponses() {
-  var pageJQuery = unsafeWindow.jQuery || unsafeWindow.$;
-  if (typeof pageJQuery !== "function") return;
-  pageJQuery(unsafeWindow.document).ajaxSuccess(function (event, xhr) {
-    var entries;
+  const gameJQuery = pageJQuery();
+  if (!gameJQuery) return;
+  gameJQuery(unsafeWindow.document).ajaxSuccess(function (event, xhr) {
+    let entries: unknown;
     try {
       entries = JSON.parse(xhr && xhr.responseText);
     } catch (e) {
@@ -128,37 +118,39 @@ function observeGameResponses() {
 installEmpireDiagnostics(__PACKAGING__, __SCRIPT_VERSION__);
 
 empire.Init();
+// BUG IN THE ORIGINAL, removed rather than fixed: the ready handler opened
+// with a guard meant to stop the script on views other than city, island and
+// world map when a backup-lock timer was on the page. It looked the timer up
+// as `$("backupLockTimer")` — no `#` or `.`, so it matched nothing, the guard
+// was always true and it never stopped anything. Whether the game's element
+// is an id or a class has not been checked, and guessing would start stopping
+// the script on pages where it has always run, so the guard is gone and the
+// behaviour is exactly what it has always been.
 $(function () {
-  var bgViewId = $("body").attr("id");
-  if (!(
-    bgViewId === "city" ||
-    bgViewId === "island" ||
-    bgViewId === "worldmap_iso" ||
-    !$("backupLockTimer").length
-  )) {
-    return false;
-  }
-
-  (function init(model, data, local, ajax) {
-    var mod, dat, loc, aj;
-    mod = !!unsafeWindow.ikariam && !!unsafeWindow.ikariam.model;
-    dat =
+  (function init(
+    modelAnnounced,
+    cityDataAnnounced,
+    stringsAnnounced,
+    ajaxHooked,
+  ) {
+    var hasModel = !!unsafeWindow.ikariam && !!unsafeWindow.ikariam.model;
+    var hasCityData =
       !!unsafeWindow.ikariam && !!unsafeWindow.ikariam.model.relatedCityData;
-    loc = !!unsafeWindow.LocalizationStrings;
-    aj =
+    var hasStrings = !!unsafeWindow.LocalizationStrings;
+    var canHookAjax =
       !!unsafeWindow.ikariam.controller &&
       !!unsafeWindow.ikariam.controller.executeAjaxRequest &&
       !!unsafeWindow.ajaxHandlerCallFromForm;
-    if (dat && !data) {
+    if (hasCityData && !cityDataAnnounced) {
       events(Constant.Events.CITYDATA_AVAILABLE).pub();
     }
-    if (mod && dat && !model && !data) {
+    if (hasModel && hasCityData && !modelAnnounced && !cityDataAnnounced) {
       events(Constant.Events.MODEL_AVAILABLE).pub();
     }
-    if (loc && !local) {
+    if (hasStrings && !stringsAnnounced) {
       events(Constant.Events.LOCAL_STRINGS_AVAILABLE).pub();
     }
-    if (aj && !ajax) {
+    if (canHookAjax && !ajaxHooked) {
       unsafeWindow.ajaxHandlerCallFromForm = (function (
         ajaxHandlerCallFromForm,
       ) {
@@ -170,15 +162,17 @@ $(function () {
 
       observeGameResponses();
     }
-    if (!(mod && loc && dat && aj)) {
-      // BUG IN THE ORIGINAL (line 10741): the parameters are
-      // `(model, data, local, ajax)` but it passed `(mod, loc, dat, aj)` —
-      // `local` and `data` the wrong way round. Each retry therefore
-      // misjudged what it had already announced, and re-published
-      // CITYDATA_AVAILABLE, which re-runs `FetchAllTowns`. Harmless while
-      // that function only added towns; destructive once it also removed
-      // them. Pass them in the order the signature declares.
-      events.scheduleAction(init.bind(null, mod, dat, loc, aj), 1000);
+    if (!(hasModel && hasStrings && hasCityData && canHookAjax)) {
+      // BUG IN THE ORIGINAL (line 10741): the retry passed what had been
+      // seen so far with the city-data and strings flags the wrong way
+      // round. Each retry therefore misjudged what it had already announced,
+      // and re-published CITYDATA_AVAILABLE, which re-runs `FetchAllTowns`.
+      // Harmless while that function only added towns; destructive once it
+      // also removed them. Pass them in the order the signature declares.
+      events.scheduleAction(
+        init.bind(null, hasModel, hasCityData, hasStrings, canHookAjax),
+        1000,
+      );
     } else {
       // Hand the page's own inline response array to the same subscriber the
       // live ajax hook feeds, so the town you land on is recorded without
@@ -215,7 +209,3 @@ $(function () {
     }
   })();
 });
-
-/**************************************************************************
- *  for IkaLogs
- ***************************************************************************/

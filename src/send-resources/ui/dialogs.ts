@@ -6,7 +6,8 @@
  */
 
 import { reportSelectorMiss } from "@core/bug-report";
-import { qs, qsa, removeElement } from "@core/dom";
+import { escapeHtml, qs, qsa, removeElement } from "@core/dom";
+import { formatInteger } from "@core/format";
 import { getCurrentTownName, getIkariam } from "@core/ikariam/globals";
 import { DIALOG_ID, SEL } from "@core/ikariam/selectors";
 import { getTownList, getTownNameFromList } from "../navigation";
@@ -19,6 +20,14 @@ import {
   planWineRun,
   readWineBoard,
 } from "../features/auto-wine";
+import {
+  BUILD_DIALOG,
+  BUTTON,
+  MISC,
+  SEND_DIALOG,
+  WINE_DIALOG,
+  WINE_PREVIEW,
+} from "../messages";
 import { getState, loadReceivers, loadSenders } from "../state";
 import { RESOURCE_OPTIONS } from "../types";
 import { action } from "./actions";
@@ -29,13 +38,15 @@ function openPopup(title: string, html: string): void {
     // Every settings dialog goes through here. Without a record this is a
     // completely silent failure: the user clicks Setting and nothing happens.
     reportSelectorMiss("window.ikariam.createPopup", { dialogTitle: title });
-    alert(
-      "Could not open the settings dialog - the game's own popup API is not " +
-        "available on this screen. Try again from the town view.",
-    );
+    alert(MISC.popupUnavailable);
     return;
   }
   api.createPopup(DIALOG_ID, title, html, "???", "class");
+}
+
+/** One `<th>` per label. Labels are trusted text: callers escape game data. */
+function headerCells(labels: readonly string[]): string {
+  return labels.map((label) => `<th>${label}</th>`).join("");
 }
 
 export function closeDialog(): void {
@@ -47,7 +58,8 @@ export function closeDialog(): void {
 function townOptions(): string {
   return getTownList()
     .map(
-      (town) => `<option value="${town.townNumber}">${town.townName}</option>`,
+      (town) =>
+        `<option value="${town.townNumber}">${escapeHtml(town.townName)}</option>`,
     )
     .join("");
 }
@@ -57,11 +69,11 @@ export function renderResourceTable(): void {
     .queue.listOfType("sendResource")
     .map(
       (task) => `<tr>
-        <td>${getTownNameFromList(task.data.origin)}</td>
-        <td>${getTownNameFromList(task.data.destination)}</td>
+        <td>${escapeHtml(getTownNameFromList(task.data.origin))}</td>
+        <td>${escapeHtml(getTownNameFromList(task.data.destination))}</td>
         <td>${task.data.resource}</td>
         <td>${task.data.amount}</td>
-        <td>${task.data.label ?? ""}</td>
+        <td>${escapeHtml(task.data.label ?? "")}</td>
       </tr>`,
     )
     .join("");
@@ -78,17 +90,17 @@ export function openSendResourcesDialog(): void {
   ).join("");
 
   openPopup(
-    "Mass transport resources",
-    `<div><span>From: </span><select id="transporterSendFromTown">${towns}</select></div><br/>
-     <div><span>Destination: </span><select id="transporterSendDestination">${towns}</select></div><br/>
-     <div><span>Resource: </span><select id="transporterSendResource">${resources}</select></div><br/>
-     <div><span>Amount: </span><input id="transporterSendAmount" type="number"></div><br/>
-     <button style="margin-right:5px" class="button" ${action("send.add")}>Add</button>
-     <button style="margin-right:5px" class="button" ${action("send.removeFirst")}>Remove First</button>
-     <button style="margin-right:5px" class="button" ${action("send.removeLast")}>Remove Last</button>
-     <button class="button" ${action("dialog.close")}>Close</button><br/>
+    SEND_DIALOG.title,
+    `<div><span>${SEND_DIALOG.from}</span><select id="transporterSendFromTown">${towns}</select></div><br/>
+     <div><span>${SEND_DIALOG.destination}</span><select id="transporterSendDestination">${towns}</select></div><br/>
+     <div><span>${SEND_DIALOG.resource}</span><select id="transporterSendResource">${resources}</select></div><br/>
+     <div><span>${SEND_DIALOG.amount}</span><input id="transporterSendAmount" type="number"></div><br/>
+     <button style="margin-right:5px" class="button" ${action("send.add")}>${BUTTON.add}</button>
+     <button style="margin-right:5px" class="button" ${action("send.removeFirst")}>${SEND_DIALOG.removeFirst}</button>
+     <button style="margin-right:5px" class="button" ${action("send.removeLast")}>${SEND_DIALOG.removeLast}</button>
+     <button class="button" ${action("dialog.close")}>${BUTTON.close}</button><br/>
      <table id="resourceTable" class="fullTable" border="1" cellpadding="5">
-       <thead><th>Origin</th><th>Destination</th><th>Resource</th><th>Amount</th><th>Source</th></thead>
+       <thead>${headerCells(SEND_DIALOG.columns)}</thead>
        <tbody id="resourceTableBody"></tbody>
      </table>`,
   );
@@ -140,31 +152,26 @@ export function openAutoWineDialog(): void {
           : "—";
 
       return `<tr class="txtWine">
-        <td><input type="checkbox" ${checked} id="cbSender_${id}" name="${town.townName}" value="${id}"/></td>
-        <td>${town.townName}</td>
-        <td><input type="text" id="txtWine_${id}" value="${perHour}"/></td>
-        <td style="text-align:right">${stock === null ? "—" : stock.toLocaleString("en-US")}</td>
+        <td><input type="checkbox" ${checked} id="cbSender_${id}" name="${escapeHtml(town.townName)}" value="${id}"/></td>
+        <td>${escapeHtml(town.townName)}</td>
+        <td><input type="text" id="txtWine_${id}" value="${escapeHtml(perHour)}"/></td>
+        <td style="text-align:right">${stock === null ? "—" : formatInteger(stock)}</td>
         <td style="text-align:right">${hours}</td>
       </tr>`;
     })
     .join("");
 
   openPopup(
-    "Auto Wine",
+    WINE_DIALOG.title,
     `<div><table id="autoWineTable" class="fullTable" border="1" cellpadding="5">
-       <tr><th>Sender</th><th>Town Name</th><th>Wine/h</th><th>Stock</th><th>Lasts</th></tr>
+       <tr>${headerCells(WINE_DIALOG.columns)}</tr>
        ${rows}
      </table></div><br/>
-     <p style="font-size:11px"><b>Sender</b> and <b>Wine/h</b> are the two roles and they
-     are mutually exclusive: tick a town to make it a source, or give it a Wine/h
-     above 0 to make it a receiver. A ticked town is never a receiver.<br/>
-     <b>Stock</b> and <b>Lasts</b> come from the Empire Overview board, or from the
-     last time each town was visited. When they show "—" there is no measurement
-     yet and Auto Wine uses the <b>Wine/h</b> you type here, assuming zero stock.</p>
-     <button style="margin-right:20px" class="button" ${action("wine.save")}>Save</button>
-     <button style="margin-right:20px" class="button" ${action("wine.load")}>Load</button>
-     <button style="margin-right:20px" class="button" ${action("wine.preview")}>Preview plan</button>
-     <button class="button" ${action("dialog.close")}>Cancel</button><br/><br/>
+     <p style="font-size:11px">${WINE_DIALOG.help}</p>
+     <button style="margin-right:20px" class="button" ${action("wine.save")}>${BUTTON.save}</button>
+     <button style="margin-right:20px" class="button" ${action("wine.load")}>${BUTTON.load}</button>
+     <button style="margin-right:20px" class="button" ${action("wine.preview")}>${WINE_DIALOG.previewPlan}</button>
+     <button class="button" ${action("dialog.close")}>${BUTTON.cancel}</button><br/><br/>
      <div id="winePlanPreview"></div>`,
   );
 }
@@ -181,13 +188,13 @@ export function openWineSourceDialog(): void {
           {
             "ika-town": town.townNumber,
           },
-        )}>${town.townName}</button>`,
+        )}>${escapeHtml(town.townName)}</button>`,
     )
     .join("");
 
   openPopup(
-    "Choose the wine source town",
-    `${buttons}<button class="button" ${action("dialog.close")}>Cancel</button><br/><br/>`,
+    WINE_DIALOG.chooseSourceTitle,
+    `${buttons}<button class="button" ${action("dialog.close")}>${BUTTON.cancel}</button><br/><br/>`,
   );
 }
 
@@ -201,10 +208,8 @@ export function renderWinePlanPreview(fromTown: string): void {
 
   const plan = planWineRun(fromTown);
   if (plan.supply <= 0) {
-    target.innerHTML = `<p style="color:red">The source town has no spare wine to send.${
-      plan.boardAvailable
-        ? ""
-        : " (The Empire Overview board is not available, so its stock could not be read.)"
+    target.innerHTML = `<p style="color:red">${WINE_PREVIEW.noSpare}${
+      plan.boardAvailable ? "" : WINE_PREVIEW.boardUnavailable
     }</p>`;
     return;
   }
@@ -212,12 +217,12 @@ export function renderWinePlanPreview(fromTown: string): void {
   const rows = plan.allocations
     .map(
       (allocation) => `<tr>
-        <td>${allocation.townName}</td>
-        <td style="text-align:right">${Math.round(allocation.stock).toLocaleString("en-US")}</td>
-        <td style="text-align:right">${Math.round(allocation.consume).toLocaleString("en-US")}</td>
-        <td style="text-align:right"><b>${allocation.add.toLocaleString("en-US")}</b></td>
+        <td>${escapeHtml(allocation.townName)}</td>
+        <td style="text-align:right">${formatInteger(allocation.stock)}</td>
+        <td style="text-align:right">${formatInteger(allocation.consume)}</td>
+        <td style="text-align:right"><b>${formatInteger(allocation.add)}</b></td>
         <td style="text-align:right">${allocation.finalHours.toFixed(1)}h${
-          allocation.storageFull ? " (storage full)" : ""
+          allocation.storageFull ? WINE_PREVIEW.storageFull : ""
         }</td>
       </tr>`,
     )
@@ -226,21 +231,26 @@ export function renderWinePlanPreview(fromTown: string): void {
   // A town whose storage could not take its share ends below the target, so
   // "everyone" would be untrue as soon as one is capped.
   const storageFull = plan.allocations.filter((a) => a.storageFull);
+  const hours = plan.targetHours.toFixed(1);
   const levelling =
     storageFull.length === 0
-      ? `levelling everyone to <b>~${plan.targetHours.toFixed(1)}h</b>.`
-      : `levelling to <b>~${plan.targetHours.toFixed(1)}h</b>, except ` +
-        `${storageFull.map((a) => a.townName).join(", ")}: storage full, ` +
-        `so ${storageFull.length === 1 ? "it ends" : "they end"} lower and ` +
-        `the rest stays at the source for the next run.`;
+      ? WINE_PREVIEW.levelEveryone(hours)
+      : WINE_PREVIEW.levelExcept(
+          hours,
+          storageFull.map((a) => escapeHtml(a.townName)).join(", "),
+          storageFull.length,
+        );
 
   target.innerHTML = `
-    <p><b>Source:</b> ${getTownNameFromList(fromTown)} —
-       shipping ${plan.used.toLocaleString("en-US")} wine
-       (spare ${plan.supply.toLocaleString("en-US")}, ${plan.unused.toLocaleString("en-US")} left over),
-       ${levelling}</p>
+    <p>${WINE_PREVIEW.summary(
+      escapeHtml(getTownNameFromList(fromTown)),
+      formatInteger(plan.used),
+      formatInteger(plan.supply),
+      formatInteger(plan.unused),
+      levelling,
+    )}</p>
     <table class="fullTable" border="1" cellpadding="4">
-      <tr><th>Town</th><th>Stock</th><th>Consume/h</th><th>Send</th><th>Lasts after</th></tr>
+      <tr>${headerCells(WINE_PREVIEW.columns)}</tr>
       ${rows}
     </table>`;
 }
@@ -251,7 +261,7 @@ function renderBuildingList(): string {
   return listBuildingsInCurrentTown()
     .map(
       (slot) =>
-        `<span>${slot.buildingName}<button class="button" ${action(
+        `<span>${escapeHtml(slot.buildingName)}<button class="button" ${action(
           "build.add",
           {
             "ika-position": slot.positionId,
@@ -264,12 +274,12 @@ function renderBuildingList(): string {
 
 export function renderTownQueue(townName: string): string {
   const queue = getTownQueue(townName);
-  if (queue.length === 0) return "-empty-";
+  if (queue.length === 0) return BUILD_DIALOG.emptyTown;
 
   return queue
     .map(
       (entry, index) =>
-        `<span>${index + 1}.${entry.buildingName}<button class="button" ${action(
+        `<span>${index + 1}.${escapeHtml(entry.buildingName)}<button class="button" ${action(
           "build.remove",
           {
             "ika-position": entry.positionId,
@@ -286,23 +296,23 @@ export function openAutoBuildDialog(): void {
     span.innerHTML.trim(),
   );
 
-  const headers = townNames.map((name) => `<th>${name}</th>`).join("");
+  const headers = headerCells(townNames.map(escapeHtml));
   const cells = townNames
     .map(
       (name) =>
-        `<td class="tdQueue" data-ika-town-cell="${name}">${renderTownQueue(name)}</td>`,
+        `<td class="tdQueue" data-ika-town-cell="${escapeHtml(name)}">${renderTownQueue(name)}</td>`,
     )
     .join("");
 
   openPopup(
     getCurrentTownName(),
     `<table id="autoBuildTable" class="fullTable fixTable" border="1" cellpadding="5">
-       <tr><th>List Building</th>${headers}</tr>
+       <tr><th>${BUILD_DIALOG.buildingList}</th>${headers}</tr>
        <tr><td id="tdListBuilding">${renderBuildingList()}</td>${cells}</tr>
      </table><br/>
-     <p style="font-size:11px">Changes are saved as you add or remove entries.</p>
-     <button style="margin-right:20px" class="button" ${action("build.enqueue")}>Run queue</button>
-     <button class="button" ${action("dialog.close")}>Close</button><br/><br/>`,
+     <p style="font-size:11px">${BUILD_DIALOG.savedAsYouGo}</p>
+     <button style="margin-right:20px" class="button" ${action("build.enqueue")}>${BUILD_DIALOG.runQueue}</button>
+     <button class="button" ${action("dialog.close")}>${BUTTON.close}</button><br/><br/>`,
   );
 }
 

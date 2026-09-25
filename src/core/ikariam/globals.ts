@@ -1,10 +1,10 @@
 /**
  * Typed access to globals created by the GAME PAGE itself.
  *
- * Easy to confuse: the Empire Overview script also has its own object named `ikariam`
- * (`var ikariam = {...}` at line 6650 of the original). That is a completely
- * different object from the page's `window.ikariam`. This file is only about
- * the page's one.
+ * Easy to confuse: the Empire Overview script also has its own object named
+ * `ikariam` (`export const ikariam` in `src/empire-overview/game-api.ts`).
+ * That is a completely different object from the page's `window.ikariam`.
+ * This file is only about the page's one.
  *
  * Send Resources runs with `@grant none`, so `window` already is the page
  * window. Empire Overview runs sandboxed and must go through `unsafeWindow`.
@@ -65,7 +65,27 @@ export function getAccountName(): string {
   return el.title;
 }
 
-/** Name of the currently open town. */
+/**
+ * Currently logged-in account name, or `""` — never throws.
+ *
+ * For code that runs while a module graph is still evaluating, where a throw
+ * would take the whole script down before anything could record it. The
+ * anchor's `title` and its text are the same name, differing only in leading
+ * whitespace, so the text is a safe second source.
+ */
+export function readAccountName(): string {
+  const anchor = qs<HTMLAnchorElement>(SEL.accountName);
+  if (anchor) return anchor.title || anchor.textContent?.trim() || "";
+  return qs(SEL.accountBlock)?.textContent?.trim() ?? "";
+}
+
+/**
+ * Name of the currently open town.
+ *
+ * Read as TEXT, like every name it is compared with (the dropdown's `title`,
+ * the model's `name`). `innerHTML` would read a town called `A & B` as
+ * `A &amp; B`, and a switch to it would never be seen to land.
+ */
 export function getCurrentTownName(): string {
-  return qs(SEL.cityBread)?.innerHTML.trim() ?? "";
+  return qs(SEL.cityBread)?.textContent?.trim() ?? "";
 }

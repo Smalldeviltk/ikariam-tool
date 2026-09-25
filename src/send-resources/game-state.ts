@@ -21,6 +21,7 @@
  */
 
 import { qs, readNumberOrNull } from "@core/dom";
+import { parseGameNumber } from "@core/format";
 import { SEL } from "@core/ikariam/selectors";
 import {
   modelActionPoints,
@@ -29,13 +30,14 @@ import {
   modelResource,
 } from "@core/ikariam/model";
 
-/** `"12,345"` / `"12.3k"` -> number. */
+/**
+ * `"12,345"` / `"12.3k"` -> number, and 0 for anything unreadable.
+ *
+ * The parsing is `parseGameNumber`'s; this only settles "unreadable" as 0,
+ * which is what a displayed amount wants.
+ */
 export function parseAmount(text: string | null | undefined): number {
-  if (!text) return 0;
-  const clean = text.replace(/,/g, "").replace(/\s/g, "").trim();
-  if (/k$/i.test(clean)) return Math.round(parseFloat(clean) * 1000);
-  const parsed = parseFloat(clean);
-  return Number.isFinite(parsed) ? parsed : 0;
+  return parseGameNumber(text) ?? 0;
 }
 
 /**

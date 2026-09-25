@@ -10,12 +10,19 @@
 export const SEL = {
   /** Account name, read from the `title` attribute. */
   accountName: ".avatarName > a.noViewParameters",
+  /** The block around the account name, a fallback when its link is absent. */
+  accountBlock: ".avatarName",
 
   /** The `<ul>` holding the town list inside the town-picker dropdown. */
   townListContainer: "#dropDown_js_citySelectContainer > div.bg > ul",
 
   /** Name of the currently open town. */
   cityBread: "#js_cityBread",
+  /** The form the town dropdown submits to change town, and its city field. */
+  changeCityForm: "#changeCityForm",
+  changeCityInput: "#js_cityIdOnChange",
+  /** Shown by the game from the start of a request until it is handled. */
+  loadingIndicator: "#loadingPreview",
 
   /** Link back to the town view. */
   cityLink: "#js_cityLink > a",
@@ -78,21 +85,6 @@ export const SEL = {
   /** Finance cells on the Resource tab. */
   currentWood: "#t_currentwood",
   woodIncome: "#t_woodincome > span.Green",
-
-  /**
-   * The game's left menu, and the slots inside it.
-   *
-   * A launcher is appended after the last slot. Empire Overview uses the
-   * same anchor; a live capture found 11 matches, so it is real - but Send
-   * Resources has to cope with a page where it is not.
-   */
-  menuSlots: ".menu_slots",
-  menuSlotExpandable: ".menu_slots > .expandable",
-
-  /** Pirate fortress. */
-  pirateCaptcha: "#pirateCaptureBox > div > form .captchaImage",
-  pirateTable: "#pirateCaptureBox > div > table",
-  pirateActionLinks: ".action > a",
 
   /** Barbarian village / barbarian fleet. */
   barbarianVillageResources: "#barbarianVillage ul.resources",

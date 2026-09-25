@@ -7,8 +7,7 @@
  *
  * What it buys: a town running dry is the one failure in this game that is both
  * slow-moving and expensive, and the only warning the game itself gives is a
- * tooltip on a screen you have to go looking for. See
- * `docs/improvement-plan.md` §4.2 item C.
+ * tooltip on a screen you have to go looking for.
  */
 
 import { measuredStats } from "./auto-wine";
@@ -65,9 +64,14 @@ export function wineStatus(): TownWineStatus[] {
   });
 }
 
-/** Only the towns worth showing, worst first. */
-export function townsNeedingWine(): TownWineStatus[] {
-  return wineStatus()
+/**
+ * Only the towns worth showing, worst first. Takes a status list the caller
+ * already has, so the panel does not measure every town twice.
+ */
+export function townsNeedingWine(
+  towns: readonly TownWineStatus[] = wineStatus(),
+): TownWineStatus[] {
+  return towns
     .filter((town) => town.severity !== "ok")
     .sort((a, b) => (a.hoursLeft ?? Infinity) - (b.hoursLeft ?? Infinity));
 }
@@ -80,19 +84,4 @@ export function formatHours(hours: number | null): string {
   const days = Math.floor(hours / 24);
   const rest = Math.floor(hours % 24);
   return rest > 0 ? `${days}d ${rest}h` : `${days}d`;
-}
-
-/**
- * One line for the panel, or `null` when nothing needs saying.
- *
- * Deliberately short: this sits in a window someone glances at, not a report.
- */
-export function wineWarningSummary(): string | null {
-  const towns = townsNeedingWine();
-  if (towns.length === 0) return null;
-
-  const worst = towns[0];
-  const rest = towns.length - 1;
-  const tail = rest > 0 ? ` (+${rest} more)` : "";
-  return `${worst.townName}: ${formatHours(worst.hoursLeft)} of wine left${tail}`;
 }

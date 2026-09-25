@@ -12,7 +12,7 @@
  *    it without warning).
  *
  * jQuery 4 removed a batch of long-deprecated helpers, and this codebase calls
- * one of them **45 times**: `$.now()`. It runs in the `City` constructor, so
+ * one of them **dozens of times**: `$.now()`. It runs in the `City` constructor, so
  * without a shim the extension build throws before the board ever renders.
  *
  * Each helper is installed ONLY if missing, so a page carrying an older jQuery
@@ -52,7 +52,7 @@ export function installJQueryCompat(jq: JQueryStatic): string[] {
     }
   };
 
-  // Removed in jQuery 4. Used 45 times here, including in the City constructor.
+  // Removed in jQuery 4. Used dozens of times here, including in the City constructor.
   ensure("now", () => Date.now());
 
   // The rest are not all used today, but they are the other casualties of the

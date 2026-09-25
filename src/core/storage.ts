@@ -71,9 +71,14 @@ export function accountStore(accountName: string): Store {
 }
 
 /**
- * Per-account store using the Empire Overview scheme: `***<accountName>***<key>`.
- * The original built this prefix with `["", accountName, ""].join("***")`.
+ * Key prefix of the Empire Overview scheme: `***<accountName>***<key>`.
+ *
+ * The one place that spells it. Empire Overview writes with it, and the data
+ * export recognises and remaps its keys with `EMPIRE_KEY_PATTERN` below.
  */
-export function empireStore(accountName: string): Store {
-  return makeStore(["", accountName, ""].join("***"));
+export function empireKeyPrefix(accountName: string): string {
+  return `***${accountName}***`;
 }
+
+/** Matches an Empire Overview key; group 1 is the account, group 2 the key. */
+export const EMPIRE_KEY_PATTERN = /^\*\*\*(.*?)\*\*\*(.*)$/;

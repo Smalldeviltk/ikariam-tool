@@ -7,10 +7,9 @@
  * stock. A town already sitting on 30k wine got exactly as much as one about to
  * run dry, so wine piled up where it was not needed and the needy town starved.
  *
- * The approach here comes from the two drafts in `sample/`
- * (`wine-distribution.js` and `wine-distribution-2.js`): pour so that EVERY
- * town ends up with the same number of hours of wine left — the classic
- * water-filling problem.
+ * The approach here comes from two earlier drafts of this algorithm, kept
+ * outside the repository: pour so that EVERY town ends up with the same number
+ * of hours of wine left — the classic water-filling problem.
  *
  * ── Formula ─────────────────────────────────────────────────────────────────
  * For the set of receiving towns, with `t` the target hours:
@@ -21,15 +20,15 @@
  * ── What the drafts did not handle ─────────────────────────────────────────
  * Both assume every town needs more. If a town ALREADY holds out longer than
  * `t`, its `add_i` is negative — but wine can only be shipped out, never pulled
- * back. `wine-distribution-2.js` clamps with `Math.max(0, ...)`, so the supply
- * that should have gone to the remaining towns is simply demanded on top:
- * with its own example (7 towns, supply 31,000) it asks for 37,271.
+ * back. One draft clamps with `Math.max(0, ...)`, so the supply that should
+ * have gone to the remaining towns is simply demanded on top: with its own
+ * example (7 towns, supply 31,000 — kept in the tests) it asks for 37,271.
  *
  * The correct fix is to drop over-supplied towns from the set and recompute
  * `t`, repeating until none are left. Converges in at most n rounds.
  *
- * `wine-distribution.js` (the incremental draft) reaches the same answer but
- * its rounding correction is broken: it reads `arguments[1]` after assigning
+ * The other, incremental draft reaches the same answer but its rounding
+ * correction is broken: it reads `arguments[1]` after assigning
  * `totalSupply = 0`, and in sloppy mode `arguments[1]` is aliased to the
  * parameter, so `diff` is never positive and the top-up loop never runs.
  *

@@ -9,6 +9,7 @@
 import { qs, qsa } from "@core/dom";
 import { getTransportConfig } from "@core/ikariam/globals";
 import { SEL } from "@core/ikariam/selectors";
+import { SHIP_CAPACITY } from "./messages";
 import { FLAG, getFlag, setFlag } from "./state";
 
 /** Merchant ship capacity at research level 0. */
@@ -138,20 +139,8 @@ export function calibrateShipCapacity(): void {
   if (freighterCapacity) setFlag(FLAG.freighterCapacity, freighterCapacity);
 
   if (perShip || freighterCapacity) {
-    alert(
-      "Calibrated!\n" +
-        (perShip ? `Merchant Ship: ${perShip}` : "") +
-        (freighterCapacity ? `\nFreighter: ${freighterCapacity}` : ""),
-    );
-    console.log(
-      "ika_perShipCapacity =",
-      perShip,
-      "ika_freighterCapacity =",
-      freighterCapacity,
-    );
+    alert(SHIP_CAPACITY.calibrated(perShip || null, freighterCapacity || null));
   } else {
-    alert(
-      "Could not read cargo capacity. Open the Trading Port or the Shipyard, then click again.",
-    );
+    alert(SHIP_CAPACITY.notReadable);
   }
 }

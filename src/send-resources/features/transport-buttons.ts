@@ -34,7 +34,10 @@
  */
 
 import { qs, qsa, setInputValue } from "@core/dom";
+import { formatInteger } from "@core/format";
 import { SEL } from "@core/ikariam/selectors";
+import { TRANSPORT_BUTTONS } from "../messages";
+import { RESOURCE_OPTIONS } from "../types";
 import { action } from "../ui/actions";
 import { getFreighterCapacity, getPerShipCapacity } from "../ship-capacity";
 
@@ -45,7 +48,7 @@ const MARKER_CLASS = "ika-transport-buttons";
 export const TRANSPORT_STYLE_ID = "ika-transport-buttons-style";
 
 /** Resources the shipment form carries, in the order the game lists them. */
-const RESOURCES = ["wood", "wine", "marble", "glass", "sulfur"] as const;
+const RESOURCES = RESOURCE_OPTIONS.map((option) => option.value);
 
 export type ShipKind = "merchant" | "freighter";
 
@@ -164,14 +167,15 @@ function stepAmount(step: Step): number {
 function stepLabel(step: Step): string {
   const amount = stepAmount(step);
   const sign = amount < 0 ? "-" : "+";
-  return `${sign}${Math.abs(amount).toLocaleString("en-US")}`;
+  return `${sign}${formatInteger(Math.abs(amount))}`;
 }
 
 function stepTitle(step: Step): string {
-  const count = Math.abs(step.ships);
-  const noun = step.kind === "freighter" ? "freighter" : "merchant ship";
-  const plural = count === 1 ? "" : "s";
-  return `${step.ships < 0 ? "Remove" : "Add"} ${count} ${noun}${plural}`;
+  return TRANSPORT_BUTTONS.step(
+    step.ships >= 0,
+    Math.abs(step.ships),
+    step.kind === "freighter",
+  );
 }
 
 function buttonRow(resource: string): string {
@@ -186,7 +190,7 @@ function buttonRow(resource: string): string {
           "ika-kind": step.kind,
         })}>${stepLabel(step)}</a>`,
     ).join("") +
-    `<a class="button" href="#" title="Clear" ` +
+    `<a class="button" href="#" title="${TRANSPORT_BUTTONS.clear}" ` +
     `${action("transport.add", {
       "ika-resource": resource,
       "ika-ships": 0,
@@ -212,6 +216,9 @@ export function applyTransportStep(
   const field = qs<HTMLInputElement>(SEL.resourceField(resource));
   if (!field) return;
 
+  // Digits only, deliberately not `parseGameNumber`: this is a field the
+  // player types into, so any separator they used (comma, dot, space) is
+  // noise around a whole number, never a decimal point.
   const current = parseInt(field.value.replace(/\D/g, ""), 10) || 0;
   const delta = ships * capacityOf(kind);
   const next = set ? 0 : Math.max(0, current + delta);

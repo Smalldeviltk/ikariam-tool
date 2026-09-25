@@ -16,6 +16,7 @@ import { logInfo } from "@core/logger";
 import { getCurrentTownName } from "@core/ikariam/globals";
 import { SEL } from "@core/ikariam/selectors";
 import { parseAmount, readCurrentWine } from "../game-state";
+import { AUTO_WINE } from "../messages";
 import { getTownList, getTownNameFromList } from "../navigation";
 import {
   AUTO_WINE_LABEL,
@@ -25,7 +26,11 @@ import {
 } from "../state";
 import type { WineReceiver } from "../types";
 import { projectedStats } from "../town-cache";
-import { distributeWine, type WineTown } from "./wine-distribution";
+import {
+  distributeWine,
+  type WineDistributionResult,
+  type WineTown,
+} from "./wine-distribution";
 
 /**
  * Hours of its own consumption the source town keeps back.
@@ -191,13 +196,23 @@ export function getSourceSupply(
   return cached ? Math.max(0, cached.stock - reserve) : 0;
 }
 
+/** A distribution plan, plus what the source town could spare and keeps. */
+export interface WineRunPlan extends WineDistributionResult {
+  /** Wine the source can ship, after its reserve. */
+  supply: number;
+  /** Wine the source keeps for its own tavern. */
+  reserve: number;
+  /** Whether the Empire Overview board was on the page to read. */
+  boardAvailable: boolean;
+}
+
 /**
  * Compute the distribution plan for one source town.
  *
  * Pure aside from reading the board, so the UI can preview the plan before
  * anything is queued.
  */
-export function planWineRun(fromTown: string) {
+export function planWineRun(fromTown: string): WineRunPlan {
   const board = readWineBoard();
   const receivers = loadReceivers().filter((r) => r.townNumber !== fromTown);
   const reserve = getSourceReserve(fromTown, board);
@@ -236,23 +251,15 @@ export function enqueueWineRun(fromTown: string): number {
     const townCount = getTownList().length;
     alert(
       configured.length === 0
-        ? `No town is set to receive wine — ${senderCount} of ${townCount} ` +
-            "towns are ticked as Sender.\n\n" +
-            "Sender and receiver are exclusive roles: tick a town to make it " +
-            "a source, or leave it unticked and give it a Wine/h above 0 to " +
-            "make it a receiver. The Load button fills those figures in."
-        : "The only town set to receive wine is the one you are sending " +
-            "from.\n\nPick a different source, or give another town a " +
-            "Wine/h figure.",
+        ? AUTO_WINE.noReceivers(senderCount, townCount)
+        : AUTO_WINE.onlyReceiverIsSource,
     );
     return 0;
   }
 
   const plan = planWineRun(fromTown);
   if (plan.supply <= 0) {
-    alert(
-      `The source town has no spare wine (it must hold more than ${plan.reserve}).`,
-    );
+    alert(AUTO_WINE.noSpareWine(plan.reserve));
     return 0;
   }
 
@@ -277,7 +284,7 @@ export function enqueueWineRun(fromTown: string): number {
   }
 
   if (added === 0) {
-    alert("Every receiving town already has enough wine — nothing to send.");
+    alert(AUTO_WINE.nothingToSend);
     return 0;
   }
 
@@ -306,12 +313,7 @@ export function loadConsumedWine(): void {
     }
   }
   if (filled === 0) {
-    alert(
-      "No wine figures are available yet.\n\n" +
-        "They come from the Empire Overview board, or from visiting a town " +
-        "(each visit records that town's wine). Visit the towns once, or open " +
-        "the board, then press Load again — or just type the Wine/h values.",
-    );
+    alert(AUTO_WINE.noFigures);
   }
 }
 
@@ -339,5 +341,3 @@ export function collectWineSettings(): {
   }
   return { senders, receivers };
 }
-
-export { loadReceivers, loadSenders };

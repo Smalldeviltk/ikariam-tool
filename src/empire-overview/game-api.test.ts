@@ -106,7 +106,7 @@ describe("loadUrl to another town from the city view", () => {
     "REGRESSION: switches town through the game's change-city form before " +
       "opening the view — changeCurrentCity over ajax moved the dropdown but " +
       "left the old town's buildings on screen",
-    () => {
+    async () => {
       ikariam.loadUrl(true, "city", sawMill);
 
       expect(formSwitches).toEqual(["297035"]);
@@ -114,11 +114,11 @@ describe("loadUrl to another town from the city view", () => {
       expect(ajaxCalls).toEqual([]);
 
       setBreadcrumb("M-Corinth");
-      vi.advanceTimersByTime(100);
+      await vi.advanceTimersByTimeAsync(100);
       expect(ajaxCalls).toEqual([]);
 
       // ...and had time to draw.
-      vi.advanceTimersByTime(1200);
+      await vi.advanceTimersByTimeAsync(1200);
       expect(ajaxCalls).toHaveLength(1);
       expect(ajaxCalls[0]).toContain("view=resource");
       expect(ajaxCalls[0]).toContain("cityId=297035");
@@ -131,25 +131,25 @@ describe("loadUrl to another town from the city view", () => {
     "REGRESSION: waits for the game to finish loading before opening the " +
       "view — opening it on a flat delay let the rest of the switch arrive " +
       "afterwards and close the dialog that had just opened",
-    () => {
+    async () => {
       const pageJQuery = (window as any).jQuery;
       ikariam.loadUrl(true, "city", sawMill);
 
       setBreadcrumb("M-Corinth");
       pageJQuery.active = 1;
-      vi.advanceTimersByTime(3_000);
+      await vi.advanceTimersByTimeAsync(3_000);
       expect(ajaxCalls).toEqual([]);
 
       pageJQuery.active = 0;
-      vi.advanceTimersByTime(1_100);
+      await vi.advanceTimersByTimeAsync(1_100);
       expect(ajaxCalls).toEqual([]);
-      vi.advanceTimersByTime(200);
+      await vi.advanceTimersByTimeAsync(200);
       expect(ajaxCalls).toHaveLength(1);
       expect(ajaxCalls[0]).toContain("view=resource");
     },
   );
 
-  it("treats a visible loading indicator as still loading", () => {
+  it("treats a visible loading indicator as still loading", async () => {
     document.body.insertAdjacentHTML(
       "beforeend",
       `<div id="loadingPreview" style="display: block"></div>`,
@@ -157,24 +157,24 @@ describe("loadUrl to another town from the city view", () => {
     ikariam.loadUrl(true, "city", sawMill);
 
     setBreadcrumb("M-Corinth");
-    vi.advanceTimersByTime(3_000);
+    await vi.advanceTimersByTimeAsync(3_000);
     expect(ajaxCalls).toEqual([]);
 
     document.getElementById("loadingPreview")!.style.display = "none";
-    vi.advanceTimersByTime(1_300);
+    await vi.advanceTimersByTimeAsync(1_300);
     expect(ajaxCalls).toHaveLength(1);
   });
 
   it(
     "opens the view without reloading when the town switched but the game " +
       "never went quiet before the timeout",
-    () => {
+    async () => {
       const pageJQuery = (window as any).jQuery;
       ikariam.loadUrl(true, "city", sawMill);
 
       setBreadcrumb("M-Corinth");
       pageJQuery.active = 1;
-      vi.advanceTimersByTime(15_200);
+      await vi.advanceTimersByTimeAsync(15_200);
 
       expect(pageLoads).toEqual([]);
       expect(ajaxCalls).toHaveLength(1);
@@ -183,10 +183,10 @@ describe("loadUrl to another town from the city view", () => {
     },
   );
 
-  it("falls back to a full page load when the switch never lands", () => {
+  it("falls back to a full page load when the switch never lands", async () => {
     ikariam.loadUrl(true, "city", sawMill);
 
-    vi.advanceTimersByTime(15_200);
+    await vi.advanceTimersByTimeAsync(15_200);
 
     expect(ajaxCalls).toEqual([]);
     expect(pageLoads).toHaveLength(1);
@@ -197,7 +197,7 @@ describe("loadUrl to another town from the city view", () => {
   it(
     "REGRESSION: does not click the dropdown entry — a click on its link " +
       "does not switch town, so every board button waited out the timeout",
-    () => {
+    async () => {
       const clicked = vi.fn();
       document
         .querySelector('li[selectvalue="297035"] > a')!
@@ -210,7 +210,7 @@ describe("loadUrl to another town from the city view", () => {
     },
   );
 
-  it("keeps the original path when the page has no change-city form", () => {
+  it("keeps the original path when the page has no change-city form", async () => {
     document.querySelector("#changeCityForm")!.remove();
 
     ikariam.loadUrl(true, "city", sawMill);
@@ -220,7 +220,7 @@ describe("loadUrl to another town from the city view", () => {
     expect(ajaxCalls[0]).toContain("changeCurrentCity");
   });
 
-  it("keeps the original path for a town the dropdown does not list", () => {
+  it("keeps the original path for a town the dropdown does not list", async () => {
     ikariam.loadUrl(true, "city", { ...sawMill, cityId: 999999 });
 
     expect(ajaxCalls).toHaveLength(1);
@@ -232,7 +232,7 @@ describe("loadUrl that only changes town", () => {
   it(
     "keeps the original single request for a town name, which has always " +
       "redrawn the new town — Send Resources switches town through it",
-    () => {
+    async () => {
       ikariam.loadUrl(true, "city", { cityId: 297035 });
 
       expect(formSwitches).toEqual([]);
@@ -244,7 +244,7 @@ describe("loadUrl that only changes town", () => {
 });
 
 describe("loadUrl without a town switch", () => {
-  it("opens a view of the current town straight away", () => {
+  it("opens a view of the current town straight away", async () => {
     const clicked = vi.fn();
     document
       .querySelector('li[selectvalue="297034"] > a')!
@@ -262,7 +262,7 @@ describe("loadUrl without a town switch", () => {
     expect(ajaxCalls[0]).not.toContain("changeCurrentCity");
   });
 
-  it("leaves a jump to another view type to the original full page load", () => {
+  it("leaves a jump to another view type to the original full page load", async () => {
     ikariam.loadUrl(true, "island", { cityId: 297035, view: "island" });
 
     expect(ajaxCalls).toEqual([]);

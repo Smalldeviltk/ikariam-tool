@@ -8,7 +8,10 @@ import {
 } from "./task-queue";
 import type { Store } from "./storage";
 
-vi.mock("./logger", () => ({
+// Silence the logger, but keep its other exports (its storage key is read by
+// the data export).
+vi.mock("./logger", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./logger")>()),
   logInfo: () => {},
   clearLog: () => {},
   initLogger: () => {},
@@ -40,6 +43,17 @@ const ship = (destination: string, amount = 100, label?: string): NewTask => ({
   type: "sendResource",
   data: { origin: "0", destination, resource: "wood", amount, label },
 });
+
+/** The shipment amount of a task, or `undefined` for any other kind. */
+function amountOf(task: Task | undefined): number | undefined {
+  return task?.type === "sendResource" ? task.data.amount : undefined;
+}
+
+/** A copy of a shipment with a different amount. */
+function withAmount(task: Task, amount: number): Task {
+  if (task.type !== "sendResource") throw new Error("not a shipment");
+  return { ...task, data: { ...task.data, amount } };
+}
 
 const build = (townName: string): NewTask => ({
   type: "upgradeBuilding",
@@ -76,13 +90,10 @@ describe("TaskQueue", () => {
   it("replaceById leaves the task in place", () => {
     const a = queue.push(ship("1", 100));
     const b = queue.push(ship("2", 100));
-    queue.replaceById(a.id, {
-      ...(queue.head() as Task),
-      data: { ...(a as any).data, amount: 40 },
-    } as Task);
+    queue.replaceById(a.id, withAmount(a, 40));
     const list = queue.list();
     expect(list[0].id).toBe(a.id);
-    expect((list[0] as any).data.amount).toBe(40);
+    expect(amountOf(list[0])).toBe(40);
     expect(list[1].id).toBe(b.id);
   });
 
@@ -212,12 +223,12 @@ describe("TaskRunner", () => {
     queue.push(ship("1", 500));
     const { runner } = runnerWith((t) => ({
       status: "progress",
-      task: { ...t, data: { ...(t as any).data, amount: 200 } } as Task,
+      task: withAmount(t, 200),
     }));
     runner.start();
     await tick();
     expect(queue.length).toBe(1);
-    expect((queue.head() as any).data.amount).toBe(200);
+    expect(amountOf(queue.head())).toBe(200);
   });
 
   it("`failed` drops the task", async () => {

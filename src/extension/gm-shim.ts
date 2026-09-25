@@ -14,11 +14,26 @@
  * above `import "@empire/main"` is what guarantees the globals exist in time.
  */
 
+import { addStyle } from "../core/dom";
+
+/** The part of `GM_xmlhttpRequest`'s argument the code actually uses. */
+interface GmXhrDetails {
+  method?: string;
+  url: string;
+  headers?: Record<string, string>;
+  onload?: (response: {
+    responseText: string;
+    status: number;
+    statusText: string;
+  }) => void;
+  onerror?: (error: unknown) => void;
+}
+
 interface ShimTarget {
   unsafeWindow?: unknown;
   GM_addStyle?: (css: string) => HTMLStyleElement;
   GM_openInTab?: (url: string, options?: unknown) => unknown;
-  GM_xmlhttpRequest?: (details: Record<string, any>) => unknown;
+  GM_xmlhttpRequest?: (details: GmXhrDetails) => unknown;
   GM_registerMenuCommand?: (name: string, fn: () => void) => number;
   [key: string]: unknown;
 }
@@ -34,12 +49,7 @@ if (typeof target.unsafeWindow === "undefined") {
 }
 
 if (typeof target.GM_addStyle !== "function") {
-  target.GM_addStyle = (css: string): HTMLStyleElement => {
-    const style = document.createElement("style");
-    style.textContent = css;
-    document.head.appendChild(style);
-    return style;
-  };
+  target.GM_addStyle = addStyle;
 }
 
 if (typeof target.GM_openInTab !== "function") {
@@ -62,7 +72,7 @@ if (typeof target.GM_xmlhttpRequest !== "function") {
    * `empire.CheckForUpdates`, which is disabled in the original anyway, so a
    * failure surfaces through `onerror` rather than breaking anything.
    */
-  target.GM_xmlhttpRequest = (details: Record<string, any>) => {
+  target.GM_xmlhttpRequest = (details: GmXhrDetails) => {
     fetch(details.url, {
       method: details.method ?? "GET",
       headers: details.headers,

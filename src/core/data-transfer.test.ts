@@ -9,6 +9,10 @@ import {
   parseBundle,
   TRANSFER_FORMAT,
 } from "./data-transfer";
+import { FLAG, KEY } from "../send-resources/state";
+import { TOWN_STATS_KEY } from "../send-resources/town-cache";
+import { BUG_REPORT_STORAGE_KEY } from "./bug-report";
+import { LOGGER_STORAGE_KEY } from "./logger";
 
 const ACCOUNT = "Smalldevil";
 
@@ -243,5 +247,44 @@ describe("describeBundle", () => {
 describe("DEFAULT_GROUPS", () => {
   it("is config plus measurements, and nothing riskier", () => {
     expect(DEFAULT_GROUPS).toEqual(["config", "measurements"]);
+  });
+});
+
+describe("every key the scripts write is classified", () => {
+  // Send Resources' keys are spelled out in data-transfer.ts, because core
+  // cannot import the feature code. This is what keeps the two in step: a key
+  // renamed or added on one side and not the other fails here, instead of
+  // silently dropping out of every export.
+  it("covers Send Resources' global keys", () => {
+    const globalKeys = [
+      KEY.listAccount,
+      KEY.listAutoBuild,
+      ...Object.values(FLAG),
+    ];
+    for (const key of globalKeys) {
+      expect(classifyKey(key), key).toMatchObject({ account: null });
+    }
+  });
+
+  it("covers Send Resources' per-account keys", () => {
+    const accountKeys = [
+      KEY.resource,
+      KEY.listSender,
+      KEY.listReceiver,
+      KEY.globalTaskQueue,
+      TOWN_STATS_KEY,
+    ];
+    for (const key of accountKeys) {
+      expect(classifyKey(ACCOUNT + key), key).toMatchObject({
+        account: ACCOUNT,
+        suffix: key,
+      });
+    }
+  });
+
+  it("covers the core modules' own keys", () => {
+    for (const key of [LOGGER_STORAGE_KEY, BUG_REPORT_STORAGE_KEY]) {
+      expect(classifyKey(key), key).toMatchObject({ group: "diagnostics" });
+    }
   });
 });

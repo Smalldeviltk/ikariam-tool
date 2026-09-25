@@ -11,7 +11,6 @@ import {
   modelResource,
   modelWineConsumption,
   winePressLevel,
-  parseCoords,
 } from "./model";
 
 /**
@@ -232,27 +231,5 @@ describe("city identity", () => {
       relatedCityData: { selectedCity: "city_404" },
     });
     expect(modelCurrentCityName()).toBeNull();
-  });
-});
-
-describe("parseCoords", () => {
-  it("extracts both numbers", () => {
-    expect(parseCoords("[12:34]")).toEqual({ x: 12, y: 34 });
-  });
-
-  it(
-    "REGRESSION: y is not a copy of x — the ported parsePremium used a " +
-      "single-group regex without the g flag, which returns [whole, group]",
-    () => {
-      const coords = parseCoords("[12:34]")!;
-      expect(coords.x).not.toBe(coords.y);
-      expect(coords.y).toBe(34);
-    },
-  );
-
-  it("returns null when there are not two numbers", () => {
-    expect(parseCoords("[12]")).toBeNull();
-    expect(parseCoords("")).toBeNull();
-    expect(parseCoords(undefined)).toBeNull();
   });
 });

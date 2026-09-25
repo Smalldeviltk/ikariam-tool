@@ -55,7 +55,7 @@ beforeEach(() => {
   localStorage.clear();
   initState("tester");
   // Several of the paths under test explain themselves through `alert`.
-  (window as any).alert = vi.fn();
+  window.alert = vi.fn();
 });
 
 describe("readWineBoard", () => {

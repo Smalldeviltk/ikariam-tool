@@ -118,7 +118,12 @@ export function makeTaskId(type: TaskType): string {
 export class TaskQueue {
   constructor(
     private readonly store: Store,
-    private readonly key = "globalTaskQueue",
+    /**
+     * Storage key, required on purpose: the data export classifies the real
+     * one (`ikaGlobalTaskQueue`), and a default would write somewhere it
+     * never looks.
+     */
+    private readonly key: string,
   ) {}
 
   list(): Task[] {
@@ -182,20 +187,6 @@ export class TaskQueue {
     this.write(tasks);
   }
 
-  shift(): Task | undefined {
-    const tasks = this.list();
-    const first = tasks.shift();
-    this.write(tasks);
-    return first;
-  }
-
-  pop(): Task | undefined {
-    const tasks = this.list();
-    const last = tasks.pop();
-    this.write(tasks);
-    return last;
-  }
-
   removeType(type: TaskType): void {
     this.write(this.list().filter((t) => t.type !== type));
   }
@@ -220,10 +211,16 @@ export class TaskQueue {
  * Consecutive throws before a task is given up on.
  *
  * High enough that a slow page render never reaches it — the DOM waits inside
- * the handlers time out at 15s each, so five in a row is over a minute of the
- * same failure.
+ * the handlers time out at `DEFAULT_TIMEOUT_MS` (15 s, `core/async.ts`) each,
+ * so five in a row is over a minute of the same failure.
  */
 const DEFAULT_MAX_ERRORS = 5;
+
+/** Queue poll interval when none is given; the original's send loop used 1 s. */
+const DEFAULT_INTERVAL_MS = 1000;
+
+/** Pause after every queued task has deferred in a row, when none is given. */
+const DEFAULT_DEFER_COOLDOWN_MS = 60_000;
 
 export interface TaskRunnerOptions {
   /** Queue poll interval in ms. The original used 1000 for sending. */
@@ -306,7 +303,7 @@ export class TaskRunner {
     this.drained = false;
     this.timer = window.setInterval(
       () => void this.tick(),
-      this.options.intervalMs ?? 1000,
+      this.options.intervalMs ?? DEFAULT_INTERVAL_MS,
     );
   }
 
@@ -367,7 +364,8 @@ export class TaskRunner {
           this.deferStreak += 1;
           // A full lap with nothing runnable: back off instead of spinning.
           if (this.deferStreak >= this.queue.length) {
-            const cooldown = this.options.deferCooldownMs ?? 60_000;
+            const cooldown =
+              this.options.deferCooldownMs ?? DEFAULT_DEFER_COOLDOWN_MS;
             this.pausedUntil = Date.now() + cooldown;
             this.deferStreak = 0;
             logInfo(

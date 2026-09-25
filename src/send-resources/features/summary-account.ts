@@ -8,12 +8,17 @@
  * server sees one shared table — matching the original's `isGlobal = true`.
  */
 
-import { qs } from "@core/dom";
+import { escapeHtml, qs } from "@core/dom";
 import {
   compareValues,
   formatNumToStr,
   formatTimeLengthToStr,
   minBy,
+  MS_PER_DAY,
+  MS_PER_HOUR,
+  MS_PER_SECOND,
+  parseGameNumber,
+  SECONDS_PER_HOUR,
 } from "@core/format";
 import { SEL } from "@core/ikariam/selectors";
 import { backToCity } from "../navigation";
@@ -27,7 +32,15 @@ import {
   saveAccounts,
   setFlag,
 } from "../state";
+import { ACCOUNT_SUMMARY } from "../messages";
 import type { AccountSummary } from "../types";
+
+/** Where an account name links to: the game lobby, which switches to it. */
+const LOBBY_ACCOUNT_URL =
+  "https://lobby.ikariam.gameforge.com/en_GB/accounts?redirectAccount=";
+
+const MS_PER_MINUTE = 60_000;
+const HOURS_PER_WEEK = 24 * 7;
 
 /**
  * Returns whether it is safe to trigger the keep-alive reload right now.
@@ -45,10 +58,10 @@ export function parseRemainingFromTitle(): number {
   if (parts.length < 2) return 0;
 
   const units: ReadonlyArray<readonly [suffix: string, ms: number]> = [
-    ["d", 86400000],
-    ["h", 3600000],
-    ["m", 60000],
-    ["s", 1000],
+    ["d", MS_PER_DAY],
+    ["h", MS_PER_HOUR],
+    ["m", MS_PER_MINUTE],
+    ["s", MS_PER_SECOND],
   ];
 
   let total = 0;
@@ -67,10 +80,11 @@ export function parseRemainingFromTitle(): number {
 function readWoodStats(): { totalWood: string; woodIncome: string } | null {
   const current = qs(SEL.currentWood);
   if (!current) return null;
+  // Stored as strings, as the original stored them; the parse is only what
+  // strips the thousands separators and the income's leading "+".
   return {
-    totalWood: current.innerHTML.replace(/,/g, ""),
-    woodIncome:
-      qs(SEL.woodIncome)?.innerHTML.replace("+", "").replace(/,/g, "") ?? "0",
+    totalWood: String(parseGameNumber(current.textContent) ?? 0),
+    woodIncome: String(parseGameNumber(qs(SEL.woodIncome)?.textContent) ?? 0),
   };
 }
 
@@ -154,11 +168,12 @@ function buildSummaryHtml(
 
   const rows = accounts
     .map((account) => {
-      const incomePerSecond = Number(account.woodIncome) / 3600;
+      const incomePerSecond = Number(account.woodIncome) / SECONDS_PER_HOUR;
       const projectedWood =
         Number(account.totalWood) +
         Math.round(
-          incomePerSecond * ((Date.now() - (account.timeWood ?? 0)) / 1000),
+          incomePerSecond *
+            ((Date.now() - (account.timeWood ?? 0)) / MS_PER_SECOND),
         );
 
       const classes = [
@@ -171,18 +186,18 @@ function buildSummaryHtml(
       return `<tr class="${classes}">
         <td><input type="checkbox" ${account.isAutoBuildChecked ? "checked" : ""}
              data-ika-account="${escapeHtml(account.account.trim())}" class="js-ika-autobuild"/></td>
-        <td><a href="https://lobby.ikariam.gameforge.com/en_GB/accounts?redirectAccount=${encodeURIComponent(account.account)}">${escapeHtml(account.account)}</a></td>
+        <td><a href="${LOBBY_ACCOUNT_URL}${encodeURIComponent(account.account)}">${escapeHtml(account.account)}</a></td>
         <td style="text-align: right">${formatTimeLengthToStr(account.time - Date.now(), 3, " ")}</td>
         <td style="text-align: right">${formatNumToStr(projectedWood, false, 0)}</td>
         <td style="text-align: right" class="woodWeek">${formatNumToStr(Number(account.woodIncome))}</td>
-        <td style="text-align: right" class="woodWeek">${formatNumToStr(Number(account.woodIncome) * 24 * 7)}</td>
+        <td style="text-align: right" class="woodWeek">${formatNumToStr(Number(account.woodIncome) * HOURS_PER_WEEK)}</td>
       </tr>`;
     })
     .join("");
 
   return `<table id="summaryAccountTable" border="1" cellpadding="10px">
-    <tr><th></th><th>Account</th><th>Time Left</th><th>Total Wood</th>
-        <th class="woodWeek">Wood Per h</th><th class="woodWeek">1 Week</th></tr>
+    <tr><th></th>${ACCOUNT_SUMMARY.columns.map((label) => `<th>${label}</th>`).join("")}
+        <th class="woodWeek">${ACCOUNT_SUMMARY.woodPerHour}</th><th class="woodWeek">${ACCOUNT_SUMMARY.woodPerWeek}</th></tr>
     ${rows}
   </table>`;
 }
@@ -206,16 +221,4 @@ function keepAliveTick(): void {
   setFlag(FLAG.reloadedMinute, minute);
   setFlag(FLAG.isAutoReload, false);
   backToCity();
-}
-
-const HTML_ESCAPES: Record<string, string> = {
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  '"': "&quot;",
-  "'": "&#39;",
-};
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => HTML_ESCAPES[char]);
 }

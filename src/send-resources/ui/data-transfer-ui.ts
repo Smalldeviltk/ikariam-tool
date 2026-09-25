@@ -15,16 +15,17 @@ import {
   importData,
   parseBundle,
 } from "@core/data-transfer";
+import { errorMessage } from "@core/format";
 import { logInfo } from "@core/logger";
+import { DATA_TRANSFER } from "../messages";
 import { getState } from "../state";
 
 /** Groups the user can move, with the wording shown in the confirmations. */
-const GROUP_LABELS: Record<DataGroup, string> = {
-  config: "settings (wine lists, build queue, cargo calibration)",
-  measurements: "measurements (town cache, account summary)",
-  runtime: "in-flight work (task queue, running flags)",
-  diagnostics: "logs and bug reports",
-};
+const GROUP_LABELS: Readonly<Record<DataGroup, string>> =
+  DATA_TRANSFER.groupLabels;
+
+/** Import notes shown after an import; the rest are in the log. */
+const MAX_NOTES_SHOWN = 5;
 
 function timestampedFilename(account: string): string {
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
@@ -51,7 +52,7 @@ export function exportDataToFile(): void {
   const bundle = exportData({ groups: DEFAULT_GROUPS, account: accountName });
 
   if (bundle.entries.length === 0) {
-    alert("There is nothing to export yet.");
+    alert(DATA_TRANSFER.nothingToExport);
     return;
   }
 
@@ -63,10 +64,12 @@ export function exportDataToFile(): void {
 
   logInfo(`Exported ${bundle.entries.length} entries`);
   alert(
-    `Saved ${bundle.entries.length} entries.\n\n${describeBundle(bundle)}\n\n` +
-      `Moved: ${GROUP_LABELS.config} and ${GROUP_LABELS.measurements}.\n\n` +
-      `NOT moved: ${GROUP_LABELS.runtime}. Two browsers running the same queue ` +
-      `would both drive one game account and double-send.`,
+    DATA_TRANSFER.saved(
+      bundle.entries.length,
+      describeBundle(bundle),
+      [GROUP_LABELS.config, GROUP_LABELS.measurements],
+      GROUP_LABELS.runtime,
+    ),
   );
 }
 
@@ -102,26 +105,15 @@ export function importDataFromFile(): void {
         if (foreign.length > 0) {
           const unique = [...new Set(foreign)].join(", ");
           const remap = confirm(
-            `This export holds data for a different account (${unique}), ` +
-              `but you are logged in as "${accountName}".\n\n` +
-              `OK  = rewrite it onto "${accountName}"\n` +
-              `Cancel = import only the account-independent entries`,
+            DATA_TRANSFER.otherAccount(unique, accountName),
           );
           remapAccountTo = remap ? accountName : undefined;
           if (!remap) {
-            alert(
-              "Account-specific entries will be skipped. Nothing reads keys " +
-                "belonging to another account.",
-            );
+            alert(DATA_TRANSFER.skippingOtherAccount);
           }
         }
 
-        if (
-          !confirm(
-            `Import this?\n\n${describeBundle(bundle)}\n\n` +
-              `Existing settings with the same names will be OVERWRITTEN.`,
-          )
-        ) {
+        if (!confirm(DATA_TRANSFER.confirmImport(describeBundle(bundle)))) {
           return;
         }
 
@@ -135,15 +127,15 @@ export function importDataFromFile(): void {
           `Imported ${result.imported} entries (${result.skipped} skipped)`,
         );
         alert(
-          `Imported ${result.imported} entries, skipped ${result.skipped}.\n\n` +
-            `Reload the page for everything to take effect.` +
-            (result.notes.length
-              ? `\n\n${result.notes.slice(0, 5).join("\n")}`
-              : ""),
+          DATA_TRANSFER.imported(
+            result.imported,
+            result.skipped,
+            result.notes.slice(0, MAX_NOTES_SHOWN).join("\n"),
+          ),
         );
       })
-      .catch((error: Error) => {
-        alert(`Import failed: ${error.message}`);
+      .catch((error: unknown) => {
+        alert(DATA_TRANSFER.failed(errorMessage(error)));
       });
   });
 

@@ -9,7 +9,8 @@
  * because two things cannot steer the page at once.
  *
  * A request for the same data took 328 ms and 841 ms across two probe runs, and
- * moves nothing on screen. See `docs/improvement-plan.md` §1 for the capture.
+ * moves nothing on screen. The capture is in `docs/improvement-plan.md`, in
+ * the section on how IkaEasy loads data.
  *
  * DOES ASKING FOR A TOWN SELECT IT?
  * Measured, on the live game: no, not in the client's model. Standing in
@@ -24,6 +25,7 @@
  * comparison when it does not fire.
  */
 
+import { errorMessage } from "@core/format";
 import { logInfo } from "@core/logger";
 import { fetchTown } from "@core/ikariam/http";
 import { modelCurrentCityId, modelOwnCities } from "@core/ikariam/model";
@@ -66,7 +68,7 @@ export async function syncAllTowns(): Promise<SyncResult> {
       synced++;
     } catch (e) {
       failed.push(id);
-      logInfo(`Sync: town ${id} failed - ${(e as Error)?.message ?? e}`);
+      logInfo(`Sync: town ${id} failed - ${errorMessage(e)}`);
     }
   }
 
@@ -78,9 +80,7 @@ export async function syncAllTowns(): Promise<SyncResult> {
     try {
       await fetchTown(before);
     } catch (e) {
-      logInfo(
-        `Sync: could not return to town ${before} - ${(e as Error)?.message ?? e}`,
-      );
+      logInfo(`Sync: could not return to town ${before} - ${errorMessage(e)}`);
     }
   }
 

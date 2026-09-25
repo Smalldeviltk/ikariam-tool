@@ -1,5 +1,5 @@
 /**
- * Mechanically ported from the original "Quan ly Ika Perseus -VN- V2.js".
+ * Mechanically ported from the original `legacy/Quản lý Ika Perseus -VN- V2.js`.
  * The logic is line-for-line the same; only the module split, the imports and
  * the type annotations are new. Fixes to genuine bugs found during the port are
  * marked inline with a comment explaining the original behaviour.
@@ -209,10 +209,12 @@ export const render: any = {
               );
           break;
         case "building":
-          var bName = tiptype.shift();
-          var index = parseInt(bName.slice(-1));
-          bName = bName.slice(0, -1);
-          return getBuildingTooltip(city.getBuildingsFromName(bName)[index]);
+          var buildingName = tiptype.shift();
+          var index = parseInt(buildingName.slice(-1));
+          buildingName = buildingName.slice(0, -1);
+          return getBuildingTooltip(
+            city.getBuildingsFromName(buildingName)[index],
+          );
         case "army":
           switch (tiptype.shift()) {
             case "unit":
@@ -231,13 +233,10 @@ export const render: any = {
               //
               // Returning "" matches how the author handled the other
               // unimplemented tooltip in this very switch (`case "unit"`), and
-              // how the commented-out `case "plunder"` was parked. Writing an
+              // how the original parked `case "plunder"`. Writing an
               // implementation would mean inventing both the markup and the
               // data source, so the feature stays off until it is specified.
               return "";
-            /*   case "plunder":
-        return getPlunderMovementTip(tiptype.pop());
-        break	*/
           }
           break;
         default:
@@ -1730,8 +1729,6 @@ export const render: any = {
       })
       .on("change", "#empire_logInPopup", function () {
         database.settings.logInPopup.value = this.checked;
-        //if (this.checked)
-        //alert(Constant.LanguageData[lang].alert_daily);
       })
       .on("change", "#empire_alternativeBuildingList", function () {
         database.settings.alternativeBuildingList.value = this.checked;
@@ -1787,9 +1784,9 @@ export const render: any = {
       .on("change", "#empire_languageChange", function () {
         database.settings.languageChange.value = this.value;
       })
-      .on("click", "#empire_Website_Button", function () {
-        //GM_openInTab('https://greasyfork.org/scripts/764-empire-overview');
-      })
+      // The project-page and feedback buttons opened a tab in the original
+      // too, and it had both disabled; they stay inert.
+      .on("click", "#empire_Website_Button", function () {})
       .on("click", "#empire_Reset_Button", function () {
         empire.HardReset();
       })
@@ -1802,9 +1799,7 @@ export const render: any = {
       .on("click", "#empire_Update_Button", function () {
         empire.CheckForUpdates.call(empire, true);
       })
-      .on("click", "#empire_Bug_Button", function () {
-        //GM_openInTab('https://greasyfork.org/scripts/764-empire-overview/feedback');
-      })
+      .on("click", "#empire_Bug_Button", function () {})
       .on("change", "input[type='checkbox']", function () {
         this.blur();
       });
@@ -2179,7 +2174,6 @@ export const render: any = {
   },
   getResourceTable: function () {
     var lang = database.settings.languageChange.value;
-    //var header = '<colgroup span="3"/>\n   <colgroup span="2"/>\n    <colgroup span="2"/>\n    <colgroup span="2"/>\n    <colgroup span="2"/>\n    <colgroup span="2"/>\n    <colgroup span="2"/>\n   <colgroup span="2"/>\n    <colgroup span="2"/>\n<thead>\n<tr class="header_row">\n    <th class="city_name" data-tooltip="{10}" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=ikipedia&helpId=18\')">{0}</th>\n    <th class="action_points icon actionpointImage" data-tooltip="{1}"></th>\n    \n    <th class="wonder"></th>\n    <th class="empireactions">\n       <div class="trading" data-tooltip="'+ Constant.LanguageData[lang].transport +'" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=militaryAdvisor\')"></div>\n<div class="agora" data-tooltip="'+ Constant.LanguageData[lang].agora +'" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=diplomacyIslandBoard&amp=&islandId\')"></div> <div class="member" data-tooltip="'+ Constant.LanguageData[lang].member +'" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=diplomacyAllyMemberlist\')"></div>\n  </th>\n    <th class="citizen_header icon populationImage" data-tooltip="{2}" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=ikipedia&helpId=3\');return false;"></th>\n    \n    <th class="growth_header icon growthImage" data-tooltip="'+ Constant.LanguageData[lang].satisfaction +'"   style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=ikipedia&helpId=3\');return false;"></th>\n    <th class="research_header icon researchImage" data-tooltip="{3}" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=researchAdvisor\');return false;"></th>\n    <th class="gold_header icon goldImage" colspan="2" data-tooltip="{4}" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=finances\');return false;"></th>\n    <th class="wood_header icon woodImage" colspan="2" data-tooltip="{5}" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=ikipedia&helpId=5\');return false;"></th>\n    <th class="wine_header icon wineImage" colspan="2" data-tooltip="{6}" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=ikipedia&helpId=6\');return false;"></th>\n    <th class="marble_header icon marbleImage" colspan="2" data-tooltip="{7}" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=ikipedia&helpId=6\');return false;"></th>\n    <th class="glass_header icon glassImage" colspan="2" data-tooltip="{8}" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=ikipedia&helpId=6\');return false;"></th>\n    <th class="sulfur_header icon sulfurImage" colspan="2" data-tooltip="{9}" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=ikipedia&helpId=6\');return false;"></th>\n  \n</tr>\n</thead>';
     var header =
       '<colgroup span="2"/>\n      <colgroup span="1"/>\n    <colgroup span="1"/>\n    <colgroup span="2"/>\n    <colgroup span="2"/>\n    <colgroup span="2"/>\n    <colgroup span="2"/>\n    <colgroup span="2"/>\n   <colgroup span="2"/>\n    <colgroup span="2"/>\n<thead>\n<tr class="header_row">\n    <th class="city_name" data-tooltip="{10}" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=ikipedia&helpId=18\')">{0}</th>\n    <th class="action_points icon actionpointImage" data-tooltip="{1}"></th>\n    \n    <th class="empireactions">\n       <div class="trading" data-tooltip="' +
       Constant.LanguageData[lang].transport +
@@ -2192,7 +2186,6 @@ export const render: any = {
       '"   style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=ikipedia&helpId=3\');return false;"></th>\n    <th class="research_header icon researchImage" data-tooltip="{3}" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=researchAdvisor\');return false;"></th>\n    <th class="gold_header icon goldImage" colspan="2" data-tooltip="{4}" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=finances\');return false;"></th>\n    <th class="wood_header icon woodImage" colspan="2" data-tooltip="{5}" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=ikipedia&helpId=5\');return false;"></th>\n    <th class="wine_header icon wineImage" colspan="2" data-tooltip="{6}" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=ikipedia&helpId=6\');return false;"></th>\n    <th class="marble_header icon marbleImage" colspan="2" data-tooltip="{7}" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=ikipedia&helpId=6\');return false;"></th>\n    <th class="glass_header icon glassImage" colspan="2" data-tooltip="{8}" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=ikipedia&helpId=6\');return false;"></th>\n    <th class="sulfur_header icon sulfurImage" colspan="2" data-tooltip="{9}" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=ikipedia&helpId=6\');return false;"></th>\n  \n</tr>\n</thead>';
     var table =
       '<table class="resources">\n    {0}\n   <tbody>{1}</tbody>\n    <tfoot>{2}</tfoot>\n</table>';
-    //var resourceRow = '<tr id="resource_{0}">\n    <td class="city_name">\n        <span></span>\n        <span class="clickable"></span>\n        <sub></sub>\n        <span class="Red" data-tooltip="{6}">&nbsp;&nbsp;<b>{5}</b>&nbsp;&nbsp;</span>\n         </td>\n    <td class="action_points"><span class="ap"></span>&nbsp;<br><span class="garrisonlimit"  data-tooltip="dynamic"><img height="18" hspace="3"></span></td>\n        <td class="wonder" data-tooltip="dynamic"  style="cursor:pointer;">\n        <div class="wonder" style="background: url(cdn/all/both/wonder/w{7}.png) no-repeat center center; background-size: {8}px auto;"></div></td>\n    <td class="empireactions">\n        <div class="worldmap" data-tooltip="'+ Constant.LanguageData[lang].to_world +'" style="cursor:pointer;"></div>        <div class="city" data-tooltip="'+ Constant.LanguageData[lang].to_town_hall +' {2}" style="cursor:pointer;"></div>\n    <div class="island" data-tooltip="'+ Constant.LanguageData[lang].to_island +'" style="cursor:pointer;"></div>\n  <br> <div class="islandwood" data-tooltip="'+ Constant.LanguageData[lang].to_saw_mill +'" style="cursor:pointer;"></div>\n    <div class="islandgood" style="background: url(cdn/all/both/resources/icon_{3}.png) no-repeat center center; background-size: 18px auto; cursor: pointer;" data-tooltip="'+ Constant.LanguageData[lang].to_mine +'"></div>\n <div class="transport" data-tooltip="'+ Constant.LanguageData[lang].transporting +' {2}" style="cursor:pointer;"></div>\n        </td>\n    <td class="population" data-tooltip="dynamic">\n        <span class= "pop" data-tooltip="dynamic"></span>\n        <span></span>\n        <div class="progressbarPop ui-progressbar ui-widget ui-widget-content ui-corner-all" data-tooltip="dynamic">\n            <div class="ui-progressbar-value ui-widget-header ui-corner-left" style="width: 95%"></div>\n        </div>\n    </td>\n    \n    <td class="population_happiness">   <span class="happy"  data-tooltip="dynamic"><img align=right height="18" hspace="8" vspace="2"></span><br><span class="growth clickbar"></span>\n </td>\n    <td class="research" data-tooltip="dynamic">\n        <span class="scientists" data-tooltip="dynamic"></span>\n        <span></span>\n    {4}   \n   </div>\n    </td>\n    {1}\n    </tr>\n';
     var resourceRow =
       '<tr id="resource_{0}">\n    <td class="city_name">\n        <span></span>\n        <span class="clickable"></span>\n        <sub></sub>\n        <span class="Red" data-tooltip="{6}">&nbsp;&nbsp;<b>{5}</b>&nbsp;&nbsp;</span>\n         </td>\n    <td class="action_points"><span class="ap"></span>&nbsp;<br><span class="garrisonlimit"  data-tooltip="dynamic"><img height="18" hspace="3"></span></td>\n          <td class="empireactions">\n        <div class="worldmap" data-tooltip="' +
       Constant.LanguageData[lang].to_world +
@@ -2209,7 +2202,6 @@ export const render: any = {
       ' {2}" style="cursor:pointer;"></div>\n        </td>\n    <td class="population" data-tooltip="dynamic">\n        <span class= "pop" data-tooltip="dynamic"></span>\n        <span></span>\n        <div class="progressbarPop ui-progressbar ui-widget ui-widget-content ui-corner-all" data-tooltip="dynamic">\n            <div class="ui-progressbar-value ui-widget-header ui-corner-left" style="width: 95%"></div>\n        </div>\n    </td>\n    \n    <td class="population_happiness">   <span class="happy"  data-tooltip="dynamic"><img align=right height="18" hspace="8" vspace="2"></span><br><span class="growth clickbar"></span>\n </td>\n    <td class="research" data-tooltip="dynamic">\n        <span class="scientists" data-tooltip="dynamic"></span>\n        <span></span>\n    {4}   \n   </div>\n    </td>\n    {1}\n    </tr>\n';
     var resourceCell =
       '<td class="resource {0}">\n    <span class="icon safeImage"></span>\n    <span class="current"></span>\n   <span class="incoming" data-tooltip="dynamic"></span>\n    <div class="progressbar ui-progressbar ui-widget ui-widget-content ui-corner-all" data-tooltip="dynamic">\n    <div class="ui-progressbar-value ui-widget-header ui-corner-left" style="width: 95%"></div>\n    </div>\n  </td>\n<td class="resource {0}">\n    <span class="prodconssubsum production Green" data-tooltip="dynamic"></span>\n    <span class="prodconssubsum consumption Red" data-tooltip="dynamic"></span>\n    <span class="emptytime Red"></span>\n</td>';
-    //var footer = '<tr>\n    <td colspan="3"></td>\n   <td id="t_sigma" class="total" data-tooltip="dynamic">Σ</td>\n    <td id="t_population" class="total"></td><td id="t_growth" class="total"></td>\n    <td id="t_research" class="total" data-tooltip="dynamic"></td>\n        <td id="t_currentgold" class="total"></td>\n    <td id="t_goldincome" class="total" data-tooltip="dynamic">\n        <span class="Green"></span>\n      <span class="Red"></span>\n         <td id="t_currentwood" class="total"></td>\n    <td id="t_woodincome" class="total" data-tooltip="dynamic">\n        <span class="Green"></span>\n        <span class="Red"></span>\n    </td>\n    <td id="t_currentwine" class="total"></td>\n    <td id="t_wineincome" class="total" data-tooltip="dynamic">\n        <span class="Green"></span>\n        <span class="Red"></span>\n    </td>\n    <td id="t_currentmarble" class="total"></td>\n    <td id="t_marbleincome" class="total"data-tooltip="dynamic">\n        <span class="Green"></span>\n        <span class="Red"></span>\n    </td>\n    <td id="t_currentglass" class="total"></td>\n    <td id="t_glassincome" class="total" data-tooltip="dynamic">\n        <span class="Green"></span>\n        <span class="Red"></span>\n    </td>\n    <td id="t_currentsulfur" class="total"></td>\n    <td id="t_sulfurincome" class="total" data-tooltip="dynamic">\n        <span class="Green"></span>\n        <span class="Red"></span>\n    </td>\n</tr>';
     var footer =
       '<tr>\n    <td colspan="2"></td>\n   <td id="t_sigma" class="total" data-tooltip="dynamic">Σ</td>\n    <td id="t_population" class="total"></td><td id="t_growth" class="total"></td>\n    <td id="t_research" class="total" data-tooltip="dynamic"></td>\n        <td id="t_currentgold" class="total"></td>\n    <td id="t_goldincome" class="total" data-tooltip="dynamic">\n        <span class="Green"></span>\n      <span class="Red"></span>\n         <td id="t_currentwood" class="total"></td>\n    <td id="t_woodincome" class="total" data-tooltip="dynamic">\n        <span class="Green"></span>\n        <span class="Red"></span>\n    </td>\n    <td id="t_currentwine" class="total"></td>\n    <td id="t_wineincome" class="total" data-tooltip="dynamic">\n        <span class="Green"></span>\n        <span class="Red"></span>\n    </td>\n    <td id="t_currentmarble" class="total"></td>\n    <td id="t_marbleincome" class="total"data-tooltip="dynamic">\n        <span class="Green"></span>\n        <span class="Red"></span>\n    </td>\n    <td id="t_currentglass" class="total"></td>\n    <td id="t_glassincome" class="total" data-tooltip="dynamic">\n        <span class="Green"></span>\n        <span class="Red"></span>\n    </td>\n    <td id="t_currentsulfur" class="total"></td>\n    <td id="t_sulfurincome" class="total" data-tooltip="dynamic">\n        <span class="Green"></span>\n        <span class="Red"></span>\n    </td>\n</tr>';
 
@@ -2331,23 +2323,22 @@ export const render: any = {
       var body = "";
       $.each(database.cities, function (cityId, city) {
         var rowCells = "";
-        var divbarracks = "";
+        var barracksLink = "";
         if (this.getBuildingFromName(Constant.Buildings.BARRACKS)) {
-          divbarracks =
+          barracksLink =
             '<div class="barracks" data-tooltip="' +
             Constant.LanguageData[lang].to_barracks +
             '&nbsp;{2}" style="cursor:pointer;"></div>';
         }
-        var divshipyard = "&nbsp;";
+        var shipyardLink = "&nbsp;";
         if (this.getBuildingFromName(Constant.Buildings.SHIPYARD)) {
-          divshipyard =
+          shipyardLink =
             '<div class="shipyard" data-tooltip="' +
             Constant.LanguageData[lang].to_shipyard +
             '&nbsp;{2}" style="cursor:pointer;"></div>';
         }
-        // TODO: only ever computed for hoplites in the original; every unit type
-        // still needs wiring up. Left disabled as it was.
-        // city.military.getUnits.getUnit('phalanx') * Constant.UnitData.phalanx.baseCost
+        // Army upkeep is not computed: the original only ever had it for
+        // hoplites, and had that disabled too, so the column shows 0.
         var cost = 0;
         for (var category in Constant.unitOrder) {
           $.each(Constant.unitOrder[category], function (index, value) {
@@ -2364,8 +2355,8 @@ export const render: any = {
           city.getId,
           rowCells,
           city._name,
-          divbarracks,
-          divshipyard,
+          barracksLink,
+          shipyardLink,
           cost,
         ]);
       });
@@ -2553,14 +2544,16 @@ export const render: any = {
         $node = Utils.getClone($row);
       }
       var city = database.getCityFromId(cityId);
-      var data1 = city.military.getUnits.getUnit(type) || 0;
-      var data2 = city.military.getIncomingTotals[type] || 0;
-      var data3 = city.military.getTrainingTotals[type] || 0;
+      var ownUnits = city.military.getUnits.getUnit(type) || 0;
+      var incomingUnits = city.military.getIncomingTotals[type] || 0;
+      var trainingUnits = city.military.getTrainingTotals[type] || 0;
       var cells = $node.find("td." + type);
-      cells.get(0).textContent = Utils.FormatNumToStr(data1, false, 0) || "";
+      cells.get(0).textContent = Utils.FormatNumToStr(ownUnits, false, 0) || "";
       cells = cells.eq(1).children("span");
-      cells.get(0).textContent = Utils.FormatNumToStr(data2, true, 0) || "";
-      cells.get(1).textContent = Utils.FormatNumToStr(data3, true, 0) || "";
+      cells.get(0).textContent =
+        Utils.FormatNumToStr(incomingUnits, true, 0) || "";
+      cells.get(1).textContent =
+        Utils.FormatNumToStr(trainingUnits, true, 0) || "";
       delete this.cityRows.army[cityId];
       if (celllevel) {
         Utils.setClone($row, $node);
@@ -2765,7 +2758,6 @@ export const render: any = {
   updateCityBuildingPosition: function (city, position, $node) {
     var building = city.getBuildingFromPosition(position);
     var idx: any = 0;
-    //var cellOnly = ($node == undefined);
     var cellOnly = $node === undefined;
     $.each(city.getBuildingsFromName(building.getName), function (index, b) {
       if (b.getPosition == building.getPosition) {

@@ -1,9 +1,11 @@
 /**
- * Mechanically ported from the original "Quan ly Ika Perseus -VN- V2.js".
+ * Mechanically ported from the original `legacy/Quản lý Ika Perseus -VN- V2.js`.
  * The logic is line-for-line the same; only the module split, the imports and
  * the type annotations are new. Fixes to genuine bugs found during the port are
  * marked inline with a comment explaining the original behaviour.
  */
+import { readAccountName } from "@core/ikariam/globals";
+import { empireKeyPrefix } from "@core/storage";
 import $ from "./jquery";
 import { Constant } from "./constants";
 import { Utils } from "./utils";
@@ -18,23 +20,13 @@ import { render } from "./render";
  * The original indexed straight into `querySelector(...)`, which throws when
  * the avatar block is absent. That throw happens while the module graph is
  * still evaluating — before the diagnostics are installed — so the script died
- * with no board, no menu button and nothing recorded anywhere.
- *
- * The anchor's `title` and its text are the same name, differing only in
- * leading whitespace, so the text is a safe second source. Falling back to `""`
- * would silently move every stored key, so it is deliberately the last resort.
+ * with no board, no menu button and nothing recorded anywhere. `readAccountName`
+ * never throws. Its last resort is `""`, which would silently move every
+ * stored key, so it is only reached when the page has no avatar block at all.
  */
-function readAccountName(): string {
-  const anchor = document.querySelector<HTMLAnchorElement>(
-    ".avatarName > a.noViewParameters",
-  );
-  if (anchor) return anchor.title || anchor.textContent?.trim() || "";
-  return document.querySelector(".avatarName")?.textContent?.trim() ?? "";
-}
-
 export const accountName = readAccountName();
 
-export const EMPIRE_STORAGE_PREFIX = ["", accountName, ""].join("***");
+export const EMPIRE_STORAGE_PREFIX = empireKeyPrefix(accountName);
 export const empire: any = {
   version: 1.1831,
   scriptId: 764,
@@ -43,16 +35,12 @@ export const empire: any = {
   loaded: false,
   setVar: function (varname, varvalue) {
     localStorage.setItem(EMPIRE_STORAGE_PREFIX + varname, varvalue);
-    //GM_setValue(EMPIRE_STORAGE_PREFIX + varname, varvalue);
   },
   deleteVar: function (varname) {
     localStorage.removeItem(EMPIRE_STORAGE_PREFIX + varname);
-    //GM_deleteValue(EMPIRE_STORAGE_PREFIX + varname);
   },
   getVar: function (varname, vardefault) {
     var ret = localStorage.getItem(EMPIRE_STORAGE_PREFIX + varname);
-
-    //var ret = GM_getValue(EMPIRE_STORAGE_PREFIX + varname);
     if (null === ret && "undefined" != typeof vardefault) {
       return vardefault;
     }
@@ -102,10 +90,6 @@ export const empire: any = {
     ikariam.Init();
     render.Init();
     database.Init(ikariam.Host());
-    //this.CheckForUpdates(false);
-    // GM_registerMenuCommand(this.scriptName + 'Manual Update', function () {
-    //     empire.CheckForUpdates(true);
-    // });
   },
 
   CheckForUpdates: function (forced) {
@@ -133,7 +117,11 @@ export const empire: any = {
             // only wraps the GM_xmlhttpRequest call, not this async callback.
             var versionMatch = /@version\s*(.*?)\s*$/m.exec(rt);
             if (!versionMatch) {
-              if (forced) render.toast("Could not read the remote version.");
+              if (forced)
+                render.toast(
+                  Constant.LanguageData[database.settings.languageChange.value]
+                    .toast_remoteVersionUnreadable,
+                );
               return;
             }
             remote_version = parseFloat(versionMatch[1]);
@@ -147,7 +135,6 @@ export const empire: any = {
                       Constant.LanguageData[lang].alert_update1,
                   )
                 ) {
-                  // if(confirm(Utils.format(Constant.LanguageData[lang].alert_update,[empire.scriptName]))) {
                   GM_openInTab(
                     "https://greasyfork.org/scripts/" +
                       empire.scriptId +
@@ -160,7 +147,6 @@ export const empire: any = {
                     empire.scriptName +
                     '".',
                 );
-              // render.toast(Utils.format(Constant.LanguageData[lang].alert_noUpdate,[empire.scriptName]));
             }
             database.getGlobalData.latestVersion = remote_version;
           },

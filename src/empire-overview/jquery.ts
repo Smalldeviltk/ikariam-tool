@@ -47,7 +47,17 @@ if (!jq) {
  * guarantees `$.now()` exists by the time the first City is constructed. See
  * `jquery-compat.ts` for why this is needed at all.
  */
-export const jqueryCompatAdded: string[] = installJQueryCompat(jq);
+installJQueryCompat(jq);
+
+/**
+ * The PAGE's jQuery — the copy the game's own code calls `$.ajax` on — as
+ * opposed to the default export, which is this script's sandbox copy with
+ * jQuery UI. `undefined` on a page that has none.
+ */
+export function pageJQuery(): JQueryStatic | undefined {
+  const candidate = unsafeWindow.jQuery || unsafeWindow.$;
+  return typeof candidate === "function" ? candidate : undefined;
+}
 
 /**
  * Whether this is a Chromium-based browser.
@@ -57,11 +67,10 @@ export const jqueryCompatAdded: string[] = installJQueryCompat(jq);
  * product — and that distinction matters here, because **the userscript build
  * is deployed on Edge**, which is Chromium and deliberately reports
  * `navigator.vendor === "Google Inc."` for compatibility. So the flag is `true`
- * on Edge, which is the correct answer at all four call sites:
+ * on Edge, which is the correct answer everywhere it is read:
  *
- *  - `jquery.ts`   — skip `noConflict`, as on Chrome
- *  - `render.ts`   — the Chromium keycode tables (the one that would actually
- *                    misbehave if this were wrong)
+ *  - `render.ts`   — the Chromium keycode tables, twice (the use that would
+ *                    actually misbehave if this were wrong)
  *  - `render.ts`   — a cosmetic row class
  *  - `helpers.ts`  — a `-webkit-transform` rule
  *

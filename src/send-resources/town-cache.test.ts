@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { globalStore } from "@core/storage";
 import {
-  clearTownStats,
   loadTownStats,
   MAX_AGE_MS,
   projectedStats,
@@ -14,9 +13,9 @@ const store = globalStore;
 
 /** Stand in for the game's own state object. */
 function mockModel(wine: number, wineSpendings: number): void {
-  (window as any).ikariam = {
+  Object.assign(window, { ikariam: {
     model: { currentResources: { wine }, wineSpendings },
-  };
+  } });
 }
 
 /**
@@ -32,7 +31,7 @@ const CITY_VIEW =
 beforeEach(() => {
   localStorage.clear();
   document.body.innerHTML = CITY_VIEW;
-  delete (window as any).ikariam;
+  delete window.ikariam;
 });
 
 describe("recordCurrentTown", () => {
@@ -75,13 +74,13 @@ describe("recordCurrentTown", () => {
 
   it("records from the ordinal keys the live model uses", () => {
     document.body.innerHTML = CITY_VIEW + `<div id="js_cityBread">W-Athens</div>`;
-    (window as any).ikariam = {
+    Object.assign(window, { ikariam: {
       model: {
         currentResources: { resource: 900, 1: 4321 },
         maxResources: { resource: 50_000, 1: 60_000 },
         wineSpendings: 200,
       },
-    };
+    } });
     expect(recordCurrentTown(store)).toMatchObject({
       stock: 4321,
       consume: 200,
@@ -173,12 +172,6 @@ describe("pruneTownStats", () => {
     expect(pruneTownStats(store, now)).toBe(1);
     expect(Object.keys(loadTownStats(store))).toEqual(["Fresh"]);
   });
-
-  it("clearTownStats empties everything", () => {
-    saveTownStats(store, { A: { stock: 1, consume: 0, at: now } });
-    clearTownStats(store);
-    expect(loadTownStats(store)).toEqual({});
-  });
 });
 
 describe("name and figures come from one source", () => {
@@ -189,7 +182,7 @@ describe("name and figures come from one source", () => {
       // The breadcrumb still shows the previous town while the model has
       // already moved on — exactly what a view swap looks like in flight.
       document.body.innerHTML = CITY_VIEW + `<div id="js_cityBread">STALE-Corinth</div>`;
-      (window as any).ikariam = {
+      Object.assign(window, { ikariam: {
         model: {
           currentResources: { wine: 5000 },
           wineSpendings: 300,
@@ -198,7 +191,7 @@ describe("name and figures come from one source", () => {
             city_1: { id: 1, name: "W-Athens", relationship: "ownCity" },
           },
         },
-      };
+      } });
 
       recordCurrentTown(store);
       const stats = loadTownStats(store);

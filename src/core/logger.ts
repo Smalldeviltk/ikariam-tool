@@ -6,7 +6,8 @@
 
 import { qs } from "./dom";
 
-const STORAGE_KEY = "loggerInfo";
+/** Where the log is mirrored, so it survives a reload. */
+export const LOGGER_STORAGE_KEY = "loggerInfo";
 const TEXTAREA_ID = "txtLogger";
 
 /** Cap on retained log characters. The old code was unbounded, so the entry grew forever. */
@@ -17,7 +18,7 @@ let accountLabel = "";
 export function initLogger(accountName: string): void {
   accountLabel = accountName;
   const box = qs<HTMLTextAreaElement>(`#${TEXTAREA_ID}`);
-  if (box) box.innerHTML = localStorage.getItem(STORAGE_KEY) ?? "";
+  if (box) box.innerHTML = localStorage.getItem(LOGGER_STORAGE_KEY) ?? "";
 }
 
 export function logInfo(message: string): void {
@@ -28,7 +29,7 @@ export function logInfo(message: string): void {
     let next = line + box.innerHTML;
     if (next.length > MAX_CHARS) next = next.slice(0, MAX_CHARS);
     box.innerHTML = next;
-    localStorage.setItem(STORAGE_KEY, next);
+    localStorage.setItem(LOGGER_STORAGE_KEY, next);
   }
   console.log(`[ika] ${line.trimEnd()}`);
 }
@@ -36,5 +37,5 @@ export function logInfo(message: string): void {
 export function clearLog(): void {
   const box = qs<HTMLTextAreaElement>(`#${TEXTAREA_ID}`);
   if (box) box.innerHTML = "";
-  localStorage.setItem(STORAGE_KEY, "");
+  localStorage.setItem(LOGGER_STORAGE_KEY, "");
 }

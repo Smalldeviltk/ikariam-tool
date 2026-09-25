@@ -16,7 +16,7 @@ import type { AccountSummary, AutoBuildAccount, WineReceiver } from "./types";
 
 /* ─────────────────── localStorage keys (unchanged) ─────────────────────── */
 
-const KEY = {
+export const KEY = {
   /** Per account. Old code: `getVar("resource")`. */
   resource: "resource",
   listSender: "listSender",

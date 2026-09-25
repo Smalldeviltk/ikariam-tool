@@ -1,6 +1,6 @@
 /* eslint-disable */
 /**
- * Mechanically ported from the original "Quan ly Ika Perseus -VN- V2.js".
+ * Mechanically ported from the original `legacy/Quản lý Ika Perseus -VN- V2.js`.
  * The logic is line-for-line the same; only the module split, the imports and
  * the type annotations are new. Fixes to genuine bugs found during the port are
  * marked inline with a comment explaining the original behaviour.
@@ -510,6 +510,9 @@ export const Constant: any = {
       alert_update1: "Would you like to go to the install page now?",
       alert_daily: "Please enable 'Automatically confirm the daily bonus '",
       alert_wine: "Warning wine > ",
+      toast_updated: "Updated: ",
+      toast_movementAdded: "Movement added",
+      toast_remoteVersionUnreadable: "Could not read the remote version.",
       en: "English",
       // Units
       phalanx: "Hoplite",

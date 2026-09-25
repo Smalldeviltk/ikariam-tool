@@ -32,7 +32,7 @@ beforeEach(() => {
   localStorage.clear();
   document.body.innerHTML = "";
   // happy-dom does not implement `alert`, so assign rather than spy on it.
-  (window as any).alert = vi.fn();
+  window.alert = vi.fn();
   vi.spyOn(console, "log").mockImplementation(() => {});
 });
 
@@ -99,7 +99,7 @@ describe("calibrateShipCapacity", () => {
   });
 
   it("prefers transportConfig when the Trading Port view supplies it", () => {
-    (window as any).transportConfig = {
+    window.transportConfig = {
       maxCapacityPerTransport: 777,
       freighterCapacity: 88888,
     };
@@ -109,7 +109,7 @@ describe("calibrateShipCapacity", () => {
       expect(getPerShipCapacity()).toBe(777);
       expect(getFreighterCapacity()).toBe(88888);
     } finally {
-      delete (window as any).transportConfig;
+      delete window.transportConfig;
     }
   });
 

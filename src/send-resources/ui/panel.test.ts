@@ -13,7 +13,10 @@ import {
   WINE_WARNING_ID,
 } from "./panel";
 
-vi.mock("@core/logger", () => ({
+// Silence the logger, but keep its other exports (its storage key is read by
+// the data export).
+vi.mock("@core/logger", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@core/logger")>()),
   logInfo: () => {},
   clearLog: () => {},
   initLogger: () => {},

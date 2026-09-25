@@ -241,18 +241,3 @@ export function modelOwnCities(): RelatedCity[] {
         (city as RelatedCity).relationship === "ownCity",
     );
 }
-
-/**
- * Parse `"[12:34]"` into coordinates.
- *
- * Note the `g` flag: a single-group match returns `[whole, group]`, and with one
- * group both entries are the SAME number — the exact bug found in the ported
- * `parsePremium`, where every town's Y silently became a copy of its X.
- */
-export function parseCoords(
-  coords: string | undefined,
-): { x: number; y: number } | null {
-  const found = coords?.match(/\d+/g);
-  if (!found || found.length < 2) return null;
-  return { x: parseInt(found[0], 10), y: parseInt(found[1], 10) };
-}

@@ -1,11 +1,18 @@
 /**
- * Number and time formatting.
+ * Number and time formatting, and parsing numbers the game renders.
  *
  * Both original scripts carried near-identical copies of these helpers
  * (`formatTimeLengthToStr` / `Utils.FormatTimeLengthToStr`, `formatNumToStr` /
  * `Utils.FormatNumToStr`, ...). They are merged here, keeping each algorithm
  * step for step so output does not shift by a single character.
  */
+
+import { TIME_FINISHED } from "./messages";
+
+export const MS_PER_SECOND = 1000;
+export const MS_PER_HOUR = 3_600_000;
+export const MS_PER_DAY = 86_400_000;
+export const SECONDS_PER_HOUR = 3600;
 
 const TIME_FACTORS: ReadonlyArray<readonly [suffix: string, seconds: number]> =
   [
@@ -28,9 +35,9 @@ export function formatTimeLengthToStr(
   spacer = " ",
 ): string {
   const total = milliseconds || 0;
-  if (total < 0) return "Finished.";
+  if (total < 0) return TIME_FINISHED;
 
-  let remaining = Math.ceil(total / 1000);
+  let remaining = Math.ceil(total / MS_PER_SECOND);
   let precisionLeft = precision;
   let out = "";
 
@@ -45,37 +52,6 @@ export function formatTimeLengthToStr(
     }
   }
   return out;
-}
-
-/** Format a timestamp as `"today, 14:05:00"` or `"Tue Jul 29, 14:05:00"`. */
-export function formatFullTimeToDateString(
-  timestamp: number | undefined,
-  precise = true,
-): string {
-  const MS_PER_DAY = 86400000;
-  const date = new Date(timestamp || 0);
-  let day = "";
-
-  if (precise) {
-    const dayDelta =
-      Math.floor(date.getTime() / MS_PER_DAY) -
-      Math.floor(Date.now() / MS_PER_DAY);
-    switch (dayDelta) {
-      case 0:
-        day = "today";
-        break;
-      case 1:
-        day = "tomorrow";
-        break;
-      case -1:
-        day = "yesterday";
-        break;
-      default:
-        day = date.toString().split(" ").splice(0, 3).join(" ");
-    }
-  }
-  if (day !== "") day += ", ";
-  return day + date.toLocaleTimeString();
 }
 
 /**
@@ -115,8 +91,23 @@ export function formatNumToStr(
   return out.join("");
 }
 
+/**
+ * A rounded amount with thousands separators: `31970` -> `"31,970"`.
+ *
+ * `formatNumToStr` above keeps the original's quirks (it returns the NUMBER 0
+ * for 0); this is the plain version the newer tables use.
+ */
+export function formatInteger(value: number): string {
+  return Math.round(value).toLocaleString("en-US");
+}
+
+/** A sort key: strings compare case-insensitively, everything else as is. */
+function sortKey(value: unknown): string | number {
+  return typeof value === "string" ? value.toUpperCase() : (value as number);
+}
+
 /** Comparator for `Array.prototype.sort`, ordering by a single key. */
-export function compareValues<T extends Record<string, any>>(
+export function compareValues<T extends object>(
   key: keyof T,
   order: "asc" | "desc" = "asc",
 ): (a: T, b: T) => number {
@@ -127,8 +118,8 @@ export function compareValues<T extends Record<string, any>>(
     ) {
       return 0;
     }
-    const valueA = typeof a[key] === "string" ? a[key].toUpperCase() : a[key];
-    const valueB = typeof b[key] === "string" ? b[key].toUpperCase() : b[key];
+    const valueA = sortKey(a[key]);
+    const valueB = sortKey(b[key]);
 
     let comparison = 0;
     if (valueA > valueB) comparison = 1;
@@ -152,4 +143,29 @@ export function minBy<T>(
   const pool = filter ? items.filter(filter) : items;
   if (pool.length === 0) return null;
   return pool.reduce((prev, curr) => (prev[key] < curr[key] ? prev : curr));
+}
+
+/**
+ * A number as the game renders it: `"32,495"`, `"-525"`, `"12.3k"`, `" 1 234 "`.
+ *
+ * Thousands separators and whitespace are dropped, a trailing `k` multiplies
+ * by a thousand (the menu bar abbreviates above ~10,000), and anything that
+ * still does not start with a number gives `null` — so a real 0 and an
+ * unreadable value stay distinguishable. Callers that want 0 for "unreadable"
+ * write `?? 0`.
+ */
+export function parseGameNumber(
+  text: string | null | undefined,
+): number | null {
+  if (text === null || text === undefined) return null;
+  const clean = text.replace(/,/g, "").replace(/\s/g, "");
+  const parsed = parseFloat(clean);
+  if (!Number.isFinite(parsed)) return null;
+  return /k$/i.test(clean) ? Math.round(parsed * 1000) : parsed;
+}
+
+/** The message of anything thrown, for a log line. */
+export function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
 }

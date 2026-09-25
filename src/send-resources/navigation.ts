@@ -9,6 +9,7 @@ import { clickIfPresent, qs, qsa, waitForElements } from "@core/dom";
 import { waitFor } from "@core/async";
 import { getCurrentTownName } from "@core/ikariam/globals";
 import { SEL } from "@core/ikariam/selectors";
+import { MISC } from "./messages";
 import type { TownEntry } from "./types";
 
 /** How long to wait for a town switch before giving up. */
@@ -32,10 +33,12 @@ export function getTownCount(): number {
  * here is trimmed.
  */
 function townAnchor(townNumber: number | string): HTMLElement | null {
-  const node = townNodes()[Number(townNumber)] as HTMLElement | undefined;
-  if (!node) return null;
-  const anchor =
-    node.querySelector?.("a") ?? (node.childNodes[0] as HTMLElement);
+  // Indexed through `childNodes`, not `children`: a dropdown index is what
+  // every stored task and setting records, and it has always counted nodes.
+  // Anything that is not an element (a text node) simply has no anchor.
+  const node = townNodes()[Number(townNumber)];
+  if (!(node instanceof HTMLElement)) return null;
+  const anchor = node.querySelector("a") ?? node.firstElementChild;
   return anchor instanceof HTMLElement ? anchor : null;
 }
 
@@ -222,7 +225,7 @@ export function closeGamePopup(): void {
 /** Open the safehouse (hotkey S). */
 export function openSpyBuilding(): void {
   if (!clickIfPresent(SEL.safehouse)) {
-    alert("No safehouse in this town!");
+    alert(MISC.noSafehouse);
   }
 }
 

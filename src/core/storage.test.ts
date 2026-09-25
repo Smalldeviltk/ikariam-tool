@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { accountStore, empireStore, globalStore } from "./storage";
+import {
+  accountStore,
+  EMPIRE_KEY_PATTERN,
+  empireKeyPrefix,
+  globalStore,
+} from "./storage";
 
 beforeEach(() => localStorage.clear());
 
@@ -42,16 +47,23 @@ describe("key schemes", () => {
     expect(localStorage.getItem("Aliceresource")).toBe("x");
   });
 
-  it("empireStore uses the *** scheme", () => {
-    empireStore("Alice").set("settings", "x");
-    expect(localStorage.getItem("***Alice***settings")).toBe("x");
+  it("spells the Empire Overview prefix as ***<account>***", () => {
+    expect(empireKeyPrefix("Alice")).toBe("***Alice***");
+  });
+
+  it("splits an Empire Overview key into account and key", () => {
+    const match = (empireKeyPrefix("Alice") + "settings").match(
+      EMPIRE_KEY_PATTERN,
+    );
+    expect(match?.slice(1)).toEqual(["Alice", "settings"]);
+    expect("Alicesettings".match(EMPIRE_KEY_PATTERN)).toBeNull();
   });
 
   it("the two schemes never collide for the same account and key", () => {
     accountStore("Alice").set("settings", "from-account");
-    empireStore("Alice").set("settings", "from-empire");
+    localStorage.setItem(empireKeyPrefix("Alice") + "settings", "from-empire");
     expect(accountStore("Alice").get("settings")).toBe("from-account");
-    expect(empireStore("Alice").get("settings")).toBe("from-empire");
+    expect(localStorage.getItem("***Alice***settings")).toBe("from-empire");
   });
 
   it("keeps different accounts separate", () => {

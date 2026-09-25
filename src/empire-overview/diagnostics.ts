@@ -21,7 +21,14 @@ import {
   registerContextProvider,
   setBuildInfo,
 } from "@core/bug-report";
+import { pageWindow } from "@core/ikariam/globals";
 import $, { isChromium } from "./jquery";
+
+/** The game globals the context snapshot reads. */
+interface InspectedPage {
+  ikariam?: { model?: unknown; templateView?: { id?: string | null } | null };
+  LocalizationStrings?: unknown;
+}
 
 /**
  * Whether the board actually rendered.
@@ -43,20 +50,21 @@ function boardHealth(): Record<string, unknown> {
 }
 
 function empireContext(): Record<string, unknown> {
-  const anyWindow = window as unknown as Record<string, any>;
+  // The PAGE window: this script runs sandboxed, and its own `window` has no
+  // `ikariam`, so reading that always reported the game as missing.
+  const page = pageWindow as unknown as InspectedPage;
   return {
     board: boardHealth(),
     isChromium,
     // The renderer needs jQuery UI; the two packagings supply different
     // versions of it, which is the first thing to check on a render failure.
     jQuery: $.fn?.jquery ?? null,
-    jQueryUi: ($ as any).ui?.version ?? null,
+    jQueryUi: ($ as { ui?: { version?: string } }).ui?.version ?? null,
     // The port reaches these through `unsafeWindow`; their absence explains a
     // whole class of parse failures.
-    hasIkariamModel: !!anyWindow.ikariam?.model,
-    hasLocalizationStrings:
-      typeof anyWindow.LocalizationStrings !== "undefined",
-    templateView: anyWindow.ikariam?.templateView?.id ?? null,
+    hasIkariamModel: !!page.ikariam?.model,
+    hasLocalizationStrings: typeof page.LocalizationStrings !== "undefined",
+    templateView: page.ikariam?.templateView?.id ?? null,
     bodyId: document.body?.id ?? null,
   };
 }

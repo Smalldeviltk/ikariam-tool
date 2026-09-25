@@ -1,14 +1,16 @@
 /**
- * Mechanically ported from the original "Quan ly Ika Perseus -VN- V2.js".
+ * Mechanically ported from the original `legacy/Quản lý Ika Perseus -VN- V2.js`.
  * The logic is line-for-line the same; only the module split, the imports and
  * the type annotations are new. Fixes to genuine bugs found during the port are
  * marked inline with a comment explaining the original behaviour.
  */
 import { reportBug } from "@core/bug-report";
+import { waitFor } from "@core/async";
+import { qs } from "@core/dom";
 import { getCurrentTownName } from "@core/ikariam/globals";
 import { SEL } from "@core/ikariam/selectors";
 import { describeEntry, trace } from "./ajax-trace";
-import $ from "./jquery";
+import $, { pageJQuery } from "./jquery";
 import { Constant } from "./constants";
 import { MilitaryUnits } from "./models/military";
 import { Movement } from "./models/movement";
@@ -18,8 +20,11 @@ import { empire } from "./empire";
 import { events } from "./events";
 import { render } from "./render";
 
-/** How long `switchTownFromDropdown` waits for the breadcrumb to change. */
+/** How long `switchTownWithGameForm` waits for the new town to settle. */
 const TOWN_SWITCH_TIMEOUT_MS = 15_000;
+
+/** How often it looks. */
+const TOWN_SWITCH_POLL_MS = 100;
 
 /**
  * How long the game must stay idle, with the new town's name in the
@@ -35,16 +40,21 @@ const TOWN_SWITCH_SETTLE_MS = 1200;
  * shows `#loadingPreview` from `beforeSend` until the response is handled.
  */
 function gameIsLoading(): boolean {
-  var pageJQuery = unsafeWindow.jQuery || unsafeWindow.$;
-  if (
-    pageJQuery &&
-    typeof pageJQuery.active === "number" &&
-    pageJQuery.active > 0
-  ) {
-    return true;
-  }
-  var loading = document.getElementById("loadingPreview");
+  // `active` is real jQuery API (open request count) that its typings omit.
+  const gameJQuery = pageJQuery() as { active?: number } | undefined;
+  if ((gameJQuery?.active ?? 0) > 0) return true;
+  const loading = qs(SEL.loadingIndicator);
   return !!loading && loading.style.display === "block";
+}
+
+/** The board's strings in the language chosen in its settings. */
+function languageText(): any {
+  return Constant.LanguageData[database.settings.languageChange.value];
+}
+
+/** "Updated: ", which the parsers put before the name of what they read. */
+function updatedPrefix(): string {
+  return languageText().toast_updated;
 }
 
 export const ikariam: any = {
@@ -113,7 +123,7 @@ export const ikariam: any = {
       params.cityId !== undefined &&
       String(ikariam.CurrentCityId) !== String(params.cityId)
     ) {
-      var switching = ikariam.switchTownWithGameForm(
+      const switching = ikariam.switchTownWithGameForm(
         params.cityId,
         function (switched: boolean) {
           ikariam.loadUrl(switched, mainView, params, switched);
@@ -190,47 +200,46 @@ export const ikariam: any = {
     done: (switched: boolean) => void,
   ): boolean {
     if (!/^\d+$/.test(String(cityId))) return false;
-    var anchor = $(
+    const anchor = qs(
       SEL.townListContainer + ' > li[selectvalue="' + cityId + '"] > a',
-    ).get(0);
-    if (!anchor) return false;
-    var target = (
-      anchor.getAttribute("title") ||
-      anchor.textContent ||
+    );
+    const target = (
+      anchor?.getAttribute("title") ||
+      anchor?.textContent ||
       ""
     ).trim();
     if (!target) return false;
 
-    var form = document.getElementById("changeCityForm");
-    var cityInput = document.getElementById(
-      "js_cityIdOnChange",
-    ) as HTMLInputElement | null;
-    var submitForm = unsafeWindow.ajaxHandlerCallFromForm;
+    const form = qs<HTMLFormElement>(SEL.changeCityForm);
+    const cityInput = qs<HTMLInputElement>(SEL.changeCityInput);
+    const submitForm = unsafeWindow.ajaxHandlerCallFromForm;
     if (!form || !cityInput || typeof submitForm !== "function") return false;
 
     cityInput.value = String(cityId);
     submitForm(form);
 
-    var startedAt = Date.now();
-    var quietSince: number | null = null;
-    (function waitForTown() {
-      var arrived = getCurrentTownName() === target;
-      var now = Date.now();
-      if (arrived && !gameIsLoading()) {
-        if (quietSince === null) quietSince = now;
-        if (now - quietSince >= TOWN_SWITCH_SETTLE_MS) {
-          done(true);
-          return;
-        }
-      } else {
+    const arrived = () => getCurrentTownName() === target;
+    let quietSince: number | null = null;
+    const settled = () => {
+      if (!arrived() || gameIsLoading()) {
         quietSince = null;
+        return false;
       }
-      if (now - startedAt > TOWN_SWITCH_TIMEOUT_MS) {
-        done(arrived);
-        return;
-      }
-      setTimeout(waitForTown, 100);
-    })();
+      const now = Date.now();
+      if (quietSince === null) quietSince = now;
+      return now - quietSince >= TOWN_SWITCH_SETTLE_MS;
+    };
+
+    waitFor(settled, {
+      intervalMs: TOWN_SWITCH_POLL_MS,
+      timeoutMs: TOWN_SWITCH_TIMEOUT_MS,
+      label: `switch to ${target}`,
+    }).then(
+      () => done(true),
+      // Timed out: open the view anyway if the town did switch, otherwise
+      // let the caller fall back to a full page load.
+      () => done(arrived()),
+    );
     return true;
   },
   Host: function () {
@@ -552,7 +561,6 @@ export const ikariam: any = {
           break;
         case "cityMilitary":
           this.parseCityMilitary();
-          //this.parseMilitaryLocalization();
           break;
         case "researchAdvisor":
           this.parseResearchAdvisor(tData);
@@ -605,7 +613,7 @@ export const ikariam: any = {
       "Current form",
       $("#palace").find("div.contentBox01h h3.header").get(0).textContent,
     );
-    render.toast("Updated: " + $("#palace").children(":first").text());
+    render.toast(updatedPrefix() + $("#palace").children(":first").text());
   },
   parseCulturalPossessions: function (html) {
     var allCulturalGoods = html.match(/iniValue\s:\s(\d*)/g);
@@ -626,7 +634,7 @@ export const ikariam: any = {
         });
       });
     render.toast(
-      "Updated: " + $("#culturalPossessions_assign > .header").text(),
+      updatedPrefix() + $("#culturalPossessions_assign > .header").text(),
     );
   },
   parseMuseum: function () {
@@ -646,7 +654,9 @@ export const ikariam: any = {
       events(Constant.Events.CITY_UPDATED).pub(ikariam.CurrentCityId, {
         culturalGoods: true,
       });
-    render.toast("Updated: " + $("#tab_museum > div > h3").get(0).textContent);
+    render.toast(
+      updatedPrefix() + $("#tab_museum > div > h3").get(0).textContent,
+    );
   },
   parseTavern: function () {},
   resTransportObject: function () {
@@ -825,7 +835,7 @@ export const ikariam: any = {
       }
       return completionTime.getTime();
     }
-    render.toast("Updated: " + $("#js_mainBoxHeaderTitle").text());
+    render.toast(updatedPrefix() + $("#js_mainBoxHeaderTitle").text());
   },
   /**
    * First call without data will parse the transportform, second call will add the forms data to the database
@@ -939,7 +949,6 @@ export const ikariam: any = {
     }
   },
   parseMilitaryTransport: function (submit) {
-    //return false;
     submit = submit || false;
     var that = this;
     if (submit) {
@@ -1038,7 +1047,7 @@ export const ikariam: any = {
         );
       transport.returnTime = arrTime.getTime();
       database.getGlobalData.addFleetMovement(transport);
-      render.toast("Updated: Movement added");
+      render.toast(updatedPrefix() + languageText().toast_movementAdded);
       return false;
     } else {
       return true;
@@ -1103,7 +1112,7 @@ export const ikariam: any = {
       "finances",
       $("#finances").find("h3#js_mainBoxHeaderTitle").text(),
     );
-    render.toast("Updated: " + $("#finances").children(":first").text());
+    render.toast(updatedPrefix() + $("#finances").children(":first").text());
   },
   parseResearchAdvisor: function (data) {
     var changes = [];
@@ -1131,7 +1140,7 @@ export const ikariam: any = {
       $("li.points").text().split(":")[0],
     );
     render.toast(
-      "Updated: " + $("#tab_researchAdvisor").children(":first").text(),
+      updatedPrefix() + $("#tab_researchAdvisor").children(":first").text(),
     );
   },
   parseAcademy: function (data) {
@@ -1144,7 +1153,7 @@ export const ikariam: any = {
         research: changed,
       });
     render.toast(
-      "Updated: " + $("#academy h3#js_mainBoxHeaderTitle").text() + "",
+      updatedPrefix() + $("#academy h3#js_mainBoxHeaderTitle").text(),
     );
   },
   parseTownHall: function (data) {
@@ -1166,7 +1175,7 @@ export const ikariam: any = {
     changes.priests = city.updatePriests(priests);
     changes.research = city.updateResearchers(researchers);
     events(Constant.Events.CITY_UPDATED).pub(ikariam.CurrentCityId, changes);
-    render.toast("Updated: " + $("#js_TownHallCityName").text() + "");
+    render.toast(updatedPrefix() + $("#js_TownHallCityName").text());
   },
   parseTemple: function (data) {
     var priests = parseInt(data.js_TempleSlider.slider.ini_value) || 0;
@@ -1352,7 +1361,7 @@ export const ikariam: any = {
     } finally {
     }
     render.toast(
-      "Updated: " + $("#js_MilitaryMovementsFleetMovements h3").text(),
+      updatedPrefix() + $("#js_MilitaryMovementsFleetMovements h3").text(),
     );
   },
   parseCityMilitary: function () {
@@ -1570,7 +1579,7 @@ export const ikariam: any = {
       );
     });
     events(Constant.Events.PREMIUM_UPDATED).pub(changes);
-    render.toast("Updated: " + $("#premium").children(":first").text());
+    render.toast(updatedPrefix() + $("#premium").children(":first").text());
   },
   FetchAllTowns: function () {
     var _relatedCityData = unsafeWindow.ikariam.model.relatedCityData;

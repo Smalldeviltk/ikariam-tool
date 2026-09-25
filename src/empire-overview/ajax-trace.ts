@@ -18,7 +18,8 @@
  * `tools/collect-dom-report.js` can pick them up. It never throws.
  */
 
-const KEY = "ikaAjaxTrace";
+/** Where the trace is kept; the crawler in `tools/` reads the same key. */
+export const TRACE_STORAGE_KEY = "ikaAjaxTrace";
 const MAX_ENTRIES = 40;
 
 export interface TraceRecord {
@@ -29,7 +30,7 @@ export interface TraceRecord {
 
 function load(): TraceRecord[] {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(TRACE_STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -42,9 +43,9 @@ export function trace(kind: string, data: Record<string, unknown>): void {
     const records = load();
     records.push({ at: Date.now(), kind, ...data });
     while (records.length > MAX_ENTRIES) records.shift();
-    localStorage.setItem(KEY, JSON.stringify(records));
+    localStorage.setItem(TRACE_STORAGE_KEY, JSON.stringify(records));
     // The crawler runs in page context; the script may not.
-    (unsafeWindow as any).ikaAjaxTrace = records;
+    unsafeWindow.ikaAjaxTrace = records;
   } catch {
     // Diagnostics must never be the reason something fails.
   }
@@ -56,8 +57,8 @@ export function readTrace(): TraceRecord[] {
 
 export function clearTrace(): void {
   try {
-    localStorage.removeItem(KEY);
-    delete (unsafeWindow as any).ikaAjaxTrace;
+    localStorage.removeItem(TRACE_STORAGE_KEY);
+    delete unsafeWindow.ikaAjaxTrace;
   } catch {
     /* ignore */
   }

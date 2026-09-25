@@ -5,14 +5,15 @@
  * Everything in these scripts used to get its data by navigating: click a town
  * in a dropdown, poll the breadcrumb until it changes, read the DOM. That is
  * slow, it moves the player's view around, and it fails in ways that are
- * invisible from outside the page — four separate defects fixed in one session
- * were all consequences of it.
+ * invisible from outside the page: a view swapped out mid-read, a breadcrumb
+ * that changed before the buildings did, a poll that never ends.
  *
  * The game already exposes the same data over a plain request. IkaEasy V4 uses
  * exactly this (`js/helper/httpClient.js:21`, `js/data/city.js:52`), and a
  * probe against the live game (`ikaTestAjaxFetch` in
  * `tools/collect-dom-report.js`) confirmed the shape before a line of this was
- * written. See `docs/improvement-plan.md` §1.
+ * written. The plan's section on how IkaEasy loads data
+ * (`docs/improvement-plan.md`) has the capture.
  *
  * WHAT THE PROBE MEASURED, on s303-en
  *   - `GET /index.php?view=townHall&cityId=<id>&...&ajax=1` returns HTTP 200
@@ -33,16 +34,18 @@
  * feature code's business, not the transport's.
  */
 
+import { sleep } from "../async";
 import { pageWindow } from "./globals";
 
 /** Minimum gap between two requests. */
 const DEFAULT_MIN_GAP_MS = 300;
 
-/** Give up on a request that has not answered by then. */
-const DEFAULT_TIMEOUT_MS = 15_000;
-
-/** One `[type, payload]` pair as the game sends them. */
-export type ResponseEntry = unknown;
+/**
+ * Give up on a request that has not answered by then. The same 15 s as
+ * `waitFor`'s default, but named apart: this bounds one HTTP request, that
+ * bounds a DOM poll.
+ */
+const REQUEST_TIMEOUT_MS = 15_000;
 
 export interface RequestOptions {
   /** Overrides the default gap before this request. */
@@ -77,9 +80,10 @@ let lastRequestAt = 0;
  * fetched all nine towns and the board learned nothing, which is why the towns
  * had to be walked by hand afterwards.
  *
- * `document` is the one thing both bundles genuinely share — both run in the
- * page context (`@grant none` for the userscripts, a page-world injection for
- * the extension), so the event and its payload cross between them intact.
+ * `document` is the one thing both bundles genuinely share. Send Resources
+ * runs in the page (`@grant none`); Empire Overview runs in the userscript
+ * manager's sandbox (`@grant unsafeWindow` and GM_* functions), which still
+ * sees the page's own DOM; the extension injects both into the page world.
  */
 const RESPONSE_EVENT = "ika:ajaxResponse";
 
@@ -172,10 +176,6 @@ function absorbToken(entries: unknown[]): void {
   }
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /**
  * One request to the game, returning the parsed response array.
  *
@@ -208,7 +208,7 @@ export async function ikariamRequest(
   const controller = new AbortController();
   const timeout = setTimeout(
     () => controller.abort(),
-    options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    options.timeoutMs ?? REQUEST_TIMEOUT_MS,
   );
 
   let text: string;

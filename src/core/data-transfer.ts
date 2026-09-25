@@ -31,6 +31,12 @@
  * same DOM, which is the class of bug this project exists to have removed.
  */
 
+import { BUG_REPORT_STORAGE_KEY } from "./bug-report";
+import { errorMessage } from "./format";
+import { LOGGER_STORAGE_KEY } from "./logger";
+import { IMPORT_ERRORS, IMPORT_NOTES, IMPORT_SUMMARY } from "./messages";
+import { EMPIRE_KEY_PATTERN, empireKeyPrefix } from "./storage";
+
 /** Bumped when the envelope shape changes incompatibly. */
 export const TRANSFER_FORMAT = "ikariam-tool/data";
 export const TRANSFER_VERSION = 1;
@@ -40,7 +46,16 @@ export type DataGroup = "config" | "measurements" | "runtime" | "diagnostics";
 /** Groups included when nothing is specified. */
 export const DEFAULT_GROUPS: DataGroup[] = ["config", "measurements"];
 
-/** Keys with no account prefix. */
+/**
+ * Keys with no account prefix.
+ *
+ * The core modules' own keys are imported, so renaming one cannot quietly
+ * drop it from exports. Send Resources' keys cannot be imported here — core
+ * does not depend on the features — so they are spelled out, and a test in
+ * `data-transfer.test.ts` fails if one of them is missing from this table or
+ * from `ACCOUNT_SUFFIXES`. `ikaDomReports` belongs to the crawler in
+ * `tools/`, which is not part of the build.
+ */
 const GLOBAL_KEYS: Record<string, DataGroup> = {
   listAutoBuild: "config",
   ika_perShipCapacity: "config",
@@ -53,8 +68,8 @@ const GLOBAL_KEYS: Record<string, DataGroup> = {
   isAutoReload: "runtime",
   reloadedMinute: "runtime",
 
-  loggerInfo: "diagnostics",
-  ikaBugReports: "diagnostics",
+  [LOGGER_STORAGE_KEY]: "diagnostics",
+  [BUG_REPORT_STORAGE_KEY]: "diagnostics",
   ikaDomReports: "diagnostics",
 };
 
@@ -73,9 +88,6 @@ const ACCOUNT_SUFFIXES: Record<string, DataGroup> = {
   resource: "runtime",
 };
 
-/** Empire Overview stores its own settings as `***<account>***<key>`. */
-const EMPIRE_PREFIX_PATTERN = /^\*\*\*.*\*\*\*/;
-
 export interface ClassifiedKey {
   key: string;
   group: DataGroup;
@@ -92,17 +104,16 @@ export function classifyKey(key: string): ClassifiedKey | null {
     return { key, group: globalGroup, account: null, suffix: key };
   }
 
-  if (EMPIRE_PREFIX_PATTERN.test(key)) {
-    const match = key.match(/^\*\*\*(.*?)\*\*\*(.*)$/);
-    if (match) {
-      return {
-        key,
-        // Empire Overview only stores board settings and cached game data here.
-        group: "config",
-        account: match[1],
-        suffix: match[2],
-      };
-    }
+  // Empire Overview stores its own settings as `***<account>***<key>`.
+  const empireMatch = key.match(EMPIRE_KEY_PATTERN);
+  if (empireMatch) {
+    return {
+      key,
+      // Empire Overview only stores board settings and cached game data here.
+      group: "config",
+      account: empireMatch[1],
+      suffix: empireMatch[2],
+    };
   }
 
   // Longest suffix first so `listReceiver` beats a shorter accidental match.
@@ -204,21 +215,19 @@ export function parseBundle(json: string): TransferBundle {
   try {
     parsed = JSON.parse(json);
   } catch {
-    throw new Error("That is not valid JSON.");
+    throw new Error(IMPORT_ERRORS.notJson);
   }
   const bundle = parsed as Partial<TransferBundle>;
   if (bundle?.format !== TRANSFER_FORMAT) {
-    throw new Error(
-      "That file was not produced by this tool (missing or wrong format tag).",
-    );
+    throw new Error(IMPORT_ERRORS.notOurFormat);
   }
   if (typeof bundle.version !== "number" || bundle.version > TRANSFER_VERSION) {
     throw new Error(
-      `Unsupported export version ${bundle.version}; this build understands up to ${TRANSFER_VERSION}.`,
+      IMPORT_ERRORS.unsupportedVersion(bundle.version, TRANSFER_VERSION),
     );
   }
   if (!Array.isArray(bundle.entries)) {
-    throw new Error("The export contains no entries.");
+    throw new Error(IMPORT_ERRORS.noEntries);
   }
   return bundle as TransferBundle;
 }
@@ -241,8 +250,8 @@ export function importData(
 
     let targetKey = entry.key;
     if (entry.account !== null && options.remapAccountTo !== undefined) {
-      if (EMPIRE_PREFIX_PATTERN.test(entry.key)) {
-        targetKey = `***${options.remapAccountTo}***${entry.suffix}`;
+      if (EMPIRE_KEY_PATTERN.test(entry.key)) {
+        targetKey = empireKeyPrefix(options.remapAccountTo) + entry.suffix;
       } else {
         targetKey = `${options.remapAccountTo}${entry.suffix}`;
       }
@@ -250,7 +259,7 @@ export function importData(
 
     if (!overwrite && localStorage.getItem(targetKey) !== null) {
       result.skipped++;
-      result.notes.push(`kept existing ${targetKey}`);
+      result.notes.push(IMPORT_NOTES.keptExisting(targetKey));
       continue;
     }
 
@@ -259,9 +268,7 @@ export function importData(
       result.imported++;
     } catch (e) {
       result.skipped++;
-      result.notes.push(
-        `could not write ${targetKey}: ${(e as Error).message}`,
-      );
+      result.notes.push(IMPORT_NOTES.couldNotWrite(targetKey, errorMessage(e)));
     }
   }
 
@@ -289,9 +296,9 @@ export function describeBundle(bundle: TransferBundle): string {
     ([group, count]) => `${count} ${group}`,
   );
   const accounts = accountsInBundle(bundle);
-  return (
-    `Exported ${new Date(bundle.exportedAt).toLocaleString()}\n` +
-    `${bundle.entries.length} entries (${parts.join(", ") || "none"})\n` +
-    `Accounts: ${accounts.join(", ") || "none (global data only)"}`
-  );
+  return [
+    IMPORT_SUMMARY.exportedAt(new Date(bundle.exportedAt).toLocaleString()),
+    IMPORT_SUMMARY.entries(bundle.entries.length, parts.join(", ")),
+    IMPORT_SUMMARY.accounts(accounts.join(", ")),
+  ].join("\n");
 }

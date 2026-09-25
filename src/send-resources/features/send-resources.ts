@@ -30,6 +30,7 @@ import {
 import { getActionPoints, getFreeShips, readCurrentWine } from "../game-state";
 import { getFreighterCapacity, getPerShipCapacity } from "../ship-capacity";
 import { getState } from "../state";
+import { TRANSFER_STATUS } from "../messages";
 import type { ResourceId } from "../types";
 
 /**
@@ -41,6 +42,12 @@ const BACK_TO_TOWN_TIMEOUT_MS = 5_000;
 
 /** How long to let the game settle after a submit, before navigating away. */
 const POST_SUBMIT_TIMEOUT_MS = 5_000;
+
+/**
+ * Pause after touching the shipment form, before the next step: the game
+ * recalculates ship counts and the mission summary from the field's events.
+ */
+const FORM_SETTLE_MS = 500;
 
 /** Queue one shipment. */
 export function enqueueSendResource(
@@ -152,7 +159,7 @@ export async function handleSendResource(
 
   if (!useMerchant) {
     // Let the Trading Post itself pick the maximum freighter count.
-    await sleep(500);
+    await sleep(FORM_SETTLE_MS);
     qs<HTMLElement>(SEL.freightersMaxButton)?.click();
   }
 
@@ -165,7 +172,7 @@ export async function handleSendResource(
   // summary from the field's own events. See `setInputValue`.
   setInputValue(field, String(sentAmount));
 
-  await sleep(500);
+  await sleep(FORM_SETTLE_MS);
   qs<HTMLElement>(SEL.submit)?.click();
 
   // PAST THIS POINT THE GOODS HAVE LEFT. Nothing below may throw: the runner
@@ -194,7 +201,7 @@ export async function handleSendResource(
 /** Status line for the panel. */
 export function describeCurrentTransfer(): string {
   const head = getState().queue.head();
-  if (!head || head.type !== "sendResource") return "Nothing is transferring";
+  if (!head || head.type !== "sendResource") return TRANSFER_STATUS.idle;
   const { amount, resource, origin, destination } = head.data;
   return (
     `${amount} ${resource} from ${getTownNameFromList(origin)} ` +

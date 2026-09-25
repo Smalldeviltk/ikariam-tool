@@ -1,6 +1,6 @@
 /**
- * The control surface: a launcher in the game's own menu, and a draggable
- * window holding everything else.
+ * The control surface: a fixed launcher button, and a draggable window
+ * holding everything else.
  *
  * WHAT THIS REPLACES
  * The original — and the port until now — appended a fixed `<div>` pinned at
@@ -8,15 +8,15 @@
  * written inline. It covered the game at some window sizes, could not be moved,
  * grouped nothing, and showed no state beyond two button labels.
  *
- * Now: one entry in the game's left menu opens a window whose controls are
- * grouped by feature, and whose footer carries live status. The window
- * remembers where it was left. See `docs/improvement-plan.md` §3.
+ * Now: a launcher button opens a window whose controls are grouped by
+ * feature, and whose footer carries live status. The window remembers where
+ * it was left.
  *
  * The buttons themselves are unchanged — same `data-ika-action` names, same
  * handlers. This is a layout change, not a behaviour change.
  */
 
-import { addStyle, qs } from "@core/dom";
+import { addStyle, escapeHtml, qs } from "@core/dom";
 import {
   createWindow,
   setWindowFooter,
@@ -24,15 +24,16 @@ import {
 } from "@core/ui/window";
 import {
   formatHours,
+  townsNeedingWine,
   wineStatus,
   type TownWineStatus,
 } from "../features/wine-warning";
+import { BUTTON, PANEL, WINE_WARNING } from "../messages";
 import { getState } from "../state";
 import { action } from "./actions";
-import { escapeHtml, QUEUE_LIST_ID, refreshQueueView } from "./queue-view";
+import { QUEUE_LIST_ID, refreshQueueView } from "./queue-view";
 import { buildStyles } from "./styles";
 
-export const PANEL_ID = "customDiv";
 export const WINDOW_ID = "ikaSendResourcesWindow";
 export const LAUNCHER_CLASS = "ika-send-menu";
 export const WINE_WARNING_ID = "ikaWineWarning";
@@ -47,36 +48,36 @@ function group(title: string, body: string): string {
 function windowContent(): string {
   return (
     group(
-      "Wine",
-      `<button class="button" id="btnStartScriptAutoWine" ${action("wine.chooseSource")}>Start</button>` +
-        `<button class="button" ${action("wine.settings")}>Settings</button>` +
+      PANEL.groups.wine,
+      `<button class="button" id="btnStartScriptAutoWine" ${action("wine.chooseSource")}>${BUTTON.start}</button>` +
+        `<button class="button" ${action("wine.settings")}>${BUTTON.settings}</button>` +
         `<div id="${WINE_WARNING_ID}"></div>`,
     ) +
     group(
-      "Transport",
-      `<button class="button" id="btnStartScript" ${action("queue.toggle")}>Start Timer</button>` +
-        `<button class="button" ${action("send.settings")}>Settings</button>` +
-        `<button class="button" id="calibratePerShipCapacity" ${action("ship.calibrate")}>Calibrate Cargo</button>`,
+      PANEL.groups.transport,
+      `<button class="button" id="btnStartScript" ${action("queue.toggle")}>${BUTTON.startTimer}</button>` +
+        `<button class="button" ${action("send.settings")}>${BUTTON.settings}</button>` +
+        `<button class="button" id="calibratePerShipCapacity" ${action("ship.calibrate")}>${PANEL.calibrateCargo}</button>`,
     ) +
     group(
-      "Build",
-      `<button class="button" ${action("build.startNow")}>Start</button>` +
-        `<button class="button" id="btnStartAutoBuild" ${action("build.toggleTimer")}>Start Timer</button>` +
-        `<button class="button" ${action("build.settings")}>Settings</button>` +
-        `<button class="button" id="btnStartScanBuilding" ${action("build.scan")}>Scan</button>`,
+      PANEL.groups.build,
+      `<button class="button" ${action("build.startNow")}>${BUTTON.start}</button>` +
+        `<button class="button" id="btnStartAutoBuild" ${action("build.toggleTimer")}>${BUTTON.startTimer}</button>` +
+        `<button class="button" ${action("build.settings")}>${BUTTON.settings}</button>` +
+        `<button class="button" id="btnStartScanBuilding" ${action("build.scan")}>${PANEL.scan}</button>`,
     ) +
-    group("Queue", `<div id="${QUEUE_LIST_ID}"></div>`) +
+    group(PANEL.groups.queue, `<div id="${QUEUE_LIST_ID}"></div>`) +
     group(
-      "Account",
-      `<button class="button" ${action("account.update")}>Update Account</button>` +
+      PANEL.groups.account,
+      `<button class="button" ${action("account.update")}>${PANEL.updateAccount}</button>` +
         `<div id="summaryAccountList"></div>`,
     ) +
     group(
-      "Data",
-      `<button class="button" id="btnExportData" ${action("data.export")}>Export</button>` +
-        `<button class="button" id="btnImportData" ${action("data.import")}>Import</button>` +
-        `<button class="button" id="btnBugReport" ${action("bug.report")}>Bug Report</button>` +
-        `<button class="button" ${action("log.clear")}>Clear Log</button>`,
+      PANEL.groups.data,
+      `<button class="button" id="btnExportData" ${action("data.export")}>${PANEL.exportData}</button>` +
+        `<button class="button" id="btnImportData" ${action("data.import")}>${PANEL.importData}</button>` +
+        `<button class="button" id="btnBugReport" ${action("bug.report")}>${PANEL.bugReport}</button>` +
+        `<button class="button" ${action("log.clear")}>${PANEL.clearLog}</button>`,
     ) +
     `<div id="logger"><textarea rows="4" cols="60" id="txtLogger" style="font-size:9px; display:none"></textarea></div>`
   );
@@ -98,7 +99,7 @@ function windowContent(): string {
 function buildLauncher(onClick: () => void): void {
   const launcher = document.createElement("button");
   launcher.className = `button ${LAUNCHER_CLASS}`;
-  launcher.textContent = "Send Resources";
+  launcher.textContent = PANEL.launcher;
   launcher.style.cssText =
     "position:fixed; z-index:1000; left:8px; bottom:8px; cursor:pointer;";
   launcher.addEventListener("click", onClick);
@@ -112,7 +113,7 @@ export function buildPanel(): void {
 
   panelWindow = createWindow({
     id: WINDOW_ID,
-    title: "Send Resources",
+    title: PANEL.title,
     store: getState().account,
   });
   panelWindow.content.innerHTML = windowContent();
@@ -127,22 +128,18 @@ export function buildPanel(): void {
 
 export function setQueueButtonLabel(running: boolean): void {
   const button = qs("#btnStartScript");
-  if (button) button.textContent = running ? "Stop Timer" : "Start Timer";
+  if (button) button.textContent = timerLabel(running);
 }
 
 export function setAutoBuildButtonLabel(running: boolean): void {
   const button = qs("#btnStartAutoBuild");
-  if (button) button.textContent = running ? "Stop Timer" : "Start Timer";
+  if (button) button.textContent = timerLabel(running);
 }
 
-/**
- * The live status line.
- *
- * The old panel had a `<p>` that only ever said what was transferring. The
- * footer now also carries the queue depth, which is the thing that was
- * genuinely unknowable before: there was no way to see how many orders were
- * still pending.
- */
+function timerLabel(running: boolean): string {
+  return running ? BUTTON.stopTimer : BUTTON.startTimer;
+}
+
 /**
  * How long each town's wine lasts, for the towns where that is worth saying.
  *
@@ -157,24 +154,18 @@ export function renderWineWarning(): string {
   const measured = towns.filter((town) => town.hoursLeft !== null);
 
   if (measured.length === 0) {
-    return (
-      `<div class="ika-wine-unknown">` +
-      `No wine figures yet — open the Empire Overview board, or visit a town.` +
-      `</div>`
-    );
+    return `<div class="ika-wine-unknown">${WINE_WARNING.unknown}</div>`;
   }
 
-  const needing = towns
-    .filter((town) => town.severity !== "ok")
-    .sort((a, b) => (a.hoursLeft ?? Infinity) - (b.hoursLeft ?? Infinity));
+  const needing = townsNeedingWine(towns);
 
   if (needing.length === 0) {
-    return `<div class="ika-wine-ok">Wine: ${measured.length} towns, all comfortable</div>`;
+    return `<div class="ika-wine-ok">${WINE_WARNING.allComfortable(measured.length)}</div>`;
   }
 
   const line = (town: TownWineStatus) =>
     `<li class="ika-wine-${town.severity}">` +
-    `${escapeHtml(town.townName)} — ${formatHours(town.hoursLeft)}</li>`;
+    `${WINE_WARNING.townLine(escapeHtml(town.townName), formatHours(town.hoursLeft))}</li>`;
 
   return `<ul class="ika-wine-list">${needing.map(line).join("")}</ul>`;
 }
@@ -185,6 +176,14 @@ export function refreshWineWarning(): void {
   if (host) host.innerHTML = renderWineWarning();
 }
 
+/**
+ * The live status line.
+ *
+ * The old panel had a `<p>` that only ever said what was transferring. The
+ * footer now also carries the queue depth, which is the thing that was
+ * genuinely unknowable before: there was no way to see how many orders were
+ * still pending.
+ */
 export function setTransferInfo(text: string): void {
   if (!panelWindow) return;
   // Only worth redrawing while someone is looking at it.
@@ -195,7 +194,7 @@ export function setTransferInfo(text: string): void {
   const pending = getState().queue.length;
   setWindowFooter(
     panelWindow,
-    pending > 0 ? `${text}  —  ${pending} queued` : text,
+    pending > 0 ? PANEL.footerWithQueue(text, pending) : text,
   );
 }
 

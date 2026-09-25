@@ -8,6 +8,7 @@
  */
 
 import { qs, qsa } from "@core/dom";
+import { parseGameNumber } from "@core/format";
 import { SEL } from "@core/ikariam/selectors";
 
 /**
@@ -28,7 +29,7 @@ function annotate(containerSelector: string, addOne: boolean): void {
   let total = 0;
   // Skip the first item (the label) and sum the numeric cells.
   for (let i = 1; i < items.length; i++) {
-    total += Number(items[i].innerHTML.replace(/,/g, ""));
+    total += parseGameNumber(items[i].textContent) ?? 0;
   }
 
   const node = document.createElement("li");
@@ -57,22 +58,4 @@ export function startBarbarianObserver(): void {
   });
 
   observer.observe(target, { childList: true });
-}
-
-/**
- * Capture a pirate raid when no captcha blocks it.
- *
- * The original defined this as `checkPirate` but its only call site was
- * commented out inside `refreshStatus`. Kept available; still not wired in.
- */
-export function capturePirate(): void {
-  try {
-    if (qs(SEL.pirateCaptcha)) return;
-    const table = qs(SEL.pirateTable);
-    if (!table) return;
-    const links = qsa(SEL.pirateActionLinks, table);
-    if (links[0]?.classList.contains("capture")) links[0].click();
-  } catch (e) {
-    console.log(e);
-  }
 }

@@ -18,6 +18,7 @@
  * predictable amount left now.
  */
 
+import { MS_PER_HOUR } from "@core/format";
 import { getCurrentTownName } from "@core/ikariam/globals";
 import {
   modelCurrentCityName,
@@ -27,7 +28,7 @@ import {
 } from "@core/ikariam/model";
 import type { Store } from "@core/storage";
 
-const KEY = "ikaTownStats";
+export const TOWN_STATS_KEY = "ikaTownStats";
 
 /** Snapshots older than this are ignored outright. */
 export const MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -49,11 +50,11 @@ export interface TownStats {
 export type TownStatsMap = Record<string, TownStats>;
 
 export function loadTownStats(store: Store): TownStatsMap {
-  return store.getJSON<TownStatsMap>(KEY, {});
+  return store.getJSON<TownStatsMap>(TOWN_STATS_KEY, {});
 }
 
 export function saveTownStats(store: Store, stats: TownStatsMap): void {
-  store.setJSON(KEY, stats);
+  store.setJSON(TOWN_STATS_KEY, stats);
 }
 
 /**
@@ -109,7 +110,7 @@ export function projectedStats(
   const age = now - entry.at;
   if (age > MAX_AGE_MS) return null;
 
-  const drained = (entry.consume * age) / 3_600_000;
+  const drained = (entry.consume * age) / MS_PER_HOUR;
   const projected: TownStats = {
     stock: Math.max(0, Math.round(entry.stock - drained)),
     consume: entry.consume,
@@ -131,8 +132,4 @@ export function pruneTownStats(store: Store, now = Date.now()): number {
   }
   if (removed) saveTownStats(store, stats);
   return removed;
-}
-
-export function clearTownStats(store: Store): void {
-  saveTownStats(store, {});
 }

@@ -6,11 +6,13 @@ import {
   formatHours,
   townsNeedingWine,
   wineStatus,
-  wineWarningSummary,
   WARNING_HOURS,
 } from "./wine-warning";
 
-vi.mock("@core/logger", () => ({
+// Silence the logger, but keep its other exports (its storage key is read by
+// the data export).
+vi.mock("@core/logger", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@core/logger")>()),
   logInfo: () => {},
   clearLog: () => {},
   initLogger: () => {},
@@ -146,30 +148,5 @@ describe("formatHours", () => {
     expect(formatHours(7.9)).toBe("7h");
     expect(formatHours(24)).toBe("1d");
     expect(formatHours(54)).toBe("2d 6h");
-  });
-});
-
-describe("wineWarningSummary", () => {
-  it("is null when there is nothing to say", () => {
-    document.body.innerHTML =
-      dropdown() + board([boardRow("W-Athens", "100000", "-100")]);
-    expect(wineWarningSummary()).toBeNull();
-  });
-
-  it("names the worst town and counts the rest", () => {
-    document.body.innerHTML =
-      dropdown() +
-      board([
-        boardRow("W-Athens", "300", "-100"),
-        boardRow("M-Corinth", "2400", "-100"),
-      ]);
-
-    expect(wineWarningSummary()).toBe("W-Athens: 3h of wine left (+1 more)");
-  });
-
-  it("drops the tail when only one town needs anything", () => {
-    document.body.innerHTML =
-      dropdown() + board([boardRow("W-Athens", "300", "-100")]);
-    expect(wineWarningSummary()).toBe("W-Athens: 3h of wine left");
   });
 });

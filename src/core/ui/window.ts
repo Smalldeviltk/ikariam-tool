@@ -12,10 +12,14 @@
  * jQuery UI, and Send Resources runs in page context with no jQuery of its own.
  *
  * This lives in `core/` because both scripts can use it. Empire Overview has
- * its own board already and is left alone; see `docs/improvement-plan.md` §3
- * for why the two surfaces are deliberately not merged.
+ * its own board already and is left alone: merging the panel into it would
+ * make Send Resources depend on Empire Overview again, which is what the town
+ * cache was built to remove (`docs/improvement-plan.md`, the Phase 2 design
+ * decision).
  */
 
+import { addStyle } from "@core/dom";
+import { WINDOW_CLOSE_TITLE } from "@core/messages";
 import type { Store } from "@core/storage";
 
 /** Where the window was left. Stored so it stays put across page loads. */
@@ -48,8 +52,18 @@ export interface GameWindow {
   destroy(): void;
 }
 
-/** Margin kept between the window and the bottom of the viewport. */
-const VIEWPORT_MARGIN = 120;
+/** Room left under the window body, so it never runs off the viewport. */
+const BODY_BOTTOM_MARGIN = 120;
+
+/** The window body never gets shorter than this, however small the screen. */
+const MIN_BODY_HEIGHT = 120;
+
+/**
+ * How much of a window must stay on screen after clamping: enough of the
+ * header to grab it and drag it back.
+ */
+const MIN_VISIBLE_WIDTH = 120;
+const MIN_VISIBLE_HEIGHT = 60;
 
 /** Where a window first appears, when nothing was remembered. */
 const DEFAULT_POSITION: WindowPosition = { left: 120, top: 120 };
@@ -117,10 +131,7 @@ function windowStyles(): string {
 
 function installStyles(): void {
   if (document.getElementById(WINDOW_STYLE_ID)) return;
-  const style = document.createElement("style");
-  style.id = WINDOW_STYLE_ID;
-  style.textContent = windowStyles();
-  document.head.appendChild(style);
+  addStyle(windowStyles()).id = WINDOW_STYLE_ID;
 }
 
 /**
@@ -131,8 +142,8 @@ function installStyles(): void {
  * way to drag it back.
  */
 function clampToViewport(position: WindowPosition): WindowPosition {
-  const maxLeft = Math.max(0, window.innerWidth - 120);
-  const maxTop = Math.max(0, window.innerHeight - 60);
+  const maxLeft = Math.max(0, window.innerWidth - MIN_VISIBLE_WIDTH);
+  const maxTop = Math.max(0, window.innerHeight - MIN_VISIBLE_HEIGHT);
   return {
     left: Math.min(Math.max(0, position.left), maxLeft),
     top: Math.min(Math.max(0, position.top), maxTop),
@@ -206,7 +217,7 @@ export function createWindow(options: WindowOptions): GameWindow {
   root.innerHTML = `
     <div class="ika-window-header">
       <span class="ika-window-title"></span>
-      <span class="ika-window-close" title="Close">&#10005;</span>
+      <span class="ika-window-close" title="${WINDOW_CLOSE_TITLE}">&#10005;</span>
     </div>
     <div class="ika-window-body"></div>
     <div class="ika-window-footer"></div>`;
@@ -221,10 +232,17 @@ export function createWindow(options: WindowOptions): GameWindow {
   (document.getElementById("container") ?? document.body).appendChild(root);
 
   const applyMaxHeight = () => {
-    body.style.maxHeight = `${Math.max(120, window.innerHeight - VIEWPORT_MARGIN)}px`;
+    body.style.maxHeight = `${Math.max(MIN_BODY_HEIGHT, window.innerHeight - BODY_BOTTOM_MARGIN)}px`;
   };
   applyMaxHeight();
   window.addEventListener("resize", applyMaxHeight);
+
+  const closeOnEscape = (event: KeyboardEvent) => {
+    // Not while typing: every settings dialog here is full of text inputs.
+    const tag = (event.target as HTMLElement)?.tagName?.toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select") return;
+    if (event.key === "Escape" && !root.hidden) api.close();
+  };
 
   makeDraggable(root, header, (moved) => {
     options.store?.setJSON(positionKey, moved);
@@ -260,6 +278,7 @@ export function createWindow(options: WindowOptions): GameWindow {
     },
     destroy() {
       window.removeEventListener("resize", applyMaxHeight);
+      document.removeEventListener("keydown", closeOnEscape);
       root.remove();
     },
   };
@@ -268,12 +287,7 @@ export function createWindow(options: WindowOptions): GameWindow {
     .querySelector<HTMLElement>(".ika-window-close")!
     .addEventListener("click", () => api.close());
 
-  document.addEventListener("keydown", (event: KeyboardEvent) => {
-    // Not while typing: every settings dialog here is full of text inputs.
-    const tag = (event.target as HTMLElement)?.tagName?.toLowerCase();
-    if (tag === "input" || tag === "textarea" || tag === "select") return;
-    if (event.key === "Escape" && !root.hidden) api.close();
-  });
+  document.addEventListener("keydown", closeOnEscape);
 
   return api;
 }

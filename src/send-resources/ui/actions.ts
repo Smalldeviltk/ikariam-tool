@@ -14,16 +14,14 @@
  * survive.
  */
 
+import { escapeHtml } from "@core/dom";
+
 export type ActionHandler = (
   element: HTMLElement,
   event: MouseEvent,
 ) => void | Promise<void>;
 
 const handlers = new Map<string, ActionHandler>();
-
-export function registerAction(name: string, handler: ActionHandler): void {
-  handlers.set(name, handler);
-}
 
 export function registerActions(map: Record<string, ActionHandler>): void {
   for (const [name, handler] of Object.entries(map)) {
@@ -38,20 +36,10 @@ export function action(
 ): string {
   const extra = data
     ? Object.entries(data)
-        .map(
-          ([key, value]) => ` data-${key}="${escapeAttribute(String(value))}"`,
-        )
+        .map(([key, value]) => ` data-${key}="${escapeHtml(String(value))}"`)
         .join("")
     : "";
   return `data-ika-action="${name}"${extra}`;
-}
-
-function escapeAttribute(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
 }
 
 let installed = false;

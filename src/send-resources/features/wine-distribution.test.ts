@@ -10,7 +10,7 @@ function town(
   return { townNumber, townName: name, stock, consume };
 }
 
-/** The worked example from `sample/wine-distribution.js`. */
+/** The worked example the first draft of this algorithm was checked against. */
 const SAMPLE_TOWNS: WineTown[] = [
   town("M-Corinth", 32495, 525),
   town("M-Aegina", 26612, 430),
@@ -51,7 +51,7 @@ describe("distributeWine", () => {
 
   it(
     "excludes an already over-supplied town and recomputes the target " +
-      "(the case `sample/wine-distribution-2.js` gets wrong)",
+      "(the case a draft that clamps each share at zero gets wrong)",
     () => {
       const result = distributeWine(SAMPLE_TOWNS, SAMPLE_SUPPLY);
       const syracuse = result.allocations.find(

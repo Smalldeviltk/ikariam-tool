@@ -1,5 +1,5 @@
 /**
- * Mechanically ported from the original "Quan ly Ika Perseus -VN- V2.js".
+ * Mechanically ported from the original `legacy/Quản lý Ika Perseus -VN- V2.js`.
  * The logic is line-for-line the same; only the module split, the imports and
  * the type annotations are new. Fixes to genuine bugs found during the port are
  * marked inline with a comment explaining the original behaviour.
@@ -234,7 +234,6 @@ export const database: any = {
         totals[unitId].training += train[unitId] || 0;
         totals[unitId].total += total[unitId] || 0;
         totals[unitId].incoming += incoming[unitId] || 0;
-        // totals[unitId].plunder += plunder[unitId] || 0;
       });
     });
     return totals;

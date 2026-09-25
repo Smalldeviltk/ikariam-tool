@@ -17,14 +17,16 @@
 
 import { qs, qsa, waitForElement } from "@core/dom";
 import { sleep, waitFor } from "@core/async";
-import { compareValues } from "@core/format";
+import { compareValues, errorMessage, MS_PER_SECOND } from "@core/format";
 import { getCurrentTownName } from "@core/ikariam/globals";
 import { SEL } from "@core/ikariam/selectors";
 import { logInfo } from "@core/logger";
 import type { Task, TaskResult } from "@core/task-queue";
+import { SCAN } from "../messages";
 import {
   backToCity,
   closeGamePopup,
+  getTownCount,
   getTownNameFromList,
   getTownNumberByName,
   gotoTown,
@@ -66,6 +68,21 @@ const TOWN_SETTLE_MS = 1200;
  */
 const UPGRADE_CONFIRM_TIMEOUT_MS = 10_000;
 
+/** Pause between arriving in a town and clicking the building to upgrade. */
+const BUILDING_CLICK_PAUSE_MS = 500;
+
+/* ─────────────────────────── Building labels ───────────────────────────── */
+
+/** The level at the end of a label such as `"Warehouse 12"`. */
+function levelOf(label: string): number {
+  return Number(label.split(" ").pop());
+}
+
+/** The same label showing another level: `"Warehouse 12"` -> `"Warehouse 13"`. */
+function withLevel(label: string, level: number): string {
+  return label.replace(String(label.split(" ").pop()), String(level));
+}
+
 /* ────────────────────── Reading / writing the config ───────────────────── */
 
 function findAccount(
@@ -83,7 +100,7 @@ function findTown(
 }
 
 /** Configured upgrade queue for one town of the logged-in account. */
-export function getTownQueue(townName: string) {
+export function getTownQueue(townName: string): AutoBuildTown["queue"] {
   const { accountName } = getState();
   return (
     findTown(findAccount(loadAutoBuild(), accountName), townName)?.queue ?? []
@@ -107,15 +124,13 @@ export function addBuildingToQueue(
   const account = findAccount(list, accountName);
   const town = findTown(account, townName);
 
-  const currentLevel = Number(buildingName.split(" ").pop());
   const alreadyQueued =
     town?.queue.filter((entry) => entry.positionId === positionId).length ?? 0;
-  const nextLevel = currentLevel + alreadyQueued + 1;
-  const label = buildingName.replace(
-    String(buildingName.split(" ").pop()),
-    String(nextLevel),
-  );
-  const entry = { positionId, buildingName: label };
+  const nextLevel = levelOf(buildingName) + alreadyQueued + 1;
+  const entry = {
+    positionId,
+    buildingName: withLevel(buildingName, nextLevel),
+  };
 
   if (town) {
     town.queue.push(entry);
@@ -276,7 +291,7 @@ export async function handleUpgradeBuilding(
   }
 
   logInfo(`Start upgrading ${buildingName}`);
-  await sleep(500);
+  await sleep(BUILDING_CLICK_PAUSE_MS);
   // `getElementById` takes a literal id. Interpolating into a `#...`
   // selector (as the original did) makes `querySelector` THROW a
   // SyntaxError for any id that is not a valid CSS identifier, and that
@@ -416,25 +431,20 @@ export async function scanBuildings(
   queueIsRunning: () => boolean = () => false,
 ): Promise<void> {
   if (scanning) {
-    alert("A scan is already walking the towns.");
+    alert(SCAN.alreadyRunning);
     return;
   }
 
-  const container = qs(SEL.townListContainer);
-  const total = container ? container.childNodes.length : 0;
-  const limit = Math.min(total, maxTowns);
+  const limit = Math.min(getTownCount(), maxTowns);
   if (limit === 0) {
-    alert("No town list on this page — open a town view and try again.");
+    alert(SCAN.noTownList);
     return;
   }
 
   // The queue runner navigates too. Two of them steering the same page means
   // whichever loses the race times out.
   if (queueIsRunning()) {
-    alert(
-      "The task queue is running and also changes town.\n\n" +
-        "Stop it first, then scan.",
-    );
+    alert(SCAN.queueRunning);
     return;
   }
 
@@ -446,16 +456,18 @@ export async function scanBuildings(
     scanning = true;
     try {
       const result = await syncAllTowns();
-      const summary =
-        `Sync finished: ${result.synced}/${result.synced + result.failed.length} ` +
-        `towns in ${(result.elapsedMs / 1000).toFixed(1)}s` +
-        (result.failed.length ? `, failed: ${result.failed.join(", ")}` : "");
+      const summary = SCAN.syncFinished(
+        result.synced,
+        result.synced + result.failed.length,
+        (result.elapsedMs / MS_PER_SECOND).toFixed(1),
+        result.failed.join(", "),
+      );
       logInfo(summary);
       alert(summary);
       return;
     } catch (e) {
       logInfo(
-        `Sync failed, falling back to walking the towns - ${(e as Error)?.message ?? e}`,
+        `Sync failed, falling back to walking the towns - ${errorMessage(e)}`,
       );
     } finally {
       scanning = false;
@@ -476,9 +488,7 @@ export async function scanBuildings(
         visited++;
       } catch (e) {
         failed.push(townName);
-        logInfo(
-          `Scan: could not open ${townName} — ${(e as Error)?.message ?? e}`,
-        );
+        logInfo(`Scan: could not open ${townName} — ${errorMessage(e)}`);
       }
     }
   } finally {
@@ -486,9 +496,7 @@ export async function scanBuildings(
     backToCity();
   }
 
-  const summary =
-    `Scan finished: ${visited}/${limit} towns visited` +
-    (failed.length ? `, failed: ${failed.join(", ")}` : "");
+  const summary = SCAN.walkFinished(visited, limit, failed.join(", "));
   logInfo(summary);
   alert(summary);
 }
@@ -511,11 +519,7 @@ export function listBuildingsInCurrentTown(): BuildingSlot[] {
 
     // While upgrading, the title still shows the old level — add one.
     if (element.classList.contains("constructionSite")) {
-      const oldLevel = Number(buildingName.split(" ").pop());
-      buildingName = buildingName.replace(
-        String(oldLevel),
-        String(oldLevel + 1),
-      );
+      buildingName = withLevel(buildingName, levelOf(buildingName) + 1);
     }
     return {
       buildingName,

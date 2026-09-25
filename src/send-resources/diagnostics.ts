@@ -13,7 +13,6 @@
  */
 
 import {
-  buildBugReport,
   clearBugs,
   exportBugReport,
   getBugs,
@@ -103,7 +102,10 @@ export function installDiagnostics(): void {
   anyWindow.ikaBugReport = () => {
     const json = exportBugReport();
     try {
-      (window as any).copy?.(json);
+      // DevTools' console helper; undefined anywhere else.
+      const copyToClipboard = anyWindow.copy as
+        ((text: string) => void) | undefined;
+      copyToClipboard?.(json);
     } catch {
       /* clipboard only exists in the DevTools console */
     }
@@ -115,4 +117,4 @@ export function installDiagnostics(): void {
   };
 }
 
-export { buildBugReport, clearBugs, exportBugReport, getBugs, summariseBugs };
+export { clearBugs, exportBugReport, getBugs, summariseBugs };

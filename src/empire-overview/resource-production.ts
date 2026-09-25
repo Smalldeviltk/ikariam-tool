@@ -1,10 +1,11 @@
 /* eslint-disable */
 /**
- * Mechanically ported from the original "Quan ly Ika Perseus -VN- V2.js".
+ * Mechanically ported from the original `legacy/Quản lý Ika Perseus -VN- V2.js`.
  * The logic is line-for-line the same; only the module split, the imports and
  * the type annotations are new. Fixes to genuine bugs found during the port are
  * marked inline with a comment explaining the original behaviour.
  */
+import { reportBug } from "@core/bug-report";
 import { modelWineConsumption } from "@core/ikariam/model";
 import $ from "./jquery";
 import { Utils } from "./utils";
@@ -97,7 +98,9 @@ $(function () {
     try {
       if (dataSet) ResourceProduction.repositionSpan(dataSet.producedTradegood);
     } catch (e) {
-      // Our span only; the game's update below must still run.
+      // Our span only; the game's update below must still run. Recorded so
+      // the failure is not lost along with the span.
+      reportBug("manual", e, { where: "production span: reposition" });
     }
     // Called on the model, as the original did, whatever `this` the game used.
     var result =
@@ -109,6 +112,7 @@ $(function () {
       ResourceProduction.updateProd();
     } catch (e) {
       // Our span only.
+      reportBug("manual", e, { where: "production span: update" });
     }
     return result;
   };

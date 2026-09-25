@@ -11,15 +11,17 @@
  * So there was no way to see how many orders were pending, delete one entered
  * by mistake, or reorder them. A queue stalled behind a task that kept
  * deferring looked exactly like an empty one. The API existed; only the surface
- * was missing. See `docs/improvement-plan.md` §4.2 item B.
+ * was missing.
  *
  * Rendering is string-built and re-rendered wholesale. That is fine at this
  * size — the queue is tens of entries, not thousands — and it means the view
  * cannot drift out of step with the queue.
  */
 
-import { qs } from "@core/dom";
+import { escapeHtml, qs } from "@core/dom";
+import { formatInteger } from "@core/format";
 import type { Task } from "@core/task-queue";
+import { QUEUE_VIEW } from "../messages";
 import { getTownNameFromList } from "../navigation";
 import { getState } from "../state";
 import { action } from "./actions";
@@ -35,20 +37,11 @@ export function describeTask(task: Task): string {
     const { amount, resource, origin, destination, label } = task.data;
     const prefix = label ? `[${label}] ` : "";
     return (
-      `${prefix}${amount.toLocaleString("en-US")} ${resource}: ` +
+      `${prefix}${formatInteger(amount)} ${resource}: ` +
       `${getTownNameFromList(origin)} → ${getTownNameFromList(destination)}`
     );
   }
-  return `Upgrade ${task.data.buildingName} in ${task.data.townName}`;
-}
-
-/** Shared with the panel's wine list: town names come from the game. */
-export function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return QUEUE_VIEW.upgrade(task.data.buildingName, task.data.townName);
 }
 
 function row(task: Task, index: number, isHead: boolean): string {
@@ -60,9 +53,9 @@ function row(task: Task, index: number, isHead: boolean): string {
     `<td>${index + 1}${marker}</td>` +
     `<td>${escapeHtml(describeTask(task))}</td>` +
     `<td>` +
-    `<button class="button" title="Send to the back" ` +
+    `<button class="button" title="${QUEUE_VIEW.moveToBack}" ` +
     `${action("queue.moveToBack", { "ika-task": task.id })}>↓</button>` +
-    `<button class="button" title="Remove" ` +
+    `<button class="button" title="${QUEUE_VIEW.remove}" ` +
     `${action("queue.remove", { "ika-task": task.id })}>✕</button>` +
     `</td></tr>`
   );
@@ -74,25 +67,25 @@ export function renderQueue(): string {
   const tasks = queue.list();
 
   if (tasks.length === 0) {
-    return `<p class="ika-queue-empty">The queue is empty.</p>`;
+    return `<p class="ika-queue-empty">${QUEUE_VIEW.empty}</p>`;
   }
 
   const head = queue.head();
   const shown = tasks.slice(0, MAX_ROWS);
   const overflow =
     tasks.length > MAX_ROWS
-      ? `<p class="ika-queue-empty">+ ${tasks.length - MAX_ROWS} more</p>`
+      ? `<p class="ika-queue-empty">${QUEUE_VIEW.more(tasks.length - MAX_ROWS)}</p>`
       : "";
 
   return (
     `<table class="fullTable ika-queue-table">` +
-    `<tr><th>#</th><th>Task</th><th></th></tr>` +
+    `<tr><th>#</th><th>${QUEUE_VIEW.headerTask}</th><th></th></tr>` +
     shown
       .map((task, index) => row(task, index, head?.id === task.id))
       .join("") +
     `</table>` +
     overflow +
-    `<button class="button" ${action("queue.clear")}>Clear all</button>`
+    `<button class="button" ${action("queue.clear")}>${QUEUE_VIEW.clearAll}</button>`
   );
 }
 

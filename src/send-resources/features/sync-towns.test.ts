@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resetHttpState } from "@core/ikariam/http";
 import { ownTownIds, syncAllTowns } from "./sync-towns";
 
-vi.mock("@core/logger", () => ({
+// Silence the logger, but keep its other exports (its storage key is read by
+// the data export).
+vi.mock("@core/logger", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@core/logger")>()),
   logInfo: () => {},
   clearLog: () => {},
   initLogger: () => {},
@@ -27,9 +30,11 @@ function installModel(selected: () => number) {
   for (const id of TOWN_IDS) {
     related[`city_${id}`] = { id, name: `Town ${id}`, relationship: "ownCity" };
   }
-  (window as any).ikariam = {
-    model: { actionRequest: "token", relatedCityData: related },
-  };
+  Object.assign(window, {
+    ikariam: {
+      model: { actionRequest: "token", relatedCityData: related },
+    },
+  });
 }
 
 /** One response, shaped like the live probe's. */
@@ -70,7 +75,7 @@ describe("ownTownIds", () => {
   });
 
   it("is empty when the game has not loaded", () => {
-    delete (window as any).ikariam;
+    delete window.ikariam;
     expect(ownTownIds()).toEqual([]);
   });
 });
@@ -78,7 +83,7 @@ describe("ownTownIds", () => {
 describe("syncAllTowns", () => {
   it("asks for every town, once each", async () => {
     const fetchMock = mockFetch();
-    (globalThis as any).fetch = fetchMock;
+    vi.stubGlobal("fetch", fetchMock);
 
     const result = await syncAllTowns();
 
@@ -94,7 +99,7 @@ describe("syncAllTowns", () => {
     "REGRESSION: one unreachable town does not abandon the rest — the " +
       "walking version used to abort the whole scan into an unhandled promise",
     async () => {
-      (globalThis as any).fetch = mockFetch([TOWN_IDS[1]]);
+      vi.stubGlobal("fetch", mockFetch([TOWN_IDS[1]]));
 
       const result = await syncAllTowns();
 
@@ -120,7 +125,7 @@ describe("syncAllTowns", () => {
           text: async () => response(selected),
         };
       });
-      (globalThis as any).fetch = fetchMock;
+      vi.stubGlobal("fetch", fetchMock);
 
       const result = await syncAllTowns();
 
@@ -134,7 +139,7 @@ describe("syncAllTowns", () => {
 
   it("sends nothing extra when the selection stays put", async () => {
     const fetchMock = mockFetch();
-    (globalThis as any).fetch = fetchMock;
+    vi.stubGlobal("fetch", fetchMock);
 
     const result = await syncAllTowns();
 
@@ -143,9 +148,9 @@ describe("syncAllTowns", () => {
   }, 20_000);
 
   it("does nothing at all when the game has not loaded", async () => {
-    delete (window as any).ikariam;
+    delete window.ikariam;
     const fetchMock = mockFetch();
-    (globalThis as any).fetch = fetchMock;
+    vi.stubGlobal("fetch", fetchMock);
 
     const result = await syncAllTowns();
 
