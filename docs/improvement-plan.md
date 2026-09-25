@@ -11,12 +11,17 @@
 > thì vẫn chạy. Đừng bấm Start Timer cho tới khi sửa xong. Chi tiết và cách sửa
 > ở §2.A.
 >
-> Đợt gần nhất (§2.C, **chưa commit**): sửa header không cập nhật sau khi gửi
-> tay, sửa nút trên board chuyển sai town, Auto Wine giữ lại 1 giờ tiêu thụ
-> cho town nguồn và không gửi quá sức chứa kho. Auto Build vẫn còn mất queue
-> khi town đang xây — chưa tìm ra, đang chờ log.
+> Đợt gần nhất (§2.D, commit `1983f45`): review chất lượng code toàn bộ `src/`
+> và sửa gần hết finding. Còn một finding 🔴 (tên tham số của `createPopup`)
+> chờ code gốc của game; các điểm cố ý giữ, còn sót và cần thử trên game thật
+> đều ghi ở §2.D.
 >
-> Đợt trước (§2.B): sửa Auto Build tiêu queue khi nâng cấp không thành, bỏ
+> Đợt trước (§2.C, đã commit): sửa header không cập nhật sau khi gửi tay, sửa
+> nút trên board chuyển sai town, Auto Wine giữ lại 1 giờ tiêu thụ cho town
+> nguồn và không gửi quá sức chứa kho. Auto Build vẫn còn mất queue khi town
+> đang xây — chưa tìm ra, đang chờ log.
+>
+> Đợt trước nữa (§2.B): sửa Auto Build tiêu queue khi nâng cấp không thành, bỏ
 > điều kiện tàu rảnh khỏi lúc nạp queue Auto Wine, và chặn vòng lặp vô hạn khi
 > handler ném lỗi liên tục.
 >
@@ -283,7 +288,7 @@ vì lặp vô hạn — mỗi task khoảng 80 giây (5 vòng × 16 giây) rồi
 task `sendResource` mất đi lấy lại được bằng cách bấm Start lần nữa. Config
 Auto Build thì không mất: `cleanAutoBuildConfig` chỉ loại town có queue rỗng.
 
-### 2.C Ba lỗi người dùng báo, và Auto Wine (25/09/2026, chưa commit)
+### 2.C Ba lỗi người dùng báo, và Auto Wine (25/09/2026)
 
 Cả ba lỗi dưới đây đều **không nhìn thấy được từ console**: game không báo lỗi
 nào. Lỗi 1 chỉ tìm ra nhờ thử tắt/bật từng phần trên trang thật, không phải
@@ -362,6 +367,78 @@ Lỗi 2 đã sửa có thể kéo theo hết lỗi này — thử lại trước
   capture.
 - Làm tròn theo tàu và rượu tiêu hao lúc đang chở: ghi thành S và T ở §4.2,
   chưa làm.
+
+### 2.D Review chất lượng code toàn bộ `src/` (25/09/2026) — phần còn lại
+
+Review theo phần "chất lượng code" của `sample/prompt/review-source-workflow.md`,
+chia ba vùng (`core` + `extension`, `send-resources`, `empire-overview`). Gần
+hết finding đã sửa (commit `1983f45`); mục này chỉ ghi **những gì
+chưa sửa được, cố ý giữ, hoặc sửa rồi nhưng cần thử trên game thật**, để lượt
+sau khỏi soi lại từ đầu.
+
+#### Chưa sửa được — thiếu dữ kiện
+
+| Mức | Chỗ | Vấn đề | Cần gì |
+| --- | --- | --- | --- |
+| 🔴 | `src/core/ikariam/globals.ts` — `IkariamPageApi.createPopup` | Hai tham số cuối tên `arg4`, `arg5` — vi phạm quy tắc đặt tên. Chỗ gọi duy nhất (`send-resources/ui/dialogs.ts`, `openPopup`) truyền `"???", "class"`, chép y nguyên từ script gốc; IkaEasy V4 truyền `1` ở vị trí thứ 4. Không nguồn nào nói chúng là gì. | Tắt cả hai script, F5, chạy trong console `copy(ikariam.createPopup.toString())` và dán lại. Có code thì đặt tên theo ý nghĩa thật, và sửa luôn hai giá trị `"???"`/`"class"` nếu chúng vô nghĩa. |
+| ⚠️ | `src/empire-overview/main.ts` — đầu ready handler | Điều kiện dừng script khi có "backup-lock timer" dùng `$("backupLockTimer")` — thiếu `#`/`.`, nên chưa bao giờ khớp và chưa bao giờ dừng gì. **Đã xoá** điều kiện (hành vi giữ y như trước) thay vì đoán selector, vì đoán sai sẽ làm script ngừng chạy trên trang vốn vẫn chạy. | Nếu muốn có lại điều kiện này: một capture của đúng trang có bộ đếm đó, để biết nó là id hay class và nằm trên view nào. |
+
+#### Cố ý giữ — đã có quyết định
+
+- **Style của code port Empire Overview** (11 file `/* eslint-disable */`, ~639
+  `var`, ~62 `any`). Người dùng chọn chỉ dọn rác và đổi tên placeholder; đổi
+  hàng loạt `var`→`let`/`const` dễ vỡ hoisting/closure trong callback jQuery mà
+  test không bắt được. Code **mới** trong các file này đã dùng `const`/`let`.
+- **Hàm dài không tách** — `registerUiActions` (`app.ts`, ~210 dòng),
+  `handleSendResource`, `handleUpgradeBuilding`, `scanBuildings`. Người dùng
+  chọn không tách; riêng `handleSendResource` đằng nào cũng phải viết lại khi
+  sửa §2.A.
+- **Ô số của form gửi hàng** (`transport-buttons.ts`, `applyTransportStep`)
+  vẫn parse kiểu "chỉ lấy chữ số", không dùng `parseGameNumber`: đó là ô người
+  chơi tự gõ, dấu `.`/`,`/khoảng trắng chỉ có thể là phân cách hàng nghìn.
+  Lý do đã ghi ngay trong code.
+- **Đường dẫn tới IkaEasy trong `sample/`** vẫn nằm trong comment (thư mục bị
+  gitignore): đó là dự án bên thứ ba, người đọc tự lấy được; dòng "the original"
+  thì README đã định nghĩa là `legacy/`.
+- **`console.*` còn lại** đều có chủ ý: `logger.ts` in từng dòng log, các lệnh
+  console trong `diagnostics.ts`/`app.ts` là để người dùng đọc bug report,
+  `console.warn` ở `storage.ts`, `ship-capacity.ts`, `actions.ts`,
+  `bug-report.ts` báo dữ liệu hỏng, và `empire.ts` chỉ in khi bật `debug`.
+- **`.fullTable` có hai rule** trong `send-resources/ui/styles.ts` là cố ý: bảng
+  queue trên panel dùng nó ngoài popup. Các rule chỉ dùng trong popup giữ bản
+  gắn id popup (nặng hơn CSS popup của game) và bỏ bản trùng.
+
+#### Còn sót khi gom chuỗi hiển thị (i18n) — nên làm lượt sau
+
+- `send-resources/types.ts` — nhãn tài nguyên trong `RESOURCE_OPTIONS`
+  (`"Wood"`, `"Wine"`, `"Marble"`, `"Crystal"`, `"Sulfur"`) chưa chuyển sang
+  `send-resources/messages.ts`.
+- `send-resources/features/wine-warning.ts` — `formatHours` viết thẳng đơn vị
+  `"h"`, `"d"`, `"<1h"`, `"—"`.
+- `send-resources/ui/queue-view.ts` — `describeTask` hiện tên tài nguyên dạng id
+  nội bộ (`wood`, `glass`) thay vì nhãn cho người chơi.
+- `send-resources/features/auto-build.ts` — `listBuildingsInCurrentTown` parse
+  tooltip của game bằng chuỗi đã dịch `"Under construction"`: đổi ngôn ngữ giao
+  diện game là hỏng. Nên dựa vào class `constructionSite` (đã dùng ngay dòng
+  dưới) thay vì chữ.
+- Bảng `Constant.LanguageData` của Empire Overview chỉ có `en`. Ba key mới
+  (`toast_updated`, `toast_movementAdded`, `toast_remoteVersionUnreadable`) chỉ
+  được thêm vào đó.
+- `tools/collect-dom-report.js` viết thẳng key `"ikaAjaxTrace"`; trong `src/`
+  giờ là `TRACE_STORAGE_KEY` (`empire-overview/ajax-trace.ts`). Crawler không
+  nằm trong build nên không import được — đổi tên thì phải sửa cả hai.
+
+#### Đã sửa nhưng đổi hành vi — cần thử trên game thật
+
+| Thay đổi | Ở đâu | Thử gì |
+| --- | --- | --- |
+| Tên town trên breadcrumb đọc bằng `textContent` thay vì `innerHTML` | `core/ikariam/globals.ts` — `getCurrentTownName`, dùng chung cả hai script | Chuyển town bằng Auto Build, Scan và nút trên board; không còn chờ 15 s |
+| Phím tắt dựa theo phím vật lý (`event.code`) thay vì `event.which` đã lỗi thời | `send-resources/app.ts` — `registerHotkeys` | Space mở/đóng panel, A, S, B vẫn đúng việc |
+| `readNumberOrNull` trả `null` khi ô trống (trước: 0) và hiểu hậu tố `k` | `core/dom.ts` | Số tàu rảnh và action point trên panel vẫn đúng |
+| Bug report đổi trường `jQuery` thành `pageJQuery` + `scriptJQuery`, và đọc model qua `window` của trang | `core/bug-report.ts`, `empire-overview/diagnostics.ts` | Bấm Bug Report: `hasIkariamModel` phải là `true` trên cả hai script |
+| Chuyển town trên board chờ bằng `waitFor` của core (logic không đổi) | `empire-overview/game-api.ts` — `switchTownWithGameForm` | Các nút "to Saw Mill", nút level: sang đúng town, dialog không bị đóng |
+| Toast "Updated: …" và "Could not read the remote version." lấy từ `LanguageData` | `empire-overview/game-api.ts`, `empire.ts` | Toast vẫn hiện đúng chữ |
+| Bỏ các rule CSS trùng không gắn id popup | `send-resources/ui/styles.ts` | Ba hộp thoại Settings (Transport, Wine, Build) trông như cũ |
 
 ---
 
@@ -498,6 +575,8 @@ Cột **Build** cho biết tính năng chạy được ở đâu: `US` = userscr
 ⬜ Còn lại, không chờ gì:  1.4, D, H, và nửa sau của 2.4
 ⏸ Chờ capture cảng biển:  §2.A
 ⏸ Chờ log người dùng:     §2.C lỗi 3 (Auto Build mất queue)
+⏸ Chờ code của game:      §2.D tham số `createPopup` (lệnh console ghi ở đó)
+⬜ Lượt review sau:        §2.D chuỗi i18n còn sót, và thử trên game thật
 ⏸ Chờ câu hỏi 2:          2.6, 2.7, 2.8   (đều ở board)
 ⏸ Chờ câu hỏi 3:          E, F, G, I, J, K, L, M, N, O, P, Q, R
 ⬜ Ghi lại, chưa cần làm: S, T (Auto Wine)

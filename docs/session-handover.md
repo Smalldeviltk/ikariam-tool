@@ -22,10 +22,15 @@ matches nothing, so every `sendResource` task waits 15 s and throws. Auto Wine
 and the Transport timer are affected; a shipment sent by hand in the game goes
 through. See §2 for the markup and `improvement-plan.md` §2.A for the fix.
 
-**The 25/09 round is not committed yet** (§8). It fixed two user-reported bugs
-and reworked part of Auto Wine; the write-up is `improvement-plan.md` §2.C. A
-third bug — Auto Build losing its queue while a town is building — is still
-open and waiting on a log from the user (§6).
+**Two rounds on 25/09.** The first — two user-reported bugs and part of Auto
+Wine — is committed locally as six commits and not pushed; the write-up is
+`improvement-plan.md` §2.C. A third bug, Auto Build losing its queue while a
+town is building, is still open and waiting on a log from the user (§6).
+
+The second round is a code-quality review of the whole of `src/` and the
+fixes for nearly all of it, committed as `1983f45` (§8). What was left, and why, is
+`improvement-plan.md` §2.D — read that before starting another review, so
+the same ground is not covered twice.
 
 **Do not press either Start Timer until that is fixed.** The runner now gives
 up on a task after five consecutive throws, so instead of looping forever the
@@ -45,9 +50,9 @@ against the live game either.
 |             |                                                                  |
 | ----------- | ---------------------------------------------------------------- |
 | Branch      | `refactor`, tracking `origin/refactor`                            |
-| Pushed      | Yes, up to `3228058`; local and remote were in sync on 24/09      |
-| Uncommitted | The whole 25/09 round — see §8                                    |
-| Tests       | 34 files, 452 tests, all passing                                  |
+| Pushed      | Up to `3228058`. Eight local commits since (`03d07fa`..HEAD), not pushed |
+| Uncommitted | Nothing from either 25/09 round — see §8                          |
+| Tests       | 34 files, 449 tests, all passing                                  |
 | Typecheck   | Clean (`tsc --noEmit` and the strict config)                      |
 | Build       | `npm run build` produces both the userscripts and the extension   |
 
@@ -225,6 +230,15 @@ then run it with `node`. Specifically avoid:
   CSS comments**. This has broken `transport-buttons.ts` once already.
 - A heredoc whose body itself contains the terminator word, or contains heredoc
   syntax. Use the Write tool for that content instead of fighting the shell.
+  **This bit again on 25/09**: a quoted heredoc full of template literals
+  failed with "unexpected EOF", and the half-parsed command left an empty file
+  named `({'` in the repo root (since removed). Writing the `.mjs` with the Write tool and
+  only running it from bash has not failed once since.
+- `child_process.execSync` inside such a script runs **cmd.exe** on this
+  machine, not bash — a `grep` with `\|` in it fails there. Do the grep from
+  the Bash tool instead.
+- JSON as a carrier for multi-line patches mangles `\n` inside template
+  literals. Put the before/after strings in a `.mjs` file, not a `.json` one.
 - `String.replace` with a string pattern replaces only the **first** match.
 - CRLF in the working tree defeating multi-line string matching.
 
@@ -322,6 +336,21 @@ Added 25/09:
   capacity is unknown is not capped. The user chose both.
 - **Rounding shipments to whole ships, and wine drunk while in transit, are
   noted and deliberately not done** (`improvement-plan.md` §4.2, S and T).
+- **User-facing strings live in `src/send-resources/messages.ts` and
+  `src/core/messages.ts`**; Empire Overview uses its `Constant.LanguageData`
+  table (`en` is its only language). New UI text goes there, not inline. Log
+  lines are not user-facing and stay where they are.
+- **The Empire Overview port keeps its style.** `var`, `any` and
+  `/* eslint-disable */` stay in ported code; only placeholder names and dead
+  code were cleaned. New code in those files uses `const`/`let`. The user
+  chose this.
+- **The long functions are not split** (`registerUiActions`,
+  `handleSendResource`, `handleUpgradeBuilding`, `scanBuildings`). The user
+  chose this; `handleSendResource` gets rewritten with the port fix anyway.
+- **The backup-lock guard at the top of Empire Overview's ready handler was
+  removed, not repaired.** It never matched anything (`$("backupLockTimer")`,
+  no `#` or `.`), and guessing the selector could stop the script on pages
+  where it has always run. Behaviour is unchanged.
 
 ---
 
@@ -339,6 +368,12 @@ the board bug produced), or an entry filed under the wrong town when **+** is
 pressed while the breadcrumb is wrong (`addBuildingToQueue` names the town from
 the breadcrumb). Needed: the panel log around the loss, and whether the entry
 turns up under another town. The board fix may have cured it — retest first.
+
+**Blocked on the user: the names of `createPopup`'s last two parameters**
+(`arg4`, `arg5` in `core/ikariam/globals.ts`), the one review finding left
+open against the naming rule. Every source, including the original, passes
+`"???", "class"`. Needed: `copy(ikariam.createPopup.toString())` from the
+console with both scripts off.
 
 Two questions in §6 of the plan are unanswered and are blocking real work:
 
@@ -408,9 +443,25 @@ action points in the status line).
   refreshing after a manual shipment with the launcher moved out of the menu,
   and the board's dialogs staying open now that the switch waits for the game
   to go idle. Both are covered by tests; neither has been seen working live.
-- **`town-cache.test.ts` and `panel.test.ts` were already off prettier's
-  format before 25/09.** Running `prettier --write` on them reflows unrelated
-  lines; format only what you added, or put the stray reflow back.
+  The review round adds a few behaviour changes to that list — the breadcrumb
+  read as text, hotkeys by physical key, and more; `improvement-plan.md` §2.D
+  has the table of what to try.
+- **`town-cache.test.ts`, `panel.test.ts` and `app.test.ts` were already off
+  prettier's format before 25/09.** Running `prettier --write` on them reflows
+  unrelated lines; format only what you added, or put the stray reflow back.
+- **The line numbers the port's comments cite are right.** They count lines of
+  `legacy/Quản lý Ika Perseus -VN- V2.js` (10,767 lines; line 10741 is the
+  `init` retry, line 6650 is `var ikariam = {`). `sample/Quản lý Ika Perseus
+  -VN-.user.js` is a slightly different copy, 10,769 lines — a review agent
+  compared against that one and reported every number as stale. It was not.
+- **Every localStorage key the scripts write is checked against the export
+  table** by a test in `core/data-transfer.test.ts`. Adding a key without
+  classifying it in `core/data-transfer.ts` now fails the suite rather than
+  silently dropping out of exports.
+- **Tests that mock `@core/logger` must keep its real exports** (`vi.mock(...,
+  async (importOriginal) => ({ ...(await importOriginal()), logInfo: ... }))`).
+  The data export imports the logger's storage key, and a bare mock broke nine
+  app tests with a confusing "no export defined" error.
 - **`git apply` of a reverted patch brings CRLF back into the working tree** and
   prettier (which defaults to LF) then fails those files. This happens on every
   revert-to-prove-the-test round trip. Run `prettier --write` on just the files
@@ -419,40 +470,29 @@ action points in the status line).
 
 ---
 
-## 8. Uncommitted work in the tree
+## 8. The last round of work
 
-The 25/09 round. Nothing here is committed; `git status` is the authority. The
-earlier table that stood here described work that has since been committed
-(`1c0548c`, `a7c088a`, `f1dba48`).
+The 25/09 code-quality review: 80 files changed and two new ones, committed as
+`1983f45` (code) with this document and the plan in the commit after it. The
+first 25/09 round is the six commits before those, listed in §1.
 
-| File | What changed |
+What was reviewed and why each finding was or was not fixed is
+`improvement-plan.md` §2.D. By area:
+
+| Area | What changed |
 | ---- | ------------ |
-| `core/ikariam/model.ts` | `MODEL_RESOURCE_KEY` and `readResourceRecord`: resources read by name, then by trade-good ordinal; new `modelMaxResource` |
-| `core/ikariam/model.test.ts` | +3 tests |
-| `send-resources/town-cache.ts` | snapshots carry an optional `capacity` from `maxResources` |
-| `send-resources/town-cache.test.ts` | +3 tests |
-| `send-resources/features/wine-distribution.ts` | optional `WineTown.capacity`; shares trimmed to free storage, the rest left in `unused`; `storageFull` per allocation |
-| `send-resources/features/wine-distribution.test.ts` | +5 tests |
-| `send-resources/features/auto-wine.ts` | `getSourceReserve` (one hour of the source's consumption, `FALLBACK_WINE_RESERVE` = 500); `WINE_RESERVE` removed; capacity passed through `buildWineTowns` |
-| `send-resources/features/auto-wine.test.ts` | +8 tests |
-| `send-resources/ui/dialogs.ts` | plan preview names the storage-capped towns |
-| `send-resources/ui/panel.ts` | launcher is a fixed button; nothing added to `.menu_slots` |
-| `send-resources/ui/panel.test.ts` | the menu-entry and fixed-button-fallback tests replaced by two: nothing in the game menu, fixed button always |
-| `empire-overview/main.ts` | `executeAjaxRequest` wrapper removed; `observeGameResponses` listens to the page jQuery's `ajaxSuccess` |
-| `empire-overview/resource-production.ts` | `updateGlobalData` wrapper made transparent |
-| `empire-overview/startup.test.ts` | +6 tests (game responder, `updateGlobalData` wrapper) |
-| `empire-overview/game-api.ts` | `loadUrl` two-step switch; `switchTownWithGameForm`; `gameIsLoading` |
-| `empire-overview/game-api.test.ts` | **new file**, 11 tests, created with the user's approval |
-| `docs/improvement-plan.md` | §2.C, rows S and T in §4.2, status header |
+| New files | `src/core/messages.ts` and `src/send-resources/messages.ts` — every user-facing string of those two areas, created with the user's approval |
+| `core/` shared helpers | `parseGameNumber`, `errorMessage`, `formatInteger` and the `MS_PER_*` constants in `format.ts`; `escapeHtml` in `dom.ts`; `readAccountName` in `ikariam/globals.ts`; `empireKeyPrefix`/`EMPIRE_KEY_PATTERN` in `storage.ts`; new `SEL` entries for the change-city form and the loading indicator |
+| `core/` fixes | `waitFor` keeps the predicate's last throw for its timeout message; `createWindow`'s `destroy()` removes its keydown listener; `TaskQueue` requires its key; the bug report reads the page window; `getCurrentTownName` reads text, not HTML |
+| Dead code removed | `qsStrict`, `stringToNumber`, `readNumber`, `readText`, `promisify`, `formatFullTimeToDateString`, `ResponseEntry`, `parseCoords`, `empireStore`, `TaskQueue.shift/pop`, `capturePirate` and its selectors, the menu selectors, `PANEL_ID`, `registerAction`, `clearTownStats`, `wineWarningSummary`, a re-export each in `auto-wine.ts` and `diagnostics.ts`, and about 20 lines of commented-out code in Empire Overview — with their tests where they had any |
+| Send Resources | strings moved to `messages.ts`; helpers above used instead of local copies; game data escaped in every dialog; hotkeys on `event.code`; CSS deduplicated; `any` casts in its tests replaced (`Object.assign(window, …)`, `vi.mocked`, `vi.stubGlobal`) |
+| Empire Overview | placeholder names renamed; the 21 port headers name `legacy/Quản lý Ika Perseus -VN- V2.js`; toasts moved to `LanguageData`; `pageJQuery()` in `jquery.ts`; the town switch uses `waitFor`; the backup-lock guard removed (§5); unused imports gone |
+| Tests | every logger mock keeps the real exports; `core/data-transfer.test.ts` checks every storage key is classified; `game-api.test.ts` advances timers asynchronously; 449 tests in 34 files, down from 452 because the removed functions' tests went with them |
 
 `.gitignore` is modified and `docs/So_sanh_2_script_Ikariam.md` is untracked;
-both were so before this round started — not part of this work.
+both were so before either 25/09 round — not part of this work, and left out
+of every commit.
 
-Each fix was proved the §3 way where a test could show it: the source file was
-put back to its previous version, the new tests were run and went red, then
-the fix was restored. Tests that also pass on the old code are guards, and
-their names say what they guard.
-
-`dist/` was last built by the user on 25/09 at 03:17, BEFORE the idle wait in
-`switchTownWithGameForm`, the `updateGlobalData` wrapper change and the
-launcher move. Per §7, grep `dist/` before believing a fix reached the bundle.
+`dist/` was last built by the user on 25/09 at 03:17, before the launcher
+move, the `updateGlobalData` wrapper change and this whole review. Per §7,
+grep `dist/` before believing a fix reached the bundle.
