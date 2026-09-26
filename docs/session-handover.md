@@ -10,7 +10,7 @@ It deliberately does **not** repeat the feature status. That lives in
 second. [project-summary.md](../project-summary.md) covers what the TypeScript
 port changed and what is still unverified.
 
-Last updated: 25/09/2026.
+Last updated: 27/09/2026.
 
 ---
 
@@ -43,6 +43,18 @@ screen. `portForm.present` is `false` in all five existing captures, so
 `#textfield_*`, `#submit` and `#slider_freighters_max` have never been checked
 against the live game either.
 
+**26–27/09: an Auto Build round, uncommitted.** Four bugs, all found on a
+second account (`SClone1`, three towns) and all fixed in the working tree —
+see §9. Auto Build now builds on that account. **It needs the Empire Overview
+board on the page**: without it, town switches go through `#changeCityForm`,
+which reloaded the whole page from the runner and put it in a reload loop
+(§2, §6). The user tests with both scripts on.
+
+**If a page is stuck reloading**, the way out from the console (it keeps
+working between loads) is
+`localStorage.isAutoBuildStart = "false"; localStorage.isAutoReload = "false";`
+— pressing Stop Timer can land mid-reload and not stick.
+
 ---
 
 ## 1. Where the tree stands
@@ -51,10 +63,10 @@ against the live game either.
 | ----------- | ---------------------------------------------------------------- |
 | Branch      | `refactor`, tracking `origin/refactor`                            |
 | Pushed      | Up to `3228058`. Eight local commits since (`03d07fa`..HEAD), not pushed |
-| Uncommitted | Nothing from either 25/09 round — see §8                          |
-| Tests       | 34 files, 449 tests, all passing                                  |
+| Uncommitted | The 26–27/09 Auto Build round: 8 files in `src/` (§9). `.gitignore` and `docs/So_sanh_2_script_Ikariam.md` are the user's, as before |
+| Tests       | 34 files, 457 tests, all passing                                  |
 | Typecheck   | Clean (`tsc --noEmit` and the strict config)                      |
-| Build       | `npm run build` produces both the userscripts and the extension   |
+| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 27/09 at 05:23 and contains every fix in §9 (grepped) |
 
 What landed: the AJAX transport layer, the shared window widget, the rewritten
 panel, four features (sync-towns, transport-buttons, queue-view, wine-warning),
@@ -170,6 +182,43 @@ pasted by the user from the console with both scripts off.
   `slot99` entry has not been caught doing the same, but nothing proves it is
   safe either.
 
+Added 26–27/09, from the `SClone1` account (towns W-Clone1 297124, M-Clone1
+297155, S-Clone1 297348):
+
+- **The town dropdown can carry coordinates.** With the game's "show
+  coordinates" option on, each entry reads
+  `<li selectvalue="297348" class="ownCity coords"><a title="[42:97]  S-Clone1">`
+  — two spaces after the bracket. The breadcrumb still reads `S-Clone1`, and
+  so does the name Auto Build stores. Any name taken from the dropdown's
+  `title` never matches either. The model's `relatedCityData["city_<id>"].name`
+  has no coordinates (they are in `coords`); reading names from there is what
+  made Auto Build find the towns on this account.
+- **`#js_transportPanel` sits hidden in every page, and its `.close` is the
+  first `.close` in the document.** Measured from the console: the first
+  `.close` is `div.transportPanel_header > .close`, and clicking it SHOWS the
+  panel. Its entries are `div.transportPanel_city[data-city-id]`, the name in
+  `.transportPanel_cityName` (with coordinates, `&nbsp;` after the bracket),
+  and `a.action_transport` with
+  `onclick="ajaxHandlerCall(this.href);return false;"`.
+- **`#changeCityForm` sent from the task runner reloaded the whole page
+  without landing.** The log pattern, repeated every 1–2 s: `Auto Build:
+  queued N` (a page load), `Going to town M-Clone1`, then another load, still
+  not in M. The page URL afterwards read
+  `?view=city&cityId=…&currentCityId=…&oldBackgroundView=city&containerWidth=…&cityWorldviewScale=…`,
+  which looks like the form's fields as a full navigation — inferred, not
+  confirmed. Sending the same form by hand from the console "did nothing"
+  according to the user, which settles nothing. WHY it reloads is unknown.
+  The board's own use of the form (`switchTownWithGameForm`, to open another
+  town's view) was only ever confirmed to *land in the right town*; nobody
+  measured whether it did so over ajax.
+- **Clicking a town name on the Empire Overview board is the original's route
+  to change town**, and it did not work on this account until names stopped
+  carrying coordinates. It is the first route again since 27/09; whether it
+  keeps the page from reloading has NOT been seen live yet.
+- **A line `Auto Build: queued N upgrades` in the log is a page load** (or a
+  Start button). It is logged from `start()`, so two of them seconds apart
+  mean the page reloaded in between.
+
 ---
 
 ## 3. How this branch works, the hard way
@@ -215,6 +264,23 @@ them have now been caught: `#BuildTab` (zero matches without Empire Overview),
 the stale `#js_buildingUpgradeButton`, and now the whole trading port. The
 crawler's probe output is the only thing that settles one. `portForm` has never
 been captured at all — treat every selector in that group as unverified.
+Add `.close` to the list: "the first one in the page" was the transport
+panel's.
+
+**"Confirmed on the live game" means only what was measured.** The form
+route to change town was recorded as working because the board landed in the
+right town; it was then made the first route for Send Resources, and it
+reloaded the page in a loop. Write down what a measurement showed, not what
+it suggests.
+
+**Test on a second account.** Every bug in the 26–27/09 round came from an
+account with a different game option on (coordinates) or a different layout
+of buildings. The main account never showed any of them.
+
+**The console level filter can hide `console.log`.** Twice the user pasted a
+probe and got only `undefined`. Probes should RETURN their result, and put
+`await` in front when they wait (`await (async () => …)()`), so the value is
+printed whatever the filter says.
 
 ---
 
@@ -274,6 +340,17 @@ reproduces production; `http.test.ts` and `startup.test.ts` both do it now.
   name.
 - The queue runner is observable in tests as one extra live interval:
   `vi.getTimerCount()` is 3 when it is stopped and 4 when it runs.
+- **The keep-alive reloads on even minutes of the clock**, and `start()`
+  calls it at once (`updateCurrentAccount` → `renderSummary` →
+  `keepAliveTick`). A test that counts reloads therefore passed on odd
+  minutes and failed on even ones. `vi.setSystemTime` did not pin the clock
+  there; `vi.useFakeTimers({ now: new Date("…T10:01:00Z") })` does. See
+  "Auto Build after the queue runs dry" in `app.test.ts`.
+- `git stash` / `stash pop` brings CRLF back, like `git apply` (§7). Run
+  prettier on the touched files afterwards, and check the diff for reflowed
+  lines that are not yours — `app.test.ts` had one.
+- In bash, `sed` with `\n` in the replacement inserts a real newline and
+  breaks the file. Use the Edit tool for anything but a one-token swap.
 
 **Markdown is not in the repo's prettier scope** (`npm run format` covers only
 `src/` and `build/`). Do not run prettier over `docs/` — it reflows every table
@@ -352,6 +429,30 @@ Added 25/09:
   no `#` or `.`), and guessing the selector could stop the script on pages
   where it has always run. Behaviour is unchanged.
 
+Added 26–27/09, each chosen by the user:
+
+- **Town names come from the model, not the dropdown.** `getTownNameFromList`
+  reads the `<li>`'s `selectvalue` and returns `modelCityName(id)`; the
+  `title` is only the fallback for a page without the model. Empire
+  Overview's `switchTownWithGameForm` does the same for the name it waits
+  for. The alternative, stripping `[x:y]` from the title, was offered and
+  not taken.
+- **`gotoTown` tries three routes in this order:** the board's town name
+  (`clickBoardTownName`, the original's), then `#changeCityForm`
+  (`submitChangeCityForm`), then the dropdown `<a>`. The form went first for
+  one day and caused the reload loop in §2.
+- **The original's `isAutoReload` guard is back.** A drained run sets it and
+  reloads; the next load clears it and neither re-queues Auto Build nor
+  reloads on drain (`loadedAfterRun` in `app.ts`). The next run waits for the
+  keep-alive (even minutes). The port had kept writing the flag and never
+  read it.
+- **Build's timer switches itself off once the saved build list is empty**
+  (`hasConfiguredUpgrades`). With work still saved it stays on, as in the
+  original, and retries on the keep-alive.
+- **`closeGamePopup` clicks only a `.close` that is displayed** (no ancestor
+  `display: none`). Taking the first `.close`, as the original did, opened
+  the transport panel.
+
 ---
 
 ## 6. What is blocked, and on what
@@ -361,13 +462,45 @@ Two crawler pastes are needed — one with `#js_transportPanel` open, one with t
 shipment form on screen. Until then no shipment can run, so nothing downstream
 can be tested by hand either.
 
-**Blocked on the user: Auto Build losing its queue while a town is building.**
-An entry is only dropped once its slot carries `constructionSite`, so the two
-suspects are a check made against a stale view (the kind of half-switched page
-the board bug produced), or an entry filed under the wrong town when **+** is
-pressed while the breadcrumb is wrong (`addBuildingToQueue` names the town from
-the breadcrumb). Needed: the panel log around the loss, and whether the entry
-turns up under another town. The board fix may have cured it — retest first.
+**Resolved 26/09: Auto Build "losing its queue".** On `SClone1` it was every
+task failing with `Town "S-Clone1" not found` (the coordinates, §2) and being
+dropped from the run queue, while the saved build list kept the entries. The
+run queue is a one-off copy of that list (`enqueueAutoBuild`), so a dropped
+task only comes back on the next load or Start. That design is unchanged.
+
+**Waiting on the user's retest (27/09 build):**
+
+- **Does the board route stop the reload loop?** The loop in §2 happened
+  with the form first. Nothing has been seen live since the reorder.
+- **Does a free town start while another one is building?** Reported after
+  the reorder was not yet in: "all towns share one task queue, so a free
+  town's upgrade does not start". The queue does rotate — a busy town
+  `defer`s to the back — so if a free town does not start, its own "already
+  building" check answered wrong. The suspect is §2's "breadcrumb and
+  building slots arrive in separate ajax boxes": `TOWN_SETTLE_MS` (1200 ms)
+  may be too short after a switch, so M is checked while S's
+  `.constructionSite` is still on screen, and M defers every lap. Not
+  measured. The probe that settles it, run from a BUSY town:
+  `await (async () => { /* switch, then every 100 ms for 4 s record
+  #js_cityBread text, !!.constructionSite, jQuery.active */ })()` — the
+  version in this session's transcript used the form to switch; with the
+  board first, click the board's town name instead. If the slot outlives the
+  breadcrumb by more than 1200 ms, wait for the game to go idle like
+  `switchTownWithGameForm` does.
+
+**Not started, offered and declined for now:**
+
+- **B — the stale upgrade button.** Logged live:
+  `Upgrade button points at position 4, expected 23 - ignoring`, then the task
+  defers as "not enough resources?" when it was not. `handleUpgradeBuilding`
+  takes the FIRST `#js_buildingUpgradeButton` and gives up if its `href` is
+  another slot's; it should wait, within `UPGRADE_BUTTON_TIMEOUT_MS`, for one
+  whose `position=` matches.
+- **C — who reloads.** One `logInfo` in `backToCity` naming its caller would
+  have told the reload loops apart in one paste.
+- **Why the form reloads the page** (§2). Until that is known, Send Resources
+  without the Empire Overview board still falls back to the form and can
+  loop.
 
 **Blocked on the user: the names of `createPopup`'s last two parameters**
 (`arg4`, `arg5` in `core/ikariam/globals.ts`), the one review finding left
@@ -385,11 +518,9 @@ Two questions in §6 of the plan are unanswered and are blocking real work:
    ones they want. Until then E–R are not started.
 
 Unblocked and ready to pick up: **1.4** (`switchCity`, the last Phase 1 item —
-`gotoTown` still clicks and polls the breadcrumb; more urgent since 25/09,
-because its fallback clicks the dropdown `<a>`, which §2 now records as not
-switching town, so Send Resources without Empire Overview probably cannot
-change town at all — `switchTownWithGameForm` in `game-api.ts` is a working
-model), **D** (full-warehouse stripe,
+half there: `gotoTown` has a form route since 26/09, but it is second and it
+reloaded the page, §2; the plan's "confirm from the response" part is not
+done, and that is probably what finding the reload needs), **D** (full-warehouse stripe,
 pure CSS), **H** (cross-tab sync lock — nothing currently stops two tabs driving
 one account and sending twice), and the second half of **2.4** (idle ships and
 action points in the status line).
@@ -438,6 +569,12 @@ action points in the status line).
   And `onDrain` calls `setAutoStart(false)` but leaves `isAutoBuildStart` true
   with its label unchanged, so after the queue empties the Build button reads
   "Stop Timer" over a stopped runner and takes two presses to restart.
+  **Update 26/09:** the second half is fixed when the saved build list is
+  empty (the timer turns off, §5). With work still saved the flag stays on
+  on purpose, and the label then reads "Stop Timer" over a runner waiting for
+  the keep-alive — which is now true, not a lie. The first half (Build's
+  timer runs queued shipments) is still open; it was checked on 26/09 and
+  was NOT the cause of the transport panel opening.
 
 - **Not yet confirmed on the live game after a rebuild (25/09):** the header
   refreshing after a manual shipment with the launcher moved out of the menu,
@@ -470,7 +607,7 @@ action points in the status line).
 
 ---
 
-## 8. The last round of work
+## 8. The 25/09 code-quality review round
 
 The 25/09 code-quality review: 80 files changed and two new ones, committed as
 `1983f45` (code) with this document and the plan in the commit after it. The
@@ -493,6 +630,31 @@ What was reviewed and why each finding was or was not fixed is
 both were so before either 25/09 round — not part of this work, and left out
 of every commit.
 
-`dist/` was last built by the user on 25/09 at 03:17, before the launcher
-move, the `updateGlobalData` wrapper change and this whole review. Per §7,
-grep `dist/` before believing a fix reached the bundle.
+Per §7, grep `dist/` before believing a fix reached the bundle. (The note
+that stood here said `dist/` predated this review; it has been rebuilt since
+— see §1.)
+
+---
+
+## 9. The 26–27/09 round: Auto Build on a second account
+
+Uncommitted. Each fix had its test written first and seen red against the
+code before it (§3). 8 files:
+
+| Reported by the user | Cause | Fix | Where |
+| -------------------- | ----- | --- | ----- |
+| Every Auto Build task fails `Town "S-Clone1" not found`; the run queue empties, the build list stays | The dropdown's `title` carries coordinates on this account (§2) | Names from the model by city id (`modelCityName`); the board's form switch waits for the same name | `core/ikariam/model.ts`, `send-resources/navigation.ts`, `empire-overview/game-api.ts` |
+| Page reloads without end once everything is built; button stuck on "Stop Timer" | Drain reloaded, the next load re-queued nothing, drained at once and reloaded; `isAutoReload` was written but never read | Restore the original's guard; turn Build's timer off when the list is empty | `send-resources/app.ts`, `features/auto-build.ts` |
+| Start Timer (Build) keeps opening the Transport panel | `closeGamePopup` clicked the first `.close`, the hidden transport panel's (§2) | Click only a displayed `.close` | `send-resources/navigation.ts` |
+| Page reloads every 1–2 s, even after Stop Timer | `gotoTown` sent `#changeCityForm` first, which reloaded without landing; the flag had not actually been cleared | Board town name first, form second, dropdown last | `send-resources/navigation.ts` |
+
+Along the way `gotoTown` gained the form route itself (it had none), and
+`switchTown` was split into `clickBoardTownName` and `clickDropdownTown`.
+Tests: `navigation.test.ts` (coordinates, the form, the board-first order,
+`closeGamePopup`), `game-api.test.ts` (the board's switch with coordinates),
+`app.test.ts` ("Auto Build after the queue runs dry", two loads in a row).
+
+**Seen working live:** the coordinates fix (the next log upgraded towns and
+emptied the build list), and the drain guard ("queue build tạm ok").
+**Not seen live yet:** the transport-panel fix and the board-first switch —
+the user's next reports were about other symptoms, not these.
