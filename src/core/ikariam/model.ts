@@ -227,6 +227,20 @@ export function modelCurrentCityName(): string | null {
   return typeof name === "string" && name.trim() ? name.trim() : null;
 }
 
+/**
+ * Name of the town with this id, taken from the model.
+ *
+ * The same name the breadcrumb shows. The town dropdown's `title` is not: with
+ * the game's "show coordinates" option on it reads `"[42:97]  S-Clone1"`, and
+ * the model keeps the coordinates in their own `coords` field.
+ */
+export function modelCityName(cityId: number | string): string | null {
+  const city = getModel()?.relatedCityData?.[`city_${cityId}`];
+  if (typeof city !== "object" || city === null) return null;
+  const name = city.name;
+  return typeof name === "string" && name.trim() ? name.trim() : null;
+}
+
 /** Every town owned by this account. */
 export function modelOwnCities(): RelatedCity[] {
   const related = getModel()?.relatedCityData;

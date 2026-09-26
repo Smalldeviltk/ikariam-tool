@@ -8,6 +8,7 @@ import { reportBug } from "@core/bug-report";
 import { waitFor } from "@core/async";
 import { qs } from "@core/dom";
 import { getCurrentTownName } from "@core/ikariam/globals";
+import { modelCityName } from "@core/ikariam/model";
 import { SEL } from "@core/ikariam/selectors";
 import { describeEntry, trace } from "./ajax-trace";
 import $, { pageJQuery } from "./jquery";
@@ -203,12 +204,17 @@ export const ikariam: any = {
     const anchor = qs(
       SEL.townListContainer + ' > li[selectvalue="' + cityId + '"] > a',
     );
+    // The model names the town as the breadcrumb will. The dropdown's title
+    // may not: with the game's "show coordinates" option on it reads
+    // "[42:96]  M-Corinth", which the breadcrumb never matches, so every
+    // switch timed out into a full page load. The title is the fallback.
     const target = (
+      modelCityName(cityId) ||
       anchor?.getAttribute("title") ||
       anchor?.textContent ||
       ""
     ).trim();
-    if (!target) return false;
+    if (!anchor || !target) return false;
 
     const form = qs<HTMLFormElement>(SEL.changeCityForm);
     const cityInput = qs<HTMLInputElement>(SEL.changeCityInput);

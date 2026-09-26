@@ -183,6 +183,105 @@ describe("the two Start Timer buttons share one runner", () => {
   );
 });
 
+describe("Auto Build after the queue runs dry", () => {
+  /** Page reloads, counted from clicks on the city link `backToCity` uses. */
+  let reloads: number;
+
+  function installCityLink(): void {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="js_cityLink"><a href="#"></a></div>`,
+    );
+    document
+      .querySelector("#js_cityLink > a")!
+      .addEventListener("click", (event) => {
+        event.preventDefault();
+        reloads++;
+      });
+  }
+
+  /** What a reload does: the same storage, a fresh page and a fresh script. */
+  async function reloadPage(): Promise<void> {
+    document.body.innerHTML = PAGE;
+    installCityLink();
+    vi.resetModules();
+    const app = await import("./app");
+    vi.clearAllTimers();
+    app.start();
+  }
+
+  beforeEach(() => {
+    reloads = 0;
+    // The keep-alive also reloads, on even minutes of the clock. An odd minute
+    // keeps it out of these tests, which count only their own reloads. Passed
+    // to `useFakeTimers` because `setSystemTime` left the clock on real time.
+    vi.useFakeTimers({ now: new Date("2026-09-26T10:01:00Z") });
+  });
+
+  it(
+    "REGRESSION: turns its timer off once nothing is left to build — the " +
+      "flag stayed on, so every load drained at once and reloaded the page",
+    async () => {
+      installCityLink();
+      await startWith({ build: true });
+      await vi.advanceTimersByTimeAsync(1_100);
+      expect(reloads).toBe(1);
+
+      const state = await appState();
+      expect(state.isFlagTrue(state.FLAG.isAutoBuildStart)).toBe(false);
+      expect(document.querySelector("#btnStartAutoBuild")!.textContent).toBe(
+        "Start Timer",
+      );
+
+      await reloadPage();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(reloads).toBe(1);
+      expect(timers()).toBe(IDLE);
+    },
+  );
+
+  it(
+    "REGRESSION: does not run again on the load that follows a run — the " +
+      "original skipped it through isAutoReload, which the port only wrote",
+    async () => {
+      // A town the dropdown does not have: every task fails and is dropped,
+      // while the saved build list keeps it.
+      localStorage.setItem(
+        "listAutoBuild",
+        JSON.stringify([
+          {
+            accountName: "tester",
+            townList: [
+              {
+                townName: "Nowhere",
+                queue: [
+                  {
+                    positionId: "js_CityPosition4Link",
+                    buildingName: "Warehouse 3",
+                  },
+                ],
+              },
+            ],
+          },
+        ]),
+      );
+      installCityLink();
+      await startWith({ build: true });
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(reloads).toBe(1);
+
+      await reloadPage();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(reloads).toBe(1);
+
+      // Still switched on: the keep-alive reload brings the next run.
+      const state = await appState();
+      expect(state.isFlagTrue(state.FLAG.isAutoBuildStart)).toBe(true);
+      expect(state.getFlag(state.FLAG.isAutoReload)).toBe("false");
+    },
+  );
+});
+
 describe("startup", () => {
   it("leaves the runner alone when neither switch is on", async () => {
     await startWith({});

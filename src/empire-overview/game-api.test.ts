@@ -128,6 +128,27 @@ describe("loadUrl to another town from the city view", () => {
   );
 
   it(
+    "REGRESSION: sees the switch land when the dropdown shows coordinates — " +
+      "the target was read from the dropdown's title, which the breadcrumb " +
+      "never matches, so every switch timed out into a full page load",
+    async () => {
+      // Live markup with the game's "show coordinates" option on (26/09).
+      document.querySelector("#dropDown_js_citySelectContainer ul")!.innerHTML =
+        `<li selectvalue="297034" class="ownCity coords"><a title="[41:98]  W-Athens"> [41:98]  W-Athens</a></li>` +
+        `<li selectvalue="297035" class="ownCity coords"><a title="[42:96]  M-Corinth"> [42:96]  M-Corinth</a></li>`;
+
+      ikariam.loadUrl(true, "city", sawMill);
+      expect(formSwitches).toEqual(["297035"]);
+
+      setBreadcrumb("M-Corinth");
+      await vi.advanceTimersByTimeAsync(1300);
+      expect(ajaxCalls).toHaveLength(1);
+      expect(ajaxCalls[0]).toContain("view=resource");
+      expect(pageLoads).toEqual([]);
+    },
+  );
+
+  it(
     "REGRESSION: waits for the game to finish loading before opening the " +
       "view — opening it on a flat delay let the rest of the switch arrive " +
       "afterwards and close the dialog that had just opened",

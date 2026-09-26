@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   adjustDestinationIndex,
+  closeGamePopup,
   getTownCount,
   getTownList,
   getTownNameFromList,
@@ -259,5 +260,160 @@ describe("gotoTown town switching", () => {
   it("throws for an index with no town", async () => {
     document.body.innerHTML = townDropdown(["W-Athens"]);
     await expect(gotoTown(9)).rejects.toThrow(/No town at dropdown index/);
+  });
+});
+
+describe("a dropdown that shows coordinates", () => {
+  /**
+   * Live markup from an account with the game's "show coordinates" option on
+   * (pasted from the console, 26/09). The `title` carries the coordinates and
+   * two spaces; the breadcrumb, and the name Auto Build stores, do not.
+   */
+  const COORDS_DROPDOWN =
+    `<div id="dropDown_js_citySelectContainer"><div class="bg"><ul>` +
+    `<li selectvalue="297124" class="ownCity coords first-child"><a title="[41:98]  W-Clone1"> [41:98]  W-Clone1</a></li>` +
+    `<li selectvalue="297155" class="ownCity coords"><a title="[42:96]  M-Clone1"> [42:96]  M-Clone1</a></li>` +
+    `<li selectvalue="297348" class="ownCity coords last-child"><a title="[42:97]  S-Clone1"> [42:97]  S-Clone1</a></li>` +
+    `</ul></div></div>`;
+
+  const MODEL_TOWNS: Record<string, string> = {
+    "297124": "W-Clone1",
+    "297155": "M-Clone1",
+    "297348": "S-Clone1",
+  };
+
+  function installModel(selectedId: string) {
+    const related: Record<string, unknown> = {
+      selectedCity: `city_${selectedId}`,
+    };
+    for (const [id, name] of Object.entries(MODEL_TOWNS)) {
+      related[`city_${id}`] = {
+        id,
+        name,
+        coords: "[42:97]",
+        relationship: "ownCity",
+      };
+    }
+    Object.assign(window, { ikariam: { model: { relatedCityData: related } } });
+  }
+
+  afterEach(() => {
+    Reflect.deleteProperty(window, "ikariam");
+    Reflect.deleteProperty(window, "ajaxHandlerCallFromForm");
+  });
+
+  it(
+    "REGRESSION: finds a town by the name the breadcrumb shows, not the " +
+      "dropdown's title",
+    () => {
+      // Every Auto Build task on this account failed with `Town "S-Clone1"
+      // not found`: the name came from the breadcrumb, the lookup compared it
+      // with `"[42:97]  S-Clone1"`.
+      document.body.innerHTML = COORDS_DROPDOWN;
+      installModel("297124");
+
+      expect(getTownNameFromList(2)).toBe("S-Clone1");
+      expect(getTownNumberByName("S-Clone1")).toBe(2);
+    },
+  );
+
+  it("REGRESSION: switches town through the game's own form and sees it land", async () => {
+    // Clicking a dropdown `<a>` does not change town (measured, 25/09), and
+    // the breadcrumb never shows the coordinates the old target carried.
+    document.body.innerHTML =
+      COORDS_DROPDOWN +
+      `<span id="js_cityBread">W-Clone1</span>` +
+      `<form id="changeCityForm"><input id="js_cityIdOnChange" name="cityId"></form>`;
+    installModel("297124");
+
+    const submitted: string[] = [];
+    Object.assign(window, {
+      ajaxHandlerCallFromForm: (form: HTMLFormElement) => {
+        const cityId =
+          form.querySelector<HTMLInputElement>("#js_cityIdOnChange")!.value;
+        submitted.push(cityId);
+        // What the game does with the response.
+        document.getElementById("js_cityBread")!.textContent =
+          MODEL_TOWNS[cityId];
+      },
+    });
+
+    await gotoTown(2);
+    expect(submitted).toEqual(["297348"]);
+  });
+
+  it(
+    "REGRESSION: clicks the Empire Overview board's town name before trying " +
+      "the form — sending the form from the runner reloaded the whole page " +
+      "without landing, and every load started the same switch again",
+    async () => {
+      document.body.innerHTML =
+        COORDS_DROPDOWN +
+        `<span id="js_cityBread">W-Clone1</span>` +
+        `<form id="changeCityForm"><input id="js_cityIdOnChange" name="cityId"></form>` +
+        `<div id="BuildTab"><div class="city_name">` +
+        `<span class="clickable">S-Clone1</span></div></div>`;
+      installModel("297124");
+
+      const submitted: string[] = [];
+      Object.assign(window, {
+        ajaxHandlerCallFromForm: () => void submitted.push("form"),
+      });
+      let boardClicks = 0;
+      document
+        .querySelector("#BuildTab span.clickable")!
+        .addEventListener("click", () => {
+          boardClicks++;
+          document.getElementById("js_cityBread")!.textContent = "S-Clone1";
+        });
+
+      await gotoTown(2);
+      expect(boardClicks).toBe(1);
+      expect(submitted).toEqual([]);
+    },
+  );
+});
+
+describe("closeGamePopup", () => {
+  /**
+   * The game's transport panel, from a live page (26/09). It sits in every
+   * page hidden, ahead of any popup, and its `.close` is the first in the
+   * document. Measured: clicking it SHOWS the panel.
+   */
+  const HIDDEN_TRANSPORT_PANEL =
+    `<div id="js_transportPanel" class="transportPanel variableMainBox" style="display: none;">` +
+    `<div class="transportPanel_header variableMainHeader">Transport <div class="close"></div></div>` +
+    `<div class="variableMainContent"></div></div>`;
+
+  it(
+    "REGRESSION: leaves the hidden transport panel alone — clicking the " +
+      "first .close in the page opened it on every Auto Build task",
+    () => {
+      document.body.innerHTML =
+        HIDDEN_TRANSPORT_PANEL +
+        `<div id="buildingPopup"><div class="close"></div></div>`;
+      const clicked: string[] = [];
+      document
+        .querySelectorAll(".close")
+        .forEach((button) =>
+          button.addEventListener("click", () =>
+            clicked.push(button.parentElement!.id || "transportPanel"),
+          ),
+        );
+
+      closeGamePopup();
+      expect(clicked).toEqual(["buildingPopup"]);
+    },
+  );
+
+  it("clicks nothing when no close button is on screen", () => {
+    document.body.innerHTML = HIDDEN_TRANSPORT_PANEL;
+    let clicks = 0;
+    document
+      .querySelector(".close")!
+      .addEventListener("click", () => void clicks++);
+
+    closeGamePopup();
+    expect(clicks).toBe(0);
   });
 });

@@ -171,6 +171,12 @@ export function cleanAutoBuildConfig(): void {
   saveAutoBuild(cleaned);
 }
 
+/** Whether the logged-in account still has upgrades in its saved build list. */
+export function hasConfiguredUpgrades(): boolean {
+  const account = findAccount(loadAutoBuild(), getState().accountName);
+  return account?.townList.some((town) => town.queue.length > 0) ?? false;
+}
+
 /* ────────────────────────── Loading into the queue ─────────────────────── */
 
 /**

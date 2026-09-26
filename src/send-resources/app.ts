@@ -24,6 +24,7 @@ import { TaskRunner } from "@core/task-queue";
 import { BUG_REPORT, QUEUE_VIEW, SEND_DIALOG, WINE_DIALOG } from "./messages";
 import {
   FLAG,
+  getFlag,
   getState,
   initState,
   isAutoStart,
@@ -52,6 +53,7 @@ import {
   addBuildingToQueue,
   cleanAutoBuildConfig,
   enqueueAutoBuild,
+  hasConfiguredUpgrades,
   handleUpgradeBuilding,
   removeBuildingFromQueue,
   scanBuildings,
@@ -458,6 +460,14 @@ export function start(): void {
     logInfo(`Migrated ${moved} shipment orders into the unified queue`);
   }
 
+  // The original's guard against running on the load its own run caused: a
+  // finished run sets `isAutoReload` and reloads, and the load that follows
+  // only clears the flag. The next run waits for the keep-alive reload, which
+  // clears it first. Without this every load drained at once and reloaded
+  // again, so the page never stopped loading.
+  const loadedAfterRun = getFlag(FLAG.isAutoReload) === "true";
+  setFlag(FLAG.isAutoReload, false);
+
   runner = new TaskRunner(getState().queue, {
     intervalMs: QUEUE_INTERVAL_MS,
     isUiReady,
@@ -466,6 +476,13 @@ export function start(): void {
       setAutoStart(false);
       setQueueButtonLabel(false);
       cleanAutoBuildConfig();
+      // Nothing left to build: switch Build's timer off rather than leave its
+      // button reading "Stop Timer" over a runner with no work.
+      if (!hasConfiguredUpgrades()) {
+        setFlag(FLAG.isAutoBuildStart, false);
+        setAutoBuildButtonLabel(false);
+      }
+      if (loadedAfterRun) return;
       setFlag(FLAG.isAutoReload, true);
       backToCity();
     },
@@ -499,6 +516,6 @@ export function start(): void {
   setQueueButtonLabel(autoStart);
   setAutoBuildButtonLabel(autoBuildStart);
 
-  if (autoBuildStart) enqueueAutoBuild();
+  if (autoBuildStart && !loadedAfterRun) enqueueAutoBuild();
   syncRunnerToFlags();
 }

@@ -7,7 +7,8 @@
 
 import { clickIfPresent, qs, qsa, waitForElements } from "@core/dom";
 import { waitFor } from "@core/async";
-import { getCurrentTownName } from "@core/ikariam/globals";
+import { getCurrentTownName, pageWindow } from "@core/ikariam/globals";
+import { modelCityName } from "@core/ikariam/model";
 import { SEL } from "@core/ikariam/selectors";
 import { MISC } from "./messages";
 import type { TownEntry } from "./types";
@@ -42,8 +43,34 @@ function townAnchor(townNumber: number | string): HTMLElement | null {
   return anchor instanceof HTMLElement ? anchor : null;
 }
 
-/** Town name for a dropdown index, always trimmed. */
+/**
+ * City id of a dropdown entry, from its `selectvalue`. `null` when there is none.
+ *
+ * Measured: `<li selectvalue="297034">` is the town whose model entry is
+ * `city_297034`, so this is the bridge from a dropdown index to the model.
+ */
+function townCityId(townNumber: number | string): string | null {
+  const node = townNodes()[Number(townNumber)];
+  if (!(node instanceof HTMLElement)) return null;
+  const cityId = node.getAttribute("selectvalue");
+  return cityId && /^\d+$/.test(cityId) ? cityId : null;
+}
+
+/**
+ * Town name for a dropdown index, always trimmed.
+ *
+ * Read from the model first, which names the town exactly as the breadcrumb
+ * does. The dropdown's `title` does not always: with the game's "show
+ * coordinates" option on it reads `"[42:97]  S-Clone1"`, so every name looked
+ * up or waited for from it never matched, and Auto Build failed every task
+ * with `Town "S-Clone1" not found`. The `title` stays as the fallback for a
+ * page without the model.
+ */
 export function getTownNameFromList(townNumber: number | string): string {
+  const cityId = townCityId(townNumber);
+  const fromModel = cityId === null ? null : modelCityName(cityId);
+  if (fromModel) return fromModel;
+
   const anchor = townAnchor(townNumber);
   if (!anchor) return "";
   // `title` carries the clean name; innerHTML has the stray leading space.
@@ -112,6 +139,17 @@ export function getTownNumberByName(townName: string): number | null {
  * polling forever. With a single shared task runner an unbounded wait no longer
  * stalls just one feature — it wedges every automated action permanently.
  * Throwing lets the runner retry on the next tick.
+ *
+ * Three routes, in order:
+ *
+ *  1. The Empire Overview board's town name (`clickBoardTownName`). This is
+ *     what the original used, and the board switches over ajax.
+ *  2. The game's own form (`submitChangeCityForm`), for a page without the
+ *     board. Tried first for a while, it reloaded the whole page from the
+ *     runner without landing (26/09); every load then started the same
+ *     switch again, so the page never stopped loading.
+ *  3. A click on the dropdown's `<a>`, which is known not to switch town
+ *     (measured, 25/09) and is kept only as the last resort it always was.
  */
 export async function gotoTown(townNumber: number | string): Promise<void> {
   const target = getTownNameFromList(townNumber);
@@ -120,7 +158,11 @@ export async function gotoTown(townNumber: number | string): Promise<void> {
   }
   if (getCurrentTownName() === target) return;
 
-  if (!switchTown(townNumber, target)) {
+  if (
+    !clickBoardTownName(target) &&
+    !submitChangeCityForm(townNumber) &&
+    !clickDropdownTown(townNumber)
+  ) {
     throw new Error(`No way to switch to "${target}" on this page`);
   }
 
@@ -132,27 +174,52 @@ export async function gotoTown(townNumber: number | string): Promise<void> {
 }
 
 /**
- * Click something that switches town. Returns whether anything was clicked.
+ * Change town the way the game's dropdown does. Returns whether it was sent.
  *
- * Two routes, in order:
+ * Put the city id into `#js_cityIdOnChange` and submit `#changeCityForm`
+ * through the game's `ajaxHandlerCallFromForm` — what the Empire Overview
+ * board uses to open another town's view (`switchTownWithGameForm` in
+ * `game-api.ts`) and what IkaEasy V4 does. Sent from the task runner on
+ * 26/09 it reloaded the whole page without landing, which is why it is no
+ * longer the first route; what makes it do that is not known yet.
  *
- *  1. The Empire Overview board's Build tab. This is what the original used and
- *     is kept first so behaviour is unchanged wherever that board is open.
- *
- *  2. The game's own town dropdown. This fallback is new, and it removes a
- *     hidden hard dependency: `#BuildTab` belongs to the Empire Overview
- *     userscript, not to the game. A live page capture with only the game
- *     running matched it ZERO times — so on its own, Send Resources could never
- *     change town, and every task would fail on the 15s timeout.
+ * Sends nothing, and returns false, when the entry has no city id or the page
+ * lacks the form or the game function.
  */
-function switchTown(townNumber: number | string, target: string): boolean {
+function submitChangeCityForm(townNumber: number | string): boolean {
+  const cityId = townCityId(townNumber);
+  const form = qs<HTMLFormElement>(SEL.changeCityForm);
+  const cityInput = qs<HTMLInputElement>(SEL.changeCityInput);
+  const submitForm = (
+    pageWindow as { ajaxHandlerCallFromForm?: (form: HTMLFormElement) => void }
+  ).ajaxHandlerCallFromForm;
+  if (cityId === null || !form || !cityInput) return false;
+  if (typeof submitForm !== "function") return false;
+
+  cityInput.value = cityId;
+  submitForm(form);
+  return true;
+}
+
+/**
+ * Click the town's name on the Empire Overview board's Build tab. Returns
+ * whether it was there to click.
+ *
+ * `#BuildTab` belongs to the Empire Overview userscript, not to the game; a
+ * live capture with only the game running matched it zero times.
+ */
+function clickBoardTownName(target: string): boolean {
   for (const span of qsa<HTMLElement>(SEL.buildTabTownNames)) {
     if (span.innerHTML.trim() === target) {
       span.click();
       return true;
     }
   }
+  return false;
+}
 
+/** Click the town's entry in the game's dropdown. Returns whether it was there. */
+function clickDropdownTown(townNumber: number | string): boolean {
   const anchor = townAnchor(townNumber);
   if (anchor) {
     anchor.click();
@@ -217,9 +284,26 @@ export function backToCity(): void {
   clickIfPresent(SEL.cityLink);
 }
 
-/** Close the game's own popup if one is open. */
+/** Whether neither the element nor any of its ancestors is `display: none`. */
+function isDisplayed(element: Element): boolean {
+  for (let node: Element | null = element; node; node = node.parentElement) {
+    if (getComputedStyle(node).display === "none") return false;
+  }
+  return true;
+}
+
+/**
+ * Close the game's own popup if one is open.
+ *
+ * Only a close button that is on screen is clicked. The game's transport
+ * panel (`#js_transportPanel`) sits hidden in every page with a `.close` of
+ * its own, the first in the document, and clicking it SHOWS the panel
+ * (measured, 26/09) — so taking the first `.close`, as the original did,
+ * opened the transport panel on every Auto Build task.
+ */
 export function closeGamePopup(): void {
-  clickIfPresent(SEL.closeButton);
+  const button = qsa<HTMLElement>(SEL.closeButton).find(isDisplayed);
+  button?.click();
 }
 
 /** Open the safehouse (hotkey S). */
