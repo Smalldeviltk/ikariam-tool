@@ -34,6 +34,44 @@ const TOWN_SWITCH_POLL_MS = 100;
 const TOWN_SWITCH_SETTLE_MS = 1200;
 
 /**
+ * Where a view asked for across a town switch waits for the new page.
+ *
+ * `sessionStorage`, so it belongs to this tab and dies with it: the switch
+ * reloads the page on the live game, and only this tab should open the view.
+ */
+const PENDING_VIEW_KEY = "ika_pendingBoardView";
+
+/** How old a pending view may be and still be opened after a reload. */
+const PENDING_VIEW_MAX_AGE_MS = 30_000;
+
+/** A view to open once the town switch that precedes it is over. */
+interface PendingView {
+  cityId: number | string;
+  mainView: string;
+  params: Record<string, unknown>;
+  savedAt: number;
+}
+
+function savePendingView(view: PendingView): void {
+  try {
+    sessionStorage.setItem(PENDING_VIEW_KEY, JSON.stringify(view));
+  } catch {
+    // Without storage the view is only lost across a reload, as before.
+  }
+}
+
+/** Read the pending view and remove it, so it is opened at most once. */
+function takePendingView(): PendingView | null {
+  try {
+    const raw = sessionStorage.getItem(PENDING_VIEW_KEY);
+    sessionStorage.removeItem(PENDING_VIEW_KEY);
+    return raw ? (JSON.parse(raw) as PendingView) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Whether the game has a request in flight.
  *
  * Read from the game's own markers: its `executeAjaxRequest` goes through the
@@ -112,6 +150,13 @@ export const ikariam: any = {
    * Send Resources also clicks to switch town — keeps the original path: it
    * has always redrawn the new town correctly, and two requests would only
    * make it slower.
+   *
+   * On the live game the switch reloads the whole page (26/09): the board
+   * landed in the right town and the view never opened, because the wait
+   * below died with the old page. So the view is saved first, and
+   * `openPendingView` opens it once the new page is up. A full page load
+   * straight to the view's URL was tried by hand and does not open it either.
+   * When the switch lands without a reload, the wait opens it and removes it.
    */
   loadUrl: function (ajax, mainView, params, townAlreadySwitched?: boolean) {
     mainView = mainView || ikariam.mainView;
@@ -124,13 +169,23 @@ export const ikariam: any = {
       params.cityId !== undefined &&
       String(ikariam.CurrentCityId) !== String(params.cityId)
     ) {
+      savePendingView({
+        cityId: params.cityId,
+        mainView: mainView,
+        params: params,
+        savedAt: Date.now(),
+      });
       const switching = ikariam.switchTownWithGameForm(
         params.cityId,
         function (switched: boolean) {
+          // Opened here, so the next page must not open it again. A switch
+          // that never landed keeps it for the page its fallback loads.
+          if (switched) takePendingView();
           ikariam.loadUrl(switched, mainView, params, switched);
         },
       );
       if (switching) return;
+      takePendingView();
     }
     var paramList: any = { cityId: ikariam.CurrentCityId };
     if (!townAlreadySwitched && ikariam.CurrentCityId !== params.cityId) {
@@ -247,6 +302,22 @@ export const ikariam: any = {
       () => done(arrived()),
     );
     return true;
+  },
+  /**
+   * Open the view `loadUrl` saved before a town switch that reloaded the page.
+   *
+   * Called once the board is up on the new page. The view is opened only if
+   * this page is the town it was meant for and it was saved in the last
+   * `PENDING_VIEW_MAX_AGE_MS`; anything else is dropped, so a stale one can
+   * never open by surprise later. It is opened as a same-town link, which
+   * opens views correctly on the live game.
+   */
+  openPendingView: function (): void {
+    const pending = takePendingView();
+    if (!pending) return;
+    if (Date.now() - pending.savedAt > PENDING_VIEW_MAX_AGE_MS) return;
+    if (String(ikariam.CurrentCityId) !== String(pending.cityId)) return;
+    ikariam.loadUrl(true, pending.mainView, pending.params, true);
   },
   Host: function () {
     if (this._Host == null) {

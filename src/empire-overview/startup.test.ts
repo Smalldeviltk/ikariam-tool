@@ -225,6 +225,40 @@ describe("Empire Overview startup", () => {
       ).toBe(true);
     },
   );
+  it(
+    "REGRESSION: opens a view the board asked for before the town switch " +
+      "reloaded the page",
+    async () => {
+      sessionStorage.clear();
+      sessionStorage.setItem(
+        "ika_pendingBoardView",
+        JSON.stringify({
+          cityId: 297034,
+          mainView: "city",
+          params: { cityId: 297034, view: "townHall", position: 0 },
+          savedAt: Date.now(),
+        }),
+      );
+      const navigations: string[] = [];
+      Object.defineProperty(document, "location", {
+        configurable: true,
+        get: () => window.location,
+        set: (value: string) => void navigations.push(String(value)),
+      });
+
+      try {
+        await boot();
+      } finally {
+        delete (document as any).location;
+      }
+
+      expect(navigations).toHaveLength(1);
+      expect(navigations[0]).toContain("view=townHall");
+      expect(navigations[0]).toContain("cityId=297034");
+      expect(sessionStorage.getItem("ika_pendingBoardView")).toBeNull();
+    },
+  );
+
   it("records nothing in the bug reporter", async () => {
     await boot();
     const raw = localStorage.getItem("ikaBugReports");

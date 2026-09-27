@@ -206,6 +206,10 @@ $(function () {
         if (Array.isArray(parsed)) events("ajaxResponse").pub(parsed);
         return false;
       });
+
+      // A board button for another town switches town first, and on the
+      // live game that reloads the page; the view it was for opens here.
+      ikariam.openPendingView();
     }
   })();
 });

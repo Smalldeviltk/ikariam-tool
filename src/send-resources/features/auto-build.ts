@@ -15,7 +15,7 @@
  * the run queue.
  */
 
-import { qs, qsa, waitForElement } from "@core/dom";
+import { qs, qsa } from "@core/dom";
 import { sleep, waitFor } from "@core/async";
 import { compareValues, errorMessage, MS_PER_SECOND } from "@core/format";
 import { getCurrentTownName } from "@core/ikariam/globals";
@@ -310,11 +310,17 @@ export async function handleUpgradeBuilding(
   // template was something else entirely, left over from an earlier view — its
   // href still pointed at that other building. Clicking it would have upgraded
   // the wrong thing. The href carries `position=N`, so the slot is checkable.
+  //
+  // A button for another slot is waited past, not given up on: it is usually
+  // the previous building's, still on screen until the game swaps in this
+  // one's view. Giving up on the first one seen deferred the task as "not
+  // enough resources?" when there were enough (seen live, 26/09).
   const slotNumber = slotNumberOf(positionId);
-  const button = await waitForElement<HTMLElement>(SEL.buildingUpgradeButton, {
-    timeoutMs: UPGRADE_BUTTON_TIMEOUT_MS,
-  })
-    .then((element) => {
+  let otherSlotSeen: string | null = null;
+  const button = await waitFor(
+    () => {
+      const element = qs<HTMLElement>(SEL.buildingUpgradeButton);
+      if (!element) return null;
       const href = element.getAttribute("href") ?? "";
       const hrefPosition = href.match(/[?&]position=(\d+)/)?.[1] ?? null;
       if (
@@ -322,14 +328,22 @@ export async function handleUpgradeBuilding(
         hrefPosition !== null &&
         hrefPosition !== slotNumber
       ) {
-        logInfo(
-          `Upgrade button points at position ${hrefPosition}, expected ${slotNumber} - ignoring`,
-        );
+        otherSlotSeen = hrefPosition;
         return null;
       }
       return element;
-    })
-    .catch(() => null);
+    },
+    {
+      timeoutMs: UPGRADE_BUTTON_TIMEOUT_MS,
+      label: `upgrade button for ${buildingName}`,
+    },
+  ).catch(() => null);
+
+  if (!button && otherSlotSeen !== null) {
+    logInfo(
+      `Upgrade button still pointed at position ${otherSlotSeen}, expected ${slotNumber} - not clicked`,
+    );
+  }
 
   if (!button) {
     // Specific to this building (usually not enough resources), so let the

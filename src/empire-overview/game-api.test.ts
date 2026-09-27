@@ -249,6 +249,79 @@ describe("loadUrl to another town from the city view", () => {
   });
 });
 
+describe("a view asked for across a switch that reloads the page", () => {
+  const sawMill = {
+    cityId: 297035,
+    view: "resource",
+    type: "resource",
+    islandId: 55,
+  };
+
+  /** What the reload leaves: the same tab storage, the new town selected. */
+  async function reloadInto(cityId: number, townName: string): Promise<any> {
+    (window as any).ikariam.model.relatedCityData.selectedCity =
+      `city_${cityId}`;
+    setBreadcrumb(townName);
+    ajaxCalls.length = 0;
+    vi.resetModules();
+    await import("./jquery-ext");
+    await import("./constants");
+    const fresh = (await import("./game-api")).ikariam;
+    fresh._currentCity = null;
+    return fresh;
+  }
+
+  beforeEach(() => sessionStorage.clear());
+
+  it(
+    "REGRESSION: opens the view once the new page is up — the switch reloads " +
+      "the whole page on the live game, the wait for it died with the old " +
+      "page, and the board landed in the right town with no dialog",
+    async () => {
+      ikariam.loadUrl(true, "city", sawMill);
+      expect(formSwitches).toEqual(["297035"]);
+
+      const fresh = await reloadInto(297035, "M-Corinth");
+      fresh.openPendingView();
+
+      expect(ajaxCalls).toHaveLength(1);
+      expect(ajaxCalls[0]).toContain("view=resource");
+      expect(ajaxCalls[0]).toContain("cityId=297035");
+      expect(ajaxCalls[0]).not.toContain("changeCurrentCity");
+    },
+  );
+
+  it("does not open it a second time when the switch landed without a reload", async () => {
+    ikariam.loadUrl(true, "city", sawMill);
+    setBreadcrumb("M-Corinth");
+    await vi.advanceTimersByTimeAsync(1300);
+    expect(ajaxCalls).toHaveLength(1);
+
+    ikariam.openPendingView();
+    expect(ajaxCalls).toHaveLength(1);
+  });
+
+  it("drops a view meant for another town", async () => {
+    ikariam.loadUrl(true, "city", sawMill);
+
+    const fresh = await reloadInto(297034, "W-Athens");
+    fresh.openPendingView();
+
+    expect(ajaxCalls).toEqual([]);
+    expect(sessionStorage.length).toBe(0);
+  });
+
+  it("drops one left over from long ago", async () => {
+    ikariam.loadUrl(true, "city", sawMill);
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    const fresh = await reloadInto(297035, "M-Corinth");
+    fresh.openPendingView();
+
+    expect(ajaxCalls).toEqual([]);
+  });
+});
+
 describe("loadUrl that only changes town", () => {
   it(
     "keeps the original single request for a town name, which has always " +

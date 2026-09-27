@@ -75,6 +75,43 @@ describe("handleUpgradeBuilding", () => {
     },
   );
 
+  it(
+    "REGRESSION: waits for the right slot's button when the previous " +
+      "building's is still on screen — it gave up on the first one it saw, " +
+      "and logged 'Upgrade button points at position 4, expected 23' before " +
+      "deferring as 'not enough resources?' when there were enough",
+    async () => {
+      // The previous building's button, still there when slot 5 is clicked.
+      document.body.innerHTML = townView(
+        "W-Athens",
+        "?action=UpgradeExistingBuilding&cityId=297034&position=1&level=25",
+      );
+      // Clicking slot 5 makes the game swap in its view, a round trip later.
+      document
+        .getElementById("js_CityPosition5Link")!
+        .addEventListener("click", () =>
+          setTimeout(() => {
+            const button = document.getElementById("js_buildingUpgradeButton")!;
+            button.setAttribute(
+              "href",
+              "?action=UpgradeExistingBuilding&cityId=297034&position=5&level=25",
+            );
+            button.addEventListener("click", () => {
+              document.getElementById("position5")!.className =
+                "position5 building constructionSite animated";
+            });
+          }, 700),
+        );
+
+      const promise = handleUpgradeBuilding(
+        upgradeTask("js_CityPosition5Link"),
+      );
+      await vi.advanceTimersByTimeAsync(20_000);
+
+      expect((await promise).status).toBe("done");
+    },
+  );
+
   it("accepts the button when its position matches the slot", async () => {
     document.body.innerHTML = townView(
       "W-Athens",
