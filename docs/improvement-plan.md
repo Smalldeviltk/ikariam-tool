@@ -1,9 +1,16 @@
 # Kế hoạch cải thiện — UI và tính năng
 
-> Trạng thái: **đang thực hiện.** Cập nhật 25/09/2026.
+> Trạng thái: **đang thực hiện.** Cập nhật 28/09/2026.
 >
-> Đã xong: Phase 1 trừ 1.4 · Phase 2 phần panel (2.1–2.5) · A, B, C.
+> Đã xong: Phase 1 trừ 1.4 (◐) · Phase 2 phần panel (2.1–2.5) · A, B, C.
 > Còn lại: 1.4 · 2.6–2.8 (board, chờ câu hỏi 2) · D, H · toàn bộ E–T.
+>
+> **Đợt gần nhất (§2.E, 26–28/09):** Auto Build trên tài khoản thứ hai
+> (`SClone1`, bật hiện toạ độ trong dropdown). Sáu lỗi, đều đã sửa: bốn lỗi
+> đầu đã commit (`453482b`); nút trên board mở view town khác và nút Upgrade
+> còn sót của công trình trước **chưa commit**. Auto Build hiện **cần board
+> Empire Overview trên trang** — không có board thì đổi town bằng form, và
+> form làm tải lại cả trang (chưa rõ vì sao).
 >
 > **⚠️ Mọi tính năng gửi hàng TỰ ĐỘNG đang hỏng.** Game đã đổi UI cảng biển
 > sang `#js_transportPanel`; selector chọn town đích (`.cities.clearfix`) không
@@ -11,15 +18,15 @@
 > thì vẫn chạy. Đừng bấm Start Timer cho tới khi sửa xong. Chi tiết và cách sửa
 > ở §2.A.
 >
-> Đợt gần nhất (§2.D, commit `1983f45`): review chất lượng code toàn bộ `src/`
+> Đợt trước (§2.D, commit `1983f45`): review chất lượng code toàn bộ `src/`
 > và sửa gần hết finding. Còn một finding 🔴 (tên tham số của `createPopup`)
 > chờ code gốc của game; các điểm cố ý giữ, còn sót và cần thử trên game thật
 > đều ghi ở §2.D.
 >
-> Đợt trước (§2.C, đã commit): sửa header không cập nhật sau khi gửi tay, sửa
+> Đợt §2.C (đã commit): sửa header không cập nhật sau khi gửi tay, sửa
 > nút trên board chuyển sai town, Auto Wine giữ lại 1 giờ tiêu thụ cho town
-> nguồn và không gửi quá sức chứa kho. Auto Build vẫn còn mất queue khi town
-> đang xây — chưa tìm ra, đang chờ log.
+> nguồn và không gửi quá sức chứa kho. Lỗi "Auto Build mất queue" ghi ở đó đã
+> tìm ra ở §2.E.
 >
 > Đợt trước nữa (§2.B): sửa Auto Build tiêu queue khi nâng cấp không thành, bỏ
 > điều kiện tàu rảnh khỏi lúc nạp queue Auto Wine, và chặn vòng lặp vô hạn khi
@@ -122,7 +129,7 @@ một thứ ta đã biết là yếu.
 | 1.1 ✅ | **Xác minh trước.** Một lệnh gọi tay trong crawler, bắn đúng một request `view=townHall&cityId=X&ajax=1` và dump shape response. Không bao giờ tự chạy. | `tools/collect-dom-report.js`               |
 | 1.2 ✅ | `ikariamRequest(params)` — thêm `actionRequest` + `ajax=1`, throttle, timeout, trả về mảng đã parse                                                     | `src/core/ikariam/http.ts` _(mới)_          |
 | 1.3 ✅ | `applyResponse(array)` — publish vào `events("ajaxResponse")` của Empire Overview; Send Resources dùng mảng trực tiếp                                   | `src/core/ikariam/http.ts`                  |
-| 1.4 ⬜ | `switchCity(cityId)` — serialize `#changeCityForm`, POST, xác nhận từ response. `gotoTown` thử cách này trước, giữ đường click làm dự phòng             | `src/send-resources/navigation.ts`          |
+| 1.4 ◐ | `switchCity(cityId)` — serialize `#changeCityForm`, POST, xác nhận từ response. `gotoTown` thử cách này trước, giữ đường click làm dự phòng. **28/09:** `gotoTown` đã có đường form (`submitChangeCityForm`) nhưng xếp **thứ hai**, sau tên town trên board, vì gửi từ runner nó tải lại cả trang (§2.E). Phần "xác nhận từ response" chưa làm | `src/send-resources/navigation.ts`          |
 | 1.5 ✅ | `syncAllTowns()` thay ruột `scanBuildings`; nút Scan giữ nguyên                                                                                         | `src/send-resources/features/auto-build.ts` |
 
 ### Đã làm tới đâu
@@ -233,6 +240,20 @@ xong phần chọn town mà form gửi cũng đã đổi thì chỉ là dời ch
 Cần một capture ở hai màn: lúc `#js_transportPanel` đang mở, và sau khi bấm
 `a.action_transport` để form gửi hiện ra.
 
+**Cập nhật 27/09:** màn thứ nhất **đã có** (người dùng dán hai lần, ghi ở §2.E).
+Chỉ còn thiếu form gửi. Crawler dò form bằng `#textfield_wine`, nên nếu form
+đổi id thì nó báo "không có form" mà không nói gì thêm. Lệnh đã gửi người dùng
+thay vào đó liệt kê mọi form, ô nhập và nút **đang hiện** — chạy sau khi bấm
+"Transport goods", **không** bấm gửi:
+
+```js
+copy(JSON.stringify({ url: location.search, wineFieldForm: document.querySelector("#textfield_wine")?.form?.outerHTML?.slice(0, 20000) ?? null, visibleControls: [...document.querySelectorAll("form, input, select, button, a.button, [id^=slider], [id*=submit]")].filter(e => e.offsetParent !== null).map(e => ({ tag: e.tagName, id: e.id, name: e.getAttribute("name"), cls: String(e.className).slice(0, 80), type: e.type, value: e.value, text: (e.textContent || "").trim().slice(0, 40), form: e.form?.id })) }, null, 1))
+```
+
+Lưu ý khi sửa: `#js_transportPanel` có `.close` riêng và là `.close` đầu tiên
+trong trang (§2.E lỗi 3). Đừng dùng lại kiểu "click `.close` đầu tiên" ở bất
+cứ đâu trong luồng gửi hàng.
+
 Khi có, sửa ở bốn chỗ:
 
 | Chỗ | Việc |
@@ -324,7 +345,9 @@ vẫn giữ vì đúng với game hiện tại:
 **Lỗi 2 — nút trên board ("to Saw Mill", "to luxury good", nút level) chuyển
 đúng dropdown nhưng công trình trên màn hình là của town cũ.**
 ✅ Đã sửa. Người dùng xác nhận đã sang đúng town; phần "dialog bị đóng vì trang
-còn tải" đã sửa nhưng **chưa được xác nhận**.
+còn tải" đã sửa nhưng **chưa được xác nhận**. **Cập nhật 27/09:** dialog vẫn
+không mở khi nút là của town khác — vì bước (1) dưới đây thực ra **tải lại cả
+trang**, và bước (2) chết cùng trang cũ. Sửa ở §2.E, lỗi 5.
 
 - `loadUrl` (`game-api.ts`) gửi `changeCurrentCity` qua ajax cùng lúc mở view
   đích. Đang ở city view mà nhảy sang city view của town khác thì
@@ -340,7 +363,9 @@ còn tải" đã sửa nhưng **chưa được xác nhận**.
   Bản đầu làm vậy và mọi nút trên board chờ đủ 15 s.
 
 **Lỗi 3 — Auto Build mất queue khi town đang có công trình nâng cấp.**
-⏸ Chưa tìm ra. Entry chỉ bị xoá khi slot đó mang `constructionSite`
+✅ **Đã tìm ra 26/09 (§2.E, lỗi 1)**: không phải hai khả năng dưới đây, mà là
+tên town trong dropdown có kèm toạ độ. Đoạn còn lại giữ nguyên để thấy lúc đó
+đã nghi gì. ~~⏸ Chưa tìm ra.~~ Entry chỉ bị xoá khi slot đó mang `constructionSite`
 (`auto-build.ts`), nên hai khả năng đang nghi: trang ở trạng thái lệch kiểu lỗi
 2 làm bước kiểm tra đọc nhầm town, hoặc entry được lưu nhầm sang town khác khi
 bấm **+** lúc breadcrumb đang sai (`addBuildingToQueue` lấy tên từ
@@ -439,6 +464,50 @@ sau khỏi soi lại từ đầu.
 | Chuyển town trên board chờ bằng `waitFor` của core (logic không đổi) | `empire-overview/game-api.ts` — `switchTownWithGameForm` | Các nút "to Saw Mill", nút level: sang đúng town, dialog không bị đóng |
 | Toast "Updated: …" và "Could not read the remote version." lấy từ `LanguageData` | `empire-overview/game-api.ts`, `empire.ts` | Toast vẫn hiện đúng chữ |
 | Bỏ các rule CSS trùng không gắn id popup | `send-resources/ui/styles.ts` | Ba hộp thoại Settings (Transport, Wine, Build) trông như cũ |
+
+### 2.E Auto Build trên tài khoản thứ hai (26–28/09/2026)
+
+Mọi lỗi dưới đây chỉ lộ ra trên tài khoản `SClone1` (ba town: W-Clone1
+297124, M-Clone1 297155, S-Clone1 297348), vốn bật tuỳ chọn **hiện toạ độ**
+trong dropdown chọn town. Tài khoản chính không bao giờ gặp lỗi nào trong số
+này. Mỗi bản sửa đều có test viết trước và đã thấy đỏ trên code cũ.
+
+| # | Người dùng thấy | Nguyên nhân | Sửa | Trạng thái |
+| - | --------------- | ----------- | --- | ---------- |
+| 1 | Mọi task Auto Build báo `Town "S-Clone1" not found`; task queue cạn, cấu hình Build vẫn còn | `title` trong dropdown là `"[42:97]  S-Clone1"`, còn breadcrumb và tên Auto Build lưu là `S-Clone1` | Lấy tên town từ model theo city id (`selectvalue` → `modelCityName`); `title` chỉ là dự phòng. Board chờ đúng tên đó khi đổi town bằng form | ✅ commit `453482b`, **đã thấy chạy** trên game |
+| 2 | Xây xong hết thì trang tải lại liên tục, nút kẹt ở "Stop Timer" | Queue cạn → reload; cờ Build vẫn bật nên lần load sau cạn ngay, lại reload. Script gốc chặn bằng `isAutoReload`; bản port chỉ ghi cờ đó mà không bao giờ đọc | Khôi phục cơ chế của bản gốc (`loadedAfterRun` trong `app.ts`); tự tắt timer Build khi cấu hình rỗng (`hasConfiguredUpgrades`) | ✅ commit `453482b`, **đã thấy chạy** |
+| 3 | Start Timer của Build cứ mở panel Transport | `closeGamePopup` click `.close` đầu tiên trong trang — chính là nút của `#js_transportPanel` đang ẩn; click nó làm panel **hiện ra** (đo bằng console) | Chỉ click `.close` đang hiển thị | ✅ commit `453482b`, chưa xác nhận trên game |
+| 4 | Trang tải lại mỗi 1–2 s, bấm Stop Timer cũng không dừng | `gotoTown` đổi town bằng `#changeCityForm` trước tiên; gửi từ runner, form tải lại cả trang mà không tới town đích, và mỗi lần load lại bắt đầu đúng lần đổi town đó. Cờ Build trong storage vẫn `true` | Thứ tự mới: tên town trên board (đường của bản gốc) → form → `<a>` dropdown | ✅ commit `453482b`, chưa xác nhận trên game |
+| 5 | Nút trên board: cùng town thì mở đúng dialog; town khác thì chỉ sang town đó, không mở dialog | Đổi town bằng form **tải lại cả trang** (người dùng xác nhận); phần chờ rồi mở view chết cùng trang cũ. Tải thẳng URL của view (`location.assign("?view=townHall&cityId=…&position=0")`) cũng chỉ sang town, không mở dialog — đã thử tay | `loadUrl` lưu view cần mở vào `sessionStorage` (`ika_pendingBoardView`) trước khi đổi town; `openPendingView()` mở nó khi board khởi động xong trên trang mới — chỉ khi đúng town và còn mới (30 s). Đổi town không reload thì callback cũ mở và xoá bản ghi | ✅ **chưa commit**, chưa xác nhận trên game |
+| 6 | Log `Upgrade button points at position 4, expected 23 - ignoring` rồi hoãn "not enough resources?" dù đủ tài nguyên | Lấy nút `#js_buildingUpgradeButton` **đầu tiên**; đó thường là nút của công trình vừa mở trước, còn trên màn hình | Chờ (trong 15 s sẵn có) tới khi nút có `position=` đúng slot; nút của slot khác vẫn không bao giờ bị click | ✅ **chưa commit**, chưa xác nhận trên game |
+
+**Đã đo được, ghi lại để khỏi đo lại:**
+
+- Dropdown bật toạ độ: `<li selectvalue="297348" class="ownCity coords"><a title="[42:97]  S-Clone1">`
+  — hai dấu cách sau ngoặc. Model giữ toạ độ ở field `coords` riêng.
+- `#js_transportPanel` luôn có sẵn trong trang (ẩn), town đích là
+  `div.transportPanel_city[data-city-id]`, nút gửi là `a.action_transport` với
+  `onclick="ajaxHandlerCall(this.href);return false;"`. Đây là phần markup
+  §2.A còn thiếu — **chọn town đích giờ đủ dữ liệu**; chỉ còn thiếu form gửi.
+- Một dòng `Auto Build: queued N upgrades` trong log = một lần load trang (hoặc
+  bấm Start). Hai dòng cách nhau vài giây = trang vừa tải lại.
+- Console của người dùng có thể lọc mất `console.log`. Probe nên **trả về** kết
+  quả, và đặt `await` phía trước khi phải chờ.
+
+**Còn mở:**
+
+- **Vì sao form đổi town tải lại cả trang.** Chưa biết. Cho tới khi biết, Send
+  Resources không có board sẽ lại dùng form và có thể lặp reload. Đây là phần
+  còn lại của 1.4 ("xác nhận từ response").
+- **Town rảnh không bắt đầu khi town khác đang xây** — người dùng báo trước
+  bản sửa lỗi 4, chưa thử lại. Queue có xoay vòng (town bận `defer` xuống
+  cuối), nên nếu còn lỗi thì là bước kiểm tra "đang xây" đọc nhầm: nghi
+  `TOWN_SETTLE_MS` 1200 ms quá ngắn, slot của town trước vẫn còn trên màn hình.
+  Chưa đo.
+- **Dialog mở quá sớm?** `openPendingView` chạy ngay khi board khởi động xong.
+  Nếu game còn đang tải, dialog có thể mở rồi bị đóng — kiểu lỗi đã gặp 25/09.
+  Nếu gặp: chờ game rảnh như `switchTownWithGameForm`.
+- **C — log ai gọi `backToCity`:** đã đề xuất, chưa làm.
 
 ---
 
@@ -572,9 +641,9 @@ Cột **Build** cho biết tính năng chạy được ở đâu: `US` = userscr
 ✅ Phase 2   2.1 → 2.5              cửa sổ dùng chung + panel
 ✅ Đợt rẻ    A, B, C                nút transport, xem queue, cảnh báo rượu
 
-⬜ Còn lại, không chờ gì:  1.4, D, H, và nửa sau của 2.4
-⏸ Chờ capture cảng biển:  §2.A
-⏸ Chờ log người dùng:     §2.C lỗi 3 (Auto Build mất queue)
+⬜ Còn lại, không chờ gì:  1.4 (phần còn lại), D, H, nửa sau của 2.4, C (§2.E)
+⏸ Chờ capture form gửi:   §2.A — markup chọn town đích đã có (§2.E)
+⏸ Chờ người dùng thử lại: §2.E lỗi 3–6, và "town rảnh không bắt đầu"
 ⏸ Chờ code của game:      §2.D tham số `createPopup` (lệnh console ghi ở đó)
 ⬜ Lượt review sau:        §2.D chuỗi i18n còn sót, và thử trên game thật
 ⏸ Chờ câu hỏi 2:          2.6, 2.7, 2.8   (đều ở board)
@@ -600,7 +669,10 @@ action point vào dòng trạng thái cho trọn 2.4.
 - **`onDrain` không reset `isAutoBuildStart`.** Khi queue cạn, `setAutoStart(false)`
   tắt cờ Transport nhưng cờ Build giữ nguyên `true` và nhãn nút không đổi. Nút
   Build ghi "Stop Timer" trong khi runner đã dừng, và phải bấm hai lần mới chạy
-  lại được.
+  lại được. **◐ 26/09:** sửa khi cấu hình Build rỗng (timer tự tắt, §2.E lỗi
+  2). Còn việc trong cấu hình thì cờ cố ý giữ `true` để keep-alive chạy lượt
+  sau, như bản gốc. Việc thứ nhất (runner chạy mọi loại task) vẫn còn — đã
+  kiểm tra 26/09 và **không** phải nguyên nhân panel Transport tự mở.
 
 ---
 

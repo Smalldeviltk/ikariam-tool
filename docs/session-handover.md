@@ -10,7 +10,7 @@ It deliberately does **not** repeat the feature status. That lives in
 second. [project-summary.md](../project-summary.md) covers what the TypeScript
 port changed and what is still unverified.
 
-Last updated: 27/09/2026.
+Last updated: 28/09/2026.
 
 ---
 
@@ -43,12 +43,18 @@ screen. `portForm.present` is `false` in all five existing captures, so
 `#textfield_*`, `#submit` and `#slider_freighters_max` have never been checked
 against the live game either.
 
-**26–27/09: an Auto Build round, uncommitted.** Four bugs, all found on a
-second account (`SClone1`, three towns) and all fixed in the working tree —
-see §9. Auto Build now builds on that account. **It needs the Empire Overview
-board on the page**: without it, town switches go through `#changeCityForm`,
-which reloaded the whole page from the runner and put it in a reload loop
-(§2, §6). The user tests with both scripts on.
+**26–28/09: an Auto Build round on a second account** (`SClone1`, three
+towns) — see §9. Six bugs, all fixed: the first four are committed
+(`453482b`), the last two — board buttons for another town not opening their
+dialog, and the stale upgrade button — are **in the working tree,
+uncommitted**. Auto Build now builds on that account. **It needs the Empire
+Overview board on the page**: without it, town switches go through
+`#changeCityForm`, which reloaded the whole page from the runner and put it
+in a reload loop (§2, §6). The user tests with both scripts on.
+
+**Next in the plan is still §2.A, the trading port.** The destination list's
+markup is now in hand (§2); the shipment form is the one capture missing, and
+the command for it is in `improvement-plan.md` §2.A.
 
 **If a page is stuck reloading**, the way out from the console (it keeps
 working between loads) is
@@ -62,11 +68,11 @@ working between loads) is
 |             |                                                                  |
 | ----------- | ---------------------------------------------------------------- |
 | Branch      | `refactor`, tracking `origin/refactor`                            |
-| Pushed      | Up to `3228058`. Eight local commits since (`03d07fa`..HEAD), not pushed |
-| Uncommitted | The 26–27/09 Auto Build round: 8 files in `src/` (§9). `.gitignore` and `docs/So_sanh_2_script_Ikariam.md` are the user's, as before |
-| Tests       | 34 files, 457 tests, all passing                                  |
+| Pushed      | Up to `3228058`. Ten local commits since (`03d07fa`..HEAD, the last two `453482b` and `194ba74`), not pushed |
+| Uncommitted | §9 bugs 5 and 6: 6 files in `src/` (`empire-overview/game-api.ts`, `main.ts` and their two tests; `send-resources/features/auto-build.ts` and its test), plus this document and the plan. `.gitignore` and `docs/So_sanh_2_script_Ikariam.md` are the user's, as before |
+| Tests       | 34 files, 463 tests, all passing                                  |
 | Typecheck   | Clean (`tsc --noEmit` and the strict config)                      |
-| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 27/09 at 05:23 and contains every fix in §9 (grepped) |
+| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 27/09 at 23:26 and contains every fix in §9, the uncommitted two included (grepped for `openPendingView` and `still pointed at position`) |
 
 What landed: the AJAX transport layer, the shared window widget, the rewritten
 panel, four features (sync-towns, transport-buttons, queue-view, wine-warning),
@@ -209,8 +215,16 @@ Added 26–27/09, from the `SClone1` account (towns W-Clone1 297124, M-Clone1
   confirmed. Sending the same form by hand from the console "did nothing"
   according to the user, which settles nothing. WHY it reloads is unknown.
   The board's own use of the form (`switchTownWithGameForm`, to open another
-  town's view) was only ever confirmed to *land in the right town*; nobody
-  measured whether it did so over ajax.
+  town's view) was only ever confirmed to *land in the right town*.
+  **Measured 27/09: it reloads the whole page there too** — the user pressed
+  a board button for another town, the page reloaded into that town, and the
+  dialog never opened, because the wait that was to open it died with the old
+  page.
+- **A full page load straight to a view's URL does not open its dialog.**
+  Tried by hand from S-Clone1:
+  `location.assign("?view=townHall&cityId=297155&position=0")` loaded M-Clone1
+  with no Town Hall dialog. So a URL is not a way to carry a view across a
+  reload; the board now carries it in `sessionStorage` (§5).
 - **Clicking a town name on the Empire Overview board is the original's route
   to change town**, and it did not work on this account until names stopped
   carrying coordinates. It is the first route again since 27/09; whether it
@@ -453,6 +467,29 @@ Added 26–27/09, each chosen by the user:
   `display: none`). Taking the first `.close`, as the original did, opened
   the transport panel.
 
+Added 27/09, each chosen by the user:
+
+- **A board view for another town is carried across the reload in
+  `sessionStorage`.** `loadUrl` saves `{cityId, mainView, params, savedAt}`
+  under `ika_pendingBoardView` before `switchTownWithGameForm`;
+  `ikariam.openPendingView()`, called from `main.ts` once the board's `init`
+  has everything, takes it (read and remove) and opens it as a same-town
+  link — the route the user confirmed opens dialogs. It opens only in the
+  town it was for and within `PENDING_VIEW_MAX_AGE_MS` (30 s); anything else
+  is dropped, so a stale one never opens by surprise. When the switch lands
+  without a reload, the old callback opens the view and removes the record,
+  so it never opens twice. A switch that times out keeps the record for the
+  page its full-load fallback brings. `sessionStorage`, not `localStorage`,
+  so only this tab acts on it — and it stays out of the data export's key
+  table. The alternative, a full page load to the view's URL, was ruled out
+  by the measurement in §2.
+- **The upgrade button of another slot is waited past, not given up on.**
+  `handleUpgradeBuilding` polls (`waitFor`, `UPGRADE_BUTTON_TIMEOUT_MS` =
+  15 s) for a `#js_buildingUpgradeButton` whose `href` carries this slot's
+  `position=`. Another slot's button is still never clicked; if only that one
+  was seen by the timeout, it logs `Upgrade button still pointed at position
+  X, expected Y - not clicked` and defers as before.
+
 ---
 
 ## 6. What is blocked, and on what
@@ -488,14 +525,17 @@ task only comes back on the next load or Start. That design is unchanged.
   breadcrumb by more than 1200 ms, wait for the game to go idle like
   `switchTownWithGameForm` does.
 
+**Also waiting on the retest:** the board dialog for another town (§9 bug 5)
+and the stale upgrade button (§9 bug 6). One risk in bug 5's fix is known and
+unmeasured: `openPendingView` runs the moment the board's `init` is done. If
+the game is still loading then, the dialog could open and be closed by what
+arrives after — the failure seen on 25/09. If the user reports a dialog that
+flashes and vanishes, wait for the game to go idle first, as
+`switchTownWithGameForm` does (`gameIsLoading`).
+
 **Not started, offered and declined for now:**
 
-- **B — the stale upgrade button.** Logged live:
-  `Upgrade button points at position 4, expected 23 - ignoring`, then the task
-  defers as "not enough resources?" when it was not. `handleUpgradeBuilding`
-  takes the FIRST `#js_buildingUpgradeButton` and gives up if its `href` is
-  another slot's; it should wait, within `UPGRADE_BUTTON_TIMEOUT_MS`, for one
-  whose `position=` matches.
+- ~~B — the stale upgrade button.~~ Done 27/09, §9 bug 6.
 - **C — who reloads.** One `logInfo` in `backToCity` naming its caller would
   have told the reload loops apart in one paste.
 - **Why the form reloads the page** (§2). Until that is known, Send Resources
@@ -636,10 +676,13 @@ that stood here said `dist/` predated this review; it has been rebuilt since
 
 ---
 
-## 9. The 26–27/09 round: Auto Build on a second account
+## 9. The 26–28/09 round: Auto Build on a second account
 
-Uncommitted. Each fix had its test written first and seen red against the
-code before it (§3). 8 files:
+Each fix had its test written first and seen red against the code before it
+(§3). Bugs 1–4 are committed as `453482b` (8 files); bugs 5–6 are
+uncommitted (§1). The plan has the same table in Vietnamese, §2.E.
+
+Bugs 1–4:
 
 | Reported by the user | Cause | Fix | Where |
 | -------------------- | ----- | --- | ----- |
@@ -658,3 +701,23 @@ Tests: `navigation.test.ts` (coordinates, the form, the board-first order,
 emptied the build list), and the drain guard ("queue build tạm ok").
 **Not seen live yet:** the transport-panel fix and the board-first switch —
 the user's next reports were about other symptoms, not these.
+
+Bugs 5–6, 27/09, uncommitted:
+
+| Reported by the user | Cause | Fix | Where |
+| -------------------- | ----- | --- | ----- |
+| A board button opens the right dialog in the current town; for another town it only lands in that town | The form switch reloads the page (§2), and the wait that opens the view dies with the old page | Save the view in `sessionStorage` before switching; `openPendingView()` opens it on the new page (§5) | `empire-overview/game-api.ts`, `empire-overview/main.ts` |
+| `Upgrade button points at position 4, expected 23 - ignoring`, then "not enough resources?" with enough resources | The first `#js_buildingUpgradeButton` seen was the previous building's, still on screen | Wait for the button of this slot (§5) | `send-resources/features/auto-build.ts` |
+
+Tests: `game-api.test.ts` "a view asked for across a switch that reloads the
+page" (opens after the reload, not twice, not for another town, not when
+stale — red because the function did not exist, a weak red; the first one
+still pins the behaviour the old code could not have), `startup.test.ts`
+(boot opens a pending view — red until `main.ts` called it),
+`auto-build.test.ts` (slot 5's button replaces slot 1's 700 ms after the
+slot is clicked). The first version of that last test was GREEN against the
+old code: its swap was timed from the start of the test, and had already
+happened by the time the handler looked. Timing it from the slot click is
+what made it red — §3's "run the revert before believing a green test", again.
+
+Neither is seen live yet.
