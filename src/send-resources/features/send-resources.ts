@@ -121,7 +121,7 @@ export async function handleSendResource(
   // every tick after it, until the player opened a town by hand — which is
   // precisely what the port had to be clicked for, over and over.
   if (!qs(SEL.position(1)) && !qs(SEL.position(2))) {
-    backToCity();
+    backToCity("shipment needs the town view to find the port");
     await waitForElement(SEL.position(1), {
       timeoutMs: BACK_TO_TOWN_TIMEOUT_MS,
     }).catch(() => null);
@@ -189,7 +189,7 @@ export async function handleSendResource(
 
   const remaining = amount - sentAmount;
   // Leave the page where the next shipment expects to find it.
-  backToCity();
+  backToCity("shipment sent");
 
   if (remaining <= 0) return { status: "done" };
   return {

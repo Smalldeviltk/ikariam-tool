@@ -3644,11 +3644,20 @@ export const render: any = {
                       : "";
                 }
                 var fillperc = (current / storage.capacity) * 100;
+                // FIX (not in the original): a store at its cap gets diagonal
+                // stripes, as IkaEasy V4 draws them (css/empire-resources.css).
+                // "full" is red from 96%, so it could not tell a store that is
+                // nearly full from one whose production is being thrown away.
+                // Gold's bar measures something else and is left alone.
+                const capped =
+                  resourceName !== Constant.Resources.GOLD &&
+                  storage.capacity > 0 &&
+                  current >= storage.capacity;
                 rescells
                   .find("div.progressbar")
                   .find("div.ui-progressbar-value")
                   .width(fillperc + "%")
-                  .removeClass("normal warning almostfull full")
+                  .removeClass("normal warning almostfull full capped")
                   .addClass(
                     fillperc > 90
                       ? fillperc > 96
@@ -3657,7 +3666,8 @@ export const render: any = {
                       : fillperc > 70
                         ? "warning"
                         : "normal",
-                  );
+                  )
+                  .toggleClass("capped", capped);
                 var diffGold = Math.floor(city.getIncome + city.getExpenses);
                 var fillpercG =
                   (100 / (city.populationData.maxPop * 3)) * diffGold;

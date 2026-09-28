@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { initState, saveAutoBuild } from "../state";
+import { getState, initState, saveAutoBuild } from "../state";
 import {
+  enqueueAutoBuild,
   getTownQueue,
   handleUpgradeBuilding,
   scanBuildings,
@@ -63,6 +64,10 @@ describe("handleUpgradeBuilding", () => {
         "W-Athens",
         "?action=UpgradeExistingBuilding&cityId=297034&position=1&level=25",
       );
+      let clicked = false;
+      document
+        .getElementById("js_buildingUpgradeButton")!
+        .addEventListener("click", () => void (clicked = true));
 
       const promise = handleUpgradeBuilding(
         upgradeTask("js_CityPosition5Link"),
@@ -71,7 +76,8 @@ describe("handleUpgradeBuilding", () => {
       const result = await promise;
 
       // Clicking it would have upgraded the wrong building.
-      expect(result.status).toBe("defer");
+      expect(clicked).toBe(false);
+      expect(result.status).toBe("done");
     },
   );
 
@@ -137,11 +143,11 @@ describe("handleUpgradeBuilding", () => {
     expect(result.status).toBe("done");
   });
 
-  it("defers when no upgrade button appears at all", async () => {
+  it("ends the town's turn when no upgrade button appears at all", async () => {
     document.body.innerHTML = townView("W-Athens", null);
     const promise = handleUpgradeBuilding(upgradeTask("js_CityPosition5Link"));
     await vi.advanceTimersByTimeAsync(20_000);
-    expect((await promise).status).toBe("defer");
+    expect((await promise).status).toBe("done");
   });
 
   it("retries rather than acting when not on a town view", async () => {
@@ -204,7 +210,8 @@ describe("handleUpgradeBuilding", () => {
       await vi.advanceTimersByTimeAsync(20_000);
       const result = await promise;
 
-      expect(result.status).toBe("defer");
+      // The turn is over, and the saved upgrade waits for the next lap.
+      expect(result.status).toBe("done");
       expect(clicked).toBe(false);
       expect(getTownQueue("W-Athens")).toHaveLength(1);
     },
@@ -234,10 +241,95 @@ describe("handleUpgradeBuilding", () => {
       const result = await promise;
 
       expect(clicked).toBe(true);
-      expect(result.status).toBe("defer");
+      expect(result.status).toBe("done");
       expect(getTownQueue("W-Athens")).toHaveLength(1);
     },
   );
+});
+
+describe("enqueueAutoBuild", () => {
+  const WAREHOUSE = {
+    positionId: "js_CityPosition4Link",
+    buildingName: "Warehouse 3",
+  };
+  const PORT = {
+    positionId: "js_CityPosition1Link",
+    buildingName: "Trading Port 5",
+  };
+
+  /** Saved upgrades on the `SClone1` layout: two each in M and W, one in S. */
+  function configureThreeTowns(): void {
+    saveAutoBuild([
+      {
+        accountName: "Smalldevil",
+        townList: [
+          { townName: "M-Clone1", queue: [WAREHOUSE, PORT] },
+          { townName: "S-Clone1", queue: [WAREHOUSE] },
+          { townName: "W-Clone1", queue: [PORT, WAREHOUSE] },
+        ],
+      },
+    ]);
+  }
+
+  /** The dropdown in `SClone1`'s order: W, M, S. */
+  const DROPDOWN =
+    `<div id="dropDown_js_citySelectContainer"><div class="bg"><ul>` +
+    [
+      ["297124", "W-Clone1"],
+      ["297155", "M-Clone1"],
+      ["297348", "S-Clone1"],
+    ]
+      .map(
+        ([id, name]) =>
+          `<li selectvalue="${id}" class="ownCity"><a title="${name}"> ${name}</a></li>`,
+      )
+      .join("") +
+    `</ul></div></div>`;
+
+  function queuedTowns(): string[] {
+    return getState()
+      .queue.listOfType("upgradeBuilding")
+      .map((task) => `${task.data.townName}: ${task.data.buildingName}`);
+  }
+
+  it(
+    "REGRESSION: queues one visit per town, for its first saved upgrade — " +
+      "queueing every upgrade had a busy town's entries circle the queue, " +
+      "switching town every second",
+    () => {
+      document.body.innerHTML = DROPDOWN;
+      configureThreeTowns();
+
+      expect(enqueueAutoBuild()).toBe(3);
+      expect(queuedTowns()).toEqual([
+        "W-Clone1: Trading Port 5",
+        "M-Clone1: Warehouse 3",
+        "S-Clone1: Warehouse 3",
+      ]);
+    },
+  );
+
+  it("follows the board's order, which the player can drag", () => {
+    document.body.innerHTML =
+      DROPDOWN +
+      `<div id="BuildTab">` +
+      ["S-Clone1", "W-Clone1", "M-Clone1"]
+        .map(
+          (name) =>
+            `<div class="city_name"><span class="clickable">${name}</span></div>`,
+        )
+        .join("") +
+      `</div>`;
+    configureThreeTowns();
+
+    enqueueAutoBuild();
+
+    expect(queuedTowns().map((line) => line.split(":")[0])).toEqual([
+      "S-Clone1",
+      "W-Clone1",
+      "M-Clone1",
+    ]);
+  });
 });
 
 describe("scanBuildings", () => {

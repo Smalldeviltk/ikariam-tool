@@ -1,6 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   adjustDestinationIndex,
+  backToCity,
   closeGamePopup,
   getTownCount,
   getTownList,
@@ -372,6 +373,44 @@ describe("a dropdown that shows coordinates", () => {
       expect(submitted).toEqual([]);
     },
   );
+});
+
+describe("backToCity", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it(
+    "logs who sent the page back to the town view — the reload loops of " +
+      "26/09 could not be told apart without it",
+    () => {
+      document.body.innerHTML = `<div id="js_cityLink"><a href="#"></a></div>`;
+      let clicked = false;
+      document
+        .querySelector("#js_cityLink > a")!
+        .addEventListener("click", (event) => {
+          event.preventDefault();
+          clicked = true;
+        });
+      const log = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      backToCity("keep-alive (even minute)");
+
+      expect(clicked).toBe(true);
+      expect(log).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "Back to the town view: keep-alive (even minute)",
+        ),
+      );
+    },
+  );
+
+  it("logs nothing when there is no town link to click", () => {
+    document.body.innerHTML = "";
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    backToCity("keep-alive (even minute)");
+
+    expect(log).not.toHaveBeenCalled();
+  });
 });
 
 describe("closeGamePopup", () => {

@@ -82,19 +82,27 @@ export function renderResourceTable(): void {
   if (body) body.innerHTML = rows;
 }
 
+/** Id of the amount field for one resource in the send dialog. */
+function amountFieldId(resource: string): string {
+  return `transporterSendAmount_${resource}`;
+}
+
 export function openSendResourcesDialog(): void {
   const towns = townOptions();
-  const resources = RESOURCE_OPTIONS.map(
+  // One amount field per resource, instead of a resource dropdown and a
+  // single amount: a shipment of several resources is one Add, not one per
+  // resource.
+  const amounts = RESOURCE_OPTIONS.map(
     (resource) =>
-      `<option value="${resource.value}">${resource.label}</option>`,
+      `<div><span>${resource.label}: </span><input id="${amountFieldId(resource.value)}" type="number" min="1" step="1" inputmode="numeric"></div>`,
   ).join("");
 
   openPopup(
     SEND_DIALOG.title,
     `<div><span>${SEND_DIALOG.from}</span><select id="transporterSendFromTown">${towns}</select></div><br/>
      <div><span>${SEND_DIALOG.destination}</span><select id="transporterSendDestination">${towns}</select></div><br/>
-     <div><span>${SEND_DIALOG.resource}</span><select id="transporterSendResource">${resources}</select></div><br/>
-     <div><span>${SEND_DIALOG.amount}</span><input id="transporterSendAmount" type="number"></div><br/>
+     <div><span>${SEND_DIALOG.amount}</span></div>
+     ${amounts}<br/>
      <button style="margin-right:5px" class="button" ${action("send.add")}>${BUTTON.add}</button>
      <button style="margin-right:5px" class="button" ${action("send.removeFirst")}>${SEND_DIALOG.removeFirst}</button>
      <button style="margin-right:5px" class="button" ${action("send.removeLast")}>${SEND_DIALOG.removeLast}</button>
@@ -110,23 +118,34 @@ export function openSendResourcesDialog(): void {
 export interface SendFormValues {
   origin: string;
   destination: string;
-  resource: string;
-  amount: number;
+  /** One entry per resource whose field was filled in, in dialog order. */
+  amounts: { resource: string; amount: number }[];
+  /** Filled-in fields that are not a whole number above 0, by label. */
+  invalid: string[];
 }
 
-/** Read the four fields of the send form. Returns `null` when incomplete. */
+/** Read the send form. Returns `null` when a town is not chosen. */
 export function readSendForm(): SendFormValues | null {
   const origin = qs<HTMLSelectElement>("#transporterSendFromTown")?.value;
   const destination = qs<HTMLSelectElement>(
     "#transporterSendDestination",
   )?.value;
-  const resource = qs<HTMLSelectElement>("#transporterSendResource")?.value;
-  const amount = Number(qs<HTMLInputElement>("#transporterSendAmount")?.value);
+  if (!origin || !destination) return null;
 
-  if (!origin || !destination || !resource || !Number.isFinite(amount)) {
-    return null;
+  const amounts: SendFormValues["amounts"] = [];
+  const invalid: string[] = [];
+  for (const resource of RESOURCE_OPTIONS) {
+    const text =
+      qs<HTMLInputElement>(`#${amountFieldId(resource.value)}`)?.value.trim() ??
+      "";
+    // An empty field means "none of this one".
+    if (text === "") continue;
+    // Digits only: "1e3", "2.5", "-4" and "+4" all pass `Number()`.
+    const amount = /^\d+$/.test(text) ? Number(text) : 0;
+    if (amount > 0) amounts.push({ resource: resource.value, amount });
+    else invalid.push(resource.label);
   }
-  return { origin, destination, resource, amount };
+  return { origin, destination, amounts, invalid };
 }
 
 /* ───────────────────────────── Auto wine dialog ────────────────────────── */
@@ -311,7 +330,7 @@ export function openAutoBuildDialog(): void {
        <tr><td id="tdListBuilding">${renderBuildingList()}</td>${cells}</tr>
      </table><br/>
      <p style="font-size:11px">${BUILD_DIALOG.savedAsYouGo}</p>
-     <button style="margin-right:20px" class="button" ${action("build.enqueue")}>${BUILD_DIALOG.runQueue}</button>
+     <button style="margin-right:20px" class="button" ${action("build.save")}>${BUTTON.save}</button>
      <button class="button" ${action("dialog.close")}>${BUTTON.close}</button><br/><br/>`,
   );
 }

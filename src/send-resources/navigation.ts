@@ -10,6 +10,7 @@ import { waitFor } from "@core/async";
 import { getCurrentTownName, pageWindow } from "@core/ikariam/globals";
 import { modelCityName } from "@core/ikariam/model";
 import { SEL } from "@core/ikariam/selectors";
+import { logInfo } from "@core/logger";
 import { MISC } from "./messages";
 import type { TownEntry } from "./types";
 
@@ -279,9 +280,15 @@ export function adjustDestinationIndex(
   return dest > Number(origin) ? dest - 1 : dest;
 }
 
-/** Return to the town view. */
-export function backToCity(): void {
-  clickIfPresent(SEL.cityLink);
+/**
+ * Return to the town view — which, on the live game, reloads the page.
+ *
+ * `reason` is required and logged, so a log that shows the page reloading
+ * over and over also says who did it. Five places call this, and the reload
+ * loops of 26/09 could not be told apart without it.
+ */
+export function backToCity(reason: string): void {
+  if (clickIfPresent(SEL.cityLink)) logInfo(`Back to the town view: ${reason}`);
 }
 
 /** Whether neither the element nor any of its ancestors is `display: none`. */

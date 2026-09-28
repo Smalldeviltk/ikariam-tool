@@ -182,10 +182,29 @@ describe("live state", () => {
 
   it("puts the transfer status in the footer", () => {
     setTransferInfo("Nothing is transferring");
-    expect(document.querySelector(".ika-window-footer")!.textContent).toBe(
-      "Nothing is transferring",
+    expect(document.querySelector(".ika-window-footer")!.textContent).toMatch(
+      /^Nothing is transferring/,
     );
   });
+
+  it(
+    "shows the idle ships and action points from the game's header — the two " +
+      "things a queued shipment waits on",
+    () => {
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<span id="js_GlobalMenu_freeTransporters">227</span>` +
+          `<span id="js_GlobalMenu_freeFreighters">5</span>` +
+          `<li id="js_GlobalMenu_maxActionPoints">11</li>`,
+      );
+
+      setTransferInfo("Nothing is transferring");
+
+      const footer = document.querySelector(".ika-window-footer")!.textContent;
+      expect(footer).toContain("Idle ships 227 + 5 freighters");
+      expect(footer).toContain("AP 11");
+    },
+  );
 
   it(
     "shows how many orders are still queued — the old panel had no way to " +
@@ -311,9 +330,9 @@ describe("the wine warning", () => {
 
     document.body.innerHTML += `<div id="${WINE_WARNING_ID}"></div>`;
     refreshWineWarning();
-    const items = [
-      ...document.querySelectorAll(`#${WINE_WARNING_ID} li`),
-    ].map((li) => li.textContent);
+    const items = [...document.querySelectorAll(`#${WINE_WARNING_ID} li`)].map(
+      (li) => li.textContent,
+    );
 
     expect(items).toHaveLength(2);
     expect(items[0]).toContain("M-Aegina");

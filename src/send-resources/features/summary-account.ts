@@ -220,5 +220,5 @@ function keepAliveTick(): void {
 
   setFlag(FLAG.reloadedMinute, minute);
   setFlag(FLAG.isAutoReload, false);
-  backToCity();
+  backToCity("keep-alive (even minute)");
 }

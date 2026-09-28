@@ -205,6 +205,84 @@ export class TaskQueue {
   }
 }
 
+/* ─────────────────────────── Cross-tab lock ─────────────────────────────── */
+
+/**
+ * One tab at a time per account drives the queue.
+ *
+ * The queue is in localStorage, which every tab of the game's origin shares,
+ * while the runner's `busy` flag is per page. Two tabs of one account would
+ * each run the same head task — two town switches fighting over the same
+ * account, or the same shipment sent twice.
+ *
+ * Built on the Web Locks API, as IkaEasy V4 does (`js/helper/syncLock.js`):
+ * the browser grants the lock to one page at a time and takes it back by
+ * itself when that page closes or reloads, so a crashed or reloading tab can
+ * never leave it stuck. A tab that asks while another holds it waits in the
+ * browser's queue and gets it as soon as it is free.
+ *
+ * Where the API is missing, `acquire` grants at once — no protection, but the
+ * runner works exactly as it did before the lock existed.
+ */
+export class TabLock {
+  private requested = false;
+  private held = false;
+  private releaseHeld: (() => void) | null = null;
+  private abortWait: AbortController | null = null;
+
+  constructor(
+    private readonly name: string,
+    /** Injected for tests; the page's own `navigator.locks` by default. */
+    private readonly locks: LockManager | null = navigator.locks ?? null,
+    /** Called with `true` when the lock is granted, `false` when given up. */
+    private readonly onChange?: (held: boolean) => void,
+  ) {}
+
+  get isHeld(): boolean {
+    return this.held;
+  }
+
+  /** Ask for the lock. Does nothing if already held or already asked for. */
+  acquire(): void {
+    if (this.requested) return;
+    this.requested = true;
+    if (!this.locks) {
+      this.held = true;
+      return;
+    }
+
+    const abort = new AbortController();
+    this.abortWait = abort;
+    this.locks
+      .request(this.name, { signal: abort.signal }, () => {
+        // Released between the grant and this callback: hand it straight back.
+        if (abort.signal.aborted) return;
+        this.abortWait = null;
+        this.held = true;
+        this.onChange?.(true);
+        // Held for as long as this promise is pending.
+        return new Promise<void>((resolve) => {
+          this.releaseHeld = resolve;
+        });
+      })
+      // An abort while still waiting rejects the request; nothing to do.
+      .catch(() => {});
+  }
+
+  /** Give the lock back, or stop waiting for it. */
+  release(): void {
+    if (!this.requested) return;
+    this.requested = false;
+    this.abortWait?.abort();
+    this.abortWait = null;
+    const wasHeld = this.held;
+    this.held = false;
+    this.releaseHeld?.();
+    this.releaseHeld = null;
+    if (wasHeld && this.locks) this.onChange?.(false);
+  }
+}
+
 /* ─────────────────────────────── Runner ─────────────────────────────────── */
 
 /**
@@ -225,6 +303,15 @@ const DEFAULT_DEFER_COOLDOWN_MS = 60_000;
 export interface TaskRunnerOptions {
   /** Queue poll interval in ms. The original used 1000 for sending. */
   intervalMs?: number;
+  /**
+   * Whether this page may drive the queue at all — `false` while another tab
+   * of the same account holds the `TabLock`.
+   *
+   * Checked before anything else, the drain included: the queue lives in
+   * localStorage, so a waiting tab sees the driving tab's queue empty out and
+   * would otherwise run `onDrain` (and reload) for a run it took no part in.
+   */
+  canRun?: () => boolean;
   /**
    * Whether the UI is idle (no popup, not loading).
    * Returning `false` makes the runner skip this tick without consuming a task.
@@ -320,6 +407,7 @@ export class TaskRunner {
 
   private async tick(): Promise<void> {
     if (this.busy) return;
+    if (this.options.canRun && !this.options.canRun()) return;
     if (Date.now() < this.pausedUntil) return;
 
     const task = this.queue.head();

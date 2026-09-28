@@ -28,6 +28,7 @@ import {
   wineStatus,
   type TownWineStatus,
 } from "../features/wine-warning";
+import { getActionPoints, getFreeShips } from "../game-state";
 import { BUTTON, PANEL, WINE_WARNING } from "../messages";
 import { getState } from "../state";
 import { action } from "./actions";
@@ -183,6 +184,11 @@ export function refreshWineWarning(): void {
  * footer now also carries the queue depth, which is the thing that was
  * genuinely unknowable before: there was no way to see how many orders were
  * still pending.
+ *
+ * And the idle ships and action points, the two things a shipment waits on
+ * (`handleSendResource` returns `retry` while either is used up), so a queue
+ * that is not moving shows why. Read from the game's header, as the handler
+ * reads them.
  */
 export function setTransferInfo(text: string): void {
   if (!panelWindow) return;
@@ -192,9 +198,11 @@ export function setTransferInfo(text: string): void {
     refreshWineWarning();
   }
   const pending = getState().queue.length;
+  const status = pending > 0 ? PANEL.footerWithQueue(text, pending) : text;
+  const { merchants, freighters } = getFreeShips();
   setWindowFooter(
     panelWindow,
-    pending > 0 ? PANEL.footerWithQueue(text, pending) : text,
+    PANEL.footerWithCounters(status, merchants, freighters, getActionPoints()),
   );
 }
 

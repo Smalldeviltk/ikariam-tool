@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { FLAG, initState, isFlagTrue, setAutoStart, setFlag } from "./state";
+import {
+  FLAG,
+  getState,
+  initState,
+  isFlagTrue,
+  saveAutoBuild,
+  setAutoStart,
+  setFlag,
+} from "./state";
 
 // Silence the logger, but keep its other exports (its storage key is read by
 // the data export).
@@ -176,9 +184,125 @@ describe("the two Start Timer buttons share one runner", () => {
 
       await actions["build.toggleTimer"](document.body);
 
-      expect(getState().queue.list().map((task) => task.type)).toEqual([
-        "sendResource",
+      expect(
+        getState()
+          .queue.list()
+          .map((task) => task.type),
+      ).toEqual(["sendResource"]);
+    },
+  );
+});
+
+describe("the Transport settings dialog", () => {
+  /** The two town pickers and the five amount fields, as the dialog draws them. */
+  function installSendForm(amounts: Record<string, string>): void {
+    const towns = `<option value="0">W-Athens</option><option value="1">M-Corinth</option>`;
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<select id="transporterSendFromTown">${towns}</select>` +
+        `<select id="transporterSendDestination">${towns}</select>` +
+        ["wood", "wine", "marble", "glass", "sulfur"]
+          .map(
+            (resource) =>
+              `<input id="transporterSendAmount_${resource}" value="${amounts[resource] ?? ""}">`,
+          )
+          .join(""),
+    );
+    document.querySelector<HTMLSelectElement>(
+      "#transporterSendDestination",
+    )!.value = "1";
+  }
+
+  async function queuedShipments(): Promise<string[]> {
+    const { getState: appGetState } = await appState();
+    return appGetState()
+      .queue.listOfType("sendResource")
+      .map((task) => `${task.data.resource} ${task.data.amount}`);
+  }
+
+  beforeEach(() => {
+    window.alert = vi.fn();
+  });
+
+  it(
+    "queues one row per resource filled in — the resource dropdown added " +
+      "one row per Add",
+    async () => {
+      await startWith({});
+      installSendForm({ wood: "5000", marble: "1200", sulfur: "300" });
+
+      await actions["send.add"](document.body);
+
+      expect(await queuedShipments()).toEqual([
+        "wood 5000",
+        "marble 1200",
+        "sulfur 300",
       ]);
+      expect(window.alert).not.toHaveBeenCalled();
+    },
+  );
+
+  it("queues nothing, and says which, when an amount is not a whole number above 0", async () => {
+    await startWith({});
+    installSendForm({ wood: "5000", wine: "2.5", glass: "-4" });
+
+    await actions["send.add"](document.body);
+
+    expect(await queuedShipments()).toEqual([]);
+    expect(window.alert).toHaveBeenCalledWith(
+      expect.stringContaining("Wine, Crystal"),
+    );
+  });
+
+  it("asks for an amount when every field is empty", async () => {
+    await startWith({});
+    installSendForm({});
+
+    await actions["send.add"](document.body);
+
+    expect(await queuedShipments()).toEqual([]);
+    expect(window.alert).toHaveBeenCalledWith(
+      expect.stringContaining("at least one resource"),
+    );
+  });
+});
+
+describe("the Auto Build settings dialog", () => {
+  it(
+    "Save closes the dialog and starts nothing — its 'Run queue' did what " +
+      "the panel's Start button does",
+    async () => {
+      localStorage.setItem(
+        "listAutoBuild",
+        JSON.stringify([
+          {
+            accountName: "tester",
+            townList: [
+              {
+                townName: "W-Athens",
+                queue: [
+                  {
+                    positionId: "js_CityPosition4Link",
+                    buildingName: "Warehouse 3",
+                  },
+                ],
+              },
+            ],
+          },
+        ]),
+      );
+      await startWith({});
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<div id="ikaMationTransporterDialog"></div>`,
+      );
+
+      await actions["build.save"](document.body);
+
+      expect(document.querySelector("#ikaMationTransporterDialog")).toBeNull();
+      const { getState: appGetState } = await appState();
+      expect(appGetState().queue.listOfType("upgradeBuilding")).toEqual([]);
+      expect(timers()).toBe(IDLE);
     },
   );
 });
@@ -278,6 +402,46 @@ describe("Auto Build after the queue runs dry", () => {
       const state = await appState();
       expect(state.isFlagTrue(state.FLAG.isAutoBuildStart)).toBe(true);
       expect(state.getFlag(state.FLAG.isAutoReload)).toBe("false");
+    },
+  );
+
+  it(
+    "REGRESSION: a keep-alive reload in the middle of a lap carries on with " +
+      "it — every load queued a fresh lap from the first town, so the last " +
+      "town of a long lap was never reached",
+    async () => {
+      saveAutoBuild([
+        {
+          accountName: "tester",
+          townList: ["W-Clone1", "M-Clone1", "S-Clone1"].map((townName) => ({
+            townName,
+            queue: [
+              {
+                positionId: "js_CityPosition4Link",
+                buildingName: "Warehouse 3",
+              },
+            ],
+          })),
+        },
+      ]);
+      // W and M have had their turn; the reload came before S.
+      getState().queue.push({
+        type: "upgradeBuilding",
+        data: {
+          townName: "S-Clone1",
+          positionId: "js_CityPosition4Link",
+          buildingName: "Warehouse 3",
+        },
+      });
+
+      await startWith({ build: true });
+
+      const { getState: appGetState } = await appState();
+      expect(
+        appGetState()
+          .queue.listOfType("upgradeBuilding")
+          .map((task) => task.data.townName),
+      ).toEqual(["S-Clone1"]);
     },
   );
 });

@@ -19,7 +19,7 @@ import { getAccountName, getCurrentTownName } from "@core/ikariam/globals";
 import { DIALOG_ID, SEL } from "@core/ikariam/selectors";
 import { installErrorHandlers } from "@core/bug-report";
 import { clearLog, initLogger, logInfo } from "@core/logger";
-import { TaskRunner } from "@core/task-queue";
+import { TabLock, TaskRunner } from "@core/task-queue";
 
 import { BUG_REPORT, QUEUE_VIEW, SEND_DIALOG, WINE_DIALOG } from "./messages";
 import {
@@ -130,6 +130,35 @@ const KEY_SAFEHOUSE = "KeyS";
 const BUG_SUMMARY_PREVIEW_CHARS = 800;
 
 let runner: TaskRunner;
+/** Keeps a second tab of the same account from driving the same queue. */
+let tabLock: TabLock;
+/** Whether "another tab is running the queue" has been logged since. */
+let waitingForTabLogged = false;
+
+/** Start the runner, asking for the cross-tab lock it needs to do anything. */
+function startRunner(): void {
+  tabLock.acquire();
+  runner.start();
+}
+
+/** Stop the runner and let another tab of this account take over. */
+function stopRunner(): void {
+  runner.stop();
+  tabLock.release();
+}
+
+/** The runner's `canRun`: only the tab holding the lock drives the queue. */
+function holdsTabLock(): boolean {
+  if (tabLock.isHeld) {
+    waitingForTabLogged = false;
+    return true;
+  }
+  if (!waitingForTabLogged) {
+    logInfo("Another tab is running the task queue for this account - waiting");
+    waitingForTabLogged = true;
+  }
+  return false;
+}
 
 /**
  * Whether the UI is ready for another task.
@@ -166,8 +195,8 @@ function isUiReady(): boolean {
  */
 function syncRunnerToFlags(): void {
   const wanted = isAutoStart() || isFlagTrue(FLAG.isAutoBuildStart);
-  if (wanted && !runner.isRunning) runner.start();
-  else if (!wanted && runner.isRunning) runner.stop();
+  if (wanted && !runner.isRunning) startRunner();
+  else if (!wanted && runner.isRunning) stopRunner();
 }
 
 function toggleQueueRunner(): void {
@@ -210,16 +239,18 @@ function registerUiActions(): void {
         alert(SEND_DIALOG.errors.sameTown);
         return;
       }
-      if (form.amount <= 0) {
+      if (form.invalid.length > 0) {
+        alert(SEND_DIALOG.errors.invalidAmount(form.invalid.join(", ")));
+        return;
+      }
+      if (form.amounts.length === 0) {
         alert(SEND_DIALOG.errors.noAmount);
         return;
       }
-      enqueueSendResource(
-        form.origin,
-        form.destination,
-        form.resource,
-        form.amount,
-      );
+      // One queued row per resource filled in.
+      for (const { resource, amount } of form.amounts) {
+        enqueueSendResource(form.origin, form.destination, resource, amount);
+      }
       renderResourceTable();
     },
     "send.removeFirst": () => {
@@ -288,12 +319,12 @@ function registerUiActions(): void {
       removeBuildingFromQueue(ikaPosition, ikaBuilding, ikaTown);
       refreshTownQueueCell(ikaTown);
     },
-    "build.enqueue": () => {
-      closeDialog();
-      if (enqueueAutoBuild() > 0) runner.start();
-    },
+    // Save only closes the dialog, as the original's did: every + and - is
+    // already saved. Starting the queue is the panel's Start button's job;
+    // the dialog doing it too ("Run queue") was a second Start.
+    "build.save": closeDialog,
     "build.startNow": () => {
-      if (enqueueAutoBuild() > 0) runner.start();
+      if (enqueueAutoBuild() > 0) startRunner();
     },
     "build.toggleTimer": () => {
       const running = isFlagTrue(FLAG.isAutoBuildStart);
@@ -468,11 +499,15 @@ export function start(): void {
   const loadedAfterRun = getFlag(FLAG.isAutoReload) === "true";
   setFlag(FLAG.isAutoReload, false);
 
+  tabLock = new TabLock(`ika-task-runner:${accountName}`, undefined, (held) => {
+    if (held) logInfo("This tab now runs the task queue for this account");
+  });
   runner = new TaskRunner(getState().queue, {
     intervalMs: QUEUE_INTERVAL_MS,
+    canRun: holdsTabLock,
     isUiReady,
     onDrain: () => {
-      runner.stop();
+      stopRunner();
       setAutoStart(false);
       setQueueButtonLabel(false);
       cleanAutoBuildConfig();
@@ -484,7 +519,7 @@ export function start(): void {
       }
       if (loadedAfterRun) return;
       setFlag(FLAG.isAutoReload, true);
-      backToCity();
+      backToCity("the queue ran dry");
     },
   })
     .register("sendResource", handleSendResource)
@@ -516,6 +551,11 @@ export function start(): void {
   setQueueButtonLabel(autoStart);
   setAutoBuildButtonLabel(autoBuildStart);
 
-  if (autoBuildStart && !loadedAfterRun) enqueueAutoBuild();
+  // A lap the keep-alive reload cut short is still in the stored queue: carry
+  // on with it. Queueing a fresh lap here started over from the first town on
+  // every reload, so a long lap never reached its last towns.
+  const lapInProgress =
+    getState().queue.listOfType("upgradeBuilding").length > 0;
+  if (autoBuildStart && !loadedAfterRun && !lapInProgress) enqueueAutoBuild();
   syncRunnerToFlags();
 }

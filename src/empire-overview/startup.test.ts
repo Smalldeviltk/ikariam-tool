@@ -179,6 +179,42 @@ describe("Empire Overview startup", () => {
     expect(document.querySelectorAll("#ResTab tr").length).toBeGreaterThan(0);
   });
 
+  it("stripes the bar of a store that has reached its cap, and only that one", async () => {
+    await boot();
+    const { events } = await import("./events");
+
+    // Key 1 is wine (trade-good ordinal). No warehouse in this town, so the
+    // cap is the town hall's alone; wine sits far above it, the rest below.
+    events("ajaxResponse").pub([
+      [
+        "updateGlobalData",
+        {
+          backgroundData: { id: 297034 },
+          headerData: {
+            currentResources: {
+              resource: 100,
+              1: 1_000_000,
+              2: 100,
+              3: 100,
+              4: 100,
+            },
+            resourceProduction: 0,
+            producedTradegood: 1,
+            wineSpendings: 0,
+          },
+        },
+      ],
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const bar = (resource: string) =>
+      document.querySelector(
+        `#ResTab tr[id^="resource_"] td.resource.${resource} div.progressbar div.ui-progressbar-value`,
+      );
+    expect(bar("wine")?.classList.contains("capped")).toBe(true);
+    expect(bar("wood")?.classList.contains("capped")).toBe(false);
+  });
+
   it(
     "REGRESSION: still boots when the avatar block is missing (reading the " +
       "account name used to throw while the module graph was still " +

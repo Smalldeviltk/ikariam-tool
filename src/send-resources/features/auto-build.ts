@@ -4,11 +4,17 @@
  * Ported from `checkAndProcessAutoBuild` / `startQueue` / `clickUpgrade` /
  * `addBuildingToQueue` / `removeBuildingFromQueue` / `cleanListAutoBuild`.
  *
+ * Same rhythm as the original: one LAP per run. Each town with something
+ * saved gets one visit, and that visit tries the town's FIRST saved upgrade
+ * only; a town that is busy, short of resources or refuses the click is left
+ * for the next lap. When the lap is over the queue drains, and the next lap
+ * comes with the keep-alive reload (even minutes, see `summary-account.ts`).
+ *
  * Structural change: the original walked every town inside one long run
  * (`checkAndProcessAutoBuild(townIndex + 1)`), holding the DOM busy for a long
- * time — precisely when it collided with the shipping loop. Here each building
- * is its own task in the shared queue, so a shipment can slot in between two
- * upgrades without contention.
+ * time — precisely when it collided with the shipping loop. Here each town's
+ * visit is its own task in the shared queue, so a shipment can slot in between
+ * two towns without contention.
  *
  * `listAutoBuild` in localStorage remains the configuration (the UI reads and
  * writes it as before); `enqueueAutoBuild` is where that config is loaded into
@@ -180,10 +186,31 @@ export function hasConfiguredUpgrades(): boolean {
 /* ────────────────────────── Loading into the queue ─────────────────────── */
 
 /**
- * Copy the logged-in account's configured upgrades into the shared queue.
+ * Where a town comes in a lap: its row on the Empire Overview board, else its
+ * place in the game's dropdown, else last.
+ *
+ * The board is the order the player sees and chose (its rows can be dragged),
+ * which is why it is not the dropdown order alone.
+ */
+function townLapRank(townName: string, boardNames: string[]): number {
+  const boardIndex = boardNames.indexOf(townName);
+  if (boardIndex >= 0) return boardIndex;
+  const dropdownIndex = getTownNumberByName(townName);
+  if (dropdownIndex !== null) return boardNames.length + dropdownIndex;
+  return Number.POSITIVE_INFINITY;
+}
+
+/**
+ * Queue one lap: one task per town that has upgrades saved, for the town's
+ * first saved upgrade only, in board order.
  *
  * Any pending upgrade tasks are cleared first so pressing Start twice does not
- * queue everything twice. Towns are ordered by name, matching the original.
+ * queue everything twice.
+ *
+ * One task per town, not one per saved upgrade. Queueing every upgrade had a
+ * busy town's entries sent to the back over and over, so the runner hopped
+ * between towns every second; and the reload that re-queued them from the
+ * first town again kept the last towns from ever being reached.
  */
 export function enqueueAutoBuild(): number {
   const { accountName, queue } = getState();
@@ -202,25 +229,30 @@ export function enqueueAutoBuild(): number {
     return 0;
   }
 
-  const towns = [...account.townList].sort(
-    compareValues<AutoBuildTown>("townName"),
+  const boardNames = qsa(SEL.buildTabTownNames).map(
+    (span) => span.textContent?.trim() ?? "",
   );
-  let added = 0;
+  const towns = account.townList
+    .filter((town) => town.queue.length > 0)
+    .sort(
+      (a, b) =>
+        townLapRank(a.townName, boardNames) -
+          townLapRank(b.townName, boardNames) ||
+        a.townName.localeCompare(b.townName),
+    );
   for (const town of towns) {
-    for (const entry of town.queue) {
-      queue.push({
-        type: "upgradeBuilding",
-        data: {
-          townName: town.townName,
-          positionId: entry.positionId,
-          buildingName: entry.buildingName,
-        },
-      });
-      added++;
-    }
+    const [first] = town.queue;
+    queue.push({
+      type: "upgradeBuilding",
+      data: {
+        townName: town.townName,
+        positionId: first.positionId,
+        buildingName: first.buildingName,
+      },
+    });
   }
-  logInfo(`Auto Build: queued ${added} upgrades`);
-  return added;
+  logInfo(`Auto Build: queued ${towns.length} towns`);
+  return towns.length;
 }
 
 /* ────────────────────────────── Task handler ───────────────────────────── */
@@ -265,6 +297,19 @@ function isTownBuilding(): boolean {
   return qs(SEL.constructionSite) !== null;
 }
 
+/**
+ * End this town's turn in the lap, leaving its saved upgrade for the next one.
+ *
+ * `done`, not `defer`: the task is one visit, and the visit is over. Deferring
+ * kept it circling the queue, a town switch each time round, which is what had
+ * the runner hopping between towns non-stop. The saved build list, which is
+ * what the next lap is queued from, is not touched.
+ */
+function endTownTurn(reason: string): TaskResult {
+  logInfo(`${reason} - next town`);
+  return { status: "done" };
+}
+
 export async function handleUpgradeBuilding(
   task: Extract<Task, { type: "upgradeBuilding" }>,
 ): Promise<TaskResult> {
@@ -272,7 +317,7 @@ export async function handleUpgradeBuilding(
 
   // Upgrades are only reachable from the town view.
   if (!qs(SEL.cityBread)) {
-    backToCity();
+    backToCity("Auto Build needs the town view");
     return { status: "retry", reason: "Not on the town view" };
   }
 
@@ -288,12 +333,11 @@ export async function handleUpgradeBuilding(
   closeGamePopup();
   await sleep(TOWN_SETTLE_MS);
 
-  // A town can only build one thing at a time. `defer`, not `retry`: the
-  // original explicitly moved on to the next town here ("This town is
-  // inprogress, Next>>"), and holding the head would block every other
-  // town's upgrade until this build finished.
+  // A town can only build one thing at a time. The original moved on to the
+  // next town here ("This town is inprogress, Next>>"); holding the head
+  // would block every other town's upgrade until this build finished.
   if (isTownBuilding()) {
-    return { status: "defer", reason: `${townName} is already building` };
+    return endTownTurn(`${townName} is already building`);
   }
 
   logInfo(`Start upgrading ${buildingName}`);
@@ -347,11 +391,10 @@ export async function handleUpgradeBuilding(
 
   if (!button) {
     // Specific to this building (usually not enough resources), so let the
-    // rest of the queue past rather than stalling on it.
-    return {
-      status: "defer",
-      reason: `${buildingName}: upgrade button unavailable (not enough resources?)`,
-    };
+    // rest of the lap past rather than stalling on it.
+    return endTownTurn(
+      `${buildingName}: upgrade button unavailable (not enough resources?)`,
+    );
   }
 
   // Last look before committing. Opening the building took a round trip, and
@@ -359,10 +402,7 @@ export async function handleUpgradeBuilding(
   // a build started in between (by the player, or by the town finishing a
   // queued one) would otherwise be clicked straight over.
   if (isTownBuilding()) {
-    return {
-      status: "defer",
-      reason: `${townName} started building meanwhile`,
-    };
+    return endTownTurn(`${townName} started building meanwhile`);
   }
 
   button.click();
@@ -390,15 +430,11 @@ export async function handleUpgradeBuilding(
 
   if (!started) {
     // Keep the entry. Worst case the upgrade did start and we simply failed to
-    // see it, in which case the next lap finds the town building and defers.
-    logInfo(
+    // see it, in which case the next lap finds the town building and moves on.
+    return endTownTurn(
       `${buildingName} in ${townName}: clicked Upgrade but no building site ` +
         `appeared - leaving it queued`,
     );
-    return {
-      status: "defer",
-      reason: `${buildingName}: the upgrade did not start`,
-    };
   }
 
   logInfo(`Finished upgrading ${buildingName}`);
@@ -513,7 +549,7 @@ export async function scanBuildings(
     }
   } finally {
     scanning = false;
-    backToCity();
+    backToCity("building scan finished");
   }
 
   const summary = SCAN.walkFinished(visited, limit, failed.join(", "));

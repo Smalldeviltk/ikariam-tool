@@ -10,13 +10,7 @@
 import { qs, qsa } from "@core/dom";
 import { parseGameNumber } from "@core/format";
 import { SEL } from "@core/ikariam/selectors";
-
-/**
- * Capacity used for the estimate. The original hard-coded 520 (a low-level
- * merchant ship) rather than the calibrated value; kept so the displayed number
- * does not change unexpectedly.
- */
-const ESTIMATE_CAPACITY = 520;
+import { getPerShipCapacity } from "../ship-capacity";
 
 const MARKER_CLASS = "needingShip";
 
@@ -34,7 +28,9 @@ function annotate(containerSelector: string, addOne: boolean): void {
 
   const node = document.createElement("li");
   node.className = MARKER_CLASS;
-  const ships = Math.round(total / ESTIMATE_CAPACITY);
+  // One merchant ship's cargo: the calibrated figure, 500 until calibrated.
+  // The original hard-coded 520, which is right for one research level only.
+  const ships = Math.round(total / getPerShipCapacity());
   node.innerHTML = addOne ? String(ships + 1) : `${ships} (${total})`;
   container.appendChild(node);
 }

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  TabLock,
   TaskQueue,
   TaskRunner,
   type NewTask,
@@ -58,6 +59,135 @@ function withAmount(task: Task, amount: number): Task {
 const build = (townName: string): NewTask => ({
   type: "upgradeBuilding",
   data: { townName, positionId: "p1", buildingName: "Warehouse 2" },
+});
+
+/**
+ * A Web Locks manager shared by every "tab" given it, as the browser's is
+ * shared by every page of one origin: one holder per name, the others queued
+ * in order, and an abort taking a waiter out of the queue.
+ */
+function fakeLockManager(): LockManager {
+  const held = new Set<string>();
+  const waiting = new Map<string, Array<() => void>>();
+
+  function request(
+    name: string,
+    optionsOrCallback: LockOptions | LockGrantedCallback<unknown>,
+    maybeCallback?: LockGrantedCallback<unknown>,
+  ): Promise<unknown> {
+    const options =
+      typeof optionsOrCallback === "function" ? {} : optionsOrCallback;
+    const callback =
+      typeof optionsOrCallback === "function"
+        ? optionsOrCallback
+        : maybeCallback!;
+    return new Promise((resolve, reject) => {
+      const grant = () => {
+        held.add(name);
+        Promise.resolve()
+          .then(() => callback({ name, mode: "exclusive" } as Lock))
+          .then(resolve, reject)
+          .finally(() => {
+            held.delete(name);
+            waiting.get(name)?.shift()?.();
+          });
+      };
+      if (!held.has(name)) {
+        grant();
+        return;
+      }
+      const queue = waiting.get(name) ?? [];
+      waiting.set(name, queue);
+      queue.push(grant);
+      options.signal?.addEventListener("abort", () => {
+        const index = queue.indexOf(grant);
+        if (index < 0) return;
+        queue.splice(index, 1);
+        reject(new DOMException("Aborted", "AbortError"));
+      });
+    });
+  }
+
+  return {
+    request,
+    query: async () => ({ held: [], pending: [] }),
+  } as unknown as LockManager;
+}
+
+/** Let the lock manager's promise chains settle. */
+async function settle(): Promise<void> {
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+}
+
+describe("TabLock", () => {
+  it("grants the lock to one tab at a time, then to the one waiting", async () => {
+    const locks = fakeLockManager();
+    const first = new TabLock("ika-task-runner:tester", locks);
+    const second = new TabLock("ika-task-runner:tester", locks);
+
+    first.acquire();
+    second.acquire();
+    await settle();
+    expect(first.isHeld).toBe(true);
+    expect(second.isHeld).toBe(false);
+
+    first.release();
+    await settle();
+    expect(first.isHeld).toBe(false);
+    expect(second.isHeld).toBe(true);
+  });
+
+  it("a tab that stops waiting is never granted the lock", async () => {
+    const locks = fakeLockManager();
+    const first = new TabLock("ika-task-runner:tester", locks);
+    const second = new TabLock("ika-task-runner:tester", locks);
+    const third = new TabLock("ika-task-runner:tester", locks);
+
+    first.acquire();
+    second.acquire();
+    third.acquire();
+    await settle();
+    second.release();
+    first.release();
+    await settle();
+
+    expect(second.isHeld).toBe(false);
+    expect(third.isHeld).toBe(true);
+  });
+
+  it("does not stand in the way of another account", async () => {
+    const locks = fakeLockManager();
+    const one = new TabLock("ika-task-runner:tester", locks);
+    const other = new TabLock("ika-task-runner:SClone1", locks);
+
+    one.acquire();
+    other.acquire();
+    await settle();
+
+    expect(one.isHeld).toBe(true);
+    expect(other.isHeld).toBe(true);
+  });
+
+  it("reports each grant and each release", async () => {
+    const onChange = vi.fn();
+    const lock = new TabLock(
+      "ika-task-runner:tester",
+      fakeLockManager(),
+      onChange,
+    );
+
+    lock.acquire();
+    await settle();
+    lock.release();
+
+    expect(onChange.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it("grants at once where the browser has no Web Locks", () => {
+    const lock = new TabLock("ika-task-runner:tester", null);
+    lock.acquire();
+    expect(lock.isHeld).toBe(true);
+  });
 });
 
 describe("TaskQueue", () => {
@@ -357,6 +487,63 @@ describe("TaskRunner", () => {
     await tick();
     expect(queue.length).toBe(0);
   });
+
+  it(
+    "does nothing while `canRun` says no — not even the drain, which would " +
+      "reload a waiting tab for a run it took no part in",
+    async () => {
+      const onDrain = vi.fn();
+      let allowed = false;
+      const { runner, calls } = runnerWith(
+        { status: "done" },
+        { onDrain, canRun: () => allowed },
+      );
+      runner.start();
+      await tick(3);
+      expect(onDrain).not.toHaveBeenCalled();
+
+      queue.push(ship("1"));
+      await tick(2);
+      expect(calls).toHaveLength(0);
+
+      allowed = true;
+      await tick();
+      expect(calls).toHaveLength(1);
+    },
+  );
+
+  it(
+    "REGRESSION: two tabs of one account no longer run the same task — the " +
+      "queue is shared through localStorage and nothing kept a second tab " +
+      "from driving it too",
+    async () => {
+      const store = memoryStore();
+      const locks = fakeLockManager();
+      queue = new TaskQueue(store, "q");
+      queue.push(ship("1"));
+
+      const runs: string[] = [];
+      function tab(name: string): TaskRunner {
+        const lock = new TabLock("ika-task-runner:tester", locks);
+        lock.acquire();
+        return new TaskRunner(new TaskQueue(store, "q"), {
+          intervalMs: 1000,
+          canRun: () => lock.isHeld,
+        }).register("sendResource", async () => {
+          runs.push(name);
+          // Slow enough that the other tab's tick lands while it runs.
+          await new Promise((resolve) => setTimeout(resolve, 2500));
+          return { status: "done" } as TaskResult;
+        });
+      }
+
+      tab("first").start();
+      tab("second").start();
+      await vi.advanceTimersByTimeAsync(6000);
+
+      expect(runs).toEqual(["first"]);
+    },
+  );
 
   it("stop() halts processing and isBusy is false when idle", async () => {
     queue.push(ship("1"));

@@ -43,6 +43,13 @@ export const PANEL = {
   /** The footer, while tasks are waiting. */
   footerWithQueue: (status: string, pending: number) =>
     `${status}  —  ${pending} queued`,
+  footerWithCounters: (
+    status: string,
+    merchants: number,
+    freighters: number,
+    actionPoints: number,
+  ) =>
+    `${status}  —  Idle ships ${merchants} + ${freighters} freighters  ·  AP ${actionPoints}`,
 } as const;
 
 export const WINE_WARNING = {
@@ -72,15 +79,16 @@ export const SEND_DIALOG = {
   title: "Mass transport resources",
   from: "From: ",
   destination: "Destination: ",
-  resource: "Resource: ",
   amount: "Amount: ",
   removeFirst: "Remove First",
   removeLast: "Remove Last",
   columns: ["Origin", "Destination", "Resource", "Amount", "Source"],
   errors: {
-    incomplete: "Please fill in every field.",
+    incomplete: "Please choose both towns.",
     sameTown: "Source and destination are the same!",
-    noAmount: "Amount must be greater than 0!",
+    noAmount: "Enter an amount for at least one resource.",
+    invalidAmount: (resources: string) =>
+      `Amounts must be whole numbers greater than 0: ${resources}`,
   },
 } as const;
 
@@ -147,7 +155,6 @@ export const BUILD_DIALOG = {
   buildingList: "List Building",
   emptyTown: "-empty-",
   savedAsYouGo: "Changes are saved as you add or remove entries.",
-  runQueue: "Run queue",
 } as const;
 
 export const SCAN = {
