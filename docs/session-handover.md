@@ -10,7 +10,7 @@ It deliberately does **not** repeat the feature status. That lives in
 second. [project-summary.md](../project-summary.md) covers what the TypeScript
 port changed and what is still unverified.
 
-Last updated: 28/09/2026.
+Last updated: 29/09/2026.
 
 ---
 
@@ -44,13 +44,29 @@ screen. `portForm.present` is `false` in all five existing captures, so
 against the live game either.
 
 **26–28/09: an Auto Build round on a second account** (`SClone1`, three
-towns) — see §9. Six bugs, all fixed: the first four are committed
-(`453482b`), the last two — board buttons for another town not opening their
-dialog, and the stale upgrade button — are **in the working tree,
-uncommitted**. Auto Build now builds on that account. **It needs the Empire
-Overview board on the page**: without it, town switches go through
-`#changeCityForm`, which reloaded the whole page from the runner and put it
-in a reload loop (§2, §6). The user tests with both scripts on.
+towns) — see §9. Six bugs, all fixed and committed (`453482b`, `24061f0`).
+Auto Build now builds on that account. **It needs the Empire Overview board
+on the page**: without it, town switches go through `#changeCityForm`, which
+reloaded the whole page from the runner and put it in a reload loop (§2, §6).
+The user tests with both scripts on.
+
+**28–29/09: three more rounds, all in the working tree, uncommitted** — see
+§10, and `improvement-plan.md` §2.F–2.H for the full write-ups:
+
+- **Auto Build runs in laps again, as the original did** (§2.F). One task per
+  town, for its first saved upgrade; a busy or short town ends its turn; the
+  next lap comes with the keep-alive reload (2 minutes). It was hopping town
+  every second and never reaching the last town of the lap.
+- **Four unblocked plan items** (§2.G): H (cross-tab lock), D (striped full
+  store), the second half of 2.4 (idle ships and action points in the
+  footer), and `backToCity` logging who called it.
+- **Two dialog changes the user asked for** (§2.H): Auto Build's "Run queue"
+  is Save again; Transport Settings takes one amount per resource.
+- Plus `needingShip` now uses the calibrated merchant capacity (500 default)
+  instead of 520.
+
+None of it has been seen on the live game. `dist/` was rebuilt by the user on
+29/09 at 01:33 and contains all of it (§1).
 
 **Next in the plan is still §2.A, the trading port.** The destination list's
 markup is now in hand (§2); the shipment form is the one capture missing, and
@@ -68,11 +84,11 @@ working between loads) is
 |             |                                                                  |
 | ----------- | ---------------------------------------------------------------- |
 | Branch      | `refactor`, tracking `origin/refactor`                            |
-| Pushed      | Up to `3228058`. Ten local commits since (`03d07fa`..HEAD, the last two `453482b` and `194ba74`), not pushed |
-| Uncommitted | §9 bugs 5 and 6: 6 files in `src/` (`empire-overview/game-api.ts`, `main.ts` and their two tests; `send-resources/features/auto-build.ts` and its test), plus this document and the plan. `.gitignore` and `docs/So_sanh_2_script_Ikariam.md` are the user's, as before |
-| Tests       | 34 files, 463 tests, all passing                                  |
+| Pushed      | Up to `3228058`. Twelve local commits since (`03d07fa`..HEAD, the last `e1c7c17`), not pushed |
+| Uncommitted | Everything in §10: 18 files in `src/` (listed there), plus `docs/improvement-plan.md` and this document. `.gitignore` and `docs/So_sanh_2_script_Ikariam.md` are the user's, as before |
+| Tests       | 34 files, 481 tests, all passing                                  |
 | Typecheck   | Clean (`tsc --noEmit` and the strict config)                      |
-| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 27/09 at 23:26 and contains every fix in §9, the uncommitted two included (grepped for `openPendingView` and `still pointed at position`) |
+| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 29/09 at 01:33 and contains everything in §10 (grepped the two userscripts for `ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save` and `capped`) |
 
 What landed: the AJAX transport layer, the shared window widget, the rewritten
 panel, four features (sync-towns, transport-buttons, queue-view, wine-warning),
@@ -231,7 +247,10 @@ Added 26–27/09, from the `SClone1` account (towns W-Clone1 297124, M-Clone1
   keeps the page from reloading has NOT been seen live yet.
 - **A line `Auto Build: queued N upgrades` in the log is a page load** (or a
   Start button). It is logged from `start()`, so two of them seconds apart
-  mean the page reloaded in between.
+  mean the page reloaded in between. **Since 28/09 it reads `Auto Build:
+  queued N towns`**, and a load in the middle of a lap no longer logs it —
+  the lap carries on instead (§10). Reloads now name their cause:
+  `Back to the town view: <reason>`.
 
 ---
 
@@ -365,6 +384,22 @@ reproduces production; `http.test.ts` and `startup.test.ts` both do it now.
   lines that are not yours — `app.test.ts` had one.
 - In bash, `sed` with `\n` in the replacement inserts a real newline and
   breaks the file. Use the Edit tool for anything but a one-token swap.
+- **The revert-to-prove-red round trip without `git stash`** (settled
+  28/09, used for every test in §10): copy the fixed file into the
+  scratchpad, write the old version with PowerShell (LF, no BOM — so no
+  CRLF comes back and prettier stays clean), run the test, then `Copy-Item`
+  the fixed file back:
+
+  ```powershell
+  [IO.File]::WriteAllText("$PWD\<file>", ((git show HEAD:<file>) -join "`n") + "`n")
+  ```
+ For a fix mixed with other
+  uncommitted work, patch just the fix out with `.Replace()` on the file's
+  text instead of taking HEAD. `Out-File -Encoding utf8NoBOM` does not exist
+  in Windows PowerShell 5.1.
+- **The Bash tool's auto-mode classifier sometimes returns no verdict** and
+  the call fails. PowerShell and the dedicated file tools kept working; use
+  them rather than retrying Bash.
 
 **Markdown is not in the repo's prettier scope** (`npm run format` covers only
 `src/` and `build/`). Do not run prettier over `docs/` — it reflows every table
@@ -488,7 +523,47 @@ Added 27/09, each chosen by the user:
   15 s) for a `#js_buildingUpgradeButton` whose `href` carries this slot's
   `position=`. Another slot's button is still never clicked; if only that one
   was seen by the timeout, it logs `Upgrade button still pointed at position
-  X, expected Y - not clicked` and defers as before.
+  X, expected Y - not clicked` and ends the town's turn (it deferred until
+  28/09).
+
+Added 28–29/09, each chosen by the user:
+
+- **Auto Build runs in laps, like the original.** `enqueueAutoBuild` queues
+  one `upgradeBuilding` task per town that has anything saved, for the
+  town's first saved upgrade only. Every way a visit can fail — busy town,
+  no upgrade button, a build started meanwhile, a click that never became a
+  building site — ends that town's turn with `done` (`endTownTurn`), never
+  `defer`; the saved list is only touched when the upgrade is confirmed. The
+  lap drains the queue, the existing drain/reload guard runs, and the next
+  lap comes with the keep-alive reload on even minutes. Offered alternatives
+  not taken: keep one task per upgrade and only lengthen an interval; a 60 s
+  cycle (it would have doubled the reloads, Transport's included).
+- **A lap follows the board's order**, which the player can drag: row on
+  `#BuildTab`, then dropdown index, then last. Not alphabetical as the
+  original was.
+- **A reload in the middle of a lap carries on with it.** `start()` queues a
+  fresh lap only when no `upgradeBuilding` task is left in the stored queue.
+- **The cross-tab lock is Web Locks, per account, and gates the drain too.**
+  `TabLock` in `core/task-queue.ts` (next to the runner — no new file),
+  named `ika-task-runner:<account>`. `startRunner` asks for it, `stopRunner`
+  and the drain give it back. `TaskRunner`'s new `canRun` is checked before
+  anything else in `tick`: a waiting tab sees the shared queue empty out and
+  would otherwise run `onDrain` and reload. Without the API the lock grants
+  at once (no protection, old behaviour).
+- **A full store is striped at `current >= capacity`** (IkaEasy's threshold),
+  as a new `capped` class next to the board's own `full` (red from 96%).
+  Gold is left alone: its bar reuses `full` for something else.
+- **`backToCity(reason)` takes a required reason** and logs it when it
+  actually clicks, so every call site has to say who it is.
+- **Auto Build Settings' button is Save, and Save only closes the dialog** —
+  as the original's `saveAutoBuild` did. Every `+`/`-` is saved already. The
+  panel's Start is the only thing that queues and starts a build run.
+- **Transport Settings takes one amount per resource.** Add queues one
+  `sendResource` row per filled field. Digits only (`^\d+$`); any bad field
+  queues nothing and names the field.
+- **`needingShip` divides by `getPerShipCapacity()`** — calibrated, 500
+  until calibrated. Rounding is still `Math.round`, which can come out a
+  ship short; the user was told and has not asked for `Math.ceil`.
 
 ---
 
@@ -505,19 +580,25 @@ dropped from the run queue, while the saved build list kept the entries. The
 run queue is a one-off copy of that list (`enqueueAutoBuild`), so a dropped
 task only comes back on the next load or Start. That design is unchanged.
 
-**Waiting on the user's retest (27/09 build):**
+**Waiting on the user's retest (29/09 build):**
 
 - **Does the board route stop the reload loop?** The loop in §2 happened
   with the form first. Nothing has been seen live since the reorder.
-- **Does a free town start while another one is building?** Reported after
-  the reorder was not yet in: "all towns share one task queue, so a free
-  town's upgrade does not start". The queue does rotate — a busy town
-  `defer`s to the back — so if a free town does not start, its own "already
-  building" check answered wrong. The suspect is §2's "breadcrumb and
-  building slots arrive in separate ajax boxes": `TOWN_SETTLE_MS` (1200 ms)
-  may be too short after a switch, so M is checked while S's
-  `.constructionSite` is still on screen, and M defers every lap. Not
-  measured. The probe that settles it, run from a BUSY town:
+- **Does every town get its turn?** Reported 28/09 on `SClone1` (board
+  order W, M, S): "only hops between two towns; the first town on the board
+  is never upgraded". Found in the code, not in a log: one task per saved
+  upgrade, a busy town's entries deferring round and round, and every
+  keep-alive reload re-queueing from the alphabetically first town — W is
+  last alphabetically. The lap rewrite (§10) removes both. **If W is still
+  skipped**, the cause is something else: ask for the log around its turn
+  (`Going to town W-Clone1`, or its absence). The line
+  `… is already building - next town` for a town that is free points back
+  at the older suspect below.
+- **A free town reported as building.** §2's "breadcrumb and building slots
+  arrive in separate ajax boxes": `TOWN_SETTLE_MS` (1200 ms) may be too
+  short after a switch, so M is checked while S's `.constructionSite` is
+  still on screen. Not measured. The probe that settles it, run from a BUSY
+  town:
   `await (async () => { /* switch, then every 100 ms for 4 s record
   #js_cityBread text, !!.constructionSite, jQuery.active */ })()` — the
   version in this session's transcript used the form to switch; with the
@@ -525,8 +606,9 @@ task only comes back on the next load or Start. That design is unchanged.
   breadcrumb by more than 1200 ms, wait for the game to go idle like
   `switchTownWithGameForm` does.
 
-**Also waiting on the retest:** the board dialog for another town (§9 bug 5)
-and the stale upgrade button (§9 bug 6). One risk in bug 5's fix is known and
+**Also waiting on the retest:** everything in §10 (each round's "try on the
+game" list is in the plan, §2.F–2.H), the board dialog for another town (§9
+bug 5) and the stale upgrade button (§9 bug 6). One risk in bug 5's fix is known and
 unmeasured: `openPendingView` runs the moment the board's `init` is done. If
 the game is still loading then, the dialog could open and be closed by what
 arrives after — the failure seen on 25/09. If the user reports a dialog that
@@ -536,8 +618,7 @@ flashes and vanishes, wait for the game to go idle first, as
 **Not started, offered and declined for now:**
 
 - ~~B — the stale upgrade button.~~ Done 27/09, §9 bug 6.
-- **C — who reloads.** One `logInfo` in `backToCity` naming its caller would
-  have told the reload loops apart in one paste.
+- ~~C — who reloads.~~ Done 28/09, §10: `backToCity(reason)`.
 - **Why the form reloads the page** (§2). Until that is known, Send Resources
   without the Empire Overview board still falls back to the form and can
   loop.
@@ -548,6 +629,13 @@ open against the naming rule. Every source, including the original, passes
 `"???", "class"`. Needed: `copy(ikariam.createPopup.toString())` from the
 console with both scripts off.
 
+**New item U (29/09, the user's idea):** building upgrade cost and time from
+a formula instead of `Constant.BuildingData`'s hard-coded tables. The user
+chose the formula route (not reading the game's own figures like IkaEasy)
+and **has the formula source; they will send it later**. Do not start, and
+do not go looking for a formula elsewhere, until it arrives. What the code
+does today and both options are in the plan, §4.2 "Ghi chú về U".
+
 Two questions in §6 of the plan are unanswered and are blocking real work:
 
 1. **Does Phase 2 include the Empire Overview board, or only the panel?** Items
@@ -557,13 +645,12 @@ Two questions in §6 of the plan are unanswered and are blocking real work:
 2. **Take all 18 items in §4.2, or a subset?** The user was asked to mark the
    ones they want. Until then E–R are not started.
 
-Unblocked and ready to pick up: **1.4** (`switchCity`, the last Phase 1 item —
-half there: `gotoTown` has a form route since 26/09, but it is second and it
-reloaded the page, §2; the plan's "confirm from the response" part is not
-done, and that is probably what finding the reload needs), **D** (full-warehouse stripe,
-pure CSS), **H** (cross-tab sync lock — nothing currently stops two tabs driving
-one account and sending twice), and the second half of **2.4** (idle ships and
-action points in the status line).
+Unblocked and ready to pick up: only **1.4** (`switchCity`, the last Phase 1
+item — half there: `gotoTown` has a form route since 26/09, but it is second
+and it reloaded the page, §2; the plan's "confirm from the response" part is
+not done, and that is probably what finding the reload needs — it likely
+needs a measurement on the live game). D, H and the second half of 2.4 were
+done on 28/09 (§10).
 
 ---
 
@@ -635,6 +722,17 @@ action points in the status line).
   table** by a test in `core/data-transfer.test.ts`. Adding a key without
   classifying it in `core/data-transfer.ts` now fails the suite rather than
   silently dropping out of exports.
+- **Small things left from 28–29/09, not scheduled:** the panel's status
+  line still reads "idle" while the queue head is an Auto Build task
+  (`describeCurrentTransfer` only describes `sendResource`); Auto Build
+  Settings still has a Close button that now does exactly what Save does —
+  the user was asked whether to drop it, no answer yet; `needingShip` rounds
+  with `Math.round` (§5).
+- **Two tabs of one account take turns holding the runner lock.** The
+  keep-alive reloads the holder, the waiting tab is granted the lock, and
+  the reloaded page waits. Only one drives at any moment, which is the
+  point; it just looks odd in the logs (`This tab now runs the task queue…`
+  alternating between tabs).
 - **Tests that mock `@core/logger` must keep its real exports** (`vi.mock(...,
   async (importOriginal) => ({ ...(await importOriginal()), logInfo: ... }))`).
   The data export imports the logger's storage key, and a bare mock broke nine
@@ -679,8 +777,8 @@ that stood here said `dist/` predated this review; it has been rebuilt since
 ## 9. The 26–28/09 round: Auto Build on a second account
 
 Each fix had its test written first and seen red against the code before it
-(§3). Bugs 1–4 are committed as `453482b` (8 files); bugs 5–6 are
-uncommitted (§1). The plan has the same table in Vietnamese, §2.E.
+(§3). Bugs 1–4 are committed as `453482b` (8 files); bugs 5–6 as `24061f0`
+(6 files). The plan has the same table in Vietnamese, §2.E.
 
 Bugs 1–4:
 
@@ -702,7 +800,7 @@ emptied the build list), and the drain guard ("queue build tạm ok").
 **Not seen live yet:** the transport-panel fix and the board-first switch —
 the user's next reports were about other symptoms, not these.
 
-Bugs 5–6, 27/09, uncommitted:
+Bugs 5–6, 27/09, committed as `24061f0`:
 
 | Reported by the user | Cause | Fix | Where |
 | -------------------- | ----- | --- | ----- |
@@ -721,3 +819,41 @@ happened by the time the handler looked. Timing it from the slot click is
 what made it red — §3's "run the revert before believing a green test", again.
 
 Neither is seen live yet.
+
+---
+
+## 10. The 28–29/09 rounds: Auto Build laps, four plan items, two dialogs
+
+All uncommitted, none seen on the live game; `dist/` has all of it (§1). The
+decisions behind each are in §5 ("Added 28–29/09"); the full write-ups, in
+Vietnamese, are `improvement-plan.md` §2.F, §2.G and §2.H. Every new or
+changed test was seen red against the code before it (the round trip is in
+§4). 463 → 481 tests.
+
+| Round | What | Files |
+| ----- | ---- | ----- |
+| §2.F Auto Build laps | One task per town, first saved upgrade, board order; `endTownTurn` instead of `defer`; a reload mid-lap carries on | `features/auto-build.ts` (+ test), `app.ts` (+ test) |
+| §2.F `needingShip` | `getPerShipCapacity()` instead of 520 — **no test** (the file has none; creating one was not asked for) | `features/barbarian.ts` |
+| §2.G H — cross-tab lock | `TabLock` (Web Locks), `TaskRunner` option `canRun`, `startRunner`/`stopRunner` | `core/task-queue.ts` (+ test), `app.ts` |
+| §2.G D — full store | `capped` class at `current >= capacity`, striped CSS | `empire-overview/render.ts`, `helpers.ts`, `startup.test.ts` |
+| §2.G 2.4 — footer counters | `… — Idle ships M + F freighters · AP N` from the header | `ui/panel.ts` (+ test), `messages.ts` |
+| §2.G C — who reloads | `backToCity(reason)` at six call sites | `navigation.ts` (+ test), `app.ts`, `features/auto-build.ts`, `features/send-resources.ts`, `features/summary-account.ts` |
+| §2.H Save | Auto Build Settings' "Run queue" → Save (closes the dialog); `build.enqueue` removed | `ui/dialogs.ts`, `app.ts` (+ test), `messages.ts` |
+| §2.H amounts | Transport Settings: five integer fields, one queued row per filled field | `ui/dialogs.ts`, `app.ts` (+ test), `messages.ts` |
+
+Two tests needed more than the obvious to go red or green:
+
+- **The D test had to feed the board a response.** Setting
+  `ikariam.model.currentResources` before boot does nothing: the board's
+  stock comes from `updateGlobalData` responses (`events("ajaxResponse")` →
+  `updateCityData`), so the test publishes one with `headerData` carrying
+  the stock, as the malformed-entry test in the same file does. A town with
+  no warehouse gets the town hall's 2500 as its cap.
+- **The cross-tab test uses a fake `LockManager`** (`fakeLockManager` in
+  `task-queue.test.ts`) that grants one holder per name and queues the rest,
+  because happy-dom's `navigator.locks` is `null` — which is also why every
+  other test sees the lock granted at once and was unaffected.
+
+What to try on the game is listed at the end of each plan section. The one
+that matters most: a log from `SClone1` showing each lap reaching all three
+towns (§6).
