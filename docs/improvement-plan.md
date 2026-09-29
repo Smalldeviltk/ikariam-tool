@@ -1,20 +1,32 @@
 # Kế hoạch cải thiện — UI và tính năng
 
-> Trạng thái: **đang thực hiện.** Cập nhật 28/09/2026.
+> Trạng thái: **đang thực hiện.** Cập nhật 29/09/2026.
 >
 > Đã xong: Phase 1 trừ 1.4 (◐) · Phase 2 phần panel (2.1–2.5) · A, B, C, D, H.
 > Còn lại: 1.4 · 2.6–2.8 (board, chờ câu hỏi 2) · E–G, I–T.
 >
-> **Đợt gần nhất (§2.H, 29/09, chưa commit):** hai chỉnh sửa hộp thoại do
+> **Đợt gần nhất (§2.J, 29/09, commit `a62e8dd`):** hết tàu rảnh thì lệnh gửi
+> hàng giữ đầu queue và **chặn luôn các task upgrade** phía sau. Runner giờ
+> chỉ chặn task **cùng loại** với task trả `retry`; upgrade chạy tiếp, lệnh
+> gửi giữ thứ tự và được thử lại khi hết việc khác.
+>
+> **Đợt §2.I (29/09, commit `a62e8dd`):** bốn chỉnh sửa do người dùng
+> yêu cầu — Transport Settings xếp tên tài nguyên và ô số thành hai cột;
+> "Warning wine" không còn bật cho town không tụt rượu; mọi `window.alert`
+> của hai script thành **toast tự tắt** (`confirm()` giữ nguyên); board
+> Empire Overview chỉ hiện **5 hàng town**, còn lại cuộn, header và dòng tổng
+> đứng yên.
+>
+> **Đợt §2.H (29/09, commit `1f7c0e7`):** hai chỉnh sửa hộp thoại do
 > người dùng yêu cầu — nút "Run queue" của Auto Build thành **Save** như bản
 > gốc; Transport Settings nhập **một ô số cho mỗi loại tài nguyên** thay cho
 > dropdown, Add thêm một dòng cho mỗi ô đã nhập.
 >
-> **Đợt §2.G (28/09, chưa commit):** H (khoá nhiều tab), D (sọc kho
+> **Đợt §2.G (28/09, commit `1f7c0e7`):** H (khoá nhiều tab), D (sọc kho
 > đầy), nửa sau của 2.4 (tàu rảnh + action point trên footer), và log ai gọi
 > `backToCity`.
 >
-> **Đợt §2.F (28/09, chưa commit):** Auto Build chạy lại theo
+> **Đợt §2.F (28/09, commit `1f7c0e7`):** Auto Build chạy lại theo
 > **vòng** như bản gốc — mỗi town có queue được ghé một lần, thử entry đầu
 > tiên, hết vòng thì nghỉ tới lần keep-alive reload (2 phút). Hết cảnh nhảy
 > town liên tục và town cuối vòng không bao giờ tới lượt. Kèm theo:
@@ -528,7 +540,7 @@ này. Mỗi bản sửa đều có test viết trước và đã thấy đỏ tr
 
 ### 2.F Auto Build chạy theo vòng như bản gốc, và `needingShip` (28/09/2026)
 
-**Chưa commit, chưa build lại `dist/`, chưa thử trên game.**
+**Đã commit (`1f7c0e7`, tài liệu ở `4841fb9`), chưa push. Có trong `dist/` từ bản build 29/09 01:33. Chưa thử trên game.**
 
 **Người dùng báo** (tài khoản `SClone1`, board xếp W-Clone1, M-Clone1,
 S-Clone1):
@@ -586,7 +598,7 @@ tạo). Chưa đổi: số tàu vẫn làm tròn bằng `Math.round`, nên có t
 
 ### 2.G Bốn việc không chờ gì (28/09/2026)
 
-**Chưa commit, chưa build lại `dist/`, chưa thử trên game.** Người dùng chọn
+**Đã commit (`1f7c0e7`, tài liệu ở `4841fb9`), chưa push. Có trong `dist/` từ bản build 29/09 01:33. Chưa thử trên game.** Người dùng chọn
 cả bốn; làm theo thứ tự H → D → 2.4 → C. Mỗi việc có test, và test đó đã thấy
 **đỏ trên code cũ** (bỏ phần sửa, chạy, khôi phục). 34 file, 477 test,
 typecheck sạch.
@@ -617,7 +629,7 @@ typecheck sạch.
 
 ### 2.H Hai chỉnh sửa hộp thoại (29/09/2026)
 
-**Chưa commit, chưa build lại `dist/`, chưa thử trên game.** Người dùng yêu
+**Đã commit (`1f7c0e7`, tài liệu ở `4841fb9`), chưa push. Có trong `dist/` từ bản build 29/09 01:33. Chưa thử trên game.** Người dùng yêu
 cầu. Bốn test mới, cả bốn đã thấy **đỏ trên code cũ**. 34 file, 481 test,
 typecheck sạch.
 
@@ -631,6 +643,241 @@ typecheck sạch.
 
 **Cần thử trên game:** Add với ba ô có số → bảng dưới hộp thoại có ba dòng;
 Save trong Auto Build Settings đóng hộp thoại và không đổi town.
+
+### 2.I Bốn chỉnh sửa người dùng yêu cầu (29/09/2026)
+
+**Đã commit (`a62e8dd`, tài liệu ở commit ngay sau), chưa push. Chưa thử trên game.** `dist/` do người dùng build lúc 29/09
+21:24 đã có đủ bốn phần (đã grep hai userscript: `ika-send-amounts`,
+`ika-toast`, `drains`, `fitTownRows`, `:scope > tbody > tr`). 34 file,
+481 → 496 test, typecheck (cả cấu hình strict) và prettier sạch.
+
+#### 1. Layout ô số lượng trong Transport Settings
+
+Người dùng đưa mẫu HTML/CSS: mỗi tài nguyên một dòng, tên bên trái, ô số bên
+phải, số căn phải.
+
+| Thay đổi | Ở đâu |
+| -------- | ----- |
+| Năm ô số nằm trong một khung nền be, tiêu đề **Amount**. Mỗi dòng là lưới hai cột: `<label for>` rộng 65px, ô nhập chiếm phần còn lại, số căn phải, viền đổi màu khi focus. CSS lấy nguyên từ mẫu, gắn vào `<head>` **một lần** (`#ika-send-amounts-style`) khi mở hộp thoại lần đầu | `send-resources/ui/dialogs.ts` (`sendAmountsStyles`, `installSendAmountsStyles`) |
+| Chuỗi `SEND_DIALOG.amount` từ `"Amount: "` thành `"Amount"` cho khớp mẫu. Chỉ hộp thoại này dùng | `send-resources/messages.ts` |
+
+**Khác với mẫu:** tên class có tiền tố — `.ika-send-amounts`,
+`.ika-send-amounts-title`, `.ika-send-amounts-row` — thay cho `.resource-form`,
+`.form-title`, `.resource-row`. Tên chung như vậy có thể trùng CSS của game và
+đổi giao diện chỗ khác trên trang. Người dùng đã được báo; muốn dùng đúng tên
+mẫu thì đổi lại.
+
+**Không đổi:** id các ô (`transporterSendAmount_<resource>`), nên
+`readSendForm` và việc thêm dòng vào queue y như §2.H. Dòng From/Destination và
+các nút giữ nguyên. **Không có test** — chỉ đổi giao diện; test của §2.H vẫn
+phủ phần đọc form.
+
+**Cần thử trên game:** tên thẳng cột, số căn phải, khung không tràn ra ngoài
+popup của game.
+
+#### 2. Cảnh báo "Warning wine" cho town không tụt rượu
+
+**Cách tính hiện tại** (code port nguyên từ bản gốc):
+
+1. Lượng uống mỗi giờ — `updateCityDataFromAjax` (`models/city.ts`): lấy
+   `wineSpendings`. Nếu số đó có trong bảng `wineUse` của tavern thì trừ Wine
+   Press: `wineSpendings × (100 − cấp press) / 100`; không có thì dùng nguyên.
+2. Số giờ còn lại — `getEmptyTime` (`models/resource.ts`):
+   `net = sản lượng/giờ − lượng uống`. `net < 0` →
+   `tồn kho / |net|`; ngược lại `Infinity`.
+3. Làm tròn theo mốc giờ — `updateResourceCounters` (`render.ts`):
+   `time > 1` → `floor(time) + (60 − phút hiện tại) / 60`, còn lại `0`.
+4. Bật toast `!!! Warning wine > <town> !!!` khi `time < wineWarningTime` và ô
+   "Hide tooltip 'wine warning'" không tick. Ngưỡng chọn trong Settings: 0 /
+   12 / 24 / 36 / 48 / 96 giờ (mặc định 0 = tắt). Hàm này chạy lại **mỗi 5 s**
+   khi board mở ở tab đầu.
+
+**Lỗi:** khi `getEmptyTime` là `Infinity` (rượu không giảm), bản gốc lấy
+`getFullTime` — số giờ tới khi **kho đầy** — để so với ngưỡng:
+
+| Trường hợp | `getFullTime` | Kết quả cũ |
+| ---------- | ------------- | ---------- |
+| `net = 0`: không tavern, không làm ra rượu, hoặc tavern đang nâng cấp (consumption = 0, §2 "số đo về rượu") | `0` | `time = 0` < mọi ngưỡng > 0 → cảnh báo **mỗi 5 s**, ô đỏ ghi 0 |
+| `net > 0`: làm ra nhiều hơn uống | giờ tới khi kho đầy | cảnh báo khi kho sắp **đầy**, nội dung vẫn là "Warning wine" |
+
+**Sửa** (người dùng chọn: không cảnh báo, ô để trống; `net > 0` xử lý như
+`net = 0`): `getEmptyTime` là `Infinity` thì **không** lấy `getFullTime`,
+**không** bật toast, ô thời gian **trống** và không tô Red/Green. Town đang tụt
+rượu (`net < 0`) tính như cũ. Ghi chú `FIX (not in the original)` tại chỗ sửa
+trong `empire-overview/render.ts`.
+
+**Test** (`empire-overview/startup.test.ts`, nhóm "the wine warning"): mỗi
+test đưa một response `updateGlobalData` vào board, bật cảnh báo ở 96 giờ rồi
+vẽ lại tab Resource. Một test đối chứng (town sắp hết rượu vẫn bị cảnh báo, ô
+đỏ) và hai test regression (`net = 0`, `net > 0`); hai test regression đã thấy
+**đỏ trên code cũ**.
+
+**Đã biết, chưa làm:**
+
+- Toast của town **thật sự** sắp hết rượu vẫn bật lại **mỗi 5 s** — cảnh báo
+  nằm ngay trong vòng cập nhật định kỳ, không có "chỉ báo một lần". Người dùng
+  chưa yêu cầu sửa.
+- `$.inArray(wineSpendings, wineUse, wineUse2)` truyền `wineUse2` vào chỗ tham
+  số `fromIndex`, nên chỉ `wineUse` được dò; bảng `wineUse2` (server `s202`)
+  bị bỏ qua. Trên `s303` không ảnh hưởng.
+
+**Cần thử trên game:** đặt ngưỡng > 0; town không có tavern (hoặc tavern đang
+nâng cấp) và town rượu không còn toast, ô trống; town sắp cạn vẫn đỏ và có
+toast.
+
+#### 3. `window.alert` → toast tự tắt
+
+Người dùng chọn: **toast tự tắt** (không phải hộp có nút OK, không phải popup
+của game), sửa **cả hai script**, **giữ nguyên `confirm()`**.
+
+| Script | Thay đổi | Ở đâu |
+| ------ | -------- | ----- |
+| Dùng chung | `showToast(message)` mới, đặt cạnh widget cửa sổ (không tạo file mới). Toast ở giữa, phía dưới trang, cùng tông màu với cửa sổ panel; nhiều thông báo thì xếp chồng. Hiện `4 s + 50 ms × số ký tự`, tối đa 15 s (`toastDuration`); bấm vào thì tắt ngay; mờ dần 400 ms. Nội dung là **text thuần** (`textContent`), giữ xuống dòng (`white-space: pre-line`). Style gắn một lần (`#ika-toast-style`); khung `#ika-toast-stack` tự tạo lại nếu `body` bị vẽ lại | `core/ui/window.ts` |
+| Send Resources | **28 chỗ** `alert(` → `showToast(` | `app.ts` (10), `features/auto-build.ts` (5), `ui/data-transfer-ui.ts` (5), `features/auto-wine.ts` (4), `ship-capacity.ts` (2), `navigation.ts` (1), `ui/dialogs.ts` (1) |
+| Empire Overview | **3 chỗ** (`alert_palace` ở tab Help; hai chỗ `alert` khi bật cùng lúc hai kiểu danh sách building trong Settings) → `render.toastAlert` **sẵn có** của board, tức kiểu toast cũ của board: hiện ~3 s rồi mờ | `empire-overview/render.ts` |
+
+Send Resources không dùng `render.toastAlert` vì nó nằm trong bundle Empire
+Overview — hai script không chung module (handover §4), và Send Resources không
+được phụ thuộc board (§3, quyết định thiết kế).
+
+**Không đổi:** `confirm()` — import dữ liệu (tài khoản khác, xác nhận import),
+xoá queue, và câu hỏi mở trang cập nhật khi Empire Overview thấy có bản mới
+(`empire.ts`). Đổi sang hộp trong trang phải viết lại luồng code để chờ câu
+trả lời.
+
+**Test:**
+
+- `core/ui/window.test.ts`: 7 test mới cho `showToast` (text chứ không phải
+  markup, xếp chồng, tự tắt đúng hạn, lâu hơn với thông báo dài nhưng có trần,
+  bấm để tắt, style một lần, khung tự tạo lại). Hàm mới nên **không có bản cũ
+  để thấy đỏ**.
+- `app.test.ts`, `features/auto-build.test.ts`: kiểm `showToast` thay cho
+  `window.alert`, qua mock một phần `@core/ui/window` (`vi.hoisted` để cùng
+  một mock sau `vi.resetModules()`; các export khác giữ thật). Chạy trên
+  `app.ts` và `auto-build.ts` cũ: **7 test đỏ**.
+- `features/auto-wine.test.ts`, `ship-capacity.test.ts`: bỏ dòng mock
+  `window.alert` không còn cần.
+
+**Đã biết, chưa làm:**
+
+- Import dữ liệu của tài khoản khác mà chọn **không** đổi tên: toast
+  `skippingOtherAccount` bật ngay trước một `confirm()`, nên có thể bị hộp đó
+  che, hoặc chỉ thấy sau khi trả lời.
+- Bản tóm tắt bug report cắt ở 800 ký tự (`BUG_SUMMARY_PREVIEW_CHARS`), nên
+  toast đó luôn chạm trần 15 s.
+
+**Cần thử trên game:** Add sai số trong Transport Settings → toast, trang không
+bị chặn; Scan xong → toast nhiều dòng đọc được; toast chồng nhau khi bấm liên
+tiếp.
+
+#### 4. Board Empire Overview: header, 5 town, cuộn, footer
+
+Người dùng muốn: header như cũ, **5 hàng town**, nhiều hơn thì cuộn, footer
+tổng như cũ. Làm cho cả **ba tab có hàng town**: Resource (`table.resources`),
+Buildings (`table.buildings` — không có `tfoot`, nên chỉ header + 5 town) và
+Army (`table.army`). Tab có ≤ 5 town không đổi gì.
+
+| Thay đổi | Ở đâu |
+| -------- | ----- |
+| CSS: `#ResTab`, `#BuildTab`, `#ArmyTab` có `overflow-y: auto`; `thead` của bảng con trực tiếp `position: sticky; top: 0`, `tfoot` `position: sticky; bottom: 0`, `z-index: 2`. Nền của `thead`/`tfoot` là rule sẵn có của board | `empire-overview/helpers.ts` (chuỗi CSS chính, ngay sau rule `capped`) |
+| `fitTownRows(panel)`: đặt `max-height` cho khung tab = từ đầu bảng tới đầu town thứ 6, cộng từ đầu `tfoot` tới đáy bảng (không có `tfoot` thì từ đáy town cuối). **Đo thật**, không cố định: mỗi tab cao khác nhau và đổi theo setting cỡ chữ. Bỏ `max-height` trong lúc đo, để đọc `tfoot` ở chỗ thật chứ không phải chỗ `sticky` giữ nó; giữ `scrollTop`. Tab đang ẩn đo ra 0 → giữ mức cũ, đo lại khi hiện | `empire-overview/render.ts` |
+| `watchTownRows()`: gọi ở cuối `DrawTables`. Đo cả ba tab ngay, rồi `ResizeObserver` trên bảng của từng tab đo lại mỗi khi bảng đổi kích thước (hàng vẽ lại, chuyển tab, đổi cỡ chữ). Bảng còn bị **thay cả phần tử** (`Utils.setClone`), nên một `MutationObserver` (`childList`) trên mỗi tab theo bảng mới và `unobserve` bảng cũ. Chỉ cài một lần; trình duyệt không có `ResizeObserver` thì chỉ đo một lần | `empire-overview/render.ts` |
+| Hằng `VISIBLE_TOWN_ROWS = 5` | `empire-overview/render.ts` |
+
+**Bẫy gặp khi làm:** happy-dom **không có** `HTMLTableElement.tBodies` — bản đầu
+dùng `table.tBodies` làm cả 24 test của `startup.test.ts` đỏ ("undefined is not
+iterable"). Đổi sang selector `:scope > tbody > tr` / `:scope > tfoot`, chạy
+được ở cả hai môi trường.
+
+**Test** (`empire-overview/startup.test.ts`, nhóm "the town tables' height"):
+happy-dom không có layout nên test tự gán hộp cho từng phần tử. Năm test: 8
+town có totals → header + 5 + totals; không totals → header + 5; ≤ 5 town →
+bỏ `max-height`; tab ẩn → giữ mức cũ; CSS sticky/overflow có trong trang. Tính
+năng mới — **không có bản cũ để thấy đỏ** (trước đó hàm không tồn tại).
+
+**Chưa kiểm chứng, cần xem trên game:**
+
+- Thanh cuộn dọc chiếm ~15px — có thể làm xuất hiện thêm thanh cuộn ngang nếu
+  board (absolute, co theo nội dung) không tự nới ra.
+- Kéo thả sắp xếp town (jQuery UI sortable, `handle: ".city_name .icon"`) khi
+  danh sách đang cuộn.
+- Viền `thead`/`tfoot` khi đang cuộn có thể lệch 1–2px.
+- `DrawTables` thay cả nội dung tab (`.html(...)`); nếu việc đó xảy ra khi đang
+  cuộn, vị trí cuộn có thể về đầu. Cập nhật hàng thường ngày (`setClone` từng
+  hàng) không đụng tới khung tab. Liên quan 2.7 (§3).
+
+### 2.J Upgrade kẹt sau lệnh gửi đang chờ tàu (29/09/2026)
+
+**Đã commit (`a62e8dd`, tài liệu ở commit ngay sau), chưa push. Chưa thử trên game.** `dist/` do người dùng build lúc 29/09
+22:30 đã có bản sửa (đã grep `blockedTypes` trong userscript Send Resources).
+34 file, 496 → 500 test, typecheck và prettier sạch.
+
+**Người dùng báo:** hết tàu rảnh thì task gửi hàng không chạy, và các task
+upgrade phía sau cũng không chạy, dù town đó không có công trình nào đang
+nâng. Queue lúc đó:
+
+```
+1 ▶ [Auto Wine] 24,338 wine: W-1 → M-1
+2   [Auto Wine] 35,191 wine: W-1 → M-2
+3   [Auto Wine] 58,645 wine: W-1 → S-1
+4   Upgrade Warehouse 5 in W-1
+5   Upgrade Warehouse 4 in M-1
+6   Upgrade Warehouse 5 in S-1
+7   Upgrade Warehouse 6 in M-2
+```
+
+**Nguyên nhân:** `handleSendResource` trả `retry` khi không có tàu rảnh
+(`features/send-resources.ts`), và runner hiểu `retry` là **"mọi task đều bị
+chặn"** — giữ task ở đầu queue, tick sau thử lại chính nó. Comment của
+`TaskResult` ghi "no ships" là thứ chặn mọi task. Điều đó chỉ đúng khi queue
+chỉ có lệnh gửi; từ khi Transport và Build **dùng chung một runner** (handover
+§5), hết tàu chặn luôn cả upgrade — thứ không cần tàu.
+
+**Sửa** (người dùng chọn cách này, trong ba cách được đưa ra):
+
+| Thay đổi | Ở đâu |
+| -------- | ----- |
+| `retry` giờ nghĩa là "mọi task **cùng loại** bị chặn". Runner giữ tập `blockedTypes` (trong bộ nhớ, như `busy`; reload là bắt đầu lại từ đầu queue): task trả `retry` thì loại của nó vào tập, trả kết quả khác thì ra | `core/task-queue.ts`, `TaskRunner.tick` |
+| `nextTask()` thay cho `queue.head()`: chọn task đầu tiên có loại **không** bị chặn. Không còn task nào như vậy thì **xoá tập** và chạy task đầu queue — tức là khi chỉ còn lệnh gửi, runner thử lại lệnh đầu mỗi giây như cũ, tàu về là gửi ngay | `core/task-queue.ts` |
+| Comment của `TaskResult` và của nhánh `retry` viết lại theo nghĩa mới | `core/task-queue.ts` |
+
+Với queue ở trên: task 1 trả `retry` → runner chạy 4, 5, 6, 7 (mỗi town một
+lượt, như §2.F) → chỉ còn lệnh gửi → thử lại task 1 mỗi giây. Các lệnh gửi
+**giữ chỗ và thứ tự**, không bị đẩy xuống cuối. Hai loại cùng `retry` (ví dụ
+upgrade "Not on the town view" trong lúc hết tàu) thì runner **luân phiên**,
+không kẹt, không mất task.
+
+**Hai cách không chọn:**
+
+- Handler gửi hàng trả `defer` khi hết tàu — đơn giản hơn, nhưng các lệnh gửi
+  bị đảo thứ tự, và khi chỉ còn lệnh gửi thì cả queue `defer` → runner nghỉ
+  60 s mỗi vòng thay vì bắt tàu về ngay.
+- Tách hai queue riêng — đụng lưu trữ queue, queue view, export dữ liệu và
+  quyết định "dùng chung một runner".
+
+**Test** (`core/task-queue.test.ts`, nhóm "a `retry` blocks its own type
+only"): upgrade chạy khi lệnh gửi chờ tàu, và lệnh gửi giữ thứ tự; hết việc
+khác thì quay lại lệnh gửi đầu mỗi tick; tàu về thì gửi ngay; cả hai loại
+`retry` thì luân phiên và không mất task. Cả bốn **đỏ trên runner cũ**. Test
+`retry` cũ (queue chỉ có lệnh gửi, không được xoay) vẫn xanh.
+
+**Đã biết, chưa làm:**
+
+- **Queue view vẫn đặt ▶ ở task đầu queue** (`ui/queue-view.ts` dùng
+  `queue.head()`), và dòng trạng thái của panel (`describeCurrentTransfer`)
+  vẫn mô tả lệnh gửi đầu queue — kể cả khi runner đang chạy upgrade phía sau.
+  Người dùng chưa yêu cầu sửa; muốn ▶ chỉ đúng task đang chạy thì runner phải
+  cho biết task nó chọn.
+- **Gửi hàng tự động vẫn hỏng** (§2.A). Sửa này chỉ giúp upgrade không kẹt;
+  tàu về thì lệnh gửi ném lỗi và bị bỏ sau 5 lần, như trước.
+- **Vòng Auto Build kế tiếp khi queue còn lệnh gửi:** queue không cạn nên
+  `onDrain` (reload + đặt `isAutoReload`) không chạy. Vòng mới phải đến từ
+  keep-alive reload rồi `start()` — `start()` chỉ xếp vòng mới khi không còn
+  task `upgradeBuilding` nào (§2.F), điều kiện này đúng. **Chưa kiểm trên game.**
+
+**Cần thử trên game:** hết tàu rảnh, queue có cả lệnh gửi lẫn upgrade → log
+có `Going to town …` cho từng town của vòng Auto Build; queue còn lại đúng các
+lệnh gửi, đúng thứ tự; tàu về thì lệnh gửi đầu chạy.
 
 ---
 

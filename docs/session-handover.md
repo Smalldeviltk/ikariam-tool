@@ -50,8 +50,9 @@ on the page**: without it, town switches go through `#changeCityForm`, which
 reloaded the whole page from the runner and put it in a reload loop (§2, §6).
 The user tests with both scripts on.
 
-**28–29/09: three more rounds, all in the working tree, uncommitted** — see
-§10, and `improvement-plan.md` §2.F–2.H for the full write-ups:
+**28–29/09: three more rounds, committed as `1f7c0e7` (docs in `4841fb9`),
+not pushed** — see §10, and `improvement-plan.md` §2.F–2.H for the full
+write-ups:
 
 - **Auto Build runs in laps again, as the original did** (§2.F). One task per
   town, for its first saved upgrade; a busy or short town ends its turn; the
@@ -67,6 +68,19 @@ The user tests with both scripts on.
 
 None of it has been seen on the live game. `dist/` was rebuilt by the user on
 29/09 at 01:33 and contains all of it (§1).
+
+**29/09 evening: four changes the user asked for, committed as `a62e8dd`
+(docs in the commit after it), not pushed** — the write-up is `improvement-plan.md` §2.I: the Transport
+Settings amounts in two columns, "Warning wine" no longer raised for a town
+whose wine is not going down, every `window.alert` of both scripts turned into
+a toast that fades by itself (`confirm()` kept), and the board's town tabs
+capped at five towns with the rest scrolling.
+
+**Then one bug the user reported, in the same commit** — `improvement-plan.md`
+§2.J: with no idle ships, a shipment's `retry` held the head of the queue and
+every upgrade behind it waited too. The runner now blocks only the type that
+returned `retry` (§5). `dist/` built by the user on 29/09 at 22:30 contains
+all five (§1).
 
 **Next in the plan is still §2.A, the trading port.** The destination list's
 markup is now in hand (§2); the shipment form is the one capture missing, and
@@ -84,11 +98,11 @@ working between loads) is
 |             |                                                                  |
 | ----------- | ---------------------------------------------------------------- |
 | Branch      | `refactor`, tracking `origin/refactor`                            |
-| Pushed      | Up to `3228058`. Twelve local commits since (`03d07fa`..HEAD, the last `e1c7c17`), not pushed |
-| Uncommitted | Everything in §10: 18 files in `src/` (listed there), plus `docs/improvement-plan.md` and this document. `.gitignore` and `docs/So_sanh_2_script_Ikariam.md` are the user's, as before |
-| Tests       | 34 files, 481 tests, all passing                                  |
+| Pushed      | Up to `3228058`. Sixteen local commits since (`03d07fa`..HEAD), not pushed. §10 is `1f7c0e7`, its docs `4841fb9`; the plan's §2.I–2.J is `a62e8dd`, its docs the commit after it |
+| Uncommitted | Nothing of this branch's work. `.gitignore` and `docs/So_sanh_2_script_Ikariam.md` are the user's, as before |
+| Tests       | 34 files, 500 tests, all passing                                  |
 | Typecheck   | Clean (`tsc --noEmit` and the strict config)                      |
-| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 29/09 at 01:33 and contains everything in §10 (grepped the two userscripts for `ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save` and `capped`) |
+| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 29/09 at 22:30 and contains everything in §10 and §2.I–2.J of the plan (grepped the two userscripts for `ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows` and `:scope > tbody > tr`; the §10 markers were checked in the 01:33 build: `ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save` and `capped`) |
 
 What landed: the AJAX transport layer, the shared window widget, the rewritten
 panel, four features (sync-towns, transport-buttons, queue-view, wine-warning),
@@ -424,6 +438,8 @@ into an unrelated diff.
 - **Transport and Build share one task runner**, and its running state is
   derived from the two feature flags rather than poked by whichever button was
   pressed last. Two switches over one interval is what made them fight.
+  Since 29/09 a `retry` blocks only its own task type (see "Added 29/09
+  evening").
 - **Auto Wine's Start only fills the queue.** It does not start the runner and
   does not check for idle ships. Queueing and shipping are separate steps:
   `handleSendResource` returns `retry` while the fleet is out, so a plan made
@@ -565,6 +581,34 @@ Added 28–29/09, each chosen by the user:
   until calibrated. Rounding is still `Math.round`, which can come out a
   ship short; the user was told and has not asked for `Math.ceil`.
 
+Added 29/09 evening, each chosen by the user unless marked (write-ups in
+`improvement-plan.md` §2.I–2.J):
+
+- **A `retry` blocks its own task type, not the whole queue.**
+  `TaskRunner.nextTask()` runs the first task whose type is not in
+  `blockedTypes` (in memory, like `busy`); a `retry` adds the type, any other
+  result removes it. When every queued type is blocked the set is cleared and
+  the head runs, so a shipment waiting for ships is retried every tick once
+  nothing else can run. Shipments keep their place and order. Offered and not
+  taken: the shipment handler returning `defer` (reorders shipments, and a
+  queue of only shipments would pause 60 s a lap), and two separate queues.
+- **Messages are toasts that fade by themselves, in both scripts; `confirm()`
+  stays.** Send Resources uses `showToast` in `core/ui/window.ts` (no new
+  file); Empire Overview uses its own `render.toastAlert`, since the two
+  bundles share no module and Send Resources must not depend on the board.
+  Offered and not taken: a box with an OK button, the game's `createPopup`.
+- **"Warning wine" stays silent for a town whose wine is not going down**
+  (`getEmptyTime` is `Infinity`): no toast, a blank cell, no colour. That
+  covers both `net = 0` and `net > 0`; the original's fall-back to the time
+  until the store is full is gone.
+- **The board's town tabs show five towns and scroll the rest**
+  (`VISIBLE_TOWN_ROWS`), header and totals sticky. The cap is measured from
+  the rows, not fixed. All three town tabs, not only Resource — chosen here,
+  not by the user; they were told.
+- **The Transport Settings amount classes carry an `ika-send-amounts`
+  prefix** instead of the user's sample names (`.resource-row` and so on), so
+  they cannot collide with the game's CSS — chosen here; the user was told.
+
 ---
 
 ## 6. What is blocked, and on what
@@ -607,7 +651,8 @@ task only comes back on the next load or Start. That design is unchanged.
   `switchTownWithGameForm` does.
 
 **Also waiting on the retest:** everything in §10 (each round's "try on the
-game" list is in the plan, §2.F–2.H), the board dialog for another town (§9
+game" list is in the plan, §2.F–2.H), everything in the plan's §2.I–2.J
+(same, at the end of each part), the board dialog for another town (§9
 bug 5) and the stale upgrade button (§9 bug 6). One risk in bug 5's fix is known and
 unmeasured: `openPendingView` runs the moment the board's `init` is done. If
 the game is still loading then, the dialog could open and be closed by what
@@ -728,6 +773,16 @@ done on 28/09 (§10).
   Settings still has a Close button that now does exactly what Save does —
   the user was asked whether to drop it, no answer yet; `needingShip` rounds
   with `Math.round` (§5).
+- **Small things left from 29/09 evening, not scheduled** (plan §2.I–2.J):
+  the queue view's ▶ and the panel's status line still point at the head of
+  the queue, which since the `retry` fix may be a shipment waiting while an
+  upgrade behind it runs — showing the task the runner picked needs the
+  runner to expose it. With a shipment still waiting, the queue never drains,
+  so the next Auto Build lap has to come from the keep-alive reload and
+  `start()`, not `onDrain` — not checked live. "Warning wine" still toasts
+  every 5 s for a town that really is running dry. The toast for
+  `skippingOtherAccount` shows just before a `confirm()` and may be hidden by
+  it.
 - **Two tabs of one account take turns holding the runner lock.** The
   keep-alive reloads the holder, the waiting tab is granted the lock, and
   the reloaded page waits. Only one drives at any moment, which is the
@@ -824,7 +879,8 @@ Neither is seen live yet.
 
 ## 10. The 28–29/09 rounds: Auto Build laps, four plan items, two dialogs
 
-All uncommitted, none seen on the live game; `dist/` has all of it (§1). The
+Committed as `1f7c0e7` (docs in `4841fb9`), not pushed; none seen on the live
+game; `dist/` has all of it (§1). The
 decisions behind each are in §5 ("Added 28–29/09"); the full write-ups, in
 Vietnamese, are `improvement-plan.md` §2.F, §2.G and §2.H. Every new or
 changed test was seen red against the code before it (the round trip is in
