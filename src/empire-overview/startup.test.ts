@@ -215,6 +215,178 @@ describe("Empire Overview startup", () => {
     expect(bar("wood")?.classList.contains("capped")).toBe(false);
   });
 
+  describe("the town tables' height", () => {
+    const HEADER = 30;
+    const ROW = 20;
+    const FOOTER = 25;
+    const TABLE_TOP = 100;
+
+    /** happy-dom has no layout: give an element the box it would have. */
+    function place(element: Element, top: number, height: number): void {
+      element.getBoundingClientRect = () =>
+        ({ top, bottom: top + height, height }) as DOMRect;
+    }
+
+    /**
+     * A tab holding a town table laid out as the board draws it: header,
+     * one row per town, then totals. Rows are placed one after another.
+     */
+    function townTab(towns: number, withTotals = true): HTMLElement {
+      const panel = document.createElement("div");
+      panel.innerHTML =
+        `<table><thead><tr><th></th></tr></thead><tbody>` +
+        `<tr><td></td></tr>`.repeat(towns) +
+        `</tbody>${withTotals ? "<tfoot><tr><td></td></tr></tfoot>" : ""}</table>`;
+      document.body.appendChild(panel);
+
+      const table = panel.querySelector("table")!;
+      const rowsEnd = TABLE_TOP + HEADER + towns * ROW;
+      place(table, TABLE_TOP, rowsEnd + (withTotals ? FOOTER : 0) - TABLE_TOP);
+      panel.querySelectorAll("tbody tr").forEach((row, index) => {
+        place(row, TABLE_TOP + HEADER + index * ROW, ROW);
+      });
+      if (withTotals) place(table.querySelector("tfoot")!, rowsEnd, FOOTER);
+      return panel;
+    }
+
+    it("shows the header, five towns and the totals, and scrolls the rest", async () => {
+      await boot();
+      const { fitTownRows } = await import("./render");
+      const panel = townTab(8);
+
+      fitTownRows(panel);
+
+      expect(panel.style.maxHeight).toBe(`${HEADER + 5 * ROW + FOOTER}px`);
+    });
+
+    it("stops right after the fifth town on a tab without totals", async () => {
+      await boot();
+      const { fitTownRows } = await import("./render");
+      const panel = townTab(8, false);
+
+      fitTownRows(panel);
+
+      expect(panel.style.maxHeight).toBe(`${HEADER + 5 * ROW}px`);
+    });
+
+    it("leaves a tab of five towns or fewer at its full height", async () => {
+      await boot();
+      const { fitTownRows } = await import("./render");
+      const panel = townTab(5);
+      panel.style.maxHeight = "90px";
+
+      fitTownRows(panel);
+
+      expect(panel.style.maxHeight).toBe("");
+    });
+
+    it("keeps the cap of a tab that is not on screen, which measures zero", async () => {
+      await boot();
+      const { fitTownRows } = await import("./render");
+      const panel = townTab(8);
+      panel.style.maxHeight = "155px";
+      place(panel.querySelector("table")!, 0, 0);
+
+      fitTownRows(panel);
+
+      expect(panel.style.maxHeight).toBe("155px");
+    });
+
+    it("keeps the header and the totals in place while the towns scroll", async () => {
+      await boot();
+      const css = [...document.querySelectorAll("style")]
+        .map((style) => style.textContent)
+        .join("\n");
+      expect(css).toContain("#empireBoard #ResTab > table > thead");
+      expect(css).toContain("#empireBoard #ResTab > table > tfoot");
+      expect(css).toMatch(/#empireBoard #ArmyTab \{\s*overflow-y: auto;/);
+    });
+  });
+
+  describe("the wine warning", () => {
+    /**
+     * Boot, turn the warning on at 96 hours, feed the town one response with
+     * this wine stock, production (per second) and consumption (per hour),
+     * then redraw the Resource tab once.
+     */
+    async function renderWine(
+      stock: number,
+      productionPerSecond: number,
+      consumptionPerHour: number,
+    ) {
+      await boot();
+      const { events } = await import("./events");
+      const { database } = await import("./database");
+      const { render } = await import("./render");
+      database.settings.wineWarningTime.value = 96;
+      database.settings.wineWarning.value = false;
+
+      events("ajaxResponse").pub([
+        [
+          "updateGlobalData",
+          {
+            backgroundData: { id: 297034 },
+            headerData: {
+              currentResources: {
+                resource: 100,
+                1: stock,
+                2: 100,
+                3: 100,
+                4: 100,
+              },
+              resourceProduction: 0,
+              producedTradegood: 1,
+              tradegoodProduction: productionPerSecond,
+              wineSpendings: consumptionPerHour,
+            },
+          },
+        ],
+      ]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      document
+        .querySelectorAll(".toastAlert")
+        .forEach((toast) => toast.remove());
+      render.updateResourceCounters(true);
+
+      const cell = document.querySelector(
+        `#ResTab tr[id^="resource_"] td.resource.wine span.emptytime`,
+      );
+      return {
+        toasts: document.querySelectorAll(".toastAlert").length,
+        text: cell?.textContent,
+        red: cell?.classList.contains("Red"),
+      };
+    }
+
+    it("warns about a town whose wine runs out within the threshold", async () => {
+      const shown = await renderWine(50, 0, 100);
+      expect(shown.toasts).toBe(1);
+      expect(shown.red).toBe(true);
+    });
+
+    it(
+      "REGRESSION: does not warn about a town whose wine is not going down " +
+        "(no drain made the time to a full store 0, which is under any threshold)",
+      async () => {
+        const shown = await renderWine(500, 0, 0);
+        expect(shown.toasts).toBe(0);
+        expect(shown.text).toBe("");
+        expect(shown.red).toBe(false);
+      },
+    );
+
+    it(
+      "REGRESSION: does not warn about a town that makes more wine than it " +
+        "drinks (it used to warn on the time until the store is full)",
+      async () => {
+        const shown = await renderWine(500, 1, 0);
+        expect(shown.toasts).toBe(0);
+        expect(shown.text).toBe("");
+        expect(shown.red).toBe(false);
+      },
+    );
+  });
+
   it(
     "REGRESSION: still boots when the avatar block is missing (reading the " +
       "account name used to throw while the module graph was still " +

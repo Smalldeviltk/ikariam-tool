@@ -28,6 +28,7 @@ import { getCurrentTownName } from "@core/ikariam/globals";
 import { SEL } from "@core/ikariam/selectors";
 import { logInfo } from "@core/logger";
 import type { Task, TaskResult } from "@core/task-queue";
+import { showToast } from "@core/ui/window";
 import { SCAN } from "../messages";
 import {
   backToCity,
@@ -487,20 +488,20 @@ export async function scanBuildings(
   queueIsRunning: () => boolean = () => false,
 ): Promise<void> {
   if (scanning) {
-    alert(SCAN.alreadyRunning);
+    showToast(SCAN.alreadyRunning);
     return;
   }
 
   const limit = Math.min(getTownCount(), maxTowns);
   if (limit === 0) {
-    alert(SCAN.noTownList);
+    showToast(SCAN.noTownList);
     return;
   }
 
   // The queue runner navigates too. Two of them steering the same page means
   // whichever loses the race times out.
   if (queueIsRunning()) {
-    alert(SCAN.queueRunning);
+    showToast(SCAN.queueRunning);
     return;
   }
 
@@ -519,7 +520,7 @@ export async function scanBuildings(
         result.failed.join(", "),
       );
       logInfo(summary);
-      alert(summary);
+      showToast(summary);
       return;
     } catch (e) {
       logInfo(
@@ -554,7 +555,7 @@ export async function scanBuildings(
 
   const summary = SCAN.walkFinished(visited, limit, failed.join(", "));
   logInfo(summary);
-  alert(summary);
+  showToast(summary);
 }
 
 export interface BuildingSlot {

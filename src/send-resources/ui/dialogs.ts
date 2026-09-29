@@ -6,10 +6,11 @@
  */
 
 import { reportSelectorMiss } from "@core/bug-report";
-import { escapeHtml, qs, qsa, removeElement } from "@core/dom";
+import { addStyle, escapeHtml, qs, qsa, removeElement } from "@core/dom";
 import { formatInteger } from "@core/format";
 import { getCurrentTownName, getIkariam } from "@core/ikariam/globals";
 import { DIALOG_ID, SEL } from "@core/ikariam/selectors";
+import { showToast } from "@core/ui/window";
 import { getTownList, getTownNameFromList } from "../navigation";
 import {
   getTownQueue,
@@ -38,7 +39,7 @@ function openPopup(title: string, html: string): void {
     // Every settings dialog goes through here. Without a record this is a
     // completely silent failure: the user clicks Setting and nothing happens.
     reportSelectorMiss("window.ikariam.createPopup", { dialogTitle: title });
-    alert(MISC.popupUnavailable);
+    showToast(MISC.popupUnavailable);
     return;
   }
   api.createPopup(DIALOG_ID, title, html, "???", "class");
@@ -87,22 +88,85 @@ function amountFieldId(resource: string): string {
   return `transporterSendAmount_${resource}`;
 }
 
+const SEND_AMOUNTS_STYLE_ID = "ika-send-amounts-style";
+
+/** Labels in one column, right-aligned amounts in the next. */
+function sendAmountsStyles(): string {
+  return `
+.ika-send-amounts {
+  width: 260px;
+  padding: 10px 12px;
+  background: #f5ead0;
+  border: 1px solid #c8b98f;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+.ika-send-amounts-title {
+  font-size: 12px;
+  font-weight: bold;
+  color: #5b4a2d;
+  margin-bottom: 6px;
+}
+.ika-send-amounts-row {
+  display: grid;
+  grid-template-columns: 65px 1fr;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+.ika-send-amounts-row:last-child {
+  margin-bottom: 0;
+}
+.ika-send-amounts-row label {
+  font-size: 12px;
+  color: #4b4030;
+}
+.ika-send-amounts-row input {
+  width: 100%;
+  height: 24px;
+  padding: 2px 6px;
+  box-sizing: border-box;
+  border: 1px solid #aaa;
+  border-radius: 3px;
+  background: #fff;
+  color: #333;
+  font-size: 12px;
+  text-align: right;
+  outline: none;
+}
+.ika-send-amounts-row input:focus {
+  border-color: #8b6f3d;
+  box-shadow: 0 0 0 2px rgba(139, 111, 61, 0.15);
+}`;
+}
+
+function installSendAmountsStyles(): void {
+  if (document.getElementById(SEND_AMOUNTS_STYLE_ID)) return;
+  addStyle(sendAmountsStyles()).id = SEND_AMOUNTS_STYLE_ID;
+}
+
 export function openSendResourcesDialog(): void {
   const towns = townOptions();
   // One amount field per resource, instead of a resource dropdown and a
   // single amount: a shipment of several resources is one Add, not one per
   // resource.
-  const amounts = RESOURCE_OPTIONS.map(
-    (resource) =>
-      `<div><span>${resource.label}: </span><input id="${amountFieldId(resource.value)}" type="number" min="1" step="1" inputmode="numeric"></div>`,
-  ).join("");
+  const amounts = RESOURCE_OPTIONS.map((resource) => {
+    const id = amountFieldId(resource.value);
+    return `<div class="ika-send-amounts-row">
+        <label for="${id}">${resource.label}</label>
+        <input id="${id}" type="number" min="1" step="1" inputmode="numeric">
+      </div>`;
+  }).join("");
 
+  installSendAmountsStyles();
   openPopup(
     SEND_DIALOG.title,
     `<div><span>${SEND_DIALOG.from}</span><select id="transporterSendFromTown">${towns}</select></div><br/>
      <div><span>${SEND_DIALOG.destination}</span><select id="transporterSendDestination">${towns}</select></div><br/>
-     <div><span>${SEND_DIALOG.amount}</span></div>
-     ${amounts}<br/>
+     <div class="ika-send-amounts">
+       <div class="ika-send-amounts-title">${SEND_DIALOG.amount}</div>
+       ${amounts}
+     </div><br/>
      <button style="margin-right:5px" class="button" ${action("send.add")}>${BUTTON.add}</button>
      <button style="margin-right:5px" class="button" ${action("send.removeFirst")}>${SEND_DIALOG.removeFirst}</button>
      <button style="margin-right:5px" class="button" ${action("send.removeLast")}>${SEND_DIALOG.removeLast}</button>

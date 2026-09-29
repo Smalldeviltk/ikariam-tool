@@ -79,7 +79,7 @@ export const SEND_DIALOG = {
   title: "Mass transport resources",
   from: "From: ",
   destination: "Destination: ",
-  amount: "Amount: ",
+  amount: "Amount",
   removeFirst: "Remove First",
   removeLast: "Remove Last",
   columns: ["Origin", "Destination", "Resource", "Amount", "Source"],

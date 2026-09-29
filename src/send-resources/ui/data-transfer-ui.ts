@@ -17,6 +17,7 @@ import {
 } from "@core/data-transfer";
 import { errorMessage } from "@core/format";
 import { logInfo } from "@core/logger";
+import { showToast } from "@core/ui/window";
 import { DATA_TRANSFER } from "../messages";
 import { getState } from "../state";
 
@@ -52,7 +53,7 @@ export function exportDataToFile(): void {
   const bundle = exportData({ groups: DEFAULT_GROUPS, account: accountName });
 
   if (bundle.entries.length === 0) {
-    alert(DATA_TRANSFER.nothingToExport);
+    showToast(DATA_TRANSFER.nothingToExport);
     return;
   }
 
@@ -63,7 +64,7 @@ export function exportDataToFile(): void {
   });
 
   logInfo(`Exported ${bundle.entries.length} entries`);
-  alert(
+  showToast(
     DATA_TRANSFER.saved(
       bundle.entries.length,
       describeBundle(bundle),
@@ -109,7 +110,7 @@ export function importDataFromFile(): void {
           );
           remapAccountTo = remap ? accountName : undefined;
           if (!remap) {
-            alert(DATA_TRANSFER.skippingOtherAccount);
+            showToast(DATA_TRANSFER.skippingOtherAccount);
           }
         }
 
@@ -126,7 +127,7 @@ export function importDataFromFile(): void {
         logInfo(
           `Imported ${result.imported} entries (${result.skipped} skipped)`,
         );
-        alert(
+        showToast(
           DATA_TRANSFER.imported(
             result.imported,
             result.skipped,
@@ -135,7 +136,7 @@ export function importDataFromFile(): void {
         );
       })
       .catch((error: unknown) => {
-        alert(DATA_TRANSFER.failed(errorMessage(error)));
+        showToast(DATA_TRANSFER.failed(errorMessage(error)));
       });
   });
 

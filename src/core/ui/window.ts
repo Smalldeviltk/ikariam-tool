@@ -297,3 +297,92 @@ export function setWindowFooter(win: GameWindow, text: string): void {
   const footer = win.root.querySelector<HTMLElement>(".ika-window-footer");
   if (footer) footer.textContent = text;
 }
+
+/* ─────────────────────────────── Toasts ────────────────────────────────── */
+
+export const TOAST_STYLE_ID = "ika-toast-style";
+export const TOAST_STACK_ID = "ika-toast-stack";
+
+/** How long a toast stays: a base, plus reading time for longer messages. */
+const TOAST_BASE_MS = 4000;
+const TOAST_MS_PER_CHARACTER = 50;
+const TOAST_MAX_MS = 15000;
+
+/** Length of the fade-out, matching the CSS transition. */
+const TOAST_FADE_MS = 400;
+
+/** Time a toast stays on screen before it starts to fade. */
+export function toastDuration(message: string): number {
+  return Math.min(
+    TOAST_MAX_MS,
+    TOAST_BASE_MS + message.length * TOAST_MS_PER_CHARACTER,
+  );
+}
+
+function toastStyles(): string {
+  return `
+#${TOAST_STACK_ID} {
+  position: fixed;
+  z-index: 100000;
+  left: 50%;
+  bottom: 5em;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 480px;
+  pointer-events: none;
+}
+.ika-toast {
+  pointer-events: auto;
+  cursor: pointer;
+  padding: 6px 10px;
+  border: 1px solid #b79b6f;
+  border-radius: 4px;
+  background: #f8e7b3;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .35);
+  font-size: 11px;
+  color: #3b2c1a;
+  white-space: pre-line;
+  opacity: 1;
+  transition: opacity ${TOAST_FADE_MS}ms;
+}
+.ika-toast.ika-toast-hiding { opacity: 0; }
+`;
+}
+
+function toastStack(): HTMLElement {
+  if (!document.getElementById(TOAST_STYLE_ID)) {
+    addStyle(toastStyles()).id = TOAST_STYLE_ID;
+  }
+  let stack = document.getElementById(TOAST_STACK_ID);
+  if (!stack) {
+    stack = document.createElement("div");
+    stack.id = TOAST_STACK_ID;
+    document.body.appendChild(stack);
+  }
+  return stack;
+}
+
+/**
+ * Show a message at the bottom of the page that fades by itself, in place of
+ * `window.alert`, which stops the page until it is dismissed. A click
+ * dismisses it early. The message is plain text; line breaks are kept.
+ */
+export function showToast(message: string): HTMLElement {
+  const toast = document.createElement("div");
+  toast.className = "ika-toast";
+  toast.textContent = message;
+  toastStack().appendChild(toast);
+
+  let hideTimer: ReturnType<typeof setTimeout> | undefined;
+  const hide = () => {
+    clearTimeout(hideTimer);
+    toast.classList.add("ika-toast-hiding");
+    setTimeout(() => toast.remove(), TOAST_FADE_MS);
+  };
+  hideTimer = setTimeout(hide, toastDuration(message));
+  toast.addEventListener("click", hide, { once: true });
+  return toast;
+}

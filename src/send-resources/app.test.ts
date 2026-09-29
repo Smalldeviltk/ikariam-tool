@@ -18,6 +18,13 @@ vi.mock("@core/logger", async (importOriginal) => ({
   initLogger: () => {},
 }));
 
+// Messages are toasts now. Capture them, but keep the module's real window.
+const { showToast } = vi.hoisted(() => ({ showToast: vi.fn() }));
+vi.mock("@core/ui/window", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@core/ui/window")>()),
+  showToast,
+}));
+
 /**
  * The action handlers, captured as `start()` registers them.
  *
@@ -221,7 +228,7 @@ describe("the Transport settings dialog", () => {
   }
 
   beforeEach(() => {
-    window.alert = vi.fn();
+    showToast.mockClear();
   });
 
   it(
@@ -238,7 +245,7 @@ describe("the Transport settings dialog", () => {
         "marble 1200",
         "sulfur 300",
       ]);
-      expect(window.alert).not.toHaveBeenCalled();
+      expect(showToast).not.toHaveBeenCalled();
     },
   );
 
@@ -249,7 +256,7 @@ describe("the Transport settings dialog", () => {
     await actions["send.add"](document.body);
 
     expect(await queuedShipments()).toEqual([]);
-    expect(window.alert).toHaveBeenCalledWith(
+    expect(showToast).toHaveBeenCalledWith(
       expect.stringContaining("Wine, Crystal"),
     );
   });
@@ -261,7 +268,7 @@ describe("the Transport settings dialog", () => {
     await actions["send.add"](document.body);
 
     expect(await queuedShipments()).toEqual([]);
-    expect(window.alert).toHaveBeenCalledWith(
+    expect(showToast).toHaveBeenCalledWith(
       expect.stringContaining("at least one resource"),
     );
   });

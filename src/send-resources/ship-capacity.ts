@@ -9,6 +9,7 @@
 import { qs, qsa } from "@core/dom";
 import { getTransportConfig } from "@core/ikariam/globals";
 import { SEL } from "@core/ikariam/selectors";
+import { showToast } from "@core/ui/window";
 import { SHIP_CAPACITY } from "./messages";
 import { FLAG, getFlag, setFlag } from "./state";
 
@@ -139,8 +140,10 @@ export function calibrateShipCapacity(): void {
   if (freighterCapacity) setFlag(FLAG.freighterCapacity, freighterCapacity);
 
   if (perShip || freighterCapacity) {
-    alert(SHIP_CAPACITY.calibrated(perShip || null, freighterCapacity || null));
+    showToast(
+      SHIP_CAPACITY.calibrated(perShip || null, freighterCapacity || null),
+    );
   } else {
-    alert(SHIP_CAPACITY.notReadable);
+    showToast(SHIP_CAPACITY.notReadable);
   }
 }

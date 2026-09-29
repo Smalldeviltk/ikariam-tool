@@ -12,6 +12,98 @@ import { empire } from "./empire";
 import { events } from "./events";
 import { ikariam } from "./game-api";
 
+/**
+ * Added (not in the original): the town tables grew by one row per town with
+ * no limit, so an account with many towns pushed the totals off the screen.
+ * Each tab now shows its header, this many towns and its totals, and scrolls
+ * the rest. The header and totals stay in place through the scroll
+ * (`position: sticky` in `helpers.ts`).
+ */
+export const VISIBLE_TOWN_ROWS = 5;
+
+/** The tabs that hold one row per town. */
+const TOWN_TAB_IDS = ["ResTab", "BuildTab", "ArmyTab"];
+
+/**
+ * Cap a tab's height at its header, its first `VISIBLE_TOWN_ROWS` towns and
+ * its totals. Measured rather than fixed, because the row height changes with
+ * the font-size setting and differs between tabs.
+ *
+ * The cap comes off while measuring, so the totals are read where they sit
+ * rather than where `sticky` holds them. A tab that is not on screen measures
+ * zero and keeps the cap it had; it is measured again once it is shown.
+ */
+export function fitTownRows(panel: HTMLElement): void {
+  const table = panel.querySelector<HTMLTableElement>(":scope > table");
+  if (!table) return;
+  const rows = Array.from(
+    table.querySelectorAll<HTMLElement>(":scope > tbody > tr"),
+  );
+  const totals = table.querySelector<HTMLElement>(":scope > tfoot");
+  if (rows.length <= VISIBLE_TOWN_ROWS) {
+    panel.style.maxHeight = "";
+    return;
+  }
+
+  const previousCap = panel.style.maxHeight;
+  const scrollTop = panel.scrollTop;
+  panel.style.maxHeight = "";
+  const tableBox = table.getBoundingClientRect();
+  if (tableBox.height === 0) {
+    panel.style.maxHeight = previousCap;
+    return;
+  }
+
+  // From the top of the table to the first town that does not fit, then
+  // from the top of the totals (or the end of the last town) to the bottom.
+  const cut =
+    rows[VISIBLE_TOWN_ROWS].getBoundingClientRect().top - tableBox.top;
+  const tail = totals
+    ? tableBox.bottom - totals.getBoundingClientRect().top
+    : tableBox.bottom - rows[rows.length - 1].getBoundingClientRect().bottom;
+  panel.style.maxHeight = `${Math.ceil(cut + tail)}px`;
+  panel.scrollTop = scrollTop;
+}
+
+let watchingTownRows = false;
+
+/**
+ * Fit every town tab now, and again whenever its table changes size: rows are
+ * redrawn by replacing them, a hidden tab is shown, or the font size changes.
+ * Tables themselves are replaced too (`Utils.setClone`), so the table being
+ * watched follows whatever the tab holds.
+ */
+export function watchTownRows(): void {
+  TOWN_TAB_IDS.forEach((id) => {
+    const panel = document.getElementById(id);
+    if (panel) fitTownRows(panel);
+  });
+  if (watchingTownRows || typeof ResizeObserver !== "function") return;
+  watchingTownRows = true;
+
+  const resized = new ResizeObserver((entries) => {
+    entries.forEach((entry) => {
+      const panel = entry.target.parentElement;
+      if (panel) fitTownRows(panel);
+    });
+  });
+  TOWN_TAB_IDS.forEach((id) => {
+    const panel = document.getElementById(id);
+    if (!panel) return;
+    const followTable = (changes: MutationRecord[] = []) => {
+      changes.forEach((change) =>
+        change.removedNodes.forEach((node) => {
+          if (node instanceof Element) resized.unobserve(node);
+        }),
+      );
+      const table = panel.querySelector(":scope > table");
+      if (table) resized.observe(table);
+    };
+    followTable();
+    new MutationObserver(followTable).observe(panel, { childList: true });
+  });
+}
+
 export const render: any = {
   mainContentBox: null,
   $tabs: null,
@@ -1630,7 +1722,10 @@ export const render: any = {
             "city",
             capital.getBuildingFromName(Constant.Buildings.PALACE).getUrlParams,
           );
-        } else alert(Constant.LanguageData[lang].alert_palace);
+        } else {
+          // The original used `alert`, which stops the page until dismissed.
+          render.toastAlert(Constant.LanguageData[lang].alert_palace);
+        }
       })
       .on("click", "#helpFinance", function () {
         ikariam.loadUrl(ikariam.viewIsCity, "city", { view: "finances" });
@@ -1737,7 +1832,8 @@ export const render: any = {
           database.settings.alternativeBuildingList.value == this.checked &&
           database.settings.compressedBuildingList.value == 1
         ) {
-          alert(Constant.LanguageData[lang].alert);
+          // The original used `alert`, which stops the page until dismissed.
+          render.toastAlert(Constant.LanguageData[lang].alert);
         }
         $("table.buildings").html(render.getBuildingTable());
         render.updateCitiesBuildingData();
@@ -1760,7 +1856,8 @@ export const render: any = {
           database.settings.compressedBuildingList.value == this.checked &&
           database.settings.alternativeBuildingList.value == 1
         ) {
-          alert(Constant.LanguageData[lang].alert);
+          // The original used `alert`, which stops the page until dismissed.
+          render.toastAlert(Constant.LanguageData[lang].alert);
         }
         render.cityRows.building = {};
         $("table.buildings").html(render.getBuildingTable());
@@ -2169,6 +2266,7 @@ export const render: any = {
           },
         );
       });
+      watchTownRows();
     }
     this.AttachClickHandlers();
   },
@@ -3577,31 +3675,35 @@ export const render: any = {
                       ? Utils.FormatNumToStr(0 - consumption, true, 0)
                       : "";
                   var time = currentResource.getEmptyTime;
+                  // FIX (not in the original): wine that is not going down
+                  // (`getEmptyTime` is Infinity) never runs out, so there is
+                  // nothing to warn about and the cell stays blank. The
+                  // original fell back to `getFullTime` here, which is 0 when
+                  // nothing is drunk or made, and the time until the store is
+                  // full for a town that makes more than it drinks — both
+                  // under the threshold often enough to raise "Warning wine"
+                  // every 5 s for a town that was fine.
+                  var drains = isFinite(time);
                   time =
                     time > 1
                       ? Math.floor(time) + (60 - new Date().getMinutes()) / 60
                       : 0;
-                  if (!isFinite(time)) {
-                    time = currentResource.getFullTime;
-                    time =
-                      time > 1
-                        ? Math.floor(time) + (60 - new Date().getMinutes()) / 60
-                        : 0;
-                  }
                   time *= 3600000;
-                  rescells
+                  var $emptyTime = rescells
                     .find("span.emptytime")
-                    .removeClass("Red Green")
-                    .addClass(
+                    .removeClass("Red Green");
+                  if (drains)
+                    $emptyTime.addClass(
                       time > database.settings.wineWarningTime.value * 3600000
                         ? "Green"
                         : "Red",
-                    )
-                    .get(0).textContent =
-                    database.settings.wineWarningTime.value > 0
+                    );
+                  $emptyTime.get(0).textContent =
+                    drains && database.settings.wineWarningTime.value > 0
                       ? Utils.FormatTimeLengthToStr(time, 2)
                       : "";
                   if (
+                    drains &&
                     time < database.settings.wineWarningTime.value * 3600000 &&
                     database.settings.wineWarning.value != 1
                   )

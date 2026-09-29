@@ -319,6 +319,93 @@ describe("TaskRunner", () => {
     expect(calls[0].id).toBe(calls[1].id);
   });
 
+  describe("a `retry` blocks its own type only", () => {
+    /** Shipments wait for the fleet; upgrades need no ships. */
+    function fleetAtSea(ship: () => TaskResult = () => ({ status: "retry" })) {
+      return runnerWith((task) =>
+        task.type === "sendResource" ? ship() : { status: "done" },
+      );
+    }
+
+    it(
+      "REGRESSION: upgrades queued behind a shipment waiting for ships still " +
+        "run — the shipment held the head and every upgrade waited with it",
+      async () => {
+        const first = queue.push(ship("1"));
+        const second = queue.push(ship("2"));
+        queue.push(build("W-1"));
+        queue.push(build("M-1"));
+        const { runner, calls } = fleetAtSea();
+        runner.start();
+
+        await tick(3);
+
+        expect(calls.map((task) => task.type)).toEqual([
+          "sendResource",
+          "upgradeBuilding",
+          "upgradeBuilding",
+        ]);
+        // The shipments keep their place and their order.
+        expect(queue.list().map((task) => task.id)).toEqual([
+          first.id,
+          second.id,
+        ]);
+      },
+    );
+
+    it("goes back to the waiting shipment every tick once nothing else can run", async () => {
+      const first = queue.push(ship("1"));
+      queue.push(ship("2"));
+      queue.push(build("W-1"));
+      const { runner, calls } = fleetAtSea();
+      runner.start();
+
+      await tick(4);
+
+      expect(calls.map((task) => task.id)).toEqual([
+        first.id,
+        calls[1].id,
+        first.id,
+        first.id,
+      ]);
+      expect(calls[1].type).toBe("upgradeBuilding");
+    });
+
+    it("sends the shipment as soon as the fleet is back", async () => {
+      queue.push(ship("1"));
+      queue.push(build("W-1"));
+      let fleetHome = false;
+      const { runner } = fleetAtSea(() =>
+        fleetHome ? { status: "done" } : { status: "retry" },
+      );
+      runner.start();
+
+      await tick(2);
+      expect(queue.list().map((task) => task.type)).toEqual(["sendResource"]);
+
+      fleetHome = true;
+      await tick();
+      expect(queue.length).toBe(0);
+    });
+
+    it("takes turns when every type is waiting, and drops nothing", async () => {
+      queue.push(ship("1"));
+      queue.push(build("W-1"));
+      const { runner, calls } = runnerWith({ status: "retry" });
+      runner.start();
+
+      await tick(4);
+
+      expect(calls.map((task) => task.type)).toEqual([
+        "sendResource",
+        "upgradeBuilding",
+        "sendResource",
+        "upgradeBuilding",
+      ]);
+      expect(queue.length).toBe(2);
+    });
+  });
+
   it("`defer` rotates so a different task runs next", async () => {
     const a = queue.push(ship("1"));
     const b = queue.push(ship("2"));

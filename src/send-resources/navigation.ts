@@ -11,6 +11,7 @@ import { getCurrentTownName, pageWindow } from "@core/ikariam/globals";
 import { modelCityName } from "@core/ikariam/model";
 import { SEL } from "@core/ikariam/selectors";
 import { logInfo } from "@core/logger";
+import { showToast } from "@core/ui/window";
 import { MISC } from "./messages";
 import type { TownEntry } from "./types";
 
@@ -316,7 +317,7 @@ export function closeGamePopup(): void {
 /** Open the safehouse (hotkey S). */
 export function openSpyBuilding(): void {
   if (!clickIfPresent(SEL.safehouse)) {
-    alert(MISC.noSafehouse);
+    showToast(MISC.noSafehouse);
   }
 }
 

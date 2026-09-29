@@ -31,8 +31,6 @@ function shipyard(merchantDesc: string, freighterDesc: string): string {
 beforeEach(() => {
   localStorage.clear();
   document.body.innerHTML = "";
-  // happy-dom does not implement `alert`, so assign rather than spy on it.
-  window.alert = vi.fn();
   vi.spyOn(console, "log").mockImplementation(() => {});
 });
 

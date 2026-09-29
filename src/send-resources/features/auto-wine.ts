@@ -15,6 +15,7 @@ import { qs, qsa } from "@core/dom";
 import { logInfo } from "@core/logger";
 import { getCurrentTownName } from "@core/ikariam/globals";
 import { SEL } from "@core/ikariam/selectors";
+import { showToast } from "@core/ui/window";
 import { parseAmount, readCurrentWine } from "../game-state";
 import { AUTO_WINE } from "../messages";
 import { getTownList, getTownNameFromList } from "../navigation";
@@ -249,7 +250,7 @@ export function enqueueWineRun(fromTown: string): number {
     // exclusive, so a ticked town can never be a receiver.
     const senderCount = loadSenders().length;
     const townCount = getTownList().length;
-    alert(
+    showToast(
       configured.length === 0
         ? AUTO_WINE.noReceivers(senderCount, townCount)
         : AUTO_WINE.onlyReceiverIsSource,
@@ -259,7 +260,7 @@ export function enqueueWineRun(fromTown: string): number {
 
   const plan = planWineRun(fromTown);
   if (plan.supply <= 0) {
-    alert(AUTO_WINE.noSpareWine(plan.reserve));
+    showToast(AUTO_WINE.noSpareWine(plan.reserve));
     return 0;
   }
 
@@ -284,7 +285,7 @@ export function enqueueWineRun(fromTown: string): number {
   }
 
   if (added === 0) {
-    alert(AUTO_WINE.nothingToSend);
+    showToast(AUTO_WINE.nothingToSend);
     return 0;
   }
 
@@ -313,7 +314,7 @@ export function loadConsumedWine(): void {
     }
   }
   if (filled === 0) {
-    alert(AUTO_WINE.noFigures);
+    showToast(AUTO_WINE.noFigures);
   }
 }
 

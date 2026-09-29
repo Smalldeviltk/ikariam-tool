@@ -20,6 +20,7 @@ import { DIALOG_ID, SEL } from "@core/ikariam/selectors";
 import { installErrorHandlers } from "@core/bug-report";
 import { clearLog, initLogger, logInfo } from "@core/logger";
 import { TabLock, TaskRunner } from "@core/task-queue";
+import { showToast } from "@core/ui/window";
 
 import { BUG_REPORT, QUEUE_VIEW, SEND_DIALOG, WINE_DIALOG } from "./messages";
 import {
@@ -126,7 +127,7 @@ const KEY_SEND_ALL_ARMY = "KeyA";
 const KEY_AUTO_BUILD = "KeyB";
 const KEY_SAFEHOUSE = "KeyS";
 
-/** How much of the bug summary fits in the confirmation alert. */
+/** How much of the bug summary fits in the confirmation toast. */
 const BUG_SUMMARY_PREVIEW_CHARS = 800;
 
 let runner: TaskRunner;
@@ -232,19 +233,19 @@ function registerUiActions(): void {
     "send.add": () => {
       const form = readSendForm();
       if (!form) {
-        alert(SEND_DIALOG.errors.incomplete);
+        showToast(SEND_DIALOG.errors.incomplete);
         return;
       }
       if (form.origin === form.destination) {
-        alert(SEND_DIALOG.errors.sameTown);
+        showToast(SEND_DIALOG.errors.sameTown);
         return;
       }
       if (form.invalid.length > 0) {
-        alert(SEND_DIALOG.errors.invalidAmount(form.invalid.join(", ")));
+        showToast(SEND_DIALOG.errors.invalidAmount(form.invalid.join(", ")));
         return;
       }
       if (form.amounts.length === 0) {
-        alert(SEND_DIALOG.errors.noAmount);
+        showToast(SEND_DIALOG.errors.noAmount);
         return;
       }
       // One queued row per resource filled in.
@@ -280,7 +281,7 @@ function registerUiActions(): void {
     "wine.preview": () => {
       const senders = loadSenders();
       if (senders.length === 0) {
-        alert(WINE_DIALOG.noSourceTicked);
+        showToast(WINE_DIALOG.noSourceTicked);
         return;
       }
       // With several sources, preview against the first one.
@@ -289,7 +290,7 @@ function registerUiActions(): void {
     "wine.chooseSource": () => {
       const senders = loadSenders();
       if (senders.length === 0) {
-        alert(WINE_DIALOG.noSourceTicked);
+        showToast(WINE_DIALOG.noSourceTicked);
         return;
       }
       if (senders.length === 1) {
@@ -392,7 +393,7 @@ function registerUiActions(): void {
     "bug.report": () => {
       const bugs = getBugs();
       if (bugs.length === 0) {
-        alert(BUG_REPORT.nothingToReport);
+        showToast(BUG_REPORT.nothingToReport);
         return;
       }
       const report = exportBugReport();
@@ -400,7 +401,7 @@ function registerUiActions(): void {
       void navigator.clipboard
         ?.writeText(report)
         .then(() =>
-          alert(
+          showToast(
             BUG_REPORT.copied(
               bugs.length,
               summariseBugs().slice(0, BUG_SUMMARY_PREVIEW_CHARS),
@@ -410,12 +411,12 @@ function registerUiActions(): void {
         .catch(() => {
           // Clipboard blocked: fall back to the console, which always works.
           console.log(report);
-          alert(BUG_REPORT.clipboardUnavailable);
+          showToast(BUG_REPORT.clipboardUnavailable);
         });
     },
     "bug.clear": () => {
       clearBugs();
-      alert(BUG_REPORT.cleared);
+      showToast(BUG_REPORT.cleared);
     },
 
     /* ── Misc ── */

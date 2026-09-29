@@ -18,6 +18,13 @@ vi.mock("@core/logger", async (importOriginal) => ({
   initLogger: () => {},
 }));
 
+// Messages are toasts now. Capture them, but keep the module's real window.
+const { showToast } = vi.hoisted(() => ({ showToast: vi.fn() }));
+vi.mock("@core/ui/window", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@core/ui/window")>()),
+  showToast,
+}));
+
 function upgradeTask(
   positionId: string,
 ): Extract<Task, { type: "upgradeBuilding" }> {
@@ -353,7 +360,7 @@ describe("scanBuildings", () => {
   beforeEach(() => {
     localStorage.clear();
     initState("tester");
-    window.alert = vi.fn();
+    showToast.mockClear();
     document.body.innerHTML =
       `<div id="js_cityBread">W-Athens</div>` +
       dropdown(TOWNS) +
@@ -374,7 +381,7 @@ describe("scanBuildings", () => {
 
   it("refuses to run while the task runner is navigating", async () => {
     await scanBuildings(undefined, () => true);
-    expect(vi.mocked(window.alert)).toHaveBeenCalledWith(
+    expect(showToast).toHaveBeenCalledWith(
       expect.stringContaining("task queue is running"),
     );
     expect(document.querySelector("#js_cityBread")!.textContent).toBe(
@@ -385,7 +392,7 @@ describe("scanBuildings", () => {
   it("says so when there is no town list to walk", async () => {
     document.body.innerHTML = "";
     await scanBuildings();
-    expect(vi.mocked(window.alert)).toHaveBeenCalledWith(
+    expect(showToast).toHaveBeenCalledWith(
       expect.stringContaining("No town list"),
     );
   });
@@ -404,7 +411,7 @@ describe("scanBuildings", () => {
         vi.useRealTimers();
       }
 
-      const summary = String(vi.mocked(window.alert).mock.lastCall?.[0]);
+      const summary = String(showToast.mock.lastCall?.[0]);
       // W-Athens is already current, M-Corinth switches, M-Aegina never does.
       expect(summary).toContain("2/3 towns visited");
       expect(summary).toContain("M-Aegina");
@@ -423,7 +430,7 @@ describe("scanBuildings: the fast path", () => {
     // out a real throttle between requests, so it needs real ones.
     vi.useRealTimers();
     resetHttpState();
-    window.alert = vi.fn();
+    showToast.mockClear();
     document.body.innerHTML =
       `<div id="js_cityBread">W-Athens</div>` +
       `<div id="dropDown_js_citySelectContainer"><div class="bg"><ul>` +
@@ -476,7 +483,7 @@ describe("scanBuildings: the fast path", () => {
       await scanBuildings();
 
       expect(fetchMock).toHaveBeenCalledTimes(TOWN_IDS.length);
-      expect(String(vi.mocked(window.alert).mock.lastCall?.[0])).toContain(
+      expect(String(showToast.mock.lastCall?.[0])).toContain(
         "Sync finished: 2/2",
       );
     },
@@ -498,8 +505,6 @@ describe("scanBuildings: the fast path", () => {
     }
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(String(vi.mocked(window.alert).mock.lastCall?.[0])).toContain(
-      "Scan finished",
-    );
+    expect(String(showToast.mock.lastCall?.[0])).toContain("Scan finished");
   }, 30_000);
 });

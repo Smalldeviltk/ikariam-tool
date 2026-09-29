@@ -80,10 +80,12 @@ export type NewTask = DistributiveOmit<Task, "id"> & { id?: string };
  * Outcome of one handler run; decides what happens to the task.
  *
  * The distinction between `retry` and `defer` matters. `retry` is for blockers
- * that stop EVERY task (no ships at all, no action points) — holding position is
- * right, because rotating the queue would only burn navigations. `defer` is for
- * blockers specific to THIS task (this town is already building, this town has
- * no port) where other queued tasks could still succeed.
+ * that stop every task OF THIS TYPE (no ships at all, no action points for a
+ * shipment) — the task holds its place among its own type, because rotating
+ * them would only burn navigations, while tasks of another type queued behind
+ * it still run (see `TaskRunner.nextTask`). `defer` is for blockers specific to
+ * THIS task (this town is already building, this town has no port) where other
+ * queued tasks could still succeed.
  *
  * Getting that wrong causes head-of-line blocking: the original moved on to the
  * next town when one was mid-construction, and a plain `retry` here would instead
@@ -94,7 +96,10 @@ export type TaskResult =
   | { status: "done" }
   /** Partial progress (e.g. ships filled but the amount is not covered yet). */
   | { status: "progress"; task: Task }
-  /** Blocked globally — keep at the head and retry on the next tick. */
+  /**
+   * Blocked for every task of this type — keep its place, run other types
+   * meanwhile, and retry once nothing else can run.
+   */
   | { status: "retry"; reason?: string }
   /** Blocked for this task only — move to the back so others can run. */
   | { status: "defer"; reason?: string }
@@ -363,6 +368,16 @@ export class TaskRunner {
   private readonly errorStreaks = new Map<string, number>();
   /** Epoch ms before which ticks are skipped, set when the whole queue defers. */
   private pausedUntil = 0;
+  /**
+   * Task types whose last run returned `retry`, skipped while a task of
+   * another type can run.
+   *
+   * Shipments and upgrades share this runner, and a shipment waiting for the
+   * fleet to come home used to hold the head of the queue: every upgrade
+   * behind it waited too, although an upgrade needs no ships. In memory like
+   * `busy`: a reload starts from the head again.
+   */
+  private readonly blockedTypes = new Set<TaskType>();
 
   constructor(
     private readonly queue: TaskQueue,
@@ -405,12 +420,26 @@ export class TaskRunner {
     await this.tick();
   }
 
+  /**
+   * The task to run this tick: the first one whose type is not blocked by a
+   * `retry`. When every queued type is blocked, the blocks are forgotten and
+   * the head runs, so a blocker that has cleared (the fleet is back) is
+   * noticed on the next tick, as before any type was skipped.
+   */
+  private nextTask(): Task | undefined {
+    const tasks = this.queue.list();
+    const runnable = tasks.find((task) => !this.blockedTypes.has(task.type));
+    if (runnable) return runnable;
+    this.blockedTypes.clear();
+    return tasks[0];
+  }
+
   private async tick(): Promise<void> {
     if (this.busy) return;
     if (this.options.canRun && !this.options.canRun()) return;
     if (Date.now() < this.pausedUntil) return;
 
-    const task = this.queue.head();
+    const task = this.nextTask();
     if (!task) {
       if (!this.drained) {
         this.drained = true;
@@ -436,6 +465,8 @@ export class TaskRunner {
       if (result.status !== "defer") this.deferStreak = 0;
       // It returned rather than threw, so whatever was wrong before is over.
       this.errorStreaks.delete(task.id);
+      if (result.status === "retry") this.blockedTypes.add(task.type);
+      else this.blockedTypes.delete(task.type);
 
       switch (result.status) {
         case "done":
@@ -445,7 +476,8 @@ export class TaskRunner {
           this.queue.replaceById(task.id, result.task);
           break;
         case "retry":
-          // Leave the task in place; the next tick tries again.
+          // Leave the task in place. Its type is skipped while another type
+          // can run, then it is tried again.
           break;
         case "defer": {
           this.queue.moveToBack(task.id);

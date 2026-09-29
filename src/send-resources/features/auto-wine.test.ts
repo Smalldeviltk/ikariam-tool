@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { AUTO_WINE_LABEL, getState, initState, saveReceivers } from "../state";
 import { loadConsumedWine, measuredStats } from "./auto-wine";
 import { saveTownStats } from "../town-cache";
@@ -54,8 +54,6 @@ beforeEach(() => {
   // account store, so state has to exist.
   localStorage.clear();
   initState("tester");
-  // Several of the paths under test explain themselves through `alert`.
-  window.alert = vi.fn();
 });
 
 describe("readWineBoard", () => {

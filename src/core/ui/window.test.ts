@@ -1,5 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createWindow, setWindowFooter, WINDOW_STYLE_ID } from "./window";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  createWindow,
+  setWindowFooter,
+  showToast,
+  TOAST_STACK_ID,
+  TOAST_STYLE_ID,
+  toastDuration,
+  WINDOW_STYLE_ID,
+} from "./window";
 import { accountStore } from "@core/storage";
 
 beforeEach(() => {
@@ -176,5 +184,73 @@ describe("content and chrome", () => {
     const win = createWindow({ id: "test-window", title: "Test" });
     win.destroy();
     expect(document.querySelector("#test-window")).toBeNull();
+  });
+});
+
+describe("showToast", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function toasts(): string[] {
+    return [...document.querySelectorAll(`#${TOAST_STACK_ID} .ika-toast`)].map(
+      (toast) => toast.textContent ?? "",
+    );
+  }
+
+  it("shows the message as text, never as markup", () => {
+    showToast("<b>W-Athens</b>");
+    expect(toasts()).toEqual(["<b>W-Athens</b>"]);
+    expect(document.querySelector(`#${TOAST_STACK_ID} b`)).toBeNull();
+  });
+
+  it("stacks several messages instead of replacing one", () => {
+    showToast("first");
+    showToast("second");
+    expect(toasts()).toEqual(["first", "second"]);
+  });
+
+  it("goes away by itself once it has been read", () => {
+    const message = "Please choose both towns.";
+    showToast(message);
+
+    vi.advanceTimersByTime(toastDuration(message) - 1);
+    expect(toasts()).toEqual([message]);
+
+    vi.advanceTimersByTime(1000);
+    expect(toasts()).toEqual([]);
+  });
+
+  it("stays longer for a longer message, up to a limit", () => {
+    expect(toastDuration("x".repeat(200))).toBeGreaterThan(
+      toastDuration("short"),
+    );
+    expect(toastDuration("x".repeat(100_000))).toBe(
+      toastDuration("x".repeat(200_000)),
+    );
+  });
+
+  it("goes away early when clicked", () => {
+    showToast("click me");
+    document.querySelector<HTMLElement>(".ika-toast")!.click();
+    vi.advanceTimersByTime(1000);
+    expect(toasts()).toEqual([]);
+  });
+
+  it("installs its stylesheet once, however many toasts there are", () => {
+    showToast("a");
+    showToast("b");
+    expect(document.querySelectorAll(`#${TOAST_STYLE_ID}`)).toHaveLength(1);
+  });
+
+  it("brings its stack back after the page body was redrawn", () => {
+    showToast("a");
+    document.body.innerHTML = "";
+    showToast("b");
+    expect(toasts()).toEqual(["b"]);
   });
 });
