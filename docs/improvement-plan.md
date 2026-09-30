@@ -975,7 +975,8 @@ Cột **Build** cho biết tính năng chạy được ở đâu: `US` = userscr
 | R ⬜ | **Kiểm tra bản mới.** Ta không có cơ chế cập nhật nào — Tampermonkey cần `@updateURL`/`@downloadURL`, extension cài tay thì không có gì.                                                                                                                                                            | cả hai      | —            |
 | S ⬜ | **Auto Wine: làm tròn lượng gửi theo sức chứa tàu.** `distributeWine` chia tới từng đơn vị, nên một chuyến 621 rượu tốn 2 thương thuyền (620/tàu trên server đang test). Làm tròn theo bội số của `ship-capacity.ts` để đỡ tốn tàu, nhất là khi tàu rảnh đang thiếu; phần dư giữ lại town nguồn. | cả hai | 2.A |
 | T ⬜ | **Auto Wine: tính rượu tiêu hao trong lúc chở.** Tới lúc hàng cập bến, town nhận đã uống thêm `consume × thời gian di chuyển`, nên mức giờ thực tế thấp hơn `targetHours`. Cần thời gian di chuyển giữa hai town — Send Resources hiện chưa đọc con số này ở đâu cả. | cả hai | 2.A |
-| U ⏸ | **Chi phí và thời gian nâng cấp tính bằng công thức thay vì bảng cứng trong `Constant`.** Người dùng đề xuất 29/09 và đã chọn hướng công thức. Hiện trạng, nguồn đối chiếu và các hướng làm: ghi chú về U bên dưới. | chỉ board | nguồn công thức (người dùng sẽ gửi) |
+| U ◐ | **Chi phí và thời gian nâng cấp đúng với game.** Đề xuất 29/09 là công thức; **01/10 đổi hướng: giữ bảng `Constant`, nạp lại số của chính game** (trang Help > building details). Đã nạp chi phí, thời gian, hiệu ứng và `maxLevel` logic; công thức giảm giá đã áp (tối đa 64%). Còn: cấp vượt quá số cấp trang Help liệt kê. Ghi chú về U bên dưới. | chỉ board | nguồn số cho cấp > 50 |
+| V ◐ | **Hiệu ứng của research tính đúng với game.** Người dùng đề xuất 01/10, bốn điểm: giảm chi phí xây dựng, giảm chi phí vàng cho scientist, dân số tối đa, hài lòng. Hiện trạng: ghi chú về V bên dưới. | chỉ board | chi tiết (người dùng sẽ ghi) |
 
 **Đã làm: A, B, C, D, H.** D và H ghi ở §2.G.
 
@@ -991,9 +992,73 @@ Cột **Build** cho biết tính năng chạy được ở đâu: `US` = userscr
   panel (`ui/panel.ts`). Khi chưa có số liệu nào thì nói thẳng là chưa có, thay
   vì báo mọi town đều ổn — hai chuyện đó không giống nhau.
 
-**Ghi chú về U (chi phí và thời gian nâng cấp).** Người dùng muốn thay dữ liệu
-cứng bằng công thức. Hiện trạng dưới đây đã đọc từ code (29/09), chưa đối chiếu
-với game:
+**Ghi chú về U (chi phí và thời gian nâng cấp).**
+
+**Cập nhật 01/10 — đã nạp số của game vào `Constant.BuildingData`.** Chưa commit.
+
+- **Nguồn.** Wiki (fandom) đã cũ; game đổi cả đường cong chi phí (3.795/3.900 ô
+  lệch, nhiều ô lệch trên 100%). Số mới lấy từ dialog Help > building details
+  của game (`?view=buildingDetail&buildingId=N&helpId=1`), server `s800-en`,
+  bằng nút tạm **Crawl Building** trong nhóm Data của panel Send Resources
+  (`send-resources/features/building-help-crawler.ts` — gỡ khi xong việc). 33
+  file thô, mỗi công trình một file, ở `docs/wiki/building-help-<class>-<id>.json`;
+  `docs/wiki/mapping.txt` là bảng icon → tài nguyên (người dùng cung cấp). Class
+  của 33 công trình trùng đúng 33 key của `BuildingData`, `buildingId` cũng trùng.
+- **Đã nạp:** `wood`/`wine`/`marble`/`glass`/`sulfur` (crystal của game =
+  `glass`), `time`, `maxLevel`, và các field hiệu ứng đã có sẵn: `academy.maxScientists`,
+  `warehouse.capacity`, `dump.capacity`, `tavern.wineUse`/`basicBonus`/`wineBonus`,
+  `museum.basicBonus`, `port.loadingSpeed`. Không đụng: `tavern.wineUse2`
+  (server `s202`), `townHall.actionPointsMax` (game không có cột này). Các cột
+  hiệu ứng khác của game (units "allows:", Diplomacy Points, Priests, Loading
+  Speed của Trading Post...) không có field tương ứng nên chưa lấy.
+- **Thời gian giờ là bảng, không còn công thức.** `time` là mảng giây theo cấp
+  (index = cấp hiện tại, như chi phí); `getUpgradeCost` đọc `time[level] || 0`.
+  Số lấy từ chữ game hiển thị, nên từ khoảng cấp 9 chỉ chính xác tới đơn vị thứ
+  hai (ví dụ `1M 22D` mất phần giờ). **Đo được, không đoán:** `1M` = 30 ngày
+  (công thức chính xác của Academy khớp 10/10 cấp có tháng chỉ với 30), `1Y` =
+  365 ngày (Chronos' Forge khớp 50/50 cấp với 365, lệch 5 cấp với 360).
+  ⚠️ `core/format.ts` (`TIME_FACTORS`) đang tính `M` = 2.520.000 s ≈ 29,17 ngày
+  — sai theo số đo này, chưa sửa (ngoài phạm vi).
+- **`maxLevel` là max logic, không phải trần của game.** Game đã bỏ giới hạn
+  cấp. `maxLevel` = cấp mà hiệu ứng ngừng tăng, theo mô tả hoặc bảng của trang
+  Help; không nêu thì `0` (không có max). `isMaxLevel` = `maxLevel > 0 && cấp >= maxLevel`.
+  Công trình đạt max vẫn tô xám như cũ và vẫn bấm được để nâng.
+
+  | Công trình | maxLevel | Căn cứ |
+  | --- | --- | --- |
+  | carpentering, architect, optician, fireworker, vineyard | 50 | "reduced by 1% ... up to a maximum of 50%" |
+  | forester, stonemason, glassblowing, winegrower, alchemist | 70 | "increases ... by 2% ... up to a maximum of 140%" |
+  | palace | 20 | "an additional town" mỗi cấp, "a total of 21 towns" |
+  | blackMarket | 25 | bảng: thuế chạm sàn 1% ở cấp 25 (đơn vị cuối mở ở cấp 23) |
+  | shrineOfOlympus | 21 | bảng: "Blessed Cities" đạt 21 ở cấp 21 rồi đứng yên |
+  | còn lại | 0 | mô tả không nêu. Sea Chart Archive nói trần 90% nhưng không nói mỗi cấp bao nhiêu |
+
+- **⏸ Còn thiếu — cấp vượt quá số cấp trang Help liệt kê** (51+; Palace và
+  Governor's Residence 31+). Trang Help chỉ in 50 (hoặc 30) cấp dù game không
+  giới hạn. Người dùng chọn **để trống**, sẽ tìm cách bổ sung sau. Hệ quả hiện
+  tại: chi phí và thời gian của các cấp đó ra `0` (`|| 0` có sẵn), nên công
+  trình ở đó bị tô "có thể nâng" và tooltip ghi 0; sức chứa warehouse/depot và
+  `basicBonus` của tavern/museum ở các cấp đó tính `0` (đã thêm `|| 0` để không
+  ra `NaN`). Trước đây bảng cũ có số tới cấp 61–87 tuỳ công trình.
+- **✅ Công thức giảm giá (01/10, người dùng cung cấp).** Bảng là **số gốc**
+  của game; `getUpgradeCost` trừ một lần, cộng dồn, không nhân chồng: Pulley
+  2% + Geometry 4% + Spirit Level 8% + công trình giảm giá 1%/cấp **tối đa 50%**
+  (`REDUCTION_BUILDING_MAX_PERCENT` trong `core/ikariam/model.ts`) — tổng tối đa
+  64%. Carpenter → wood, Wine Press → wine, Architect → marble, Optician →
+  crystal, Firework Test Area → sulfur. Làm tròn giữ `Math.round` như cũ
+  (người dùng chưa nói cách làm tròn; một điểm trong bảng wiki cũ — Academy cấp
+  1, Pulley: 64 × 0,98 = 62,72 hiện 62 — gợi ý game làm tròn xuống, chưa kiểm).
+  Đã chạy thử trên Academy cấp 50: 0,86 / 0,76 (Carpenter 10) / 0,36 (Carpenter
+  50 và 60). Chưa có test trong repo. Wine Press giảm **rượu tiêu thụ** của
+  Tavern cũng đã có trần 50% (01/10) — xem "Phạm vi của 5 công trình giảm giá"
+  trong ghi chú về V.
+- **Đã thử công thức, bỏ theo yêu cầu.** Từ số game, Academy khớp chính xác:
+  wood `floor(5·L·e^(0.292757·L)) + 28` (50/50), crystal
+  `floor(5·L·e^(0.32156·L)) + 100` (46/46), thời gian
+  `floor(105·L·e^(k·L)) − 98` với k ≈ 0.15617. Có thể hữu ích nếu cần suy ra
+  cấp > 50.
+
+Hiện trạng trước 01/10, đọc từ code ngày 29/09 (giữ lại để đối chiếu):
 
 - **Chi phí là bảng.** `Constant.BuildingData[tên].wood / glass / marble /
   sulfur / wine` (`empire-overview/constants.ts`, từ dòng 1285) là mảng số
@@ -1038,6 +1103,44 @@ Việc này nằm ở board, nên cũng chạm câu hỏi 2 ở §6. Trước kh
 capture `#buildingUpgrade` (chi phí + thời gian) của vài công trình ở cấp đã
 biết, để có số thật mà đối chiếu.
 
+**Ghi chú về V (hiệu ứng của research).** Người dùng sẽ cải thiện bốn điểm
+dưới đây; **chi tiết người dùng sẽ ghi sau — chưa làm gì cho tới khi có.**
+Hiện trạng đọc từ code ngày 01/10, bản port giống hệt legacy:
+
+- **Board chỉ biết research nào đã nghiên cứu, không biết hiệu ứng của nó.**
+  `parseResearchAdvisor` (`empire-overview/game-api.ts`) chỉ chạy khi người
+  chơi tự mở Research Advisor, đọc `currResearchType` trong JSON
+  `new_js_params` / `load_js.params` của `updateTemplateData`, và từ mỗi mục chỉ
+  lấy id (`aHref`), level (`"(N)"` trong tên → `N − 1`, không có thì
+  `liClass === "explored"` → 1) và tên. Lưu ở `globalData._research.topics`,
+  đọc bằng `getResearchTopicLevel(id)`. JSON đó còn gì khác thì **chưa capture**.
+- **Mọi hiệu ứng là số cứng trong code:**
+
+  | Điểm cần cải thiện | Research | Code hiện tại | Ở đâu |
+  | --- | --- | --- | --- |
+  | ✅ Giảm chi phí xây dựng (01/10) | Pulley −2%, Geometry −4%, Spirit Level −8% + công trình giảm giá tối đa 50% | cộng dồn, tối đa 64%, trừ trên số gốc — ghi chú về U | `models/building.ts`, `getUpgradeCost` |
+  | Giảm chi phí vàng cho scientist | Letter Chute | `6 + GovernmentData.researcherCost − LetterChute × 3` vàng/scientist | `models/city-research.ts`, `_researchCostModifier` |
+  | Dân số tối đa | Well Construction +50, Utopia +200, Holiday +50, Economic Future +20/cấp | cộng thêm vào dân số tính từ Town Hall | `models/city.ts` |
+  | Hài lòng | Holiday (2080) ×25, Economic Future (2999) ×10, Well Construction (3010) ×50, Utopia (2120) ×200 | cộng vào `r.research` | `models/city.ts`, `_getSatisfactionData` |
+
+**Phạm vi của 5 công trình giảm giá** (người dùng cung cấp 01/10). Mỗi công
+trình giảm 1%/cấp, tối đa 50%, cho **mọi** chỗ trong town dùng tài nguyên của
+nó, không chỉ xây dựng. Trần 50% là `REDUCTION_BUILDING_MAX_PERCENT` trong
+`core/ikariam/model.ts`, dùng chung cho cả hai script.
+
+| Công trình | Giảm | Áp cho | Code hiện tại |
+| --- | --- | --- | --- |
+| Carpenter | wood | Building, Units (Generals), Ships (Generals) | Building ✅. Units/Ships: code không tính chi phí quân và tàu |
+| Architect | marble | Building | ✅ |
+| Optician | crystal | Building, Units, Ships, Improvements (Workshop), Experiments (Academy) | Building ✅. Còn lại: code không tính |
+| Firework Test Area | sulfur | Building, Units, Ships | Building ✅. Units/Ships: code không tính |
+| Wine Press | wine | Building, Units, Tavern | Building ✅. **Tavern ✅ 01/10**: trần 50% ở `modelWineConsumption` (`core/ikariam/model.ts` — Auto Wine, town cache, span sản lượng) và 3 chỗ trong `empire-overview/models/city.ts` (`updateCityDataFromAjax`, `tavernlevel`, `_getSatisfactionData`, qua `winePressSavingPercent`). Trước đó tính `cấp/100` không trần. Units: code không tính |
+
+"Code không tính" nghĩa là không có gì để sửa hôm nay: `Constant.UnitData` chỉ
+có `baseTime` và `baseCost`, không có chi phí tài nguyên của quân/tàu, và code
+không có phần nào về cải tiến Workshop hay thí nghiệm Academy. Nếu sau này
+thêm, phải áp giảm giá theo bảng này.
+
 **Ghi chú về J (thông báo).** Extension đã khai `"permissions": ["notifications", "alarms"]` nên làm được đầy đủ, kể cả khi tab game không ở trước mặt. Bản userscript chỉ dùng được `Notification` API của trang và cần người dùng cấp quyền — nhắc được khi tab còn mở, không nhắc được khi đã đóng. Nên coi đây là tính năng **ưu tiên cho bản extension**, userscript làm mức rút gọn.
 
 ### 4.3 Cố ý không lấy
@@ -1069,7 +1172,8 @@ biết, để có số thật mà đối chiếu.
 ⬜ Lượt review sau:        §2.D chuỗi i18n còn sót, và thử trên game thật
 ⏸ Chờ câu hỏi 2:          2.6, 2.7, 2.8   (đều ở board)
 ⏸ Chờ câu hỏi 3:          E, F, G, I, J, K, L, M, N, O, P, Q, R
-⏸ Chờ nguồn công thức:    U (chi phí/thời gian nâng cấp bằng công thức) — người dùng sẽ gửi; ghi chú về U ở §4.2
+◐ U (01/10):               đã nạp số game vào Constant và công thức giảm giá; ⏸ cấp > 50 — ghi chú về U ở §4.2
+◐ V (01/10):               giảm chi phí xây dựng xong; ⏸ vàng scientist, dân số tối đa, hài lòng — người dùng sẽ ghi; ghi chú về V ở §4.2
 ⬜ Ghi lại, chưa cần làm: S, T (Auto Wine)
 ```
 
@@ -1106,8 +1210,10 @@ D, H và nửa sau của 2.4 đã xong ngày 28/09 (§2.G).
 2. **Phase 2 có bao gồm board Empire Overview không, hay chỉ panel Send
    Resources?** Board đã dùng jQuery UI tabs và kéo thả sẵn; đụng vào nó là đụng
    10.767 dòng code port cơ học, rủi ro cao hơn hẳn so với làm lại panel.
-3. **Mục 4.2 lấy hết hay lấy một phần?** 21 mục (A–U); A, B, C, D, H đã xong,
-   S và T chỉ ghi lại, U do người dùng đề xuất. Bạn đánh dấu mục nào cần,
+3. **Mục 4.2 lấy hết hay lấy một phần?** 22 mục (A–V); A, B, C, D, H đã xong,
+   S và T chỉ ghi lại, U và V do người dùng đề xuất. Bạn đánh dấu mục nào cần,
    tôi làm theo thứ tự đó.
 4. ~~**U: công thức lấy từ đâu, hay đọc số thật từ game?**~~ **Đã trả lời
-   29/09:** công thức; người dùng có sẵn nguồn và sẽ cung cấp sau.
+   29/09:** công thức; người dùng có sẵn nguồn và sẽ cung cấp sau. **Đổi
+   01/10:** giữ bảng `Constant`, nạp số thật từ trang Help của game (§4.2,
+   ghi chú về U).

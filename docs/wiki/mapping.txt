@@ -1,0 +1,6 @@
+src="//gf2.geo.gfsrv.net/cdn19/c3527b2f694fb882563c04df6d8972.png"> wood
+src="//gf1.geo.gfsrv.net/cdnc6/94ddfda045a8f5ced3397d791fd064.png"> wine
+src="//gf3.geo.gfsrv.net/cdnbf/fc258b990c1a2a36c5aeb9872fc08a.png"> marble
+src="//gf2.geo.gfsrv.net/cdn1e/417b4059940b2ae2680c070a197d8c.png"> crystal
+src="//gf1.geo.gfsrv.net/cdn9b/5578a7dfa3e98124439cca4a387a61.png"> sulfur
+src="//gf2.geo.gfsrv.net/cdna2/465f0358d2cb09c07cd0f5a53e38eb.png"> time
