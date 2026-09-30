@@ -17,6 +17,16 @@ import { database } from "../database";
 import { empire } from "../empire";
 import { events } from "../events";
 import { ikariam } from "../game-api";
+import { REDUCTION_BUILDING_MAX_PERCENT } from "@core/ikariam/model";
+
+/**
+ * How much of the tavern's wine the town's Wine Press saves, in percent: 1%
+ * per level, at most `REDUCTION_BUILDING_MAX_PERCENT`, 0 without a press.
+ */
+function winePressSavingPercent(city): number {
+  const press = city.getBuildingFromName(Constant.Buildings.VINEYARD);
+  return press ? Math.min(press.getLevel, REDUCTION_BUILDING_MAX_PERCENT) : 0;
+}
 
 export function City(id) {
   this._id = id || 0;
@@ -163,15 +173,8 @@ export function City(id) {
           ) > -1
         ) {
           baseWineConsumption = cityData.wineSpendings;
-          wineConsumption = this.getBuildingFromName(
-            Constant.Buildings.VINEYARD,
-          )
-            ? baseWineConsumption *
-              ((100 -
-                this.getBuildingFromName(Constant.Buildings.VINEYARD)
-                  .getLevel) /
-                100)
-            : baseWineConsumption;
+          wineConsumption =
+            (baseWineConsumption * (100 - winePressSavingPercent(this))) / 100;
         } else {
           wineConsumption = cityData.wineSpendings;
         }
@@ -495,11 +498,7 @@ export function City(id) {
         wineUse = Constant.BuildingData[Constant.Buildings.TAVERN].wineUse2;
       var consumption = Math.floor(
         this.getResource(Constant.Resources.WINE).getConsumption *
-          (100 /
-            (100 -
-              (this.getBuildingFromName(Constant.Buildings.VINEYARD)
-                ? this.getBuildingFromName(Constant.Buildings.VINEYARD).getLevel
-                : 0))),
+          (100 / (100 - winePressSavingPercent(this))),
       );
       for (i = 0; i < wineUse.length; i++) {
         if (Math.abs(wineUse[i] - consumption) <= 1) {
@@ -703,10 +702,12 @@ export function City(id) {
     $.each(
       this.getBuildingsFromName(Constant.Buildings.WAREHOUSE),
       function (i, building) {
+        // `|| 0`: the capacity table stops at the last level the game's help
+        // page lists; a higher level has no figure yet (not NaN).
         ret[Constant.Buildings.WAREHOUSE].storage +=
           Constant.BuildingData[Constant.Buildings.WAREHOUSE].capacity[
             building.getLevel - 1
-          ];
+          ] || 0;
         ret[Constant.Buildings.WAREHOUSE].safe += building.getLevel * 480;
       },
     );
@@ -716,7 +717,7 @@ export function City(id) {
         ret[Constant.Buildings.DUMP].storage +=
           Constant.BuildingData[Constant.Buildings.DUMP].capacity[
             building.getLevel - 1
-          ];
+          ] || 0;
       },
     );
     var capacity = 0;
@@ -763,10 +764,12 @@ export function City(id) {
     if (this.getBuildingFromName(Constant.Buildings.MUSEUM)) {
       var eventBonus = 0; // bonus for a server transfer / merge
       r.museum.cultural = this.getCulturalGoods * 50 + eventBonus;
+      // `|| 0` here and for the tavern: the tables stop at the last level
+      // the game's help page lists.
       r.museum.level =
         Constant.BuildingData[Constant.Buildings.MUSEUM].basicBonus[
           this.getBuildingFromName(Constant.Buildings.MUSEUM).getLevel
-        ];
+        ] || 0;
     }
     r.government =
       Constant.GovernmentData[database.getGlobalData.getGovernmentType]
@@ -784,14 +787,10 @@ export function City(id) {
       r.tavern.level =
         Constant.BuildingData[Constant.Buildings.TAVERN].basicBonus[
           this.getBuildingFromName(Constant.Buildings.TAVERN).getLevel
-        ];
+        ] || 0;
       var consumption = Math.floor(
         this.getResource(Constant.Resources.WINE).getConsumption *
-          (100 /
-            (100 -
-              (this.getBuildingFromName(Constant.Buildings.VINEYARD)
-                ? this.getBuildingFromName(Constant.Buildings.VINEYARD).getLevel
-                : 0))),
+          (100 / (100 - winePressSavingPercent(this))),
       );
       for (var i = 0; i < wineUse.length; i++) {
         if (Math.abs(wineUse[i] - consumption) <= 1) {

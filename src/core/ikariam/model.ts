@@ -148,6 +148,14 @@ export function modelMaxResource(resource: string): number | null {
 }
 
 /**
+ * The most a reduction building (Carpenter, Architect, Optician, Firework Test
+ * Area, Wine Press) takes off its resource: 1% per level "up to a maximum of
+ * 50%", as each one's help page in the game says. Past level 50 it saves no
+ * more.
+ */
+export const REDUCTION_BUILDING_MAX_PERCENT = 50;
+
+/**
  * Level of this town's Wine Press, 0 when it has none, or null when the page
  * is not showing a city view and therefore cannot be asked.
  *
@@ -184,7 +192,8 @@ export function winePressLevel(): number | null {
  * So the press takes one percent per level off the tavern's draw, which is the
  * same formula the Empire Overview board has always applied
  * (`empire-overview/models/city.ts`, `updateCityDataFromAjax`). Only the
- * callers of this function were reading the raw figure.
+ * callers of this function were reading the raw figure. The saving stops at
+ * `REDUCTION_BUILDING_MAX_PERCENT`.
  */
 export function modelWineConsumption(): number | null {
   const spendings = numberOrNull(getModel()?.wineSpendings);
@@ -195,8 +204,8 @@ export function modelWineConsumption(): number | null {
   const press = winePressLevel();
   if (press === null) return null;
 
-  const level = Math.min(100, Math.max(0, press));
-  return (Math.abs(spendings) * (100 - level)) / 100;
+  const saving = Math.min(REDUCTION_BUILDING_MAX_PERCENT, Math.max(0, press));
+  return (Math.abs(spendings) * (100 - saving)) / 100;
 }
 
 /** Numeric id of the town currently open. */

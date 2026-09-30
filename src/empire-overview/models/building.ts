@@ -10,6 +10,7 @@ import { Constant } from "../constants";
 import { Utils } from "../utils";
 import { database } from "../database";
 import { events } from "../events";
+import { REDUCTION_BUILDING_MAX_PERCENT } from "@core/ikariam/model";
 
 export function Building(city, pos) {
   this._position = pos;
@@ -112,7 +113,6 @@ export function Building(city, pos) {
     };
   },
   get getUpgradeCost() {
-    var carpenter, architect, vineyard, fireworker, optician;
     var level = this._level + this.isUpgrading;
     if (this.isEmpty) {
       return {
@@ -145,51 +145,29 @@ export function Building(city, pos) {
     )
       ? 0.08
       : 0;
+    // The research discounts (`bon`, 14% at most) and the reduction
+    // building's (1% per level, 50% at most) add up and come off the base
+    // cost once: 64% at most, never compounded.
+    const reductionBy = (buildingName: string) => {
+      const building = this.city().getBuildingFromName(buildingName);
+      return building
+        ? Math.min(building.getLevel, REDUCTION_BUILDING_MAX_PERCENT) / 100
+        : 0;
+    };
+    const reducedCost = (resource: string, buildingName: string) =>
+      Math.round(
+        (Constant.BuildingData[this._name][resource][level] || 0) *
+          (bon - reductionBy(buildingName)),
+      );
     return {
-      wood: Math.round(
-        (Constant.BuildingData[this._name].wood[level] || 0) *
-          (bon -
-            ((carpenter = this.city().getBuildingFromName(
-              Constant.Buildings.CARPENTER,
-            )),
-            carpenter ? carpenter.getLevel / 100 : 0)),
-      ),
-      wine: Math.round(
-        (Constant.BuildingData[this._name].wine[level] || 0) *
-          (bon -
-            ((vineyard = this.city().getBuildingFromName(
-              Constant.Buildings.VINEYARD,
-            )),
-            vineyard ? vineyard.getLevel / 100 : 0)),
-      ),
-      marble: Math.round(
-        (Constant.BuildingData[this._name].marble[level] || 0) *
-          (bon -
-            ((architect = this.city().getBuildingFromName(
-              Constant.Buildings.ARCHITECT,
-            )),
-            architect ? architect.getLevel / 100 : 0)),
-      ),
-      glass: Math.round(
-        (Constant.BuildingData[this._name].glass[level] || 0) *
-          (bon -
-            ((optician = this.city().getBuildingFromName(
-              Constant.Buildings.OPTICIAN,
-            )),
-            optician ? optician.getLevel / 100 : 0)),
-      ),
-      sulfur: Math.round(
-        (Constant.BuildingData[this._name].sulfur[level] || 0) *
-          (bon -
-            ((fireworker = this.city().getBuildingFromName(
-              Constant.Buildings.FIREWORK_TEST_AREA,
-            )),
-            fireworker ? fireworker.getLevel / 100 : 0)),
-      ),
-      time:
-        Math.round((time.a / time.b) * Math.pow(time.c, level + 1) - time.d) *
-        1000 *
-        bonTime,
+      wood: reducedCost("wood", Constant.Buildings.CARPENTER),
+      wine: reducedCost("wine", Constant.Buildings.VINEYARD),
+      marble: reducedCost("marble", Constant.Buildings.ARCHITECT),
+      glass: reducedCost("glass", Constant.Buildings.OPTICIAN),
+      sulfur: reducedCost("sulfur", Constant.Buildings.FIREWORK_TEST_AREA),
+      // Seconds per level from the game's help pages, like the costs above:
+      // index = current level. Levels past the table have no figure yet.
+      time: (time[level] || 0) * 1000 * bonTime,
     };
   },
   get getName() {
@@ -246,7 +224,11 @@ export function Building(city, pos) {
     return undefined;
   },
   get isMaxLevel() {
-    return Constant.BuildingData[this.getName].maxLevel === this.getLevel;
+    // The game has no level cap any more. `maxLevel` is the level where the
+    // building's effect stops growing, as its help page describes, and 0 for
+    // a building whose page names none. Upgrading past it is still possible.
+    var maxLevel = Constant.BuildingData[this.getName].maxLevel;
+    return maxLevel > 0 && this.getLevel >= maxLevel;
   },
   get getPosition() {
     return this._position;
