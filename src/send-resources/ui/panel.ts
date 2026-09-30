@@ -78,7 +78,9 @@ function windowContent(): string {
       `<button class="button" id="btnExportData" ${action("data.export")}>${PANEL.exportData}</button>` +
         `<button class="button" id="btnImportData" ${action("data.import")}>${PANEL.importData}</button>` +
         `<button class="button" id="btnBugReport" ${action("bug.report")}>${PANEL.bugReport}</button>` +
-        `<button class="button" ${action("log.clear")}>${PANEL.clearLog}</button>`,
+        `<button class="button" ${action("log.clear")}>${PANEL.clearLog}</button>` +
+        // Temporary: saves the building shown in the game's help dialog.
+        `<button class="button" ${action("buildingHelp.save")}>${PANEL.crawlBuildingHelp}</button>`,
     ) +
     `<div id="logger"><textarea rows="4" cols="60" id="txtLogger" style="font-size:9px; display:none"></textarea></div>`
   );

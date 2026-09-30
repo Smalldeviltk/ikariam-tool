@@ -67,6 +67,7 @@ import {
   updateCurrentAccount,
 } from "./features/summary-account";
 import { startBarbarianObserver } from "./features/barbarian";
+import { saveBuildingHelpToFile } from "./features/building-help-crawler";
 import {
   applyTransportStep,
   startTransportButtonObserver,
@@ -423,6 +424,8 @@ function registerUiActions(): void {
     "ship.calibrate": calibrateShipCapacity,
     "panel.toggleZoom": toggleZoom,
     "log.clear": clearLog,
+    // Temporary: saves the building shown in the game's help dialog.
+    "buildingHelp.save": saveBuildingHelpToFile,
   });
 
   // The summary table's auto-build checkbox reacts to `change`, not `click`,

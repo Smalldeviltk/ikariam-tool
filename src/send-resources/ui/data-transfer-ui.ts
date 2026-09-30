@@ -34,7 +34,7 @@ function timestampedFilename(account: string): string {
   return `ikariam-tool-${safeAccount}-${stamp}.json`;
 }
 
-function downloadJson(filename: string, json: string): void {
+export function downloadJson(filename: string, json: string): void {
   const blob = new Blob([json], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");

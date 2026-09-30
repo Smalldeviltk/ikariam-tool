@@ -40,6 +40,7 @@ export const PANEL = {
   importData: "Import",
   bugReport: "Bug Report",
   clearLog: "Clear Log",
+  crawlBuildingHelp: "Crawl Building",
   /** The footer, while tasks are waiting. */
   footerWithQueue: (status: string, pending: number) =>
     `${status}  —  ${pending} queued`,
@@ -245,6 +246,14 @@ export const DATA_TRANSFER = {
     "Reload the page for everything to take effect." +
     (notes ? `\n\n${notes}` : ""),
   failed: (reason: string) => `Import failed: ${reason}`,
+} as const;
+
+export const BUILDING_CRAWL = {
+  noDialog:
+    "Open Help > building details first, pick a building and wait for it " +
+    "to load, then press Crawl Building.",
+  saved: (name: string, levels: number, filename: string) =>
+    `Saved ${name}: ${levels} levels.\n${filename}`,
 } as const;
 
 export const MISC = {
