@@ -1,19 +1,22 @@
 /** Types specific to Send Resources. */
 
+import { RESOURCE_LABEL } from "./messages";
+
 /** Resource ids exactly as the game uses them in `#textfield_<resource>`. */
 export type ResourceId = "wood" | "wine" | "marble" | "glass" | "sulfur";
 
 export const RESOURCE_OPTIONS: ReadonlyArray<{
   value: ResourceId;
   label: string;
-}> = [
-  { value: "wood", label: "Wood" },
-  { value: "wine", label: "Wine" },
-  { value: "marble", label: "Marble" },
-  // The game calls crystal "glass" in the DOM but shows "Crystal" in the UI.
-  { value: "glass", label: "Crystal" },
-  { value: "sulfur", label: "Sulfur" },
-];
+}> = (["wood", "wine", "marble", "glass", "sulfur"] as const).map((value) => ({
+  value,
+  label: RESOURCE_LABEL[value],
+}));
+
+/** The on-screen name of a resource id, or the id itself when unknown. */
+export function resourceLabel(resource: string): string {
+  return RESOURCE_LABEL[resource as ResourceId] ?? resource;
+}
 
 /** One town in the town-picker dropdown. */
 export interface TownEntry {

@@ -24,6 +24,7 @@ import {
   getState,
   loadReceivers,
   loadSenders,
+  saveReceivers,
 } from "../state";
 import type { WineReceiver } from "../types";
 import { projectedStats } from "../town-cache";
@@ -316,6 +317,31 @@ export function loadConsumedWine(): void {
   if (filled === 0) {
     showToast(AUTO_WINE.noFigures);
   }
+}
+
+/**
+ * Save the receivers that Load then Save in the settings dialog would save,
+ * without the dialog: every town not ticked as a sender, with its measured
+ * consumption, or its saved Wine/h when there is no measurement. A town ends
+ * up a receiver when that figure is above 0.
+ */
+export function saveMeasuredReceivers(): void {
+  const senders = loadSenders();
+  const saved = loadReceivers();
+  const board = readWineBoard();
+  const receivers: WineReceiver[] = [];
+
+  for (const town of getTownList()) {
+    const id = town.townNumber.toString();
+    if (senders.includes(id)) continue;
+    const measured = measuredStats(town.townName, board);
+    const winePerHour = measured
+      ? String(Math.round(measured.consume))
+      : (saved.find((entry) => entry.townNumber === id)?.winePerHour ?? "0");
+    if (Number(winePerHour) > 0)
+      receivers.push({ townNumber: id, winePerHour });
+  }
+  saveReceivers(receivers);
 }
 
 /** Read the settings form back. */

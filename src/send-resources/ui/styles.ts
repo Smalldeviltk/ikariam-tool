@@ -54,6 +54,7 @@ th { font-weight: bold; }
 .ika-queue-table th, .ika-queue-table td { padding: 2px 4px; text-align: left; }
 .ika-queue-table tr.active { background: #efdca8; font-weight: bold; }
 .ika-queue-table button { padding: 0 4px; margin-left: 2px; height: 18px; line-height: 1; }
+.ika-move:disabled { opacity: 0.4; cursor: default; }
 .ika-queue-empty { font-style: italic; color: #6b5433; margin: 2px 0 4px; }
 
 .needingShip {

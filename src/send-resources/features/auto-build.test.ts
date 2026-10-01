@@ -4,6 +4,8 @@ import {
   enqueueAutoBuild,
   getTownQueue,
   handleUpgradeBuilding,
+  listBuildingsInCurrentTown,
+  moveBuildingInQueue,
   scanBuildings,
 } from "./auto-build";
 import { resetHttpState } from "@core/ikariam/http";
@@ -339,6 +341,122 @@ describe("enqueueAutoBuild", () => {
   });
 });
 
+describe("listBuildingsInCurrentTown", () => {
+  function slot(position: number, title: string, building = false): string {
+    return (
+      `<div id="position${position}" class="building${building ? " constructionSite" : ""}">` +
+      `<a class="hoverable" id="js_CityPosition${position}Link" title="${title}"></a></div>`
+    );
+  }
+
+  it(
+    "reads a first level being built from the class, not from the words — " +
+      "matching 'Under construction' broke on any other game language",
+    () => {
+      document.body.innerHTML =
+        slot(1, "Warehouse (12)") +
+        slot(2, "Academy (5)", true) +
+        slot(3, "Tavern (Under construction)", true) +
+        slot(4, "Museum (Đang xây dựng)", true);
+
+      expect(
+        listBuildingsInCurrentTown().map((entry) => entry.buildingName),
+      ).toEqual(["Academy 6", "Museum 1", "Tavern 1", "Warehouse 12"]);
+    },
+  );
+});
+
+describe("moveBuildingInQueue", () => {
+  const WAREHOUSE_4 = {
+    positionId: "js_CityPosition4Link",
+    buildingName: "Warehouse 4",
+  };
+  const WAREHOUSE_5 = {
+    positionId: "js_CityPosition4Link",
+    buildingName: "Warehouse 5",
+  };
+  const PORT = {
+    positionId: "js_CityPosition1Link",
+    buildingName: "Trading Port 5",
+  };
+  const ACADEMY = {
+    positionId: "js_CityPosition2Link",
+    buildingName: "Academy 9",
+  };
+
+  function configure(queue: { positionId: string; buildingName: string }[]) {
+    saveAutoBuild([
+      {
+        accountName: "Smalldevil",
+        townList: [{ townName: "W-Athens", queue }],
+      },
+    ]);
+  }
+
+  function savedNames(): string[] {
+    return getTownQueue("W-Athens").map((entry) => entry.buildingName);
+  }
+
+  it("moves an upgrade one place, past one other building only", () => {
+    configure([WAREHOUSE_4, PORT, ACADEMY]);
+
+    moveBuildingInQueue(
+      ACADEMY.positionId,
+      ACADEMY.buildingName,
+      "W-Athens",
+      "up",
+    );
+    expect(savedNames()).toEqual([
+      "Warehouse 4",
+      "Academy 9",
+      "Trading Port 5",
+    ]);
+
+    moveBuildingInQueue(
+      WAREHOUSE_4.positionId,
+      WAREHOUSE_4.buildingName,
+      "W-Athens",
+      "down",
+    );
+    expect(savedNames()).toEqual([
+      "Academy 9",
+      "Warehouse 4",
+      "Trading Port 5",
+    ]);
+  });
+
+  it("does nothing past either end of the list", () => {
+    configure([WAREHOUSE_4, PORT]);
+
+    moveBuildingInQueue(
+      WAREHOUSE_4.positionId,
+      WAREHOUSE_4.buildingName,
+      "W-Athens",
+      "up",
+    );
+    moveBuildingInQueue(PORT.positionId, PORT.buildingName, "W-Athens", "down");
+
+    expect(savedNames()).toEqual(["Warehouse 4", "Trading Port 5"]);
+  });
+
+  it(
+    "leaves two entries of the same building as they are — renumbered after " +
+      "a swap, their levels would come out exactly as before",
+    () => {
+      configure([WAREHOUSE_4, WAREHOUSE_5]);
+
+      moveBuildingInQueue(
+        WAREHOUSE_5.positionId,
+        WAREHOUSE_5.buildingName,
+        "W-Athens",
+        "up",
+      );
+
+      expect(savedNames()).toEqual(["Warehouse 4", "Warehouse 5"]);
+    },
+  );
+});
+
 describe("scanBuildings", () => {
   /** Town dropdown with `names.length` entries, shaped like the live capture. */
   function dropdown(names: string[]): string {
@@ -380,7 +498,8 @@ describe("scanBuildings", () => {
   });
 
   it("refuses to run while the task runner is navigating", async () => {
-    await scanBuildings(undefined, () => true);
+    // Auto Wine's Start goes on only after a scan that ran.
+    expect(await scanBuildings(undefined, () => true)).toBe(false);
     expect(showToast).toHaveBeenCalledWith(
       expect.stringContaining("task queue is running"),
     );
@@ -480,7 +599,7 @@ describe("scanBuildings: the fast path", () => {
 
       // No clicking: the dropdown anchors carry no handlers in this fixture,
       // so the walking path could not have produced this result.
-      await scanBuildings();
+      expect(await scanBuildings()).toBe(true);
 
       expect(fetchMock).toHaveBeenCalledTimes(TOWN_IDS.length);
       expect(String(showToast.mock.lastCall?.[0])).toContain(

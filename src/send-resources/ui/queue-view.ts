@@ -24,7 +24,8 @@ import type { Task } from "@core/task-queue";
 import { QUEUE_VIEW } from "../messages";
 import { getTownNameFromList } from "../navigation";
 import { getState } from "../state";
-import { action } from "./actions";
+import { resourceLabel } from "../types";
+import { action, moveButtons } from "./actions";
 
 export const QUEUE_LIST_ID = "ikaQueueList";
 
@@ -37,14 +38,19 @@ export function describeTask(task: Task): string {
     const { amount, resource, origin, destination, label } = task.data;
     const prefix = label ? `[${label}] ` : "";
     return (
-      `${prefix}${formatInteger(amount)} ${resource}: ` +
+      `${prefix}${formatInteger(amount)} ${resourceLabel(resource)}: ` +
       `${getTownNameFromList(origin)} → ${getTownNameFromList(destination)}`
     );
   }
   return QUEUE_VIEW.upgrade(task.data.buildingName, task.data.townName);
 }
 
-function row(task: Task, index: number, isHead: boolean): string {
+function row(
+  task: Task,
+  index: number,
+  isHead: boolean,
+  isLast: boolean,
+): string {
   // The head is the one the runner is working on; marking it is the difference
   // between "stalled" and "empty", which is what this view exists to show.
   const marker = isHead ? " ▶" : "";
@@ -53,8 +59,11 @@ function row(task: Task, index: number, isHead: boolean): string {
     `<td>${index + 1}${marker}</td>` +
     `<td>${escapeHtml(describeTask(task))}</td>` +
     `<td>` +
-    `<button class="button" title="${QUEUE_VIEW.moveToBack}" ` +
-    `${action("queue.moveToBack", { "ika-task": task.id })}>↓</button>` +
+    moveButtons(
+      { up: "queue.moveUp", down: "queue.moveDown" },
+      { "ika-task": task.id },
+      { isFirst: index === 0, isLast },
+    ) +
     `<button class="button" title="${QUEUE_VIEW.remove}" ` +
     `${action("queue.remove", { "ika-task": task.id })}>✕</button>` +
     `</td></tr>`
@@ -81,7 +90,9 @@ export function renderQueue(): string {
     `<table class="fullTable ika-queue-table">` +
     `<tr><th>#</th><th>${QUEUE_VIEW.headerTask}</th><th></th></tr>` +
     shown
-      .map((task, index) => row(task, index, head?.id === task.id))
+      .map((task, index) =>
+        row(task, index, head?.id === task.id, index === tasks.length - 1),
+      )
       .join("") +
     `</table>` +
     overflow +

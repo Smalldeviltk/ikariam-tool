@@ -11,6 +11,7 @@
  */
 
 import { measuredStats } from "./auto-wine";
+import { DURATION } from "../messages";
 import { getTownList } from "../navigation";
 
 /** Below this, a town is worth acting on now. */
@@ -78,10 +79,10 @@ export function townsNeedingWine(
 
 /** `"7h"`, `"2d 6h"`, or a dash when nothing is known. */
 export function formatHours(hours: number | null): string {
-  if (hours === null) return "—";
-  if (hours < 1) return "<1h";
-  if (hours < 24) return `${Math.floor(hours)}h`;
+  if (hours === null) return DURATION.unknown;
+  if (hours < 1) return DURATION.underAnHour;
+  if (hours < 24) return DURATION.hours(Math.floor(hours));
   const days = Math.floor(hours / 24);
   const rest = Math.floor(hours % 24);
-  return rest > 0 ? `${days}d ${rest}h` : `${days}d`;
+  return rest > 0 ? DURATION.daysAndHours(days, rest) : DURATION.days(days);
 }

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { getActionPoints, getFreeShips } from "./game-state";
+import { getActionPoints, getFreeShips, readCurrentStock } from "./game-state";
 
 /** The game's header, as captured live. */
 function globalMenu(merchants: string, freighters: string, points: string) {
@@ -58,5 +58,29 @@ describe("getFreeShips", () => {
     document.body.innerHTML = globalMenu("0", "0", "0");
     Object.assign(window, { ikariam: { model: { freeTransporters: 99 } } });
     expect(getFreeShips()).toEqual({ merchants: 0, freighters: 0 });
+  });
+});
+
+describe("readCurrentStock", () => {
+  it("reads the model by the key the game files each resource under", () => {
+    Object.assign(window, {
+      ikariam: {
+        model: { currentResources: { resource: 1200, "3": 450 } },
+      },
+    });
+    expect(readCurrentStock("wood")).toBe(1200);
+    expect(readCurrentStock("glass")).toBe(450);
+  });
+
+  it("falls back to the header, where crystal is `glass`", () => {
+    document.body.innerHTML =
+      `<span id="js_GlobalMenu_crystal">2,345</span>` +
+      `<span id="js_GlobalMenu_sulfur">678</span>`;
+    expect(readCurrentStock("glass")).toBe(2345);
+    expect(readCurrentStock("sulfur")).toBe(678);
+  });
+
+  it("reports zero when neither source is there", () => {
+    expect(readCurrentStock("marble")).toBe(0);
   });
 });

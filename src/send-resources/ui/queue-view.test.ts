@@ -47,7 +47,16 @@ beforeEach(() => {
 describe("describeTask", () => {
   it("names both towns rather than showing dropdown indexes", () => {
     const task = { id: "t1", ...shipment(1234) } as Task;
-    expect(describeTask(task)).toBe("1,234 wine: W-Athens → M-Corinth");
+    expect(describeTask(task)).toBe("1,234 Wine: W-Athens → M-Corinth");
+  });
+
+  it("names a resource as the game shows it, not by its DOM id", () => {
+    const task = {
+      id: "t1",
+      type: "sendResource",
+      data: { origin: "0", destination: "1", resource: "glass", amount: 50 },
+    } as Task;
+    expect(describeTask(task)).toBe("50 Crystal: W-Athens → M-Corinth");
   });
 
   it("shows the label a feature tagged the task with", () => {
@@ -74,7 +83,7 @@ describe("renderQueue", () => {
     expect(renderQueue()).toContain("queue is empty");
   });
 
-  it("lists every task with its own remove and defer buttons", () => {
+  it("lists every task with its own remove, up and down buttons", () => {
     getState().queue.push(shipment(100));
     getState().queue.push(shipment(200));
 
@@ -86,8 +95,29 @@ describe("renderQueue", () => {
       host.querySelectorAll('[data-ika-action="queue.remove"]'),
     ).toHaveLength(2);
     expect(
-      host.querySelectorAll('[data-ika-action="queue.moveToBack"]'),
+      host.querySelectorAll('[data-ika-action="queue.moveUp"]'),
     ).toHaveLength(2);
+    expect(
+      host.querySelectorAll('[data-ika-action="queue.moveDown"]'),
+    ).toHaveLength(2);
+  });
+
+  it("disables the first row's up and the last row's down", () => {
+    getState().queue.push(shipment(100));
+    getState().queue.push(shipment(200));
+    getState().queue.push(shipment(300));
+
+    refreshQueueView();
+    const host = document.querySelector(`#${QUEUE_LIST_ID}`)!;
+    const disabled = (name: string) =>
+      [
+        ...host.querySelectorAll<HTMLButtonElement>(
+          `[data-ika-action="${name}"]`,
+        ),
+      ].map((button) => button.disabled);
+
+    expect(disabled("queue.moveUp")).toEqual([true, false, false]);
+    expect(disabled("queue.moveDown")).toEqual([false, false, true]);
   });
 
   it(

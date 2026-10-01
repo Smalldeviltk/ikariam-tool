@@ -50,7 +50,7 @@ function windowContent(): string {
   return (
     group(
       PANEL.groups.wine,
-      `<button class="button" id="btnStartScriptAutoWine" ${action("wine.chooseSource")}>${BUTTON.start}</button>` +
+      `<button class="button" id="btnStartScriptAutoWine" ${action("wine.autoRun")}>${BUTTON.start}</button>` +
         `<button class="button" ${action("wine.settings")}>${BUTTON.settings}</button>` +
         `<div id="${WINE_WARNING_ID}"></div>`,
     ) +

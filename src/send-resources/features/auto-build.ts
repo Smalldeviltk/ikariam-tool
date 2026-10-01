@@ -167,6 +167,34 @@ export function removeBuildingFromQueue(
   saveAutoBuild(list);
 }
 
+/** Move one saved upgrade one place up or down in its town's list. */
+export function moveBuildingInQueue(
+  positionId: string,
+  buildingName: string,
+  townName: string,
+  direction: "up" | "down",
+): void {
+  const { accountName } = getState();
+  const list = loadAutoBuild();
+  const town = findTown(findAccount(list, accountName), townName);
+  if (!town) return;
+
+  const { queue } = town;
+  const index = queue.findIndex(
+    (entry) =>
+      entry.buildingName === buildingName && entry.positionId === positionId,
+  );
+  const neighbour = index + (direction === "up" ? -1 : 1);
+  if (index < 0 || neighbour < 0 || neighbour >= queue.length) return;
+  // Each building's levels count up in list order. Two entries of the same
+  // building, renumbered after a swap, come out exactly as they were, so
+  // swapping them changes nothing.
+  if (queue[neighbour].positionId === positionId) return;
+
+  [queue[index], queue[neighbour]] = [queue[neighbour], queue[index]];
+  saveAutoBuild(list);
+}
+
 /** Drop towns and accounts whose configured queue is now empty. */
 export function cleanAutoBuildConfig(): void {
   const cleaned = loadAutoBuild()
@@ -478,6 +506,8 @@ let scanning = false;
  *  3. **It records the town cache as it goes.** The walk already has every town
  *     open; taking the snapshot here is free and is what Auto Wine falls back on
  *     when the Empire Overview board has no figures.
+ *
+ * Resolves `true` once the scan has finished, `false` when it refused to start.
  */
 export async function scanBuildings(
   maxTowns = 14,
@@ -486,23 +516,23 @@ export async function scanBuildings(
    * runner is owned by `app.ts`; the queue itself does not know.
    */
   queueIsRunning: () => boolean = () => false,
-): Promise<void> {
+): Promise<boolean> {
   if (scanning) {
     showToast(SCAN.alreadyRunning);
-    return;
+    return false;
   }
 
   const limit = Math.min(getTownCount(), maxTowns);
   if (limit === 0) {
     showToast(SCAN.noTownList);
-    return;
+    return false;
   }
 
   // The queue runner navigates too. Two of them steering the same page means
   // whichever loses the race times out.
   if (queueIsRunning()) {
     showToast(SCAN.queueRunning);
-    return;
+    return false;
   }
 
   // Ask the game for every town instead of walking to each one, when the
@@ -521,7 +551,7 @@ export async function scanBuildings(
       );
       logInfo(summary);
       showToast(summary);
-      return;
+      return true;
     } catch (e) {
       logInfo(
         `Sync failed, falling back to walking the towns - ${errorMessage(e)}`,
@@ -556,6 +586,7 @@ export async function scanBuildings(
   const summary = SCAN.walkFinished(visited, limit, failed.join(", "));
   logInfo(summary);
   showToast(summary);
+  return true;
 }
 
 export interface BuildingSlot {
@@ -566,13 +597,17 @@ export interface BuildingSlot {
 /** Buildings in the currently open town, for the settings dialog. */
 export function listBuildingsInCurrentTown(): BuildingSlot[] {
   const slots: BuildingSlot[] = qsa(SEL.buildings).map((element) => {
-    let buildingName =
-      qs(SEL.buildingHover, element)
-        ?.getAttribute("title")
-        ?.trim()
-        .replace("(", "")
-        .replace(")", "")
-        .replace("Under construction", "0") ?? "";
+    const title =
+      qs(SEL.buildingHover, element)?.getAttribute("title")?.trim() ?? "";
+    // "Warehouse (12)"; a building whose first level is being built reads
+    // "Warehouse (Under construction)" instead, in the game's language. So
+    // anything in the brackets that is not a number is level 0, without
+    // reading the words; the `constructionSite` class below adds the level
+    // being built.
+    const bracketed = title.match(/^(.*?)\s*\((.*)\)$/);
+    let buildingName = bracketed
+      ? `${bracketed[1]} ${/^\d+$/.test(bracketed[2].trim()) ? bracketed[2].trim() : "0"}`
+      : title;
 
     // While upgrading, the title still shows the old level — add one.
     if (element.classList.contains("constructionSite")) {

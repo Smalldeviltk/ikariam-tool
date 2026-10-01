@@ -19,7 +19,7 @@ import { getAccountName, getCurrentTownName } from "@core/ikariam/globals";
 import { DIALOG_ID, SEL } from "@core/ikariam/selectors";
 import { installErrorHandlers } from "@core/bug-report";
 import { clearLog, initLogger, logInfo } from "@core/logger";
-import { TabLock, TaskRunner } from "@core/task-queue";
+import { TabLock, TaskRunner, type TaskType } from "@core/task-queue";
 import { showToast } from "@core/ui/window";
 
 import { BUG_REPORT, QUEUE_VIEW, SEND_DIALOG, WINE_DIALOG } from "./messages";
@@ -49,6 +49,7 @@ import {
   collectWineSettings,
   enqueueWineRun,
   loadConsumedWine,
+  saveMeasuredReceivers,
 } from "./features/auto-wine";
 import {
   addBuildingToQueue,
@@ -56,6 +57,7 @@ import {
   enqueueAutoBuild,
   hasConfiguredUpgrades,
   handleUpgradeBuilding,
+  moveBuildingInQueue,
   removeBuildingFromQueue,
   scanBuildings,
 } from "./features/auto-build";
@@ -194,11 +196,34 @@ function isUiReady(): boolean {
  * it runs while either switch is on, and each button only owns its own flag.
  * That is the rule the startup path already used (`autoStart || autoBuildStart`),
  * now applied to the toggles as well.
+ *
+ * The third bullet is answered by `allowsTaskType`: each switch only lets its
+ * own task type run, so Build's timer passes queued shipments over.
  */
 function syncRunnerToFlags(): void {
-  const wanted = isAutoStart() || isFlagTrue(FLAG.isAutoBuildStart);
+  const wanted =
+    isAutoStart() ||
+    isFlagTrue(FLAG.isAutoBuildStart) ||
+    oneOffRunTypes.size > 0;
   if (wanted && !runner.isRunning) startRunner();
   else if (!wanted && runner.isRunning) stopRunner();
+}
+
+/**
+ * Task types a one-off run asked for, allowed until the queue drains: Build's
+ * Start runs one lap of upgrades without switching Build's timer on.
+ */
+const oneOffRunTypes = new Set<TaskType>();
+
+/** The runner's `allowsType`: a task type runs while its own switch is on. */
+function allowsTaskType(type: TaskType): boolean {
+  if (oneOffRunTypes.has(type)) return true;
+  switch (type) {
+    case "sendResource":
+      return isAutoStart();
+    case "upgradeBuilding":
+      return isFlagTrue(FLAG.isAutoBuildStart);
+  }
 }
 
 function toggleQueueRunner(): void {
@@ -212,17 +237,82 @@ function toggleQueueRunner(): void {
 
 /**
  * Plan a wine run and put it in the queue, without starting the runner.
+ * Returns whether anything was queued.
  *
- * Auto Wine's Start only ever fills the queue; the Transport switch is what
- * decides whether anything is sent. Starting the runner from here started
- * shipping while that switch still read "Start Timer", and because it bypassed
+ * Never starts the runner directly: that started shipping while Transport's
+ * switch still read "Start Timer", and because it bypassed
  * `syncRunnerToFlags` — which derives the runner's state from the two feature
  * flags — the next Build toggle would stop it again. Same class of bug the
- * comment above `syncRunnerToFlags` describes, in the one button that was
- * missed.
+ * comment above `syncRunnerToFlags` describes. Auto Wine's Start goes through
+ * Transport's switch instead (`runAutoWine`).
  */
-function startWineRun(fromTown: string): void {
-  if (enqueueWineRun(fromTown) > 0) refreshQueueView();
+function queueWineRun(fromTown: string): boolean {
+  if (enqueueWineRun(fromTown) === 0) return false;
+  refreshQueueView();
+  return true;
+}
+
+/**
+ * Auto Wine's Start: the whole routine in one press. Scan every town and wait
+ * for it to finish, take each town's consumption as Load then Save would,
+ * queue the run, then switch Transport's timer on.
+ */
+async function runAutoWine(fromTown: string): Promise<void> {
+  if (!(await scanBuildings(undefined, () => runner.isRunning))) return;
+  saveMeasuredReceivers();
+  if (!queueWineRun(fromTown)) return;
+  if (!isAutoStart()) toggleQueueRunner();
+}
+
+/**
+ * Run `run` with the wine source town: the only one ticked as Sender, or the
+ * one the player picks from a popup whose buttons fire `chooseAction`.
+ */
+function withWineSource(
+  chooseAction: string,
+  run: (fromTown: string) => void,
+): void {
+  const senders = loadSenders();
+  if (senders.length === 0) {
+    showToast(WINE_DIALOG.noSourceTicked);
+    return;
+  }
+  if (senders.length === 1) {
+    run(senders[0]);
+    return;
+  }
+  openWineSourceDialog(chooseAction);
+}
+
+/** A row of the queue view moved one place: any task is its neighbour. */
+function moveQueuedTask(element: HTMLElement, direction: "up" | "down"): void {
+  const id = element.dataset.ikaTask;
+  if (!id) return;
+  getState().queue.moveOneStep(id, direction);
+  refreshQueueView();
+}
+
+/**
+ * A row of Transport Settings moved one place. That table lists shipments
+ * only, so the neighbour is the next shipment; upgrades in between stay put.
+ */
+function moveShipment(element: HTMLElement, direction: "up" | "down"): void {
+  const id = element.dataset.ikaTask;
+  if (!id) return;
+  getState().queue.moveOneStep(id, direction, "sendResource");
+  renderResourceTable();
+  refreshQueueView();
+}
+
+/** A saved upgrade in Auto Build Settings moved one place in its town. */
+function moveSavedUpgrade(
+  element: HTMLElement,
+  direction: "up" | "down",
+): void {
+  const { ikaPosition, ikaBuilding, ikaTown } = element.dataset;
+  if (!ikaPosition || !ikaBuilding || !ikaTown) return;
+  moveBuildingInQueue(ikaPosition, ikaBuilding, ikaTown, direction);
+  refreshTownQueueCell(ikaTown);
 }
 
 function registerUiActions(): void {
@@ -268,15 +358,20 @@ function registerUiActions(): void {
       if (last) queue.removeById(last.id);
       renderResourceTable();
     },
+    "send.moveUp": (element) => moveShipment(element, "up"),
+    "send.moveDown": (element) => moveShipment(element, "down"),
     "queue.toggle": toggleQueueRunner,
 
     /* ── Auto wine ── */
     "wine.settings": openAutoWineDialog,
+    // Save also queues the run, so the step-by-step route ends with only
+    // Start Timer left to press.
     "wine.save": () => {
       const { senders, receivers } = collectWineSettings();
       saveSenders(senders);
       saveReceivers(receivers);
       closeDialog();
+      withWineSource("wine.queueFrom", queueWineRun);
     },
     "wine.load": loadConsumedWine,
     "wine.preview": () => {
@@ -288,23 +383,19 @@ function registerUiActions(): void {
       // With several sources, preview against the first one.
       renderWinePlanPreview(senders[0]);
     },
-    "wine.chooseSource": () => {
-      const senders = loadSenders();
-      if (senders.length === 0) {
-        showToast(WINE_DIALOG.noSourceTicked);
-        return;
-      }
-      if (senders.length === 1) {
-        startWineRun(senders[0]);
-        return;
-      }
-      openWineSourceDialog();
-    },
-    "wine.start": (element) => {
+    "wine.autoRun": () =>
+      withWineSource("wine.autoRunFrom", (town) => void runAutoWine(town)),
+    "wine.autoRunFrom": (element) => {
       const town = element.dataset.ikaTown;
       if (!town) return;
       closeDialog();
-      startWineRun(town);
+      void runAutoWine(town);
+    },
+    "wine.queueFrom": (element) => {
+      const town = element.dataset.ikaTown;
+      if (!town) return;
+      closeDialog();
+      queueWineRun(town);
     },
 
     /* ── Auto build ── */
@@ -321,12 +412,16 @@ function registerUiActions(): void {
       removeBuildingFromQueue(ikaPosition, ikaBuilding, ikaTown);
       refreshTownQueueCell(ikaTown);
     },
+    "build.moveUp": (element) => moveSavedUpgrade(element, "up"),
+    "build.moveDown": (element) => moveSavedUpgrade(element, "down"),
     // Save only closes the dialog, as the original's did: every + and - is
     // already saved. Starting the queue is the panel's Start button's job;
     // the dialog doing it too ("Run queue") was a second Start.
     "build.save": closeDialog,
     "build.startNow": () => {
-      if (enqueueAutoBuild() > 0) startRunner();
+      if (enqueueAutoBuild() === 0) return;
+      oneOffRunTypes.add("upgradeBuilding");
+      syncRunnerToFlags();
     },
     "build.toggleTimer": () => {
       const running = isFlagTrue(FLAG.isAutoBuildStart);
@@ -364,12 +459,8 @@ function registerUiActions(): void {
       getState().queue.removeById(id);
       refreshQueueView();
     },
-    "queue.moveToBack": (element) => {
-      const id = element.dataset.ikaTask;
-      if (!id) return;
-      getState().queue.moveToBack(id);
-      refreshQueueView();
-    },
+    "queue.moveUp": (element) => moveQueuedTask(element, "up"),
+    "queue.moveDown": (element) => moveQueuedTask(element, "down"),
     "queue.clear": () => {
       const pending = getState().queue.length;
       if (pending === 0) return;
@@ -509,8 +600,10 @@ export function start(): void {
   runner = new TaskRunner(getState().queue, {
     intervalMs: QUEUE_INTERVAL_MS,
     canRun: holdsTabLock,
+    allowsType: allowsTaskType,
     isUiReady,
     onDrain: () => {
+      oneOffRunTypes.clear();
       stopRunner();
       setAutoStart(false);
       setQueueButtonLabel(false);

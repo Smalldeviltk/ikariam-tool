@@ -89,3 +89,15 @@ export function readCurrentWine(): number {
     modelResource("wine") ?? parseAmount(qs(SEL.globalMenu.wine)?.textContent)
   );
 }
+
+/**
+ * Stock of any resource in the town currently open, read the same way as
+ * `readCurrentWine`: the model's exact figure, else the menu bar's rounded
+ * one, else 0.
+ */
+export function readCurrentStock(resource: string): number {
+  return (
+    modelResource(resource) ??
+    parseAmount(qs(SEL.globalMenu.resource(resource))?.textContent)
+  );
+}

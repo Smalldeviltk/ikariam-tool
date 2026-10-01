@@ -132,6 +132,37 @@ export function getTownNumberByName(townName: string): number | null {
 }
 
 /**
+ * The town switch sent last, kept in `sessionStorage` across the page load it
+ * causes, so the next page can tell whether it landed. This tab only, and out
+ * of the data export, like the board's pending view.
+ */
+const PENDING_SWITCH_KEY = "ika_pendingTownSwitch";
+
+/**
+ * How long a sent switch counts as just sent. A switch reloads the page in
+ * about 0.3 s (measured 02/10); past this, sending it again is a new attempt.
+ */
+const SWITCH_LANDING_WINDOW_MS = 30_000;
+
+interface PendingSwitch {
+  target: string;
+  sentAt: number;
+}
+
+function readPendingSwitch(): PendingSwitch | null {
+  try {
+    const raw = sessionStorage.getItem(PENDING_SWITCH_KEY);
+    return raw ? (JSON.parse(raw) as PendingSwitch) : null;
+  } catch {
+    return null;
+  }
+}
+
+function forgetPendingSwitch(): void {
+  sessionStorage.removeItem(PENDING_SWITCH_KEY);
+}
+
+/**
  * Switch to `townNumber` and wait until the breadcrumb reflects it.
  *
  * The original (`gotoTown`) used an `isCallback` flag so it clicked only once
@@ -142,14 +173,25 @@ export function getTownNumberByName(townName: string): number | null {
  * stalls just one feature — it wedges every automated action permanently.
  * Throwing lets the runner retry on the next tick.
  *
+ * A SWITCH RELOADS THE PAGE. Measured 02/10 from a city view: the server
+ * answers `changeCurrentCity` with `["custom", ["reload", {link:
+ * "?view=city&cityId=<target>&currentCityId=<target>"}]]`, and the game loads
+ * that page — the dropdown does the same by hand. The wait below dies with
+ * the old page; the task is still queued, runs again on the new one, and finds
+ * itself in the right town. A switch that did not land would reload into the
+ * wrong town and send the same switch again, for ever, so the switch is noted
+ * before it is sent and not sent twice to the same town within
+ * `SWITCH_LANDING_WINDOW_MS`: the task throws instead, and the runner gives up
+ * on it after a few.
+ *
  * Three routes, in order:
  *
- *  1. The Empire Overview board's town name (`clickBoardTownName`). This is
- *     what the original used, and the board switches over ajax.
- *  2. The game's own form (`submitChangeCityForm`), for a page without the
- *     board. Tried first for a while, it reloaded the whole page from the
- *     runner without landing (26/09); every load then started the same
- *     switch again, so the page never stopped loading.
+ *  1. The game's own form (`submitChangeCityForm`) — what the dropdown sends.
+ *     It needs nothing but the page. The reload loop it was blamed for on
+ *     26/09 was the coordinates in the town names: the page landed, the name
+ *     never matched, and the switch was sent again.
+ *  2. The Empire Overview board's town name (`clickBoardTownName`), which
+ *     sends the same `changeCurrentCity` over ajax.
  *  3. A click on the dropdown's `<a>`, which is known not to switch town
  *     (measured, 25/09) and is kept only as the last resort it always was.
  */
@@ -158,13 +200,31 @@ export async function gotoTown(townNumber: number | string): Promise<void> {
   if (!target) {
     throw new Error(`No town at dropdown index ${townNumber}`);
   }
-  if (getCurrentTownName() === target) return;
+  if (getCurrentTownName() === target) {
+    forgetPendingSwitch();
+    return;
+  }
 
+  const pending = readPendingSwitch();
   if (
-    !clickBoardTownName(target) &&
+    pending?.target === target &&
+    Date.now() - pending.sentAt < SWITCH_LANDING_WINDOW_MS
+  ) {
+    const secondsAgo = Math.round((Date.now() - pending.sentAt) / 1000);
+    throw new Error(
+      `The switch to "${target}" sent ${secondsAgo}s ago did not land ` +
+        `(now in "${getCurrentTownName()}") - not sending it again`,
+    );
+  }
+
+  const sent: PendingSwitch = { target, sentAt: Date.now() };
+  sessionStorage.setItem(PENDING_SWITCH_KEY, JSON.stringify(sent));
+  if (
     !submitChangeCityForm(townNumber) &&
+    !clickBoardTownName(target) &&
     !clickDropdownTown(townNumber)
   ) {
+    forgetPendingSwitch();
     throw new Error(`No way to switch to "${target}" on this page`);
   }
 
@@ -173,6 +233,8 @@ export async function gotoTown(townNumber: number | string): Promise<void> {
     timeoutMs: TOWN_SWITCH_TIMEOUT_MS,
     label: `gotoTown(${target})`,
   });
+  // Landed without a reload: nothing for the next page to check.
+  forgetPendingSwitch();
 }
 
 /**
@@ -181,9 +243,8 @@ export async function gotoTown(townNumber: number | string): Promise<void> {
  * Put the city id into `#js_cityIdOnChange` and submit `#changeCityForm`
  * through the game's `ajaxHandlerCallFromForm` — what the Empire Overview
  * board uses to open another town's view (`switchTownWithGameForm` in
- * `game-api.ts`) and what IkaEasy V4 does. Sent from the task runner on
- * 26/09 it reloaded the whole page without landing, which is why it is no
- * longer the first route; what makes it do that is not known yet.
+ * `game-api.ts`) and what IkaEasy V4 does. The game answers with a reload
+ * into the new town (see `gotoTown`).
  *
  * Sends nothing, and returns false, when the entry has no city id or the page
  * lacks the form or the game function.

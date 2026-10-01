@@ -1,6 +1,17 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { AUTO_WINE_LABEL, getState, initState, saveReceivers } from "../state";
-import { loadConsumedWine, measuredStats } from "./auto-wine";
+import {
+  AUTO_WINE_LABEL,
+  getState,
+  initState,
+  loadReceivers,
+  saveReceivers,
+  saveSenders,
+} from "../state";
+import {
+  loadConsumedWine,
+  measuredStats,
+  saveMeasuredReceivers,
+} from "./auto-wine";
 import { saveTownStats } from "../town-cache";
 import {
   buildWineTowns,
@@ -324,6 +335,49 @@ describe("enqueueWineRun", () => {
 
     expect(enqueueWineRun("0")).toBe(0);
     expect(getState().queue.length).toBe(0);
+  });
+});
+
+describe("saveMeasuredReceivers", () => {
+  it(
+    "saves what Load then Save would: measured consumption, else the saved " +
+      "Wine/h, for every town not ticked as a sender",
+    () => {
+      document.body.innerHTML =
+        townDropdown(TOWNS) +
+        renderBoard([
+          boardRow("Athens", "50,000", "-600"),
+          boardRow("Sparta", "2,000", "-350"),
+        ]);
+      saveSenders(["0"]);
+      saveReceivers([
+        { townNumber: "1", winePerHour: "100" },
+        { townNumber: "2", winePerHour: "120" },
+      ]);
+
+      saveMeasuredReceivers();
+
+      // In `getTownList()` order, which sorts by name: compare as a set.
+      expect(loadReceivers()).toHaveLength(2);
+      expect(loadReceivers()).toEqual(
+        expect.arrayContaining([
+          // Measured on the board: replaces the 100 saved before.
+          { townNumber: "1", winePerHour: "350" },
+          // Nothing measured: the saved figure stays.
+          { townNumber: "2", winePerHour: "120" },
+        ]),
+      );
+    },
+  );
+
+  it("leaves out a town with no figure above 0", () => {
+    document.body.innerHTML =
+      townDropdown(TOWNS) + renderBoard([boardRow("Sparta", "2,000", "-0")]);
+    saveSenders(["0"]);
+
+    saveMeasuredReceivers();
+
+    expect(loadReceivers()).toEqual([]);
   });
 });
 

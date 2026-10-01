@@ -34,6 +34,9 @@ export const SEL = {
     freeTransporters: "#js_GlobalMenu_freeTransporters",
     freeFreighters: "#js_GlobalMenu_freeFreighters",
     wine: "#js_GlobalMenu_wine",
+    /** The current town's stock of one resource. Crystal is `glass` here. */
+    resource: (resource: string) =>
+      `#js_GlobalMenu_${resource === "glass" ? "crystal" : resource}`,
   },
 
   /** Building slots around the town. */

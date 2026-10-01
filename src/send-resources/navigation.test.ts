@@ -38,6 +38,7 @@ const TOWNS = ["3-Athens", "1-Sparta", "2-Corinth"];
 
 beforeEach(() => {
   document.body.innerHTML = townDropdown(TOWNS);
+  sessionStorage.clear();
 });
 
 describe("town list", () => {
@@ -228,7 +229,7 @@ describe("gotoTown town switching", () => {
     },
   );
 
-  it("prefers the Empire Overview board when it is present", async () => {
+  it("uses the Empire Overview board when the game's form is not there", async () => {
     document.body.innerHTML =
       townDropdown(["W-Athens", "C-Thebes"]) +
       `<div id="js_cityBread">W-Athens</div>` +
@@ -343,36 +344,88 @@ describe("a dropdown that shows coordinates", () => {
     expect(submitted).toEqual(["297348"]);
   });
 
-  it(
-    "REGRESSION: clicks the Empire Overview board's town name before trying " +
-      "the form — sending the form from the runner reloaded the whole page " +
-      "without landing, and every load started the same switch again",
-    async () => {
-      document.body.innerHTML =
-        COORDS_DROPDOWN +
-        `<span id="js_cityBread">W-Clone1</span>` +
-        `<form id="changeCityForm"><input id="js_cityIdOnChange" name="cityId"></form>` +
-        `<div id="BuildTab"><div class="city_name">` +
-        `<span class="clickable">S-Clone1</span></div></div>`;
-      installModel("297124");
+  /** The page with the form and the board, the form landing in the target. */
+  function installFormAndBoard(): {
+    submitted: string[];
+    boardClicks: () => number;
+  } {
+    document.body.innerHTML =
+      COORDS_DROPDOWN +
+      `<span id="js_cityBread">W-Clone1</span>` +
+      `<form id="changeCityForm"><input id="js_cityIdOnChange" name="cityId"></form>` +
+      `<div id="BuildTab"><div class="city_name">` +
+      `<span class="clickable">S-Clone1</span></div></div>`;
+    installModel("297124");
 
-      const submitted: string[] = [];
-      Object.assign(window, {
-        ajaxHandlerCallFromForm: () => void submitted.push("form"),
-      });
-      let boardClicks = 0;
-      document
-        .querySelector("#BuildTab span.clickable")!
-        .addEventListener("click", () => {
-          boardClicks++;
-          document.getElementById("js_cityBread")!.textContent = "S-Clone1";
-        });
+    const submitted: string[] = [];
+    Object.assign(window, {
+      ajaxHandlerCallFromForm: (form: HTMLFormElement) => {
+        const cityId =
+          form.querySelector<HTMLInputElement>("#js_cityIdOnChange")!.value;
+        submitted.push(cityId);
+        document.getElementById("js_cityBread")!.textContent =
+          MODEL_TOWNS[cityId];
+      },
+    });
+    let clicks = 0;
+    document
+      .querySelector("#BuildTab span.clickable")!
+      .addEventListener("click", () => void clicks++);
+    return { submitted, boardClicks: () => clicks };
+  }
+
+  /** What the page before the reload left behind: a switch sent `ago` ms back. */
+  function switchSentBeforeTheReload(target: string, ago: number): void {
+    sessionStorage.setItem(
+      "ika_pendingTownSwitch",
+      JSON.stringify({ target, sentAt: Date.now() - ago }),
+    );
+  }
+
+  it(
+    "switches through the game's own form before the board — measured 02/10, " +
+      "the form lands; the reload loop it was blamed for was the coordinates",
+    async () => {
+      const page = installFormAndBoard();
 
       await gotoTown(2);
-      expect(boardClicks).toBe(1);
-      expect(submitted).toEqual([]);
+
+      expect(page.submitted).toEqual(["297348"]);
+      expect(page.boardClicks()).toBe(0);
+      expect(sessionStorage.getItem("ika_pendingTownSwitch")).toBeNull();
     },
   );
+
+  it(
+    "REGRESSION: does not send a switch again when the reload it caused " +
+      "landed in another town — every load would send it, and reload, again",
+    async () => {
+      const page = installFormAndBoard();
+      switchSentBeforeTheReload("S-Clone1", 1_000);
+
+      await expect(gotoTown(2)).rejects.toThrow(/did not land/);
+      expect(page.submitted).toEqual([]);
+    },
+  );
+
+  it("sends it again once the last attempt is long past", async () => {
+    const page = installFormAndBoard();
+    switchSentBeforeTheReload("S-Clone1", 31_000);
+
+    await gotoTown(2);
+
+    expect(page.submitted).toEqual(["297348"]);
+  });
+
+  it("forgets the switch once the reload brought the page to the town", async () => {
+    installFormAndBoard();
+    document.getElementById("js_cityBread")!.textContent = "S-Clone1";
+    switchSentBeforeTheReload("S-Clone1", 1_000);
+
+    await gotoTown(2);
+
+    expect(sessionStorage.getItem("ika_pendingTownSwitch")).toBeNull();
+  });
 });
 
 describe("backToCity", () => {

@@ -123,7 +123,7 @@ describe("buildPanel", () => {
       el.getAttribute("data-ika-action"),
     );
     for (const name of [
-      "wine.chooseSource",
+      "wine.autoRun",
       "wine.settings",
       "queue.toggle",
       "send.settings",

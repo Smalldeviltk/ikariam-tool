@@ -25,6 +25,14 @@ vi.mock("@core/ui/window", async (importOriginal) => ({
   showToast,
 }));
 
+// The scan is tested in `auto-build.test.ts`; here Auto Wine's Start only
+// needs to know whether one ran, and what it brought back.
+const { scanBuildings } = vi.hoisted(() => ({ scanBuildings: vi.fn() }));
+vi.mock("./features/auto-build", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./features/auto-build")>()),
+  scanBuildings,
+}));
+
 /**
  * The action handlers, captured as `start()` registers them.
  *
@@ -249,7 +257,33 @@ describe("the Transport settings dialog", () => {
     },
   );
 
-  it("queues nothing, and says which, when an amount is not a whole number above 0", async () => {
+  it(
+    "REGRESSION: takes 0 as none, like an empty field — it was refused as " +
+      "an invalid amount",
+    async () => {
+      await startWith({});
+      installSendForm({ wood: "5000", wine: "0", marble: "00" });
+
+      await actions["send.add"](document.body);
+
+      expect(await queuedShipments()).toEqual(["wood 5000"]);
+      expect(showToast).not.toHaveBeenCalled();
+    },
+  );
+
+  it("asks for an amount when every field is 0 or empty", async () => {
+    await startWith({});
+    installSendForm({ wood: "0", glass: "0" });
+
+    await actions["send.add"](document.body);
+
+    expect(await queuedShipments()).toEqual([]);
+    expect(showToast).toHaveBeenCalledWith(
+      expect.stringContaining("at least one resource"),
+    );
+  });
+
+  it("queues nothing, and says which, when an amount is not a whole number", async () => {
     await startWith({});
     installSendForm({ wood: "5000", wine: "2.5", glass: "-4" });
 
@@ -272,6 +306,191 @@ describe("the Transport settings dialog", () => {
       expect.stringContaining("at least one resource"),
     );
   });
+
+  it(
+    "moves a shipment one row, past the next shipment only — upgrades in " +
+      "between keep their place in the queue",
+    async () => {
+      await startWith({});
+      const { getState: appGetState } = await appState();
+      const { queue } = appGetState();
+      const shipment = (amount: number) =>
+        queue.push({
+          type: "sendResource",
+          data: { origin: "0", destination: "1", resource: "wood", amount },
+        });
+      const first = shipment(100);
+      queue.push({
+        type: "upgradeBuilding",
+        data: {
+          townName: "W-Athens",
+          positionId: "js_CityPosition4Link",
+          buildingName: "Warehouse 3",
+        },
+      });
+      shipment(200);
+      shipment(300);
+      const button = document.createElement("button");
+      button.dataset.ikaTask = first.id;
+
+      await actions["send.moveDown"](button);
+
+      expect(
+        queue
+          .list()
+          .map((task) =>
+            task.type === "sendResource"
+              ? `wood ${task.data.amount}`
+              : "upgrade",
+          ),
+      ).toEqual(["wood 200", "upgrade", "wood 100", "wood 300"]);
+    },
+  );
+});
+
+describe("Auto Wine", () => {
+  /** A board row, as `auto-wine.test.ts` draws it. */
+  function boardRow(town: string, stock: string, consumption: string): string {
+    return (
+      `<tr><td class="city_name"><span class="clickable">${town}</span></td>` +
+      `<td class="resource wine"><span class="current">${stock}</span></td>` +
+      `<td class="resource wine">` +
+      `<span class="prodconssubsum consumption Red">${consumption}</span></td></tr>`
+    );
+  }
+
+  /** The board as a scan leaves it: the source full, M-Corinth drinking 200/h. */
+  const BOARD_AFTER_SCAN =
+    `<div id="ResTab"><table><tbody>` +
+    boardRow("W-Athens", "10,000", "-100") +
+    boardRow("M-Corinth", "0", "-200") +
+    `</tbody></table></div>`;
+
+  const DROPDOWN =
+    `<div id="dropDown_js_citySelectContainer"><div class="bg"><ul>` +
+    `<li><a title="W-Athens"> W-Athens</a></li>` +
+    `<li><a title="M-Corinth"> M-Corinth</a></li>` +
+    `</ul></div></div>`;
+
+  /** Starts with W-Athens (town 0) ticked as the only source. */
+  async function startWithSource(senders = ["0"]) {
+    await startWith({});
+    document.body.insertAdjacentHTML("beforeend", DROPDOWN);
+    const state = await appState();
+    state.saveSenders(senders);
+    return state;
+  }
+
+  /** Let `runAutoWine`, which the button does not await, run to its end. */
+  async function settle(): Promise<void> {
+    await vi.advanceTimersByTimeAsync(0);
+  }
+
+  function queuedWine(state: typeof import("./state")): string[] {
+    return state
+      .getState()
+      .queue.listOfType("sendResource")
+      .map(
+        (task) =>
+          `${task.data.origin} -> ${task.data.destination}: ${task.data.resource}`,
+      );
+  }
+
+  beforeEach(() => {
+    showToast.mockReset();
+    scanBuildings.mockReset();
+    scanBuildings.mockImplementation(async () => {
+      document.body.insertAdjacentHTML("beforeend", BOARD_AFTER_SCAN);
+      return true;
+    });
+  });
+
+  it(
+    "Start scans, waits for it, saves each town's measured consumption, " +
+      "queues the run and switches Transport's timer on",
+    async () => {
+      const state = await startWithSource();
+
+      await actions["wine.autoRun"](document.body);
+      await settle();
+
+      expect(scanBuildings).toHaveBeenCalledTimes(1);
+      // Read from the board the scan drew, so after the scan and not before.
+      expect(state.loadReceivers()).toEqual([
+        { townNumber: "1", winePerHour: "200" },
+      ]);
+      expect(queuedWine(state)).toEqual(["0 -> 1: wine"]);
+      expect(state.isAutoStart()).toBe(true);
+      expect(timers()).toBe(RUNNING);
+      expect(document.querySelector("#btnStartScript")!.textContent).toBe(
+        "Stop Timer",
+      );
+    },
+  );
+
+  it("Start stops when the scan refuses to run, and queues nothing", async () => {
+    scanBuildings.mockResolvedValue(false);
+    const state = await startWithSource();
+
+    await actions["wine.autoRun"](document.body);
+    await settle();
+
+    expect(queuedWine(state)).toEqual([]);
+    expect(state.isAutoStart()).toBe(false);
+    expect(timers()).toBe(IDLE);
+  });
+
+  it("Start says so, and does not scan, when no town is ticked as a source", async () => {
+    await startWithSource([]);
+
+    await actions["wine.autoRun"](document.body);
+    await settle();
+
+    expect(scanBuildings).not.toHaveBeenCalled();
+    expect(showToast).toHaveBeenCalledWith(
+      expect.stringContaining("No town is ticked"),
+    );
+  });
+
+  it("Start asks which source to use when several are ticked", async () => {
+    const createPopup = vi.fn();
+    await startWithSource(["0", "1"]);
+    Object.assign(window, { ikariam: { createPopup } });
+    try {
+      await actions["wine.autoRun"](document.body);
+      await settle();
+    } finally {
+      delete window.ikariam;
+    }
+
+    expect(scanBuildings).not.toHaveBeenCalled();
+    expect(String(createPopup.mock.lastCall?.[2])).toContain(
+      'data-ika-action="wine.autoRunFrom"',
+    );
+  });
+
+  it(
+    "the settings dialog's Save also queues the run, and leaves Start Timer " +
+      "to the player",
+    async () => {
+      const state = await startWithSource();
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        BOARD_AFTER_SCAN +
+          `<table><tr class="txtWine"><td><input type="checkbox" id="cbSender_0" checked></td>` +
+          `<td><input type="text" id="txtWine_0" value="0"></td></tr>` +
+          `<tr class="txtWine"><td><input type="checkbox" id="cbSender_1"></td>` +
+          `<td><input type="text" id="txtWine_1" value="200"></td></tr></table>`,
+      );
+
+      await actions["wine.save"](document.body);
+
+      expect(queuedWine(state)).toEqual(["0 -> 1: wine"]);
+      expect(scanBuildings).not.toHaveBeenCalled();
+      expect(state.isAutoStart()).toBe(false);
+      expect(timers()).toBe(IDLE);
+    },
+  );
 });
 
 describe("the Auto Build settings dialog", () => {
@@ -409,6 +628,66 @@ describe("Auto Build after the queue runs dry", () => {
       const state = await appState();
       expect(state.isFlagTrue(state.FLAG.isAutoBuildStart)).toBe(true);
       expect(state.getFlag(state.FLAG.isAutoReload)).toBe("false");
+    },
+  );
+
+  it(
+    "REGRESSION: Build's timer passes queued shipments over — it ran them " +
+      "while Transport's button still read 'Start Timer'",
+    async () => {
+      getState().queue.push({
+        type: "sendResource",
+        data: { origin: "0", destination: "1", resource: "wine", amount: 100 },
+      });
+      installCityLink();
+      await startWith({ build: true });
+
+      await vi.advanceTimersByTimeAsync(1_100);
+
+      // Nothing Build may run: the queue counts as drained, as an empty one
+      // would, and the shipment waits for Transport's timer.
+      expect(reloads).toBe(1);
+      const { getState: appGetState } = await appState();
+      expect(
+        appGetState()
+          .queue.list()
+          .map((task) => task.type),
+      ).toEqual(["sendResource"]);
+    },
+  );
+
+  it(
+    "Build's Start runs one lap of upgrades without Build's timer, then " +
+      "stops",
+    async () => {
+      // A town the dropdown does not have: the task runs, fails and is dropped.
+      saveAutoBuild([
+        {
+          accountName: "tester",
+          townList: [
+            {
+              townName: "Nowhere",
+              queue: [
+                {
+                  positionId: "js_CityPosition4Link",
+                  buildingName: "Warehouse 3",
+                },
+              ],
+            },
+          ],
+        },
+      ]);
+      installCityLink();
+      await startWith({});
+
+      await actions["build.startNow"](document.body);
+      expect(timers()).toBe(RUNNING);
+      await vi.advanceTimersByTimeAsync(3_000);
+
+      const state = await appState();
+      expect(state.getState().queue.listOfType("upgradeBuilding")).toEqual([]);
+      expect(state.isFlagTrue(state.FLAG.isAutoBuildStart)).toBe(false);
+      expect(timers()).toBe(IDLE);
     },
   );
 

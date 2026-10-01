@@ -31,7 +31,7 @@ import {
 } from "../messages";
 import { getState, loadReceivers, loadSenders } from "../state";
 import { RESOURCE_OPTIONS } from "../types";
-import { action } from "./actions";
+import { action, moveButtons } from "./actions";
 
 function openPopup(title: string, html: string): void {
   const api = getIkariam();
@@ -66,15 +66,20 @@ function townOptions(): string {
 }
 
 export function renderResourceTable(): void {
-  const rows = getState()
-    .queue.listOfType("sendResource")
+  const shipments = getState().queue.listOfType("sendResource");
+  const rows = shipments
     .map(
-      (task) => `<tr>
+      (task, index) => `<tr>
         <td>${escapeHtml(getTownNameFromList(task.data.origin))}</td>
         <td>${escapeHtml(getTownNameFromList(task.data.destination))}</td>
         <td>${task.data.resource}</td>
         <td>${task.data.amount}</td>
         <td>${escapeHtml(task.data.label ?? "")}</td>
+        <td>${moveButtons(
+          { up: "send.moveUp", down: "send.moveDown" },
+          { "ika-task": task.id },
+          { isFirst: index === 0, isLast: index === shipments.length - 1 },
+        )}</td>
       </tr>`,
     )
     .join("");
@@ -184,7 +189,7 @@ export interface SendFormValues {
   destination: string;
   /** One entry per resource whose field was filled in, in dialog order. */
   amounts: { resource: string; amount: number }[];
-  /** Filled-in fields that are not a whole number above 0, by label. */
+  /** Filled-in fields that are not a whole number, by label. */
   invalid: string[];
 }
 
@@ -202,12 +207,14 @@ export function readSendForm(): SendFormValues | null {
     const text =
       qs<HTMLInputElement>(`#${amountFieldId(resource.value)}`)?.value.trim() ??
       "";
-    // An empty field means "none of this one".
-    if (text === "") continue;
     // Digits only: "1e3", "2.5", "-4" and "+4" all pass `Number()`.
-    const amount = /^\d+$/.test(text) ? Number(text) : 0;
+    if (text !== "" && !/^\d+$/.test(text)) {
+      invalid.push(resource.label);
+      continue;
+    }
+    // An empty field, or 0, means "none of this one".
+    const amount = Number(text);
     if (amount > 0) amounts.push({ resource: resource.value, amount });
-    else invalid.push(resource.label);
   }
   return { origin, destination, amounts, invalid };
 }
@@ -259,19 +266,19 @@ export function openAutoWineDialog(): void {
   );
 }
 
-/** Popup asking which sender town to ship from, when several are ticked. */
-export function openWineSourceDialog(): void {
+/**
+ * Popup asking which sender town to ship from, when several are ticked.
+ * `onChosen` is the action each town's button runs.
+ */
+export function openWineSourceDialog(onChosen: string): void {
   const senders = loadSenders();
   const buttons = getTownList()
     .filter((town) => senders.includes(town.townNumber.toString()))
     .map(
       (town) =>
-        `<button style="margin-right:20px" class="button" ${action(
-          "wine.start",
-          {
-            "ika-town": town.townNumber,
-          },
-        )}>${escapeHtml(town.townName)}</button>`,
+        `<button style="margin-right:20px" class="button" ${action(onChosen, {
+          "ika-town": town.townNumber,
+        })}>${escapeHtml(town.townName)}</button>`,
     )
     .join("");
 
@@ -360,17 +367,22 @@ export function renderTownQueue(townName: string): string {
   if (queue.length === 0) return BUILD_DIALOG.emptyTown;
 
   return queue
-    .map(
-      (entry, index) =>
-        `<span>${index + 1}.${escapeHtml(entry.buildingName)}<button class="button" ${action(
-          "build.remove",
-          {
-            "ika-position": entry.positionId,
-            "ika-building": entry.buildingName,
-            "ika-town": townName,
-          },
-        )}>-</button></span><br/>`,
-    )
+    .map((entry, index) => {
+      const data = {
+        "ika-position": entry.positionId,
+        "ika-building": entry.buildingName,
+        "ika-town": townName,
+      };
+      return (
+        `<span>${index + 1}.${escapeHtml(entry.buildingName)}` +
+        `<button class="button" ${action("build.remove", data)}>-</button>` +
+        moveButtons({ up: "build.moveUp", down: "build.moveDown" }, data, {
+          isFirst: index === 0,
+          isLast: index === queue.length - 1,
+        }) +
+        `</span><br/>`
+      );
+    })
     .join("");
 }
 

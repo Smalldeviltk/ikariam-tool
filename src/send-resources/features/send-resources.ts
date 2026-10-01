@@ -27,7 +27,7 @@ import {
   gotoTown,
   openPort,
 } from "../navigation";
-import { getActionPoints, getFreeShips, readCurrentWine } from "../game-state";
+import { getActionPoints, getFreeShips, readCurrentStock } from "../game-state";
 import { getFreighterCapacity, getPerShipCapacity } from "../ship-capacity";
 import { getState } from "../state";
 import { TRANSFER_STATUS } from "../messages";
@@ -97,19 +97,39 @@ export async function handleSendResource(
   }
 
   /**
-   * Ceiling for this convoy. Normally the task's remaining amount, but with a
-   * `reserve` (Auto Wine) it must not dip into what the source town has to
-   * keep. The shortfall stays on the task and ships once stock recovers.
+   * Ceiling for this convoy: the task's remaining amount, but no more than
+   * the source town holds — less, with a `reserve` (Auto Wine), what it has
+   * to keep. The shortfall stays on the task and ships once stock recovers.
    */
-  let sendable = amount;
-  if (reserve && reserve > 0 && resource === "wine") {
-    const available = readCurrentWine() - reserve;
-    if (available <= 0) {
-      // This source is dry; other queued shipments may not be.
-      return { status: "defer", reason: "Source town has no spare wine" };
-    }
-    sendable = Math.min(amount, available);
-  }
+  const keep = reserve && reserve > 0 && resource === "wine" ? reserve : 0;
+  const available = readCurrentStock(resource) - keep;
+  /**
+   * When that ceiling is short of the task AND short of one ship's cargo,
+   * nothing ships: a queued amount above the stock used to send whatever had
+   * trickled in since the last convoy, a few units at a time, a ship each.
+   * A task whose own remainder is under one ship still ships when the stock
+   * covers it. "One ship" is the kind that would sail: a merchant ship while
+   * any is idle, a freighter otherwise. Checked here with the ships idle now,
+   * so a short town is not navigated to the port for nothing, and again at the
+   * form with the ships that will actually sail.
+   */
+  const tooLittle = (merchantsIdle: boolean): TaskResult | null => {
+    const oneShip = merchantsIdle
+      ? getPerShipCapacity()
+      : getFreighterCapacity();
+    if (available >= amount || available >= oneShip) return null;
+    // This source is short; other queued shipments may not be.
+    return {
+      status: "defer",
+      reason:
+        `${getTownNameFromList(origin)} has ${Math.max(0, available)} ` +
+        `${resource} to spare, less than one ` +
+        `${merchantsIdle ? "merchant ship" : "freighter"}'s cargo`,
+    };
+  };
+  const shortBeforeLeaving = tooLittle(getFreeShips().merchants > 0);
+  if (shortBeforeLeaving) return shortBeforeLeaving;
+  const sendable = Math.min(amount, available);
 
   // Get back to the TOWN view before looking for the port.
   //
@@ -153,6 +173,10 @@ export async function handleSendResource(
 
   // Prefer merchant ships; fall back to freighters only when none are idle.
   const useMerchant = merchants > 0;
+  // The merchant ships may have sailed meanwhile, leaving a freighter's
+  // larger cargo as the bar. Nothing is entered yet, so nothing is lost.
+  const shortAtTheForm = tooLittle(useMerchant);
+  if (shortAtTheForm) return shortAtTheForm;
   const capacity = useMerchant
     ? getPerShipCapacity() * merchants
     : getFreighterCapacity() * freighters;

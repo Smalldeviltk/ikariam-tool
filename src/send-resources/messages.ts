@@ -22,6 +22,31 @@ export const BUTTON = {
   add: "Add",
 } as const;
 
+/** What each resource is called on screen, by its id in the game's DOM. */
+export const RESOURCE_LABEL = {
+  wood: "Wood",
+  wine: "Wine",
+  marble: "Marble",
+  // The game calls crystal "glass" in the DOM but shows "Crystal" in the UI.
+  glass: "Crystal",
+  sulfur: "Sulfur",
+} as const;
+
+/** How long something lasts, as the wine warning shows it. */
+export const DURATION = {
+  unknown: "—",
+  underAnHour: "<1h",
+  hours: (hours: number) => `${hours}h`,
+  days: (days: number) => `${days}d`,
+  daysAndHours: (days: number, hours: number) => `${days}d ${hours}h`,
+} as const;
+
+/** Tooltips of the ↑ and ↓ buttons that reorder a list one row at a time. */
+export const MOVE_BUTTON = {
+  up: "Move up",
+  down: "Move down",
+} as const;
+
 export const PANEL = {
   title: "Send Resources",
   launcher: "Send Resources",
@@ -64,7 +89,6 @@ export const QUEUE_VIEW = {
   empty: "The queue is empty.",
   more: (count: number) => `+ ${count} more`,
   headerTask: "Task",
-  moveToBack: "Send to the back",
   remove: "Remove",
   clearAll: "Clear all",
   upgrade: (building: string, town: string) => `Upgrade ${building} in ${town}`,
@@ -83,13 +107,13 @@ export const SEND_DIALOG = {
   amount: "Amount",
   removeFirst: "Remove First",
   removeLast: "Remove Last",
-  columns: ["Origin", "Destination", "Resource", "Amount", "Source"],
+  columns: ["Origin", "Destination", "Resource", "Amount", "Source", ""],
   errors: {
     incomplete: "Please choose both towns.",
     sameTown: "Source and destination are the same!",
     noAmount: "Enter an amount for at least one resource.",
     invalidAmount: (resources: string) =>
-      `Amounts must be whole numbers greater than 0: ${resources}`,
+      `Amounts must be whole numbers (empty or 0 = none): ${resources}`,
   },
 } as const;
 

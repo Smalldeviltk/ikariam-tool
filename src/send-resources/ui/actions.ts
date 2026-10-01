@@ -15,6 +15,7 @@
  */
 
 import { escapeHtml } from "@core/dom";
+import { MOVE_BUTTON } from "../messages";
 
 export type ActionHandler = (
   element: HTMLElement,
@@ -40,6 +41,29 @@ export function action(
         .join("")
     : "";
   return `data-ika-action="${name}"${extra}`;
+}
+
+/**
+ * The ↑ and ↓ buttons of one row of a reorderable list. Each moves the row
+ * one place; the first row's ↑ and the last row's ↓ are disabled.
+ */
+export function moveButtons(
+  names: { up: string; down: string },
+  data: Record<string, string | number>,
+  position: { isFirst: boolean; isLast: boolean },
+): string {
+  const button = (
+    name: string,
+    title: string,
+    label: string,
+    disabled: boolean,
+  ) =>
+    `<button class="button ika-move" title="${title}"${disabled ? " disabled" : ""} ` +
+    `${action(name, data)}>${label}</button>`;
+  return (
+    button(names.up, MOVE_BUTTON.up, "↑", position.isFirst) +
+    button(names.down, MOVE_BUTTON.down, "↓", position.isLast)
+  );
 }
 
 let installed = false;

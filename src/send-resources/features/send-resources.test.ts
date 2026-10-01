@@ -47,12 +47,22 @@ const HEADER =
  * `afterSubmit` is the interesting knob: the game may or may not have the
  * port's town list back by the time the handler looks.
  */
-function installGame(options: { afterSubmit: "port-list" | "elsewhere" }) {
+function installGame(options: {
+  afterSubmit: "port-list" | "elsewhere";
+  /** Idle ships once the form is up, when they changed on the way there. */
+  shipsAtForm?: { merchants: number; freighters: number };
+}) {
   const state = { view: "", submitted: 0, sentWine: "" };
 
   function render(view: string) {
     state.view = view;
     let body = HEADER + `<div id="js_cityBread">${TOWNS[0]}</div>`;
+    if (view === "form" && options.shipsAtForm) {
+      const { merchants, freighters } = options.shipsAtForm;
+      body = body
+        .replace(`freeTransporters">10<`, `freeTransporters">${merchants}<`)
+        .replace(`freeFreighters">0<`, `freeFreighters">${freighters}<`);
+    }
     if (view === "town") {
       body +=
         `<div id="position1" class="position1 building port">` +
@@ -155,6 +165,108 @@ describe("handleSendResource", () => {
     expect((result as any).task.data.amount).toBe(10_000 - 5000);
     expect(game.state.sentWine).toBe("5000");
   });
+
+  it(
+    "REGRESSION: waits rather than ship a few units when the source holds " +
+      "less than the order and less than one ship's cargo — every convoy " +
+      "used to send whatever had come in since the last, a ship at a time",
+    async () => {
+      const game = installGame({ afterSubmit: "port-list" });
+      game.render("town");
+      // One merchant ship carries 500 until calibrated.
+      document.querySelector("#js_GlobalMenu_wine")!.innerHTML = "499";
+
+      await expect(run(shipment(10_000))).resolves.toMatchObject({
+        status: "defer",
+      });
+      expect(game.state.submitted).toBe(0);
+    },
+  );
+
+  it("ships what the source holds once that fills at least one ship", async () => {
+    const game = installGame({ afterSubmit: "port-list" });
+    game.render("town");
+    document.querySelector("#js_GlobalMenu_wine")!.innerHTML = "700";
+
+    const result = await run(shipment(10_000));
+
+    expect(game.state.sentWine).toBe("700");
+    expect(result).toMatchObject({ status: "progress" });
+    expect((result as any).task.data.amount).toBe(10_000 - 700);
+  });
+
+  it("ships an order smaller than one ship when the stock covers it", async () => {
+    const game = installGame({ afterSubmit: "port-list" });
+    game.render("town");
+    document.querySelector("#js_GlobalMenu_wine")!.innerHTML = "400";
+
+    await expect(run(shipment(300))).resolves.toEqual({ status: "done" });
+    expect(game.state.sentWine).toBe("300");
+  });
+
+  it("keeps Auto Wine's reserve out of what counts as the stock", async () => {
+    const game = installGame({ afterSubmit: "port-list" });
+    game.render("town");
+    document.querySelector("#js_GlobalMenu_wine")!.innerHTML = "1,000";
+
+    // 1000 held, 600 kept back: 400 to spare, under one ship's 500.
+    await expect(
+      run(shipment(10_000, { reserve: 600 })),
+    ).resolves.toMatchObject({ status: "defer" });
+    expect(game.state.submitted).toBe(0);
+  });
+
+  /** Only freighters idle: none of the merchant ships the header normally shows. */
+  function onlyFreighters(count: string): void {
+    document.querySelector("#js_GlobalMenu_freeTransporters")!.innerHTML = "0";
+    document.querySelector("#js_GlobalMenu_freeFreighters")!.innerHTML = count;
+  }
+
+  it("with only freighters idle, waits for one freighter's cargo", async () => {
+    const game = installGame({ afterSubmit: "port-list" });
+    game.render("town");
+    onlyFreighters("2");
+    // Twenty merchant ships' worth, but under one freighter's 50,000.
+    document.querySelector("#js_GlobalMenu_wine")!.innerHTML = "10,000";
+
+    await expect(run(shipment(100_000))).resolves.toMatchObject({
+      status: "defer",
+    });
+    expect(game.state.submitted).toBe(0);
+  });
+
+  it("with only freighters idle, ships once the stock fills one", async () => {
+    const game = installGame({
+      afterSubmit: "port-list",
+      shipsAtForm: { merchants: 0, freighters: 2 },
+    });
+    game.render("town");
+    onlyFreighters("2");
+    document.querySelector("#js_GlobalMenu_wine")!.innerHTML = "60,000";
+
+    await run(shipment(100_000));
+
+    expect(game.state.sentWine).toBe("60000");
+  });
+
+  it(
+    "checks again at the form when the merchant ships sailed on the way — " +
+      "the freighters left are the bar then",
+    async () => {
+      const game = installGame({
+        afterSubmit: "port-list",
+        shipsAtForm: { merchants: 0, freighters: 2 },
+      });
+      game.render("town");
+      // Enough for merchant ships, which are idle when the task starts.
+      document.querySelector("#js_GlobalMenu_wine")!.innerHTML = "10,000";
+
+      await expect(run(shipment(100_000))).resolves.toMatchObject({
+        status: "defer",
+      });
+      expect(game.state.submitted).toBe(0);
+    },
+  );
 
   it("retries rather than consuming the order when no ship is idle", async () => {
     const game = installGame({ afterSubmit: "port-list" });

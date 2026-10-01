@@ -192,6 +192,38 @@ export class TaskQueue {
     this.write(tasks);
   }
 
+  /**
+   * Swap a task with its neighbour one place up or down.
+   *
+   * With `withinType`, the neighbour is the nearest task of that type and
+   * tasks of other types in between keep their places: a feature's own table
+   * shows only its own tasks, so one step there is one of its rows.
+   *
+   * Does nothing when the task is already first or last.
+   */
+  moveOneStep(
+    id: string,
+    direction: "up" | "down",
+    withinType?: TaskType,
+  ): void {
+    const tasks = this.list();
+    const index = tasks.findIndex((t) => t.id === id);
+    if (index < 0) return;
+    const step = direction === "up" ? -1 : 1;
+    let neighbour = index + step;
+    while (
+      withinType &&
+      neighbour >= 0 &&
+      neighbour < tasks.length &&
+      tasks[neighbour].type !== withinType
+    ) {
+      neighbour += step;
+    }
+    if (neighbour < 0 || neighbour >= tasks.length) return;
+    [tasks[index], tasks[neighbour]] = [tasks[neighbour], tasks[index]];
+    this.write(tasks);
+  }
+
   removeType(type: TaskType): void {
     this.write(this.list().filter((t) => t.type !== type));
   }
@@ -318,6 +350,14 @@ export interface TaskRunnerOptions {
    */
   canRun?: () => boolean;
   /**
+   * Whether tasks of this type may run now.
+   *
+   * Shipments and upgrades share this runner, but each has its own switch;
+   * a task of a type that is switched off stays queued, in its place, and is
+   * passed over. A queue holding only such tasks counts as drained.
+   */
+  allowsType?: (type: TaskType) => boolean;
+  /**
    * Whether the UI is idle (no popup, not loading).
    * Returning `false` makes the runner skip this tick without consuming a task.
    */
@@ -420,14 +460,22 @@ export class TaskRunner {
     await this.tick();
   }
 
+  /** Queued tasks of the types `allowsType` lets run, in queue order. */
+  private allowedTasks(): Task[] {
+    const { allowsType } = this.options;
+    const tasks = this.queue.list();
+    return allowsType ? tasks.filter((task) => allowsType(task.type)) : tasks;
+  }
+
   /**
-   * The task to run this tick: the first one whose type is not blocked by a
-   * `retry`. When every queued type is blocked, the blocks are forgotten and
-   * the head runs, so a blocker that has cleared (the fleet is back) is
-   * noticed on the next tick, as before any type was skipped.
+   * The task to run this tick: the first allowed one whose type is not
+   * blocked by a `retry`. When every allowed type is blocked, the blocks are
+   * forgotten and the first allowed task runs, so a blocker that has cleared
+   * (the fleet is back) is noticed on the next tick, as before any type was
+   * skipped.
    */
   private nextTask(): Task | undefined {
-    const tasks = this.queue.list();
+    const tasks = this.allowedTasks();
     const runnable = tasks.find((task) => !this.blockedTypes.has(task.type));
     if (runnable) return runnable;
     this.blockedTypes.clear();
@@ -483,7 +531,8 @@ export class TaskRunner {
           this.queue.moveToBack(task.id);
           this.deferStreak += 1;
           // A full lap with nothing runnable: back off instead of spinning.
-          if (this.deferStreak >= this.queue.length) {
+          // Tasks passed over by `allowsType` take no part in the lap.
+          if (this.deferStreak >= this.allowedTasks().length) {
             const cooldown =
               this.options.deferCooldownMs ?? DEFAULT_DEFER_COOLDOWN_MS;
             this.pausedUntil = Date.now() + cooldown;

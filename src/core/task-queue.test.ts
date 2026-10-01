@@ -235,6 +235,42 @@ describe("TaskQueue", () => {
     expect(queue.list().map((t) => t.id)).toEqual([b.id, c.id, a.id]);
   });
 
+  it("moveOneStep swaps a task with its neighbour, one place only", () => {
+    const a = queue.push(ship("1"));
+    const b = queue.push(ship("2"));
+    const c = queue.push(ship("3"));
+
+    queue.moveOneStep(a.id, "down");
+    expect(queue.list().map((t) => t.id)).toEqual([b.id, a.id, c.id]);
+
+    queue.moveOneStep(c.id, "up");
+    expect(queue.list().map((t) => t.id)).toEqual([b.id, c.id, a.id]);
+  });
+
+  it("moveOneStep leaves the first task first and the last task last", () => {
+    const a = queue.push(ship("1"));
+    const b = queue.push(ship("2"));
+
+    queue.moveOneStep(a.id, "up");
+    queue.moveOneStep(b.id, "down");
+    queue.moveOneStep("nope", "down");
+
+    expect(queue.list().map((t) => t.id)).toEqual([a.id, b.id]);
+  });
+
+  it("moveOneStep within a type steps over other types, which stay put", () => {
+    const a = queue.push(ship("1"));
+    const upgrade = queue.push(build("Athens"));
+    const b = queue.push(ship("2"));
+
+    queue.moveOneStep(a.id, "down", "sendResource");
+    expect(queue.list().map((t) => t.id)).toEqual([b.id, upgrade.id, a.id]);
+
+    // No shipment above b: nothing moves, the upgrade included.
+    queue.moveOneStep(b.id, "up", "sendResource");
+    expect(queue.list().map((t) => t.id)).toEqual([b.id, upgrade.id, a.id]);
+  });
+
   it("removeByLabel only drops labelled shipments", () => {
     queue.push(ship("1", 10, "Auto Wine"));
     const manual = queue.push(ship("2", 10));
@@ -317,6 +353,60 @@ describe("TaskRunner", () => {
     expect(queue.length).toBe(2);
     // Same task both times — a global blocker must not rotate the queue.
     expect(calls[0].id).toBe(calls[1].id);
+  });
+
+  describe("`allowsType` — a type switched off is passed over", () => {
+    const upgradesOnly = {
+      allowsType: (type: string) => type !== "sendResource",
+    };
+
+    it("runs the allowed type and leaves the other in its place", async () => {
+      const shipment = queue.push(ship("1"));
+      queue.push(build("W-1"));
+      queue.push(build("M-1"));
+      const { runner, calls } = runnerWith({ status: "done" }, upgradesOnly);
+      runner.start();
+
+      await tick(3);
+
+      expect(calls.map((task) => task.type)).toEqual([
+        "upgradeBuilding",
+        "upgradeBuilding",
+      ]);
+      expect(queue.list().map((task) => task.id)).toEqual([shipment.id]);
+    });
+
+    it("counts a queue of passed-over tasks as drained", async () => {
+      queue.push(ship("1"));
+      const onDrain = vi.fn();
+      const { runner, calls } = runnerWith(
+        { status: "done" },
+        { ...upgradesOnly, onDrain },
+      );
+      runner.start();
+
+      await tick();
+
+      expect(calls).toEqual([]);
+      expect(onDrain).toHaveBeenCalledTimes(1);
+      expect(queue.length).toBe(1);
+    });
+
+    it("pauses after every allowed task deferred, whatever else is queued", async () => {
+      queue.push(ship("1"));
+      queue.push(build("W-1"));
+      queue.push(build("M-1"));
+      const { runner, calls } = runnerWith(
+        { status: "defer" },
+        { ...upgradesOnly, deferCooldownMs: 60_000 },
+      );
+      runner.start();
+
+      await tick(5);
+
+      // Two upgrades deferred: a full lap of what may run, so it rests.
+      expect(calls).toHaveLength(2);
+    });
   });
 
   describe("a `retry` blocks its own type only", () => {
