@@ -616,6 +616,7 @@
       this.deferStreak = 0;
       this.errorStreaks = new Map();
       this.pausedUntil = 0;
+      this.blockedTypes = new Set();
     }
     register(type, handler) {
       this.handlers.set(type, handler);
@@ -643,11 +644,18 @@
     async runOnce() {
       await this.tick();
     }
+    nextTask() {
+      const tasks = this.queue.list();
+      const runnable = tasks.find((task) => !this.blockedTypes.has(task.type));
+      if (runnable) return runnable;
+      this.blockedTypes.clear();
+      return tasks[0];
+    }
     async tick() {
       if (this.busy) return;
       if (this.options.canRun && !this.options.canRun()) return;
       if (Date.now() < this.pausedUntil) return;
-      const task = this.queue.head();
+      const task = this.nextTask();
       if (!task) {
         if (!this.drained) {
           this.drained = true;
@@ -669,6 +677,8 @@
         const result = await handler(task);
         if (result.status !== "defer") this.deferStreak = 0;
         this.errorStreaks.delete(task.id);
+        if (result.status === "retry") this.blockedTypes.add(task.type);
+        else this.blockedTypes.delete(task.type);
         switch (result.status) {
           case "done":
             this.queue.removeById(task.id);
@@ -723,6 +733,262 @@
       }
     }
   };
+  var BODY_BOTTOM_MARGIN = 120;
+  var MIN_BODY_HEIGHT = 120;
+  var MIN_VISIBLE_WIDTH = 120;
+  var MIN_VISIBLE_HEIGHT = 60;
+  var DEFAULT_POSITION = {
+    left: 120,
+    top: 120,
+  };
+  var WINDOW_STYLE_ID = "ika-window-style";
+  function windowStyles() {
+    return `
+.ika-window {
+  position: fixed;
+  z-index: 1000;
+  min-width: 260px;
+  border: 1px solid #b79b6f;
+  border-radius: 4px;
+  background: #f8e7b3;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .35);
+  font-size: 11px;
+  color: #3b2c1a;
+}
+.ika-window[hidden] { display: none !important; }
+.ika-window-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px;
+  border-bottom: 1px solid #b79b6f;
+  background: #e8d199;
+  border-radius: 3px 3px 0 0;
+  cursor: move;
+  user-select: none;
+}
+.ika-window-title { font-weight: bold; font-size: 12px; }
+.ika-window-close {
+  cursor: pointer;
+  padding: 0 4px;
+  font-weight: bold;
+  line-height: 1;
+}
+.ika-window-close:hover { color: #a3301f; }
+.ika-window-body { overflow: auto; padding: 8px; }
+.ika-window-footer {
+  padding: 4px 8px;
+  border-top: 1px solid #b79b6f;
+  font-size: 10px;
+  color: #6b5433;
+  min-height: 14px;
+}
+.ika-group { margin-bottom: 8px; }
+.ika-group:last-child { margin-bottom: 0; }
+.ika-group-title {
+  font-weight: bold;
+  border-bottom: 1px dotted #b79b6f;
+  margin-bottom: 4px;
+  padding-bottom: 2px;
+}
+.ika-group button { margin: 0 4px 4px 0; }
+`;
+  }
+  function installStyles$1() {
+    if (document.getElementById("ika-window-style")) return;
+    addStyle(windowStyles()).id = WINDOW_STYLE_ID;
+  }
+  function clampToViewport(position) {
+    const maxLeft = Math.max(0, window.innerWidth - MIN_VISIBLE_WIDTH);
+    const maxTop = Math.max(0, window.innerHeight - MIN_VISIBLE_HEIGHT);
+    return {
+      left: Math.min(Math.max(0, position.left), maxLeft),
+      top: Math.min(Math.max(0, position.top), maxTop),
+    };
+  }
+  function makeDraggable(root, handle, onMoved) {
+    let startX = 0;
+    let startY = 0;
+    let originLeft = 0;
+    let originTop = 0;
+    const onPointerMove = (event) => {
+      const next = clampToViewport({
+        left: originLeft + (event.clientX - startX),
+        top: originTop + (event.clientY - startY),
+      });
+      root.style.left = `${next.left}px`;
+      root.style.top = `${next.top}px`;
+    };
+    const onPointerUp = (event) => {
+      handle.releasePointerCapture?.(event.pointerId);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      onMoved({
+        left: parseInt(root.style.left, 10) || 0,
+        top: parseInt(root.style.top, 10) || 0,
+      });
+    };
+    handle.addEventListener("pointerdown", (event) => {
+      if (event.target?.classList.contains("ika-window-close")) return;
+      event.preventDefault();
+      startX = event.clientX;
+      startY = event.clientY;
+      originLeft = parseInt(root.style.left, 10) || 0;
+      originTop = parseInt(root.style.top, 10) || 0;
+      handle.setPointerCapture?.(event.pointerId);
+      window.addEventListener("pointermove", onPointerMove);
+      window.addEventListener("pointerup", onPointerUp);
+    });
+  }
+  function createWindow(options) {
+    installStyles$1();
+    const positionKey = `ikaWindow_${options.id}`;
+    const stored = options.store?.getJSON(positionKey, null);
+    const position = clampToViewport(stored ?? DEFAULT_POSITION);
+    const root = document.createElement("div");
+    root.id = options.id;
+    root.className = "ika-window";
+    root.hidden = true;
+    root.style.left = `${position.left}px`;
+    root.style.top = `${position.top}px`;
+    if (options.width) root.style.width = options.width;
+    root.innerHTML = `
+    <div class="ika-window-header">
+      <span class="ika-window-title"></span>
+      <span class="ika-window-close" title="${WINDOW_CLOSE_TITLE}">&#10005;</span>
+    </div>
+    <div class="ika-window-body"></div>
+    <div class="ika-window-footer"></div>`;
+    const header = root.querySelector(".ika-window-header");
+    const title = root.querySelector(".ika-window-title");
+    const body = root.querySelector(".ika-window-body");
+    title.textContent = options.title;
+    (document.getElementById("container") ?? document.body).appendChild(root);
+    const applyMaxHeight = () => {
+      body.style.maxHeight = `${Math.max(MIN_BODY_HEIGHT, window.innerHeight - BODY_BOTTOM_MARGIN)}px`;
+    };
+    applyMaxHeight();
+    window.addEventListener("resize", applyMaxHeight);
+    const closeOnEscape = (event) => {
+      const tag = event.target?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      if (event.key === "Escape" && !root.hidden) api.close();
+    };
+    makeDraggable(root, header, (moved) => {
+      options.store?.setJSON(positionKey, moved);
+    });
+    const api = {
+      root,
+      content: body,
+      isOpen: () => !root.hidden,
+      open() {
+        const next = clampToViewport({
+          left: parseInt(root.style.left, 10) || 0,
+          top: parseInt(root.style.top, 10) || 0,
+        });
+        root.style.left = `${next.left}px`;
+        root.style.top = `${next.top}px`;
+        applyMaxHeight();
+        root.hidden = false;
+      },
+      close() {
+        if (root.hidden) return;
+        root.hidden = true;
+        options.onClose?.();
+      },
+      toggle() {
+        if (root.hidden) api.open();
+        else api.close();
+      },
+      setTitle(text) {
+        title.textContent = text;
+      },
+      destroy() {
+        window.removeEventListener("resize", applyMaxHeight);
+        document.removeEventListener("keydown", closeOnEscape);
+        root.remove();
+      },
+    };
+    root
+      .querySelector(".ika-window-close")
+      .addEventListener("click", () => api.close());
+    document.addEventListener("keydown", closeOnEscape);
+    return api;
+  }
+  function setWindowFooter(win, text) {
+    const footer = win.root.querySelector(".ika-window-footer");
+    if (footer) footer.textContent = text;
+  }
+  var TOAST_STYLE_ID = "ika-toast-style";
+  var TOAST_STACK_ID = "ika-toast-stack";
+  var TOAST_BASE_MS = 4e3;
+  var TOAST_MS_PER_CHARACTER = 50;
+  var TOAST_MAX_MS = 15e3;
+  var TOAST_FADE_MS = 400;
+  function toastDuration(message) {
+    return Math.min(
+      TOAST_MAX_MS,
+      TOAST_BASE_MS + message.length * TOAST_MS_PER_CHARACTER,
+    );
+  }
+  function toastStyles() {
+    return `
+#${TOAST_STACK_ID} {
+  position: fixed;
+  z-index: 100000;
+  left: 50%;
+  bottom: 5em;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 480px;
+  pointer-events: none;
+}
+.ika-toast {
+  pointer-events: auto;
+  cursor: pointer;
+  padding: 6px 10px;
+  border: 1px solid #b79b6f;
+  border-radius: 4px;
+  background: #f8e7b3;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .35);
+  font-size: 11px;
+  color: #3b2c1a;
+  white-space: pre-line;
+  opacity: 1;
+  transition: opacity ${TOAST_FADE_MS}ms;
+}
+.ika-toast.ika-toast-hiding { opacity: 0; }
+`;
+  }
+  function toastStack() {
+    if (!document.getElementById("ika-toast-style"))
+      addStyle(toastStyles()).id = TOAST_STYLE_ID;
+    let stack = document.getElementById(TOAST_STACK_ID);
+    if (!stack) {
+      stack = document.createElement("div");
+      stack.id = TOAST_STACK_ID;
+      document.body.appendChild(stack);
+    }
+    return stack;
+  }
+  function showToast(message) {
+    const toast = document.createElement("div");
+    toast.className = "ika-toast";
+    toast.textContent = message;
+    toastStack().appendChild(toast);
+    let hideTimer;
+    const hide = () => {
+      clearTimeout(hideTimer);
+      toast.classList.add("ika-toast-hiding");
+      setTimeout(() => toast.remove(), TOAST_FADE_MS);
+    };
+    hideTimer = setTimeout(hide, toastDuration(message));
+    toast.addEventListener("click", hide, { once: true });
+    return toast;
+  }
   var BUTTON = {
     start: "Start",
     startTimer: "Start Timer",
@@ -752,6 +1018,7 @@
     importData: "Import",
     bugReport: "Bug Report",
     clearLog: "Clear Log",
+    crawlBuildingHelp: "Crawl Building",
     footerWithQueue: (status, pending) => `${status}  —  ${pending} queued`,
     footerWithCounters: (status, merchants, freighters, actionPoints) =>
       `${status}  —  Idle ships ${merchants} + ${freighters} freighters  ·  AP ${actionPoints}`,
@@ -777,7 +1044,7 @@
     title: "Mass transport resources",
     from: "From: ",
     destination: "Destination: ",
-    amount: "Amount: ",
+    amount: "Amount",
     removeFirst: "Remove First",
     removeLast: "Remove Last",
     columns: ["Origin", "Destination", "Resource", "Amount", "Source"],
@@ -889,6 +1156,12 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       `Imported ${imported} entries, skipped ${skipped}.\n\nReload the page for everything to take effect.` +
       (notes ? `\n\n${notes}` : ""),
     failed: (reason) => `Import failed: ${reason}`,
+  };
+  var BUILDING_CRAWL = {
+    noDialog:
+      "Open Help > building details first, pick a building and wait for it to load, then press Crawl Building.",
+    saved: (name, levels, filename) =>
+      `Saved ${name}: ${levels} levels.\n${filename}`,
   };
   var MISC = {
     noSafehouse: "No safehouse in this town!",
@@ -1082,7 +1355,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     const press = winePressLevel();
     if (press === null) return null;
     return (
-      (Math.abs(spendings) * (100 - Math.min(100, Math.max(0, press)))) / 100
+      (Math.abs(spendings) * (100 - Math.min(50, Math.max(0, press)))) / 100
     );
   }
   function modelCurrentCityId() {
@@ -1250,7 +1523,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     qsa(SEL.closeButton).find(isDisplayed)?.click();
   }
   function openSpyBuilding() {
-    if (!clickIfPresent(SEL.safehouse)) alert(MISC.noSafehouse);
+    if (!clickIfPresent(SEL.safehouse)) showToast(MISC.noSafehouse);
   }
   function sendAllArmy() {
     qsa(SEL.setMax).forEach((button) => button.click());
@@ -1348,10 +1621,10 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     if (perShip) setFlag(FLAG.perShipCapacity, perShip);
     if (freighterCapacity) setFlag(FLAG.freighterCapacity, freighterCapacity);
     if (perShip || freighterCapacity)
-      alert(
+      showToast(
         SHIP_CAPACITY.calibrated(perShip || null, freighterCapacity || null),
       );
-    else alert(SHIP_CAPACITY.notReadable);
+    else showToast(SHIP_CAPACITY.notReadable);
   }
   var BACK_TO_TOWN_TIMEOUT_MS = 5e3;
   var POST_SUBMIT_TIMEOUT_MS = 5e3;
@@ -1685,7 +1958,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     if (configured.filter((r) => r.townNumber !== fromTown).length === 0) {
       const senderCount = loadSenders().length;
       const townCount = getTownList().length;
-      alert(
+      showToast(
         configured.length === 0
           ? AUTO_WINE.noReceivers(senderCount, townCount)
           : AUTO_WINE.onlyReceiverIsSource,
@@ -1694,7 +1967,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     }
     const plan = planWineRun(fromTown);
     if (plan.supply <= 0) {
-      alert(AUTO_WINE.noSpareWine(plan.reserve));
+      showToast(AUTO_WINE.noSpareWine(plan.reserve));
       return 0;
     }
     const { queue } = getState();
@@ -1716,7 +1989,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       added++;
     }
     if (added === 0) {
-      alert(AUTO_WINE.nothingToSend);
+      showToast(AUTO_WINE.nothingToSend);
       return 0;
     }
     logInfo(
@@ -1736,7 +2009,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
         filled++;
       }
     }
-    if (filled === 0) alert(AUTO_WINE.noFigures);
+    if (filled === 0) showToast(AUTO_WINE.noFigures);
   }
   function collectWineSettings() {
     const senders = [];
@@ -2106,16 +2379,16 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
   var scanning = false;
   async function scanBuildings(maxTowns = 14, queueIsRunning = () => false) {
     if (scanning) {
-      alert(SCAN.alreadyRunning);
+      showToast(SCAN.alreadyRunning);
       return;
     }
     const limit = Math.min(getTownCount(), maxTowns);
     if (limit === 0) {
-      alert(SCAN.noTownList);
+      showToast(SCAN.noTownList);
       return;
     }
     if (queueIsRunning()) {
-      alert(SCAN.queueRunning);
+      showToast(SCAN.queueRunning);
       return;
     }
     if (ownTownIds().length > 0) {
@@ -2129,7 +2402,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
           result.failed.join(", "),
         );
         logInfo(summary);
-        alert(summary);
+        showToast(summary);
         return;
       } catch (e) {
         logInfo(
@@ -2161,7 +2434,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     }
     const summary = SCAN.walkFinished(visited, limit, failed.join(", "));
     logInfo(summary);
-    alert(summary);
+    showToast(summary);
   }
   function listBuildingsInCurrentTown() {
     const slots = qsa(SEL.buildings).map((element) => {
@@ -2342,285 +2615,6 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
         }
       }
     }).observe(target, { childList: true });
-  }
-  var RESOURCE_OPTIONS = [
-    {
-      value: "wood",
-      label: "Wood",
-    },
-    {
-      value: "wine",
-      label: "Wine",
-    },
-    {
-      value: "marble",
-      label: "Marble",
-    },
-    {
-      value: "glass",
-      label: "Crystal",
-    },
-    {
-      value: "sulfur",
-      label: "Sulfur",
-    },
-  ];
-  var handlers = new Map();
-  function registerActions(map) {
-    for (const [name, handler] of Object.entries(map))
-      handlers.set(name, handler);
-  }
-  function action(name, data) {
-    return `data-ika-action="${name}"${
-      data
-        ? Object.entries(data)
-            .map(
-              ([key, value]) => ` data-${key}="${escapeHtml(String(value))}"`,
-            )
-            .join("")
-        : ""
-    }`;
-  }
-  var installed$1 = false;
-  function installActionDispatcher() {
-    if (installed$1) return;
-    installed$1 = true;
-    document.addEventListener(
-      "click",
-      (event) => {
-        const target = event.target?.closest("[data-ika-action]");
-        if (!target) return;
-        const name = target.dataset.ikaAction;
-        if (!name) return;
-        const handler = handlers.get(name);
-        if (!handler) {
-          console.warn(`[ika] No handler registered for action "${name}"`);
-          return;
-        }
-        event.preventDefault();
-        handler(target, event);
-      },
-      true,
-    );
-  }
-  var MARKER_CLASS = "ika-transport-buttons";
-  var TRANSPORT_STYLE_ID = "ika-transport-buttons-style";
-  var RESOURCES = RESOURCE_OPTIONS.map((option) => option.value);
-  var STEPS = [
-    {
-      ships: -1,
-      kind: "merchant",
-    },
-    {
-      ships: 1,
-      kind: "merchant",
-    },
-    {
-      ships: 5,
-      kind: "merchant",
-    },
-    {
-      ships: 10,
-      kind: "merchant",
-    },
-    {
-      ships: 1,
-      kind: "freighter",
-    },
-  ];
-  function transportStyles() {
-    return `
-#transportGoods ul.resourceAssign > li { height: auto; min-height: 0; overflow: visible; }
-
-.${MARKER_CLASS} {
-  display: block;
-  clear: both;
-  position: relative;
-  z-index: 2;
-  margin: 2px 0 5px 0;
-  padding: 0;
-  /* The right edge is pinned to the text field's by alignRowToField, which
-     sets padding-right; this is what makes that padding move the group. */
-  text-align: right;
-  white-space: nowrap;
-  line-height: 1;
-}
-
-.${MARKER_CLASS} > a.button {
-  display: inline-block;
-  min-width: 34px;
-  width: auto;
-  margin: 0;
-  padding: 4px 9px !important;
-  font-size: 12px;
-  line-height: 20px;
-  text-align: center;
-  direction: ltr;
-}
-
-/* One strip rather than six loose buttons, the way the game's own button
-   groups read. */
-.${MARKER_CLASS} > a.button:not(:first-child) { border-left: 1px solid #c9a584; }
-.${MARKER_CLASS} > a.button:not(:last-child) { border-right: none; }
-`;
-  }
-  function alignRowToField(field, row) {
-    const host = row.parentElement;
-    if (!host) return;
-    const hostRight = host.getBoundingClientRect().right;
-    const fieldRight = field.getBoundingClientRect().right;
-    if (hostRight <= 0 || fieldRight <= 0) return;
-    const gap = Math.round(hostRight - fieldRight);
-    if (gap > 0) row.style.paddingRight = `${gap}px`;
-  }
-  function installStyles$1() {
-    if (document.getElementById("ika-transport-buttons-style")) return;
-    const style = document.createElement("style");
-    style.id = TRANSPORT_STYLE_ID;
-    style.textContent = transportStyles();
-    document.head.appendChild(style);
-  }
-  function capacityOf(kind) {
-    return kind === "freighter" ? getFreighterCapacity() : getPerShipCapacity();
-  }
-  function stepAmount(step) {
-    return step.ships * capacityOf(step.kind);
-  }
-  function stepLabel(step) {
-    const amount = stepAmount(step);
-    return `${amount < 0 ? "-" : "+"}${formatInteger(Math.abs(amount))}`;
-  }
-  function stepTitle(step) {
-    return TRANSPORT_BUTTONS.step(
-      step.ships >= 0,
-      Math.abs(step.ships),
-      step.kind === "freighter",
-    );
-  }
-  function buttonRow(resource) {
-    return (
-      `<span class="${MARKER_CLASS}">` +
-      STEPS.map(
-        (step) =>
-          `<a class="button" href="#" title="${stepTitle(step)}" ${action(
-            "transport.add",
-            {
-              "ika-resource": resource,
-              "ika-ships": step.ships,
-              "ika-kind": step.kind,
-            },
-          )}>${stepLabel(step)}</a>`,
-      ).join("") +
-      `<a class="button" href="#" title="${TRANSPORT_BUTTONS.clear}" ${action(
-        "transport.add",
-        {
-          "ika-resource": resource,
-          "ika-ships": 0,
-          "ika-kind": "merchant",
-          "ika-set": "1",
-        },
-      )}>0</a></span>`
-    );
-  }
-  function applyTransportStep(resource, ships, kind = "merchant", set = false) {
-    const field = qs(SEL.resourceField(resource));
-    if (!field) return;
-    const current = parseInt(field.value.replace(/\D/g, ""), 10) || 0;
-    const delta = ships * capacityOf(kind);
-    const next = set ? 0 : Math.max(0, current + delta);
-    setInputValue(field, String(next));
-  }
-  function addTransportButtons() {
-    let added = false;
-    for (const resource of RESOURCES) {
-      const field = qs(SEL.resourceField(resource));
-      if (!field) continue;
-      const host = field.closest("li") ?? field.parentElement;
-      if (!host || host.querySelector(`.${MARKER_CLASS}`)) continue;
-      installStyles$1();
-      host.insertAdjacentHTML("beforeend", buttonRow(resource));
-      const row = host.lastElementChild;
-      if (row instanceof HTMLElement) alignRowToField(field, row);
-      added = true;
-    }
-    return added;
-  }
-  function startTransportButtonObserver() {
-    const target = qs(SEL.container);
-    if (!target) return null;
-    addTransportButtons();
-    const observer = new MutationObserver(() => {
-      addTransportButtons();
-    });
-    observer.observe(target, {
-      childList: true,
-      subtree: true,
-    });
-    return observer;
-  }
-  var CRITICAL_SELECTORS = {
-    cityBread: SEL.cityBread,
-    townList: SEL.townListContainer,
-    buildTabTownNames: SEL.buildTabTownNames,
-    freeTransporters: SEL.globalMenu.freeTransporters,
-  };
-  function selectorHealth() {
-    const health = {};
-    for (const [name, selector] of Object.entries(CRITICAL_SELECTORS))
-      try {
-        health[name] = qsa(selector).length;
-      } catch {
-        health[name] = -1;
-      }
-    return health;
-  }
-  function appContext() {
-    const context = {
-      town: getCurrentTownName() || null,
-      modelTown: modelCurrentCityName(),
-      hasModel: hasModel(),
-      selectors: selectorHealth(),
-      dialogOpen: !!qs(`#${DIALOG_ID}`),
-    };
-    try {
-      const { accountName, queue } = getState();
-      const head = queue.head();
-      context.account = accountName;
-      context.queueLength = queue.length;
-      context.queueHead = head
-        ? {
-            type: head.type,
-            id: head.id,
-            data: head.data,
-          }
-        : null;
-    } catch {
-      context.stateInitialised = false;
-    }
-    return context;
-  }
-  var installed = false;
-  function installDiagnostics() {
-    if (installed) return;
-    installed = true;
-    registerContextProvider(appContext);
-    const anyWindow = window;
-    anyWindow.ikaBugs = () => {
-      console.log(summariseBugs());
-      return getBugs();
-    };
-    anyWindow.ikaBugReport = () => {
-      const json = exportBugReport();
-      try {
-        const copyToClipboard = anyWindow.copy;
-        copyToClipboard?.(json);
-      } catch {}
-      return json;
-    };
-    anyWindow.ikaClearBugs = () => {
-      clearBugs();
-      console.log("[ika] bug reports cleared");
-    };
   }
   var TRANSFER_FORMAT = "ikariam-tool/data";
   var DEFAULT_GROUPS = ["config", "measurements"];
@@ -2803,14 +2797,14 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       account: accountName,
     });
     if (bundle.entries.length === 0) {
-      alert(DATA_TRANSFER.nothingToExport);
+      showToast(DATA_TRANSFER.nothingToExport);
       return;
     }
     const json = JSON.stringify(bundle, null, 2);
     downloadJson(timestampedFilename(accountName), json);
     navigator.clipboard?.writeText(json).catch(() => {});
     logInfo(`Exported ${bundle.entries.length} entries`);
-    alert(
+    showToast(
       DATA_TRANSFER.saved(
         bundle.entries.length,
         describeBundle(bundle),
@@ -2841,7 +2835,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
               DATA_TRANSFER.otherAccount(unique, accountName),
             );
             remapAccountTo = remap ? accountName : void 0;
-            if (!remap) alert(DATA_TRANSFER.skippingOtherAccount);
+            if (!remap) showToast(DATA_TRANSFER.skippingOtherAccount);
           }
           if (!confirm(DATA_TRANSFER.confirmImport(describeBundle(bundle))))
             return;
@@ -2853,7 +2847,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
           logInfo(
             `Imported ${result.imported} entries (${result.skipped} skipped)`,
           );
-          alert(
+          showToast(
             DATA_TRANSFER.imported(
               result.imported,
               result.skipped,
@@ -2862,16 +2856,387 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
           );
         })
         .catch((error) => {
-          alert(DATA_TRANSFER.failed(errorMessage(error)));
+          showToast(DATA_TRANSFER.failed(errorMessage(error)));
         });
     });
     input.click();
+  }
+  var HELP_DIALOG_SELECTOR = "#buildingDetail";
+  var COLUMN_KEY_BY_ICON = {
+    "c3527b2f694fb882563c04df6d8972.png": "wood",
+    "94ddfda045a8f5ced3397d791fd064.png": "wine",
+    "fc258b990c1a2a36c5aeb9872fc08a.png": "marble",
+    "417b4059940b2ae2680c070a197d8c.png": "crystal",
+    "5578a7dfa3e98124439cca4a387a61.png": "sulfur",
+    "465f0358d2cb09c07cd0f5a53e38eb.png": "time",
+  };
+  function columnKeyForIcon(iconSrc) {
+    const fileName = iconSrc?.split("/").pop();
+    return (fileName && COLUMN_KEY_BY_ICON[fileName]) || null;
+  }
+  var cleanText = (element) =>
+    (element?.textContent ?? "").replace(/\s+/g, " ").trim();
+  function cellValue(cell) {
+    const tooltip = qs(".tooltip", cell);
+    if (tooltip) return cleanText(tooltip);
+    const title = cell.getAttribute("title");
+    return title ? title.replace(/\s+/g, " ").trim() : cleanText(cell);
+  }
+  function readSelectedBuilding(dialog) {
+    const selected = qs(".building_nav .button_building.selected", dialog);
+    if (!selected)
+      return {
+        buildingId: null,
+        buildingClass: null,
+      };
+    const idMatch = (selected.getAttribute("onclick") ?? "").match(
+      /buildingId=(\d+)/,
+    );
+    const buildingClass =
+      Array.from(selected.classList).find(
+        (name) => name !== "selected" && name !== "button_building",
+      ) ?? null;
+    return {
+      buildingId: idMatch ? Number(idMatch[1]) : null,
+      buildingClass,
+    };
+  }
+  function readBuildingHelp(dialog) {
+    const content = qs(".content", dialog);
+    const table = content ? qs("table.table01", content) : null;
+    const tableRows = table ? qsa("tr", table) : [];
+    const headerRow = tableRows.find((row) => qs("th", row));
+    const columns = headerRow
+      ? qsa("th", headerRow).map((th) => {
+          const iconSrc = qs("img", th)?.getAttribute("src") ?? null;
+          return {
+            className: th.className,
+            text: cleanText(th),
+            iconSrc,
+            key: columnKeyForIcon(iconSrc),
+          };
+        })
+      : [];
+    const rows = tableRows
+      .filter((row) => row !== headerRow)
+      .map((row) => qsa(":scope > td", row).map(cellValue))
+      .filter((cells) => cells.length > 0);
+    return {
+      capturedAt: new Date().toISOString(),
+      host: location.host,
+      ...readSelectedBuilding(dialog),
+      name: cleanText(qs("h3.header", dialog)),
+      description: content ? qsa("p", content).map(cleanText) : [],
+      columns,
+      rows,
+      contentHtml: content?.outerHTML ?? "",
+    };
+  }
+  function saveBuildingHelpToFile() {
+    const dialog = qs(HELP_DIALOG_SELECTOR);
+    if (!dialog) {
+      showToast(BUILDING_CRAWL.noDialog);
+      return;
+    }
+    const capture = readBuildingHelp(dialog);
+    const label = capture.buildingClass ?? "unknown";
+    const filename = `building-help-${label}-${capture.buildingId ?? "x"}.json`;
+    downloadJson(filename, JSON.stringify(capture, null, 2));
+    logInfo(
+      `Saved building help: ${capture.name || label}, ${capture.rows.length} levels`,
+    );
+    showToast(
+      BUILDING_CRAWL.saved(
+        capture.name || label,
+        capture.rows.length,
+        filename,
+      ),
+    );
+  }
+  var RESOURCE_OPTIONS = [
+    {
+      value: "wood",
+      label: "Wood",
+    },
+    {
+      value: "wine",
+      label: "Wine",
+    },
+    {
+      value: "marble",
+      label: "Marble",
+    },
+    {
+      value: "glass",
+      label: "Crystal",
+    },
+    {
+      value: "sulfur",
+      label: "Sulfur",
+    },
+  ];
+  var handlers = new Map();
+  function registerActions(map) {
+    for (const [name, handler] of Object.entries(map))
+      handlers.set(name, handler);
+  }
+  function action(name, data) {
+    return `data-ika-action="${name}"${
+      data
+        ? Object.entries(data)
+            .map(
+              ([key, value]) => ` data-${key}="${escapeHtml(String(value))}"`,
+            )
+            .join("")
+        : ""
+    }`;
+  }
+  var installed$1 = false;
+  function installActionDispatcher() {
+    if (installed$1) return;
+    installed$1 = true;
+    document.addEventListener(
+      "click",
+      (event) => {
+        const target = event.target?.closest("[data-ika-action]");
+        if (!target) return;
+        const name = target.dataset.ikaAction;
+        if (!name) return;
+        const handler = handlers.get(name);
+        if (!handler) {
+          console.warn(`[ika] No handler registered for action "${name}"`);
+          return;
+        }
+        event.preventDefault();
+        handler(target, event);
+      },
+      true,
+    );
+  }
+  var MARKER_CLASS = "ika-transport-buttons";
+  var TRANSPORT_STYLE_ID = "ika-transport-buttons-style";
+  var RESOURCES = RESOURCE_OPTIONS.map((option) => option.value);
+  var STEPS = [
+    {
+      ships: -1,
+      kind: "merchant",
+    },
+    {
+      ships: 1,
+      kind: "merchant",
+    },
+    {
+      ships: 5,
+      kind: "merchant",
+    },
+    {
+      ships: 10,
+      kind: "merchant",
+    },
+    {
+      ships: 1,
+      kind: "freighter",
+    },
+  ];
+  function transportStyles() {
+    return `
+#transportGoods ul.resourceAssign > li { height: auto; min-height: 0; overflow: visible; }
+
+.${MARKER_CLASS} {
+  display: block;
+  clear: both;
+  position: relative;
+  z-index: 2;
+  margin: 2px 0 5px 0;
+  padding: 0;
+  /* The right edge is pinned to the text field's by alignRowToField, which
+     sets padding-right; this is what makes that padding move the group. */
+  text-align: right;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.${MARKER_CLASS} > a.button {
+  display: inline-block;
+  min-width: 34px;
+  width: auto;
+  margin: 0;
+  padding: 4px 9px !important;
+  font-size: 12px;
+  line-height: 20px;
+  text-align: center;
+  direction: ltr;
+}
+
+/* One strip rather than six loose buttons, the way the game's own button
+   groups read. */
+.${MARKER_CLASS} > a.button:not(:first-child) { border-left: 1px solid #c9a584; }
+.${MARKER_CLASS} > a.button:not(:last-child) { border-right: none; }
+`;
+  }
+  function alignRowToField(field, row) {
+    const host = row.parentElement;
+    if (!host) return;
+    const hostRight = host.getBoundingClientRect().right;
+    const fieldRight = field.getBoundingClientRect().right;
+    if (hostRight <= 0 || fieldRight <= 0) return;
+    const gap = Math.round(hostRight - fieldRight);
+    if (gap > 0) row.style.paddingRight = `${gap}px`;
+  }
+  function installStyles() {
+    if (document.getElementById("ika-transport-buttons-style")) return;
+    const style = document.createElement("style");
+    style.id = TRANSPORT_STYLE_ID;
+    style.textContent = transportStyles();
+    document.head.appendChild(style);
+  }
+  function capacityOf(kind) {
+    return kind === "freighter" ? getFreighterCapacity() : getPerShipCapacity();
+  }
+  function stepAmount(step) {
+    return step.ships * capacityOf(step.kind);
+  }
+  function stepLabel(step) {
+    const amount = stepAmount(step);
+    return `${amount < 0 ? "-" : "+"}${formatInteger(Math.abs(amount))}`;
+  }
+  function stepTitle(step) {
+    return TRANSPORT_BUTTONS.step(
+      step.ships >= 0,
+      Math.abs(step.ships),
+      step.kind === "freighter",
+    );
+  }
+  function buttonRow(resource) {
+    return (
+      `<span class="${MARKER_CLASS}">` +
+      STEPS.map(
+        (step) =>
+          `<a class="button" href="#" title="${stepTitle(step)}" ${action(
+            "transport.add",
+            {
+              "ika-resource": resource,
+              "ika-ships": step.ships,
+              "ika-kind": step.kind,
+            },
+          )}>${stepLabel(step)}</a>`,
+      ).join("") +
+      `<a class="button" href="#" title="${TRANSPORT_BUTTONS.clear}" ${action(
+        "transport.add",
+        {
+          "ika-resource": resource,
+          "ika-ships": 0,
+          "ika-kind": "merchant",
+          "ika-set": "1",
+        },
+      )}>0</a></span>`
+    );
+  }
+  function applyTransportStep(resource, ships, kind = "merchant", set = false) {
+    const field = qs(SEL.resourceField(resource));
+    if (!field) return;
+    const current = parseInt(field.value.replace(/\D/g, ""), 10) || 0;
+    const delta = ships * capacityOf(kind);
+    const next = set ? 0 : Math.max(0, current + delta);
+    setInputValue(field, String(next));
+  }
+  function addTransportButtons() {
+    let added = false;
+    for (const resource of RESOURCES) {
+      const field = qs(SEL.resourceField(resource));
+      if (!field) continue;
+      const host = field.closest("li") ?? field.parentElement;
+      if (!host || host.querySelector(`.${MARKER_CLASS}`)) continue;
+      installStyles();
+      host.insertAdjacentHTML("beforeend", buttonRow(resource));
+      const row = host.lastElementChild;
+      if (row instanceof HTMLElement) alignRowToField(field, row);
+      added = true;
+    }
+    return added;
+  }
+  function startTransportButtonObserver() {
+    const target = qs(SEL.container);
+    if (!target) return null;
+    addTransportButtons();
+    const observer = new MutationObserver(() => {
+      addTransportButtons();
+    });
+    observer.observe(target, {
+      childList: true,
+      subtree: true,
+    });
+    return observer;
+  }
+  var CRITICAL_SELECTORS = {
+    cityBread: SEL.cityBread,
+    townList: SEL.townListContainer,
+    buildTabTownNames: SEL.buildTabTownNames,
+    freeTransporters: SEL.globalMenu.freeTransporters,
+  };
+  function selectorHealth() {
+    const health = {};
+    for (const [name, selector] of Object.entries(CRITICAL_SELECTORS))
+      try {
+        health[name] = qsa(selector).length;
+      } catch {
+        health[name] = -1;
+      }
+    return health;
+  }
+  function appContext() {
+    const context = {
+      town: getCurrentTownName() || null,
+      modelTown: modelCurrentCityName(),
+      hasModel: hasModel(),
+      selectors: selectorHealth(),
+      dialogOpen: !!qs(`#${DIALOG_ID}`),
+    };
+    try {
+      const { accountName, queue } = getState();
+      const head = queue.head();
+      context.account = accountName;
+      context.queueLength = queue.length;
+      context.queueHead = head
+        ? {
+            type: head.type,
+            id: head.id,
+            data: head.data,
+          }
+        : null;
+    } catch {
+      context.stateInitialised = false;
+    }
+    return context;
+  }
+  var installed = false;
+  function installDiagnostics() {
+    if (installed) return;
+    installed = true;
+    registerContextProvider(appContext);
+    const anyWindow = window;
+    anyWindow.ikaBugs = () => {
+      console.log(summariseBugs());
+      return getBugs();
+    };
+    anyWindow.ikaBugReport = () => {
+      const json = exportBugReport();
+      try {
+        const copyToClipboard = anyWindow.copy;
+        copyToClipboard?.(json);
+      } catch {}
+      return json;
+    };
+    anyWindow.ikaClearBugs = () => {
+      clearBugs();
+      console.log("[ika] bug reports cleared");
+    };
   }
   function openPopup(title, html) {
     const api = getIkariam();
     if (!api?.createPopup) {
       reportSelectorMiss("window.ikariam.createPopup", { dialogTitle: title });
-      alert(MISC.popupUnavailable);
+      showToast(MISC.popupUnavailable);
       return;
     }
     api.createPopup(DIALOG_ID, title, html, "???", "class");
@@ -2909,18 +3274,77 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
   function amountFieldId(resource) {
     return `transporterSendAmount_${resource}`;
   }
+  var SEND_AMOUNTS_STYLE_ID = "ika-send-amounts-style";
+  function sendAmountsStyles() {
+    return `
+.ika-send-amounts {
+  width: 260px;
+  padding: 10px 12px;
+  background: #f5ead0;
+  border: 1px solid #c8b98f;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+.ika-send-amounts-title {
+  font-size: 12px;
+  font-weight: bold;
+  color: #5b4a2d;
+  margin-bottom: 6px;
+}
+.ika-send-amounts-row {
+  display: grid;
+  grid-template-columns: 65px 1fr;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+.ika-send-amounts-row:last-child {
+  margin-bottom: 0;
+}
+.ika-send-amounts-row label {
+  font-size: 12px;
+  color: #4b4030;
+}
+.ika-send-amounts-row input {
+  width: 100%;
+  height: 24px;
+  padding: 2px 6px;
+  box-sizing: border-box;
+  border: 1px solid #aaa;
+  border-radius: 3px;
+  background: #fff;
+  color: #333;
+  font-size: 12px;
+  text-align: right;
+  outline: none;
+}
+.ika-send-amounts-row input:focus {
+  border-color: #8b6f3d;
+  box-shadow: 0 0 0 2px rgba(139, 111, 61, 0.15);
+}`;
+  }
+  function installSendAmountsStyles() {
+    if (document.getElementById(SEND_AMOUNTS_STYLE_ID)) return;
+    addStyle(sendAmountsStyles()).id = SEND_AMOUNTS_STYLE_ID;
+  }
   function openSendResourcesDialog() {
     const towns = townOptions();
-    const amounts = RESOURCE_OPTIONS.map(
-      (resource) =>
-        `<div><span>${resource.label}: </span><input id="${amountFieldId(resource.value)}" type="number" min="1" step="1" inputmode="numeric"></div>`,
-    ).join("");
+    const amounts = RESOURCE_OPTIONS.map((resource) => {
+      const id = amountFieldId(resource.value);
+      return `<div class="ika-send-amounts-row">
+        <label for="${id}">${resource.label}</label>
+        <input id="${id}" type="number" min="1" step="1" inputmode="numeric">
+      </div>`;
+    }).join("");
+    installSendAmountsStyles();
     openPopup(
       SEND_DIALOG.title,
       `<div><span>${SEND_DIALOG.from}</span><select id="transporterSendFromTown">${towns}</select></div><br/>
      <div><span>${SEND_DIALOG.destination}</span><select id="transporterSendDestination">${towns}</select></div><br/>
-     <div><span>${SEND_DIALOG.amount}</span></div>
-     ${amounts}<br/>
+     <div class="ika-send-amounts">
+       <div class="ika-send-amounts-title">${SEND_DIALOG.amount}</div>
+       ${amounts}
+     </div><br/>
      <button style="margin-right:5px" class="button" ${action("send.add")}>${BUTTON.add}</button>
      <button style="margin-right:5px" class="button" ${action("send.removeFirst")}>${SEND_DIALOG.removeFirst}</button>
      <button style="margin-right:5px" class="button" ${action("send.removeLast")}>${SEND_DIALOG.removeLast}</button>
@@ -3105,192 +3529,6 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     );
     if (cell) cell.innerHTML = renderTownQueue(townName);
   }
-  var BODY_BOTTOM_MARGIN = 120;
-  var MIN_BODY_HEIGHT = 120;
-  var MIN_VISIBLE_WIDTH = 120;
-  var MIN_VISIBLE_HEIGHT = 60;
-  var DEFAULT_POSITION = {
-    left: 120,
-    top: 120,
-  };
-  var WINDOW_STYLE_ID = "ika-window-style";
-  function windowStyles() {
-    return `
-.ika-window {
-  position: fixed;
-  z-index: 1000;
-  min-width: 260px;
-  border: 1px solid #b79b6f;
-  border-radius: 4px;
-  background: #f8e7b3;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, .35);
-  font-size: 11px;
-  color: #3b2c1a;
-}
-.ika-window[hidden] { display: none !important; }
-.ika-window-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 5px 8px;
-  border-bottom: 1px solid #b79b6f;
-  background: #e8d199;
-  border-radius: 3px 3px 0 0;
-  cursor: move;
-  user-select: none;
-}
-.ika-window-title { font-weight: bold; font-size: 12px; }
-.ika-window-close {
-  cursor: pointer;
-  padding: 0 4px;
-  font-weight: bold;
-  line-height: 1;
-}
-.ika-window-close:hover { color: #a3301f; }
-.ika-window-body { overflow: auto; padding: 8px; }
-.ika-window-footer {
-  padding: 4px 8px;
-  border-top: 1px solid #b79b6f;
-  font-size: 10px;
-  color: #6b5433;
-  min-height: 14px;
-}
-.ika-group { margin-bottom: 8px; }
-.ika-group:last-child { margin-bottom: 0; }
-.ika-group-title {
-  font-weight: bold;
-  border-bottom: 1px dotted #b79b6f;
-  margin-bottom: 4px;
-  padding-bottom: 2px;
-}
-.ika-group button { margin: 0 4px 4px 0; }
-`;
-  }
-  function installStyles() {
-    if (document.getElementById("ika-window-style")) return;
-    addStyle(windowStyles()).id = WINDOW_STYLE_ID;
-  }
-  function clampToViewport(position) {
-    const maxLeft = Math.max(0, window.innerWidth - MIN_VISIBLE_WIDTH);
-    const maxTop = Math.max(0, window.innerHeight - MIN_VISIBLE_HEIGHT);
-    return {
-      left: Math.min(Math.max(0, position.left), maxLeft),
-      top: Math.min(Math.max(0, position.top), maxTop),
-    };
-  }
-  function makeDraggable(root, handle, onMoved) {
-    let startX = 0;
-    let startY = 0;
-    let originLeft = 0;
-    let originTop = 0;
-    const onPointerMove = (event) => {
-      const next = clampToViewport({
-        left: originLeft + (event.clientX - startX),
-        top: originTop + (event.clientY - startY),
-      });
-      root.style.left = `${next.left}px`;
-      root.style.top = `${next.top}px`;
-    };
-    const onPointerUp = (event) => {
-      handle.releasePointerCapture?.(event.pointerId);
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
-      onMoved({
-        left: parseInt(root.style.left, 10) || 0,
-        top: parseInt(root.style.top, 10) || 0,
-      });
-    };
-    handle.addEventListener("pointerdown", (event) => {
-      if (event.target?.classList.contains("ika-window-close")) return;
-      event.preventDefault();
-      startX = event.clientX;
-      startY = event.clientY;
-      originLeft = parseInt(root.style.left, 10) || 0;
-      originTop = parseInt(root.style.top, 10) || 0;
-      handle.setPointerCapture?.(event.pointerId);
-      window.addEventListener("pointermove", onPointerMove);
-      window.addEventListener("pointerup", onPointerUp);
-    });
-  }
-  function createWindow(options) {
-    installStyles();
-    const positionKey = `ikaWindow_${options.id}`;
-    const stored = options.store?.getJSON(positionKey, null);
-    const position = clampToViewport(stored ?? DEFAULT_POSITION);
-    const root = document.createElement("div");
-    root.id = options.id;
-    root.className = "ika-window";
-    root.hidden = true;
-    root.style.left = `${position.left}px`;
-    root.style.top = `${position.top}px`;
-    if (options.width) root.style.width = options.width;
-    root.innerHTML = `
-    <div class="ika-window-header">
-      <span class="ika-window-title"></span>
-      <span class="ika-window-close" title="${WINDOW_CLOSE_TITLE}">&#10005;</span>
-    </div>
-    <div class="ika-window-body"></div>
-    <div class="ika-window-footer"></div>`;
-    const header = root.querySelector(".ika-window-header");
-    const title = root.querySelector(".ika-window-title");
-    const body = root.querySelector(".ika-window-body");
-    title.textContent = options.title;
-    (document.getElementById("container") ?? document.body).appendChild(root);
-    const applyMaxHeight = () => {
-      body.style.maxHeight = `${Math.max(MIN_BODY_HEIGHT, window.innerHeight - BODY_BOTTOM_MARGIN)}px`;
-    };
-    applyMaxHeight();
-    window.addEventListener("resize", applyMaxHeight);
-    const closeOnEscape = (event) => {
-      const tag = event.target?.tagName?.toLowerCase();
-      if (tag === "input" || tag === "textarea" || tag === "select") return;
-      if (event.key === "Escape" && !root.hidden) api.close();
-    };
-    makeDraggable(root, header, (moved) => {
-      options.store?.setJSON(positionKey, moved);
-    });
-    const api = {
-      root,
-      content: body,
-      isOpen: () => !root.hidden,
-      open() {
-        const next = clampToViewport({
-          left: parseInt(root.style.left, 10) || 0,
-          top: parseInt(root.style.top, 10) || 0,
-        });
-        root.style.left = `${next.left}px`;
-        root.style.top = `${next.top}px`;
-        applyMaxHeight();
-        root.hidden = false;
-      },
-      close() {
-        if (root.hidden) return;
-        root.hidden = true;
-        options.onClose?.();
-      },
-      toggle() {
-        if (root.hidden) api.open();
-        else api.close();
-      },
-      setTitle(text) {
-        title.textContent = text;
-      },
-      destroy() {
-        window.removeEventListener("resize", applyMaxHeight);
-        document.removeEventListener("keydown", closeOnEscape);
-        root.remove();
-      },
-    };
-    root
-      .querySelector(".ika-window-close")
-      .addEventListener("click", () => api.close());
-    document.addEventListener("keydown", closeOnEscape);
-    return api;
-  }
-  function setWindowFooter(win, text) {
-    const footer = win.root.querySelector(".ika-window-footer");
-    if (footer) footer.textContent = text;
-  }
   function severityOf(hours) {
     if (hours === null) return "ok";
     if (hours < 12) return "critical";
@@ -3450,7 +3688,7 @@ th { font-weight: bold; }
       ) +
       group(
         PANEL.groups.data,
-        `<button class="button" id="btnExportData" ${action("data.export")}>${PANEL.exportData}</button><button class="button" id="btnImportData" ${action("data.import")}>${PANEL.importData}</button><button class="button" id="btnBugReport" ${action("bug.report")}>${PANEL.bugReport}</button><button class="button" ${action("log.clear")}>${PANEL.clearLog}</button>`,
+        `<button class="button" id="btnExportData" ${action("data.export")}>${PANEL.exportData}</button><button class="button" id="btnImportData" ${action("data.import")}>${PANEL.importData}</button><button class="button" id="btnBugReport" ${action("bug.report")}>${PANEL.bugReport}</button><button class="button" ${action("log.clear")}>${PANEL.clearLog}</button><button class="button" ${action("buildingHelp.save")}>${PANEL.crawlBuildingHelp}</button>`,
       ) +
       `<div id="logger"><textarea rows="4" cols="60" id="txtLogger" style="font-size:9px; display:none"></textarea></div>`
     );
@@ -3589,19 +3827,19 @@ th { font-weight: bold; }
       "send.add": () => {
         const form = readSendForm();
         if (!form) {
-          alert(SEND_DIALOG.errors.incomplete);
+          showToast(SEND_DIALOG.errors.incomplete);
           return;
         }
         if (form.origin === form.destination) {
-          alert(SEND_DIALOG.errors.sameTown);
+          showToast(SEND_DIALOG.errors.sameTown);
           return;
         }
         if (form.invalid.length > 0) {
-          alert(SEND_DIALOG.errors.invalidAmount(form.invalid.join(", ")));
+          showToast(SEND_DIALOG.errors.invalidAmount(form.invalid.join(", ")));
           return;
         }
         if (form.amounts.length === 0) {
-          alert(SEND_DIALOG.errors.noAmount);
+          showToast(SEND_DIALOG.errors.noAmount);
           return;
         }
         for (const { resource, amount } of form.amounts)
@@ -3633,7 +3871,7 @@ th { font-weight: bold; }
       "wine.preview": () => {
         const senders = loadSenders();
         if (senders.length === 0) {
-          alert(WINE_DIALOG.noSourceTicked);
+          showToast(WINE_DIALOG.noSourceTicked);
           return;
         }
         renderWinePlanPreview(senders[0]);
@@ -3641,7 +3879,7 @@ th { font-weight: bold; }
       "wine.chooseSource": () => {
         const senders = loadSenders();
         if (senders.length === 0) {
-          alert(WINE_DIALOG.noSourceTicked);
+          showToast(WINE_DIALOG.noSourceTicked);
           return;
         }
         if (senders.length === 1) {
@@ -3719,14 +3957,14 @@ th { font-weight: bold; }
       "bug.report": () => {
         const bugs = getBugs();
         if (bugs.length === 0) {
-          alert(BUG_REPORT.nothingToReport);
+          showToast(BUG_REPORT.nothingToReport);
           return;
         }
         const report = exportBugReport();
         navigator.clipboard
           ?.writeText(report)
           .then(() =>
-            alert(
+            showToast(
               BUG_REPORT.copied(
                 bugs.length,
                 summariseBugs().slice(0, BUG_SUMMARY_PREVIEW_CHARS),
@@ -3735,16 +3973,17 @@ th { font-weight: bold; }
           )
           .catch(() => {
             console.log(report);
-            alert(BUG_REPORT.clipboardUnavailable);
+            showToast(BUG_REPORT.clipboardUnavailable);
           });
       },
       "bug.clear": () => {
         clearBugs();
-        alert(BUG_REPORT.cleared);
+        showToast(BUG_REPORT.cleared);
       },
       "ship.calibrate": calibrateShipCapacity,
       "panel.toggleZoom": toggleZoom,
       "log.clear": clearLog,
+      "buildingHelp.save": saveBuildingHelpToFile,
     });
     document.addEventListener("change", (event) => {
       const element = event.target?.closest(".js-ika-autobuild");
