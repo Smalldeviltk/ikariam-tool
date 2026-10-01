@@ -1,11 +1,32 @@
 # Kế hoạch cải thiện — UI và tính năng
 
-> Trạng thái: **đang thực hiện.** Cập nhật 29/09/2026.
+> Trạng thái: **đang thực hiện.** Cập nhật 02/10/2026.
 >
-> Đã xong: Phase 1 trừ 1.4 (◐) · Phase 2 phần panel (2.1–2.5) · A, B, C, D, H.
-> Còn lại: 1.4 · 2.6–2.8 (board, chờ câu hỏi 2) · E–G, I–T.
+> Đã xong: Phase 1 (1.4 xong 02/10, chưa thử trên game) · Phase 2 phần panel
+> (2.1–2.5) · A, B, C, D, H.
+> Còn lại: 2.6–2.8 (board, chờ câu hỏi 2) · E–G, I–T · U (◐) · V (◐).
 >
-> **Đợt gần nhất (§2.J, 29/09, commit `a62e8dd`):** hết tàu rảnh thì lệnh gửi
+> **Đợt gần nhất (§2.L, 02/10, chưa commit):** gửi hàng không chạy khi tồn
+> kho ít hơn lượng còn phải gửi **và** ít hơn sức chứa 1 tàu (merchant ship,
+> hoặc freighter khi hết merchant); Transport Settings nhận **0** như ô trống;
+> mỗi Start Timer chỉ cho runner chạy **loại task của nó**; gom nốt chuỗi hiển
+> thị còn sót ở §2.D; và **1.4** — đo được game tự reload khi đổi town, nên
+> `gotoTown` giờ đổi town bằng form trước và chặn vòng lặp reload.
+>
+> **Đợt §2.K (02/10, chưa commit):** nút ↑/↓ đổi **một hàng** mỗi
+> lần ở Queue, Transport Settings và Auto Build Settings; **Start** của Auto
+> Wine làm trọn quy trình (Scan → Load → Save → nạp queue → bật Start Timer),
+> còn **Save** trong Auto Wine Settings giờ nạp queue luôn.
+>
+> **Đợt U + V (30/09–01/10, commit `6ed66c6`, `c38dca4`, docs
+> `b9f1d7a`):** wiki đã cũ, game đổi cả đường cong chi phí. `Constant.BuildingData`
+> được nạp lại từ trang Help > building details của chính game (nút tạm **Crawl
+> Building**, dữ liệu thô ở `docs/wiki/`): chi phí, thời gian (giờ là bảng
+> giây), hiệu ứng, `maxLevel` logic. Công trình giảm giá có trần 50% (chi phí
+> xây dựng tối đa 64% cùng research; Wine Press trên rượu Tavern). Còn thiếu: số
+> cho cấp > 50. Chi tiết: §4.2, ghi chú về U và về V.
+>
+> Đợt §2.J (29/09, commit `a62e8dd`): hết tàu rảnh thì lệnh gửi
 > hàng giữ đầu queue và **chặn luôn các task upgrade** phía sau. Runner giờ
 > chỉ chặn task **cùng loại** với task trả `retry`; upgrade chạy tiếp, lệnh
 > gửi giữ thứ tự và được thử lại khi hết việc khác.
@@ -155,7 +176,7 @@ một thứ ta đã biết là yếu.
 | 1.1 ✅ | **Xác minh trước.** Một lệnh gọi tay trong crawler, bắn đúng một request `view=townHall&cityId=X&ajax=1` và dump shape response. Không bao giờ tự chạy. | `tools/collect-dom-report.js`               |
 | 1.2 ✅ | `ikariamRequest(params)` — thêm `actionRequest` + `ajax=1`, throttle, timeout, trả về mảng đã parse                                                     | `src/core/ikariam/http.ts` _(mới)_          |
 | 1.3 ✅ | `applyResponse(array)` — publish vào `events("ajaxResponse")` của Empire Overview; Send Resources dùng mảng trực tiếp                                   | `src/core/ikariam/http.ts`                  |
-| 1.4 ◐ | `switchCity(cityId)` — serialize `#changeCityForm`, POST, xác nhận từ response. `gotoTown` thử cách này trước, giữ đường click làm dự phòng. **28/09:** `gotoTown` đã có đường form (`submitChangeCityForm`) nhưng xếp **thứ hai**, sau tên town trên board, vì gửi từ runner nó tải lại cả trang (§2.E). Phần "xác nhận từ response" chưa làm | `src/send-resources/navigation.ts`          |
+| 1.4 ✅ | `switchCity(cityId)` — serialize `#changeCityForm`, POST, xác nhận từ response. `gotoTown` thử cách này trước, giữ đường click làm dự phòng. **02/10:** đo được server trả lời bằng lệnh **reload** vào town mới, nên "xác nhận" là xác nhận **sau reload**; form xếp **đầu**, có chặn vòng lặp reload (§2.L, phần 5). Chưa thử trên game | `src/send-resources/navigation.ts`          |
 | 1.5 ✅ | `syncAllTowns()` thay ruột `scanBuildings`; nút Scan giữ nguyên                                                                                         | `src/send-resources/features/auto-build.ts` |
 
 ### Đã làm tới đâu
@@ -179,6 +200,9 @@ module registry. Giờ response đi qua DOM event `ika:ajaxResponse` trên
 
 **Bài học, không chỉ là một lỗi:** bất cứ thứ gì hai script cần chia sẻ đều phải
 đi qua `document`, `window` hoặc `localStorage`. Biến ở tầng module thì không.
+
+**Cập nhật 02/10: 1.4 đã làm — xem §2.L, phần 5.** Hai đoạn dưới là bối cảnh
+trước đó, giữ lại để đối chiếu.
 
 **1.4 chưa làm, và chưa có lý do nào được ghi lại.** `gotoTown` vẫn đang click
 rồi poll breadcrumb. Đây là mục Phase 1 duy nhất còn thiếu; nó không chặn 1.5
@@ -286,7 +310,7 @@ Khi có, sửa ở bốn chỗ:
 | --- | ---- |
 | `src/core/ikariam/selectors.ts` | bỏ `dockCities`, thêm nhóm `transportPanel` |
 | `src/send-resources/navigation.ts` | `clickDestinationTown` theo cityId; xoá `adjustDestinationIndex`; truyền timeout tường minh thay vì để mặc định 15 s |
-| `src/send-resources/features/send-resources.ts` | hai chỗ dùng `dockCities` — dòng 131 (đang ném lỗi) và dòng 175 (chờ sau submit, có `.catch` nên chỉ phí 5 s mỗi lần gửi) |
+| `src/send-resources/features/send-resources.ts` | hai chỗ dính `dockCities` — lời gọi `clickDestinationTown` (đang ném lỗi) và `waitForElements(SEL.dockCities, …)` sau submit (có `.catch` nên chỉ phí 5 s mỗi lần gửi). Số dòng cũ (131, 175) đã dịch sau §2.L |
 | `navigation.test.ts` | xoá 4 test của `adjustDestinationIndex`, thêm fixture `transportPanel` |
 
 **Quyết định đã chốt:** thay hẳn, không giữ `.cities.clearfix` làm dự phòng.
@@ -322,6 +346,9 @@ Bỏ gate; nạp queue và gửi hàng là hai việc tách rời.
 chạy trong khi nút Transport vẫn ghi "Start Timer", và lần `syncRunnerToFlags()`
 kế tiếp sẽ tắt nó. Đúng loại lỗi mà comment trên `syncRunnerToFlags` nói đã sửa,
 sót lại ở đúng nút này. Giờ Start chỉ nạp queue.
+**Đã đổi ở §2.K (02/10):** Start giờ làm trọn quy trình và bật timer
+Transport — vẫn qua `syncRunnerToFlags()` (bằng `toggleQueueRunner`), không
+gọi `runner.start()` thẳng.
 
 **Handler ném lỗi mãi không có điểm dừng.** `TaskRunner` cố ý giữ task khi
 handler throw, vì phần lớn throw là DOM chưa sẵn sàng. Đúng với DOM chậm, sai
@@ -461,17 +488,20 @@ sau khỏi soi lại từ đầu.
 
 #### Còn sót khi gom chuỗi hiển thị (i18n) — nên làm lượt sau
 
-- `send-resources/types.ts` — nhãn tài nguyên trong `RESOURCE_OPTIONS`
+**Cập nhật 02/10:** bốn mục đầu (gạch ngang) đã làm — §2.L, phần 4. Hai mục
+cuối giữ nguyên.
+
+- ~~`send-resources/types.ts` — nhãn tài nguyên trong `RESOURCE_OPTIONS`
   (`"Wood"`, `"Wine"`, `"Marble"`, `"Crystal"`, `"Sulfur"`) chưa chuyển sang
-  `send-resources/messages.ts`.
-- `send-resources/features/wine-warning.ts` — `formatHours` viết thẳng đơn vị
-  `"h"`, `"d"`, `"<1h"`, `"—"`.
-- `send-resources/ui/queue-view.ts` — `describeTask` hiện tên tài nguyên dạng id
-  nội bộ (`wood`, `glass`) thay vì nhãn cho người chơi.
-- `send-resources/features/auto-build.ts` — `listBuildingsInCurrentTown` parse
+  `send-resources/messages.ts`.~~
+- ~~`send-resources/features/wine-warning.ts` — `formatHours` viết thẳng đơn vị
+  `"h"`, `"d"`, `"<1h"`, `"—"`.~~
+- ~~`send-resources/ui/queue-view.ts` — `describeTask` hiện tên tài nguyên dạng id
+  nội bộ (`wood`, `glass`) thay vì nhãn cho người chơi.~~
+- ~~`send-resources/features/auto-build.ts` — `listBuildingsInCurrentTown` parse
   tooltip của game bằng chuỗi đã dịch `"Under construction"`: đổi ngôn ngữ giao
   diện game là hỏng. Nên dựa vào class `constructionSite` (đã dùng ngay dòng
-  dưới) thay vì chữ.
+  dưới) thay vì chữ.~~
 - Bảng `Constant.LanguageData` của Empire Overview chỉ có `en`. Ba key mới
   (`toast_updated`, `toast_movementAdded`, `toast_remoteVersionUnreadable`) chỉ
   được thêm vào đó.
@@ -540,7 +570,7 @@ này. Mỗi bản sửa đều có test viết trước và đã thấy đỏ tr
 
 ### 2.F Auto Build chạy theo vòng như bản gốc, và `needingShip` (28/09/2026)
 
-**Đã commit (`1f7c0e7`, tài liệu ở `4841fb9`), chưa push. Có trong `dist/` từ bản build 29/09 01:33. Chưa thử trên game.**
+**Đã commit (`1f7c0e7`, tài liệu ở `4841fb9`), đã push. Có trong `dist/` từ bản build 29/09 01:33. Chưa thử trên game.**
 
 **Người dùng báo** (tài khoản `SClone1`, board xếp W-Clone1, M-Clone1,
 S-Clone1):
@@ -598,7 +628,7 @@ tạo). Chưa đổi: số tàu vẫn làm tròn bằng `Math.round`, nên có t
 
 ### 2.G Bốn việc không chờ gì (28/09/2026)
 
-**Đã commit (`1f7c0e7`, tài liệu ở `4841fb9`), chưa push. Có trong `dist/` từ bản build 29/09 01:33. Chưa thử trên game.** Người dùng chọn
+**Đã commit (`1f7c0e7`, tài liệu ở `4841fb9`), đã push. Có trong `dist/` từ bản build 29/09 01:33. Chưa thử trên game.** Người dùng chọn
 cả bốn; làm theo thứ tự H → D → 2.4 → C. Mỗi việc có test, và test đó đã thấy
 **đỏ trên code cũ** (bỏ phần sửa, chạy, khôi phục). 34 file, 477 test,
 typecheck sạch.
@@ -629,7 +659,7 @@ typecheck sạch.
 
 ### 2.H Hai chỉnh sửa hộp thoại (29/09/2026)
 
-**Đã commit (`1f7c0e7`, tài liệu ở `4841fb9`), chưa push. Có trong `dist/` từ bản build 29/09 01:33. Chưa thử trên game.** Người dùng yêu
+**Đã commit (`1f7c0e7`, tài liệu ở `4841fb9`), đã push. Có trong `dist/` từ bản build 29/09 01:33. Chưa thử trên game.** Người dùng yêu
 cầu. Bốn test mới, cả bốn đã thấy **đỏ trên code cũ**. 34 file, 481 test,
 typecheck sạch.
 
@@ -646,7 +676,7 @@ Save trong Auto Build Settings đóng hộp thoại và không đổi town.
 
 ### 2.I Bốn chỉnh sửa người dùng yêu cầu (29/09/2026)
 
-**Đã commit (`a62e8dd`, tài liệu ở commit ngay sau), chưa push. Chưa thử trên game.** `dist/` do người dùng build lúc 29/09
+**Đã commit (`a62e8dd`, tài liệu ở `066eb44`), đã push. Chưa thử trên game.** `dist/` do người dùng build lúc 29/09
 21:24 đã có đủ bốn phần (đã grep hai userscript: `ika-send-amounts`,
 `ika-toast`, `drains`, `fitTownRows`, `:scope > tbody > tr`). 34 file,
 481 → 496 test, typecheck (cả cấu hình strict) và prettier sạch.
@@ -808,7 +838,7 @@ năng mới — **không có bản cũ để thấy đỏ** (trước đó hàm 
 
 ### 2.J Upgrade kẹt sau lệnh gửi đang chờ tàu (29/09/2026)
 
-**Đã commit (`a62e8dd`, tài liệu ở commit ngay sau), chưa push. Chưa thử trên game.** `dist/` do người dùng build lúc 29/09
+**Đã commit (`a62e8dd`, tài liệu ở `066eb44`), đã push. Chưa thử trên game.** `dist/` do người dùng build lúc 29/09
 22:30 đã có bản sửa (đã grep `blockedTypes` trong userscript Send Resources).
 34 file, 496 → 500 test, typecheck và prettier sạch.
 
@@ -874,10 +904,210 @@ khác thì quay lại lệnh gửi đầu mỗi tick; tàu về thì gửi ngay;
   `onDrain` (reload + đặt `isAutoReload`) không chạy. Vòng mới phải đến từ
   keep-alive reload rồi `start()` — `start()` chỉ xếp vòng mới khi không còn
   task `upgradeBuilding` nào (§2.F), điều kiện này đúng. **Chưa kiểm trên game.**
+  **Cập nhật 02/10 (§2.L phần 3):** khi **chỉ** Build bật, shipment không còn
+  được chạy, nên queue chỉ còn shipment tính là cạn → `onDrain` chạy như
+  thường. Khi cả hai timer bật thì vẫn như mô tả ở đây.
 
 **Cần thử trên game:** hết tàu rảnh, queue có cả lệnh gửi lẫn upgrade → log
 có `Going to town …` cho từng town của vòng Auto Build; queue còn lại đúng các
 lệnh gửi, đúng thứ tự; tàu về thì lệnh gửi đầu chạy.
+
+### 2.K Nút ↑/↓ từng hàng, và Start của Auto Wine làm trọn quy trình (02/10/2026)
+
+**Chưa commit. Chưa build vào `dist/`, chưa thử trên game.** Người dùng yêu
+cầu. 34 file, 500 → 515 test, typecheck (cả cấu hình strict) và prettier sạch.
+
+#### 1. Nút ↑/↓ — mỗi lần bấm chỉ đổi một hàng
+
+| Chỗ | Thay đổi | Ở đâu |
+| --- | -------- | ----- |
+| Queue (panel) | Thêm **↑**. **↓** không còn đẩy task xuống **cuối** queue (`moveToBack`) mà chỉ đổi chỗ với hàng kề. Hàng đầu có ↑ mờ, hàng cuối có ↓ mờ (`disabled`) | `ui/queue-view.ts`, `app.ts` (`queue.moveUp`/`queue.moveDown`) |
+| Transport Settings | Cột mới ↑/↓ trong bảng lệnh gửi. Bảng chỉ có lệnh gửi, nên "hàng kề" là **lệnh gửi kề**; task upgrade xen giữa trong queue chung **giữ nguyên chỗ** | `ui/dialogs.ts` (`renderResourceTable`), `app.ts` (`send.moveUp`/`send.moveDown`), `messages.ts` (thêm cột trống) |
+| Auto Build Settings | ↑/↓ cạnh nút `-` của mỗi entry, đổi chỗ trong danh sách đã lưu của town đó (`listAutoBuild`) | `ui/dialogs.ts` (`renderTownQueue`), `features/auto-build.ts` (`moveBuildingInQueue`), `app.ts` (`build.moveUp`/`build.moveDown`) |
+| Dùng chung | `TaskQueue.moveOneStep(id, "up" \| "down", withinType?)`: đổi chỗ với task kề; có `withinType` thì task kề là task **cùng loại** gần nhất. `moveButtons()` vẽ cặp nút cho cả ba chỗ; chuỗi tooltip `MOVE_BUTTON`; CSS `.ika-move:disabled` | `core/task-queue.ts`, `ui/actions.ts`, `messages.ts`, `ui/styles.ts` |
+
+`moveToBack` **vẫn giữ**: runner dùng nó cho task trả `defer`.
+
+**Hai entry cùng một building** (vd. Warehouse 4, Warehouse 5) — người dùng
+chọn "tính lại level theo thứ tự mới". Đổi chỗ rồi đánh số lại thì ra đúng như
+cũ, nên bấm ↑/↓ giữa hai entry đó **không đổi gì**. Đổi chỗ với building khác
+thì bình thường.
+
+#### 2. Start của Auto Wine làm trọn quy trình
+
+Trước: Scan → Settings → Load → tick town nguồn → Save → **Start** (nạp
+queue) → Start Timer. Người dùng thấy nút Start thừa.
+
+| Cách dùng | Giờ làm gì | Ở đâu |
+| --------- | ---------- | ----- |
+| Bấm **Start** trên panel | Chưa tick town nguồn → báo "No town is ticked as a wine source!"; tick nhiều town → popup chọn. Rồi: **Scan** và chờ xong (toast "Sync finished …"), lấy lượng uống mỗi town như Load rồi lưu như Save (`saveMeasuredReceivers`), nạp queue, **bật Start Timer của Transport** (đã bật thì giữ) | `app.ts` (`wine.autoRun`, `wine.autoRunFrom`, `runAutoWine`, `withWineSource`), `features/auto-wine.ts` |
+| Làm từng bước trong Settings | Như cũ (Load, tick nguồn), nhưng **Save** giờ vừa lưu vừa **nạp queue** (nhiều nguồn → popup chọn). Start Timer người dùng tự bấm | `app.ts` (`wine.save`, `wine.queueFrom`) |
+
+- `scanBuildings` giờ trả `true` khi scan chạy xong, `false` khi từ chối (đang
+  scan, không có danh sách town, runner đang chạy). Start dừng khi `false`.
+- `saveMeasuredReceivers`: mỗi town **không** tick Sender lấy lượng uống đo được
+  (board, rồi town cache); không có số đo thì giữ Wine/h đã lưu; town nhận khi
+  số đó > 0 — đúng như mở hộp thoại, bấm Load rồi Save.
+- `openWineSourceDialog(onChosen)` nhận tên action cho nút của từng town, dùng
+  chung cho Start và Save. Action cũ `wine.chooseSource` / `wine.start` đổi tên
+  thành `wine.autoRun` / `wine.queueFrom`.
+
+**Test** (đã thấy đỏ ở hai chỗ quan trọng — xem dưới):
+
+- `core/task-queue.test.ts`: `moveOneStep` một bước, không vượt hai đầu, và
+  `withinType` bước qua task loại khác.
+- `ui/queue-view.test.ts`: mỗi hàng có ↑ và ↓; ↑ hàng đầu và ↓ hàng cuối bị
+  `disabled`.
+- `features/auto-build.test.ts`: `moveBuildingInQueue` (một bước, hai đầu, hai
+  entry cùng building); `scanBuildings` trả `false` khi từ chối, `true` khi xong.
+- `features/auto-wine.test.ts`: `saveMeasuredReceivers` (số đo thay số đã lưu,
+  không số đo thì giữ, số 0 thì bỏ).
+- `app.test.ts`: ↓ trong Transport Settings bước qua upgrade; Start chạy đủ
+  (scan → lưu → queue → timer bật); scan từ chối → không nạp gì; không có nguồn
+  → báo, không scan; nhiều nguồn → popup với `wine.autoRunFrom`; Save nạp queue
+  và không bật timer. `scanBuildings` được mock, và mock **vẽ board lúc scan**
+  — nên test chứng minh bước Load chạy **sau** scan.
+- Thấy đỏ: đổi `runAutoWine` cho Load chạy **trước** scan, và bỏ `withinType`
+  khỏi ↑/↓ của Transport Settings → đúng hai test tương ứng đỏ. Các hàm khác là
+  mới, không có bản cũ để thấy đỏ.
+
+**Rủi ro, chưa kiểm chứng:**
+
+- **Gửi hàng tự động vẫn hỏng** (§2.A). Start giờ tự bật timer, nên lệnh gửi
+  sẽ chạy vào chỗ hỏng đó.
+- Scan dùng AJAX (`syncAllTowns`); số liệu mới chỉ vào **board Empire
+  Overview** (Send Resources không ghi response vào town cache). Không có board
+  thì Start dùng số cũ trong town cache.
+- Chưa biết board vẽ lại DOM kịp trước bước Load hay không (sự kiện là đồng bộ,
+  phần vẽ chưa đo).
+- Không đọc được model của game thì Scan đi bộ từng town và kết thúc bằng
+  `backToCity`, có thể làm tải lại trang — khi đó các bước sau của Start không
+  chạy.
+- Timer (Transport hoặc Build) đang chạy thì Scan từ chối ("Stop it first,
+  then scan") và Start dừng; không tự tắt timer.
+
+**Cần thử trên game:** ↑/↓ ở ba chỗ, mỗi lần đúng một hàng; Start với một
+nguồn → toast "Sync finished", queue có lệnh rượu, nút Transport thành "Stop
+Timer"; Save trong Auto Wine Settings → queue có lệnh rượu, timer không bật.
+
+### 2.L Tồn kho ít, ô số 0, runner theo timer, chuỗi hiển thị, 1.4 (02/10/2026)
+
+**Chưa commit. Chưa build vào `dist/`, chưa thử trên game.** Người dùng yêu
+cầu từng phần. 34 file, 515 → 537 test, typecheck (cả cấu hình strict) và
+prettier sạch. Mỗi bản sửa có test đã thấy **đỏ** khi tạm làm hỏng đúng chỗ
+đó (bỏ bản sửa hoặc đưa về code cũ), rồi khôi phục.
+
+#### 1. Không gửi khi tồn kho ít hơn một tàu
+
+**Người dùng báo:** lệnh trong queue lớn hơn tồn kho của town nguồn thì Auto
+Transport gửi liên tục, mỗi lần vài đơn vị — phí tàu. Code cũ không đọc tồn
+kho (trừ rượu có `reserve` của Auto Wine), đặt cả số của task vào ô, và game
+chỉ gửi phần đang có.
+
+| Thay đổi | Ở đâu |
+| -------- | ----- |
+| Sau khi tới town nguồn, đọc tồn kho của **đúng loại** tài nguyên (`readCurrentStock`: model trước, header sau, không đọc được thì 0). Lượng gửi được = tồn kho − `reserve` (chỉ rượu Auto Wine). Thay cho kiểm tra rượu cũ | `features/send-resources.ts`, `game-state.ts` |
+| Gửi được **ít hơn lượng còn phải gửi** **và** **ít hơn sức chứa 1 tàu** → không gửi, trả `defer` (xuống cuối queue; cả queue `defer` thì nghỉ 60 s), log ghi town còn bao nhiêu | `features/send-resources.ts` |
+| "1 tàu" theo loại tàu sẽ đi (người dùng chốt): có merchant ship rảnh → 1 merchant ship (500, hoặc số Calibrate Cargo); không còn merchant → 1 freighter (50.000, hoặc số Calibrate Cargo). Kiểm hai lần: trước khi điều hướng (theo tàu đang rảnh, để town thiếu hàng khỏi mở cảng) và **tại form**, trước khi nhập số, theo tàu thật sự dùng (merchant có thể vừa ra khơi) | `features/send-resources.ts` |
+| Selector header cho từng tài nguyên, crystal là `#js_GlobalMenu_crystal` (CSS của board đã dùng đúng các id này; board đọc model bằng cùng key `"resource"`, `1`–`4`) | `core/ikariam/selectors.ts` |
+
+Đủ ít nhất 1 tàu nhưng ít hơn lượng phải gửi → gửi hết phần đang có, phần
+còn lại ở lại task (giờ tính theo lượng gửi thật). Task chỉ còn ít hơn 1 tàu mà
+kho đủ → vẫn gửi.
+
+**Test:** `features/send-resources.test.ts` (7: ít hơn 1 merchant ship → chờ;
+đủ 1 tàu → gửi phần đang có; đơn nhỏ hơn 1 tàu → gửi; trừ `reserve`; chỉ có
+freighter → chờ 1 freighter, đủ thì gửi; merchant ra khơi giữa đường → kiểm lại
+tại form), `game-state.test.ts` (3: `readCurrentStock`).
+
+**Đánh đổi:** chỉ còn freighter rảnh thì town nhỏ phải chờ tới khi đủ ~50.000
+hoặc có merchant về.
+
+#### 2. Transport Settings: ô số 0 như ô trống
+
+Ô trống, `0`, `00` đều là "không gửi loại này", không báo lỗi; mọi ô trống
+hoặc 0 → "Enter an amount for at least one resource."; số lẻ, số âm, `1e3`,
+`+4` vẫn báo lỗi. Câu báo lỗi đổi thành "…whole numbers (empty or 0 = none)".
+`ui/dialogs.ts` (`readSendForm`), `messages.ts`. Test: `app.test.ts` (2).
+
+#### 3. Mỗi Start Timer chỉ cho chạy loại task của nó
+
+Giải quyết việc thứ nhất trong "Hai việc phát sinh" ở §5: bật Build Start
+Timer là chạy luôn shipment đang xếp hàng.
+
+| Thay đổi | Ở đâu |
+| -------- | ----- |
+| Tùy chọn `allowsType` của `TaskRunner`: task thuộc loại không được phép **nằm yên, giữ chỗ**, bị bỏ qua. Queue chỉ còn task như vậy thì tính là **cạn** (gọi `onDrain`) | `core/task-queue.ts` |
+| Ngưỡng nghỉ 60 s (`deferStreak`) đếm theo task **được phép**, không theo cả queue — không thì task bị bỏ qua làm runner không bao giờ nghỉ | `core/task-queue.ts` |
+| `allowsTaskType`: `sendResource` khi Transport bật, `upgradeBuilding` khi Build bật | `app.ts` |
+| Nút **Start** của Build (một vòng, không bật timer) cho phép upgrade tới khi queue cạn (`oneOffRunTypes`), và không còn gọi `startRunner()` thẳng mà qua `syncRunnerToFlags` | `app.ts` |
+
+Hệ quả: chỉ bật Build, vòng upgrade xong mà queue còn shipment → queue tính là
+cạn → reload, vòng sau theo keep-alive. Trước đây queue không bao giờ cạn
+trong ca này (§2.J, "Đã biết").
+
+**Test:** `core/task-queue.test.ts` (3), `app.test.ts` (2).
+
+#### 4. Gom chuỗi hiển thị còn sót (§2.D)
+
+| Thay đổi | Ở đâu |
+| -------- | ----- |
+| Tên tài nguyên → `RESOURCE_LABEL`; `RESOURCE_OPTIONS` và hàm mới `resourceLabel` lấy từ đó | `messages.ts`, `types.ts` |
+| Đơn vị của cảnh báo rượu → `DURATION` (chữ hiển thị không đổi) | `messages.ts`, `features/wine-warning.ts` |
+| Queue hiện "Wine", "Crystal" thay vì `wine`, `glass` | `ui/queue-view.ts` |
+| `listBuildingsInCurrentTown` không so chữ "Under construction" nữa: trong ngoặc là số → cấp; không phải số → cấp 0; class `constructionSite` cộng 1 như cũ. Kết quả y như trước với tiếng Anh; tiếng khác không còn ra `NaN` | `features/auto-build.ts` |
+
+**Test:** `queue-view.test.ts` (1, và sửa 1 test cũ "wine" → "Wine"),
+`auto-build.test.ts` (1, title tiếng Việt — code cũ ra `"Museum Đang xây NaN"`).
+
+**Còn sót, ngoài danh sách §2.D, chưa làm:** bảng Transport Settings vẫn hiện
+id tài nguyên (`glass`); hộp thoại Auto Wine viết thẳng `"—"` và `"h"`.
+
+#### 5. 1.4 — đổi town bằng form, chặn vòng lặp reload
+
+**Đo trên game (02/10, người dùng chạy probe trong console):**
+
+- Gửi `#changeCityForm` qua `ajaxHandlerCallFromForm` ở city view: **không**
+  có `form.submit()` hay sự kiện `submit` — chỉ một request ajax
+  `action=header&function=changeCurrentCity`, rồi ~0,3 s sau trang tải lại.
+  Tắt hay bật script đều như nhau.
+- Response: `["custom", ["reload", {"link":
+  "?view=city&cityId=<đích>&currentCityId=<đích>", ...}]]` — **chính game**
+  tải lại trang theo lệnh của server. Sau reload trang ở **đúng** town đích.
+- Chọn town trong dropdown của game bằng tay cũng reload. Tức là reload là
+  hành vi chuẩn của game.
+- Nút tên town trên board cũng gửi `changeCurrentCity` qua ajax
+  (`loadUrl` trong `game-api.ts`) — nhiều khả năng cũng reload, **chưa đo**.
+
+**Kết luận:** vòng lặp reload ngày 26/09 (§2.E lỗi 4) gần như chắc là lỗi tên
+có toạ độ — trang đã sang đúng town, tên không khớp breadcrumb, nên gửi lại —
+không phải do form.
+
+| Thay đổi | Ở đâu |
+| -------- | ----- |
+| Thứ tự đổi town (người dùng chọn): **form của game → tên town trên board → dropdown**. Send Resources đổi town được mà không cần board | `navigation.ts`, `gotoTown` |
+| Chấp nhận một lần reload mỗi lần đổi town: task còn trong queue, sau reload handler chạy lại, `gotoTown` thấy đã ở đúng town và đi tiếp. Shipment và upgrade đều đổi town trước khi làm gì khác, nên không có gì làm hai lần | `navigation.ts` |
+| Chặn lặp: trước khi gửi, ghi `{target, sentAt}` vào `sessionStorage` (`ika_pendingTownSwitch` — riêng tab, ngoài export, như `ika_pendingBoardView` của board). Sau reload mà chưa ở đúng town, và vừa gửi tới chính town đó trong 30 s (`SWITCH_LANDING_WINDOW_MS`) → ném lỗi, không gửi lại; runner bỏ task sau 5 lần. Tới đúng town thì xoá bản ghi | `navigation.ts` |
+
+**Test:** `navigation.test.ts` (4 mới: form trước board; reload sang nhầm town
+→ không gửi lại; quá 30 s → gửi lại; tới nơi → xoá bản ghi). Test cũ "board
+trước form" được thay; test "dùng board khi có board" đổi tên thành "dùng board
+khi không có form".
+
+**Rủi ro, chưa kiểm chứng:**
+
+- Mỗi lần đổi town tốn một lần tải trang; vòng Auto Build nhiều town = nhiều
+  reload.
+- Scan kiểu đi bộ (chỉ khi không đọc được model) dừng ở reload đầu tiên. Scan
+  thường dùng ajax, không ảnh hưởng.
+- Chưa thấy runner chạy tiếp sau reload trên game. Khi thử: log `Going to town
+  X` → reload → task tiếp tục ở X.
+
+**Cần thử trên game (cả §2.L):** lệnh gửi lớn hơn tồn kho ít → log "…less than
+one merchant ship's cargo", không gửi; Transport Settings nhập 0 → không lỗi;
+chỉ bật Build Start Timer với shipment trong queue → shipment không chạy; queue
+hiện "Wine"/"Crystal"; vòng Auto Build đi qua các town bằng form (mỗi town một
+reload), không lặp reload.
 
 ---
 
@@ -994,7 +1224,10 @@ Cột **Build** cho biết tính năng chạy được ở đâu: `US` = userscr
 
 **Ghi chú về U (chi phí và thời gian nâng cấp).**
 
-**Cập nhật 01/10 — đã nạp số của game vào `Constant.BuildingData`.** Chưa commit.
+**Cập nhật 01/10 — đã nạp số của game vào `Constant.BuildingData`.** Commit
+`c38dca4` (nút crawl `6ed66c6`), chưa push, chưa thử trên game. `dist/` do
+người dùng build lúc 01/10 02:23 đã có (đã grep: số mới của Academy, trần 50%
+trong `modelWineConsumption`, nút Crawl Building).
 
 - **Nguồn.** Wiki (fandom) đã cũ; game đổi cả đường cong chi phí (3.795/3.900 ô
   lệch, nhiều ô lệch trên 100%). Số mới lấy từ dialog Help > building details
@@ -1160,16 +1393,16 @@ thêm, phải áp giảm giá theo bảng này.
 ```
 🔴 TRƯỚC HẾT   §2.A                   cảng biển — mọi lệnh gửi đang hỏng
 
-✅ Phase 1   1.1, 1.2, 1.3, 1.5     nền móng AJAX
+✅ Phase 1   1.1 → 1.5              nền móng AJAX (1.4 xong 02/10, §2.L)
 ✅ Phase 2   2.1 → 2.5              cửa sổ dùng chung + panel
 ✅ Đợt rẻ    A, B, C                nút transport, xem queue, cảnh báo rượu
 ✅ 28/09     D, H, 2.4, log backToCity   (§2.G)
+✅ 02/10     §2.K, §2.L             ↑/↓, Start Auto Wine, tồn kho, runner theo timer, chuỗi, 1.4
 
-⬜ Còn lại, không chờ gì:  1.4 (phần còn lại)
 ⏸ Chờ capture form gửi:   §2.A — markup chọn town đích đã có (§2.E)
-⏸ Chờ người dùng thử lại: §2.E lỗi 3–6, §2.F (Auto Build theo vòng, needingShip), §2.G, §2.H
+⏸ Chờ người dùng thử lại: §2.E lỗi 3–6, §2.F (Auto Build theo vòng, needingShip), §2.G, §2.H, §2.I, §2.J, U/V (01/10), §2.K, §2.L — hai mục cuối cần build lại `dist/`
 ⏸ Chờ code của game:      §2.D tham số `createPopup` (lệnh console ghi ở đó)
-⬜ Lượt review sau:        §2.D chuỗi i18n còn sót, và thử trên game thật
+⬜ Lượt review sau:        thử trên game thật các mục §2.D; chuỗi còn sót ngoài danh sách §2.D (§2.L phần 4)
 ⏸ Chờ câu hỏi 2:          2.6, 2.7, 2.8   (đều ở board)
 ⏸ Chờ câu hỏi 3:          E, F, G, I, J, K, L, M, N, O, P, Q, R
 ◐ U (01/10):               đã nạp số game vào Constant và công thức giảm giá; ⏸ cấp > 50 — ghi chú về U ở §4.2
@@ -1180,12 +1413,13 @@ thêm, phải áp giảm giá theo bảng này.
 **§2.A đi trước mọi thứ khác.** Thêm tính năng lên một tầng gửi hàng không chạy
 được thì không đo được gì, và mọi thử nghiệm thủ công đều vướng phải nó.
 
-Làm được ngay, không phụ thuộc gì: **1.4** (bỏ nốt việc lái DOM khi đổi town).
-D, H và nửa sau của 2.4 đã xong ngày 28/09 (§2.G).
+Không còn việc nào "làm được ngay, không phụ thuộc gì": 1.4 xong 02/10
+(§2.L). D, H và nửa sau của 2.4 đã xong ngày 28/09 (§2.G).
 
-**Hai việc phát sinh, chưa xếp lịch:**
+**Hai việc phát sinh** (việc thứ nhất xong 02/10, §2.L phần 3):
 
-- **Runner chạy mọi loại task bất kể switch nào đang bật.** `syncRunnerToFlags`
+- ~~**Runner chạy mọi loại task bất kể switch nào đang bật.**~~ **✅ 02/10:**
+  runner nhận `allowsType`, mỗi timer chỉ cho chạy loại task của nó. `syncRunnerToFlags`
   quyết định runner *có chạy không*, không quyết định nó *được chạy gì*. Bật
   Build Start Timer là chạy luôn cả shipment đang xếp hàng, trong khi nút
   Transport vẫn ghi "Start Timer". Comment ở `app.ts` liệt kê đúng triệu chứng
@@ -1195,8 +1429,8 @@ D, H và nửa sau của 2.4 đã xong ngày 28/09 (§2.G).
   Build ghi "Stop Timer" trong khi runner đã dừng, và phải bấm hai lần mới chạy
   lại được. **◐ 26/09:** sửa khi cấu hình Build rỗng (timer tự tắt, §2.E lỗi
   2). Còn việc trong cấu hình thì cờ cố ý giữ `true` để keep-alive chạy lượt
-  sau, như bản gốc. Việc thứ nhất (runner chạy mọi loại task) vẫn còn — đã
-  kiểm tra 26/09 và **không** phải nguyên nhân panel Transport tự mở.
+  sau, như bản gốc. Việc thứ nhất (runner chạy mọi loại task) đã kiểm tra
+  26/09 và **không** phải nguyên nhân panel Transport tự mở; đã sửa 02/10.
 
 ---
 

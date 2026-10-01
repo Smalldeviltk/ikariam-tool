@@ -10,7 +10,7 @@ It deliberately does **not** repeat the feature status. That lives in
 second. [project-summary.md](../project-summary.md) covers what the TypeScript
 port changed and what is still unverified.
 
-Last updated: 29/09/2026.
+Last updated: 02/10/2026.
 
 ---
 
@@ -23,7 +23,7 @@ and the Transport timer are affected; a shipment sent by hand in the game goes
 through. See §2 for the markup and `improvement-plan.md` §2.A for the fix.
 
 **Two rounds on 25/09.** The first — two user-reported bugs and part of Auto
-Wine — is committed locally as six commits and not pushed; the write-up is
+Wine — is committed as six commits (pushed since); the write-up is
 `improvement-plan.md` §2.C. A third bug, Auto Build losing its queue while a
 town is building, is still open and waiting on a log from the user (§6).
 
@@ -35,7 +35,9 @@ the same ground is not covered twice.
 **Do not press either Start Timer until that is fixed.** The runner now gives
 up on a task after five consecutive throws, so instead of looping forever the
 queue quietly empties — roughly 80 s per task. Queued shipments are recoverable
-(press Auto Wine's Start again); the Auto Build config is not touched.
+(Save in Auto Wine Settings queues the run again; since 02/10 Auto Wine's
+Start also switches Transport's timer on, so do not use it for this); the
+Auto Build config is not touched.
 
 The capture that unblocks it: one paste of the crawler with `#js_transportPanel`
 open, a second after clicking `a.action_transport` so the shipment form is on
@@ -48,10 +50,12 @@ towns) — see §9. Six bugs, all fixed and committed (`453482b`, `24061f0`).
 Auto Build now builds on that account. **It needs the Empire Overview board
 on the page**: without it, town switches go through `#changeCityForm`, which
 reloaded the whole page from the runner and put it in a reload loop (§2, §6).
-The user tests with both scripts on.
+The user tests with both scripts on. *Superseded 02/10 (§13): every switch
+reloads — it is the game's own answer — and the loop was the coordinates;
+the form is now the first route and Auto Build no longer needs the board.*
 
 **28–29/09: three more rounds, committed as `1f7c0e7` (docs in `4841fb9`),
-not pushed** — see §10, and `improvement-plan.md` §2.F–2.H for the full
+pushed** — see §10, and `improvement-plan.md` §2.F–2.H for the full
 write-ups:
 
 - **Auto Build runs in laps again, as the original did** (§2.F). One task per
@@ -70,7 +74,7 @@ None of it has been seen on the live game. `dist/` was rebuilt by the user on
 29/09 at 01:33 and contains all of it (§1).
 
 **29/09 evening: four changes the user asked for, committed as `a62e8dd`
-(docs in the commit after it), not pushed** — the write-up is `improvement-plan.md` §2.I: the Transport
+(docs in `066eb44`), pushed** — the write-up is `improvement-plan.md` §2.I: the Transport
 Settings amounts in two columns, "Warning wine" no longer raised for a town
 whose wine is not going down, every `window.alert` of both scripts turned into
 a toast that fades by itself (`confirm()` kept), and the board's town tabs
@@ -81,6 +85,41 @@ capped at five towns with the rest scrolling.
 every upgrade behind it waited too. The runner now blocks only the type that
 returned `retry` (§5). `dist/` built by the user on 29/09 at 22:30 contains
 all five (§1).
+
+**30/09–01/10: plan items U and V — the building tables now come from the
+game, committed as `6ed66c6` and `c38dca4` (docs in `b9f1d7a`), not pushed**
+— see §11. The wiki was out of date: 3,795 of 3,900 cost cells in
+`Constant.BuildingData` differed from the game. The tables were regenerated
+from the game's own Help > building details pages, captured with a temporary
+**Crawl Building** button (raw files in `docs/wiki/`): costs, time (now a
+table of seconds, not the `{a, b, c, d}` formula), the effect tables, and a
+logical `maxLevel`. Reduction buildings are capped at 50%. Levels past 50
+have no figures yet. `dist/` built by the user on 01/10 at 02:23 contains all
+of it; none of it has been tried on the game.
+
+**02/10: two changes the user asked for, not committed** — see §12, and
+`improvement-plan.md` §2.K: ↑/↓ buttons that move one row at a time in the
+queue view, Transport Settings and Auto Build Settings; and Auto Wine's
+**Start** doing the whole routine (scan, wait for it, Load, Save, queue,
+switch Transport's timer on), with **Save** in Auto Wine Settings now
+queueing the run too. Not in `dist/`, not tried on the game.
+
+**02/10, later: five more, not committed** — see §13, and
+`improvement-plan.md` §2.L:
+
+- **A shipment waits rather than send a few units.** When the source holds
+  less than the task still needs *and* less than one ship's cargo — a
+  merchant ship, or a freighter when no merchant is idle — the task defers.
+- **Transport Settings takes 0 as "none"**, like an empty field.
+- **Each Start Timer runs only its own task type** (`allowsType` on the
+  runner). Build's timer no longer ships queued shipments.
+- **The display strings left over from §2.D are gathered**, and the building
+  list no longer reads the words "Under construction".
+- **1.4: a town switch reloads the page, by the game's own design**
+  (measured; §2). `gotoTown` now switches through the form first and will not
+  send the same switch twice after a reload that did not land.
+
+Not in `dist/`, not tried on the game.
 
 **Next in the plan is still §2.A, the trading port.** The destination list's
 markup is now in hand (§2); the shipment form is the one capture missing, and
@@ -98,11 +137,11 @@ working between loads) is
 |             |                                                                  |
 | ----------- | ---------------------------------------------------------------- |
 | Branch      | `refactor`, tracking `origin/refactor`                            |
-| Pushed      | Up to `3228058`. Sixteen local commits since (`03d07fa`..HEAD), not pushed. §10 is `1f7c0e7`, its docs `4841fb9`; the plan's §2.I–2.J is `a62e8dd`, its docs the commit after it |
-| Uncommitted | Nothing of this branch's work. `.gitignore` and `docs/So_sanh_2_script_Ikariam.md` are the user's, as before |
-| Tests       | 34 files, 500 tests, all passing                                  |
+| Pushed      | `origin/refactor` is at `066eb44` (the plan's §2.I–2.J docs), pushed by the user; §10's `1f7c0e7` and `4841fb9` are before it, so pushed too (checked with `git log origin/refactor..HEAD` on 02/10). Three local commits since, not pushed: §11 is `6ed66c6` + `c38dca4`, its docs `b9f1d7a` |
+| Uncommitted | §12 and §13 (02/10): the code and tests in `src/`, this document and the plan (§2.K, §2.L, its header, and notes in §2, §2.A, §2.B, §2.D, §2.J, §5). `.gitignore` and `docs/So_sanh_2_script_Ikariam.md` are the user's, as before |
+| Tests       | 34 files, 537 tests, all passing (500 before §12, 515 after it). §11 added no test (see §11) |
 | Typecheck   | Clean (`tsc --noEmit` and the strict config)                      |
-| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 29/09 at 22:30 and contains everything in §10 and §2.I–2.J of the plan (grepped the two userscripts for `ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows` and `:scope > tbody > tr`; the §10 markers were checked in the 01:33 build: `ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save` and `capped`) |
+| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 01/10 at 02:23 and contains §11 (grepped: `Crawl Building` and `building-help-` in Send Resources; the new Academy figure `568954467` present and the old `582271779` gone, `winePressSavingPercent` and the time `12873600` in Empire Overview; `Math.min(50, …)` in Send Resources' `modelWineConsumption`). Earlier markers were checked in earlier builds: §2.I–2.J (`ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows`) and §10 (`ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save`, `capped`) |
 
 What landed: the AJAX transport layer, the shared window widget, the rewritten
 panel, four features (sync-towns, transport-buttons, queue-view, wine-warning),
@@ -249,7 +288,8 @@ Added 26–27/09, from the `SClone1` account (towns W-Clone1 297124, M-Clone1
   **Measured 27/09: it reloads the whole page there too** — the user pressed
   a board button for another town, the page reloaded into that town, and the
   dialog never opened, because the wait that was to open it died with the old
-  page.
+  page. **Settled 02/10 — see "Added 02/10" below:** the reload is the
+  game's answer, the page does land, and the loop was the coordinates.
 - **A full page load straight to a view's URL does not open its dialog.**
   Tried by hand from S-Clone1:
   `location.assign("?view=townHall&cityId=297155&position=0")` loaded M-Clone1
@@ -258,13 +298,78 @@ Added 26–27/09, from the `SClone1` account (towns W-Clone1 297124, M-Clone1
 - **Clicking a town name on the Empire Overview board is the original's route
   to change town**, and it did not work on this account until names stopped
   carrying coordinates. It is the first route again since 27/09; whether it
-  keeps the page from reloading has NOT been seen live yet.
+  keeps the page from reloading has NOT been seen live yet. *Since 02/10 it
+  is the second route, after the form; it sends the same `changeCurrentCity`
+  over ajax (`loadUrl`), so it almost certainly reloads too — not measured.*
 - **A line `Auto Build: queued N upgrades` in the log is a page load** (or a
   Start button). It is logged from `start()`, so two of them seconds apart
   mean the page reloaded in between. **Since 28/09 it reads `Auto Build:
   queued N towns`**, and a load in the middle of a lap no longer logs it —
   the lap carries on instead (§10). Reloads now name their cause:
   `Back to the town view: <reason>`.
+
+Added 30/09–01/10, from the game's Help > building details pages on
+`s800-en` (raw captures in `docs/wiki/`):
+
+- **The ikariam.fandom.com wiki is out of date.** Its cost tables (which
+  `Constant.BuildingData` was built from) differ from the game in 3,795 of
+  3,900 cells, many by more than 100%: the curves themselves changed, not a
+  percentage. Its time formulas no longer hold either. WebFetch of the wiki
+  returns HTTP 402.
+- **The game's help dialog has every building's figures.** `#buildingDetail`,
+  opened by `?view=buildingDetail&buildingId=N&helpId=1`; `table.building_nav`
+  lists the buildings (`div.button_building.<class>`, the selected one also
+  `.selected`, `buildingId` in its `onclick`); `h3.header` is the name;
+  `.content` holds the description (`p`, "Requirement(s): …") and
+  `table.table01` with one row per level. The 33 classes are exactly the 33
+  `BuildingData` keys and the ids match. It lists **50 levels** (Palace and
+  Governor's Residence 30) although the game no longer caps levels.
+- **Cost columns are headed by icons, not words.** Keyed by file name (the
+  host varies between `gf1`/`gf2`/`gf3.geo.gfsrv.net`): wood
+  `c3527b2f694fb882563c04df6d8972.png`, wine
+  `94ddfda045a8f5ced3397d791fd064.png`, marble
+  `fc258b990c1a2a36c5aeb9872fc08a.png`, crystal
+  `417b4059940b2ae2680c070a197d8c.png`, sulfur
+  `5578a7dfa3e98124439cca4a387a61.png`, time
+  `465f0358d2cb09c07cd0f5a53e38eb.png` (the user's list:
+  `docs/wiki/mapping.txt`).
+- **Full figures hide in two places.** A cost cell shows "1.33M" with the
+  exact figure in a hidden `.tooltip`; an effect cell (warehouse capacity …)
+  shows "13.15M" with the exact figure in its `title`. Time is display text
+  only: exact to the second up to about level 8, then two units ("1M 22D").
+- **The game's `1M` is 30 days and `1Y` is 365 days.** Measured, not assumed:
+  the Academy's time fits one exact formula (from levels 2–8, shown to the
+  second), and its ten month levels agree only with 30 days (2,520,000 s — what
+  `core/format.ts` uses — fits 2 of 10); Chronos' Forge fits all 50 levels with
+  365-day years, 5 miss with 360.
+- **Reduction buildings save 1% per level "up to a maximum of 50%"** (their
+  help text; the user confirmed and gave the scope, §11). The five production
+  buildings add 2% per level "up to a maximum of 140%". Palace: "a total of 21
+  towns".
+
+Added 02/10, from probes the user ran in the console (§13):
+
+- **Changing town from a city view reloads the page, by the game's design.**
+  Sending `#changeCityForm` through `ajaxHandlerCallFromForm` makes one ajax
+  request, `action=header&function=changeCurrentCity&…&cityId=<target>`; no
+  `form.submit()`, no `submit` event. The server answers
+  `["custom", ["reload", {"link": "?view=city&cityId=<target>&currentCityId=<target>", "isDevHost": 0}]]`
+  (then `updateBacklink`, `popupData`, `removeIngameCounterData`,
+  `ingameCounterData`, all `null`), and the page unloads ~0.3 s after the
+  request. Same with both scripts off and on. After the reload the page is in
+  the **target** town. Picking a town in the game's dropdown by hand reloads
+  too.
+- **`#changeCityForm`** is `method="post"`, `onsubmit="ajaxHandlerCallFromForm(this);return false;"`,
+  with hidden fields `action=header`, `function=changeCurrentCity`,
+  `actionRequest` (`#js_ChangeCityActionRequest`), `oldView`, `cityId`
+  (`#js_cityIdOnChange`), `islandX`, `islandY`. With Empire Overview on,
+  `window.ajaxHandlerCallFromForm` is the board's wrapper
+  (`cAjaxHandlerCallFromForm`, publishes `formSubmit` then calls the game's).
+- **The game's header has one counter per resource:** `#js_GlobalMenu_wood`,
+  `_wine`, `_marble`, `_crystal` (the DOM's `glass`), `_sulfur` — the ids the
+  board's own CSS has always targeted. The model's `currentResources` uses
+  `"resource"` for wood and `1`–`4` for the rest, as the board reads it
+  (`Constant.ResourceIDs`).
 
 ---
 
@@ -439,8 +544,12 @@ into an unrelated diff.
   derived from the two feature flags rather than poked by whichever button was
   pressed last. Two switches over one interval is what made them fight.
   Since 29/09 a `retry` blocks only its own task type (see "Added 29/09
-  evening").
-- **Auto Wine's Start only fills the queue.** It does not start the runner and
+  evening"). Since 02/10 each flag also decides *what* runs: the runner
+  passes over a type whose switch is off (§13).
+- **Auto Wine's Start only fills the queue.** *Superseded 02/10 (§12): Start
+  now runs the whole routine and switches Transport's timer on — through
+  `toggleQueueRunner`, so `syncRunnerToFlags` still owns the runner. It still
+  does not check for idle ships.* It does not start the runner and
   does not check for idle ships. Queueing and shipping are separate steps:
   `handleSendResource` returns `retry` while the fleet is out, so a plan made
   with every ship at sea simply waits. Refusing to queue threw the plan away and
@@ -505,7 +614,8 @@ Added 26–27/09, each chosen by the user:
 - **`gotoTown` tries three routes in this order:** the board's town name
   (`clickBoardTownName`, the original's), then `#changeCityForm`
   (`submitChangeCityForm`), then the dropdown `<a>`. The form went first for
-  one day and caused the reload loop in §2.
+  one day and caused the reload loop in §2. *Superseded 02/10 (§13): form
+  first, then the board, then the dropdown — the loop was the coordinates.*
 - **The original's `isAutoReload` guard is back.** A drained run sets it and
   reloads; the next load clears it and neither re-queues Auto Build nor
   reloads on drain (`loadedAfterRun` in `app.ts`). The next run waits for the
@@ -609,6 +719,66 @@ Added 29/09 evening, each chosen by the user unless marked (write-ups in
   prefix** instead of the user's sample names (`.resource-row` and so on), so
   they cannot collide with the game's CSS — chosen here; the user was told.
 
+Added 30/09–01/10, each chosen by the user (§11):
+
+- **Building figures are tables from the game, not formulas.** A formula was
+  tried and fitted the Academy exactly (§11); the user stopped it and chose
+  the game's own tables. Time is a table of seconds too.
+- **Levels past the help page's 50 (30) are left empty** until the user finds
+  a source. Costs and time read `0` there (`|| 0`), capacity and
+  `basicBonus` too (added so they are not `NaN`).
+- **`maxLevel` is a logical level, 0 when none.** The level at which the help
+  page (text or table) says the effect stops growing; `isMaxLevel` is
+  `maxLevel > 0 && level >= maxLevel`. It greys the building out as before and
+  does not stop an upgrade (the cell stays clickable).
+- **Costs in the table are the game's base figures; discounts are added up
+  and taken off once.** Pulley 2% + Geometry 4% + Spirit Level 8% + the
+  reduction building's 1% per level up to 50% — 64% at most. Rounding stays
+  `Math.round`, which the user has not specified.
+- **The 50% cap is one constant for both scripts**,
+  `REDUCTION_BUILDING_MAX_PERCENT` in `core/ikariam/model.ts`.
+- **The crawl button is temporary** and reads the page only; the player picks
+  each building by hand (they chose that over the script clicking through).
+
+Added 02/10, each chosen by the user (§12):
+
+- **↑/↓ move one row, everywhere.** The queue view's ↓ used to send a task
+  to the back (`moveToBack`, which the runner still uses for `defer`). In
+  Transport Settings one row is the next *shipment*: upgrades in between keep
+  their place (`moveOneStep(…, "sendResource")`).
+- **Two entries of one building keep their levels in list order.** Renumbered
+  after a swap they come out as before, so ↑/↓ between them does nothing.
+- **There is no Manual/Auto switch.** Auto Wine's Start is the automatic
+  route: scan and wait for it, Load + Save (`saveMeasuredReceivers`), queue,
+  switch Transport's timer on. The step-by-step route is the settings dialog,
+  whose **Save** now queues the run as well; Start Timer stays with the
+  player. Several ticked sources → the source popup, on both routes.
+- **A scan that refuses to run stops Start.** It refuses while either timer
+  runs; Start does not switch a timer off to make room.
+
+Added 02/10, later, each chosen by the user unless marked (§13):
+
+- **A shipment does not sail with less than one ship's cargo, unless that is
+  all the task needs.** "One ship" is the kind that would sail: one merchant
+  ship (500, or the calibrated figure) while any is idle, else one freighter
+  (50,000, or calibrated). Short → `defer`. Checked before navigating, with
+  the ships idle then, and again at the form with the ships that will sail.
+  The stock check covers all five resources, not only Auto Wine's wine.
+- **0 in Transport Settings means none**, like an empty field.
+- **Each Start Timer runs only its own task type.** The other type stays
+  queued in its place; a queue holding only such tasks counts as drained.
+  Build's **Start** (one lap, no timer) may run upgrades until the drain
+  (`oneOffRunTypes`). The user chose "pass over, keep in place".
+- **The building list reads a level, not words:** a number in the title's
+  brackets is the level, anything else is 0; `constructionSite` adds one. The
+  user chose the class over moving the English string.
+- **A town switch is allowed to reload the page.** Routes: the form, then the
+  board's name, then the dropdown — the user chose form first. A switch is
+  noted in `sessionStorage` (`ika_pendingTownSwitch`) before it is sent; the
+  same switch is not sent again within 30 s if the reload did not land — the
+  task throws instead, and the runner drops it after five. Chosen here, as
+  the guard against the loop; the user was told.
+
 ---
 
 ## 6. What is blocked, and on what
@@ -626,8 +796,10 @@ task only comes back on the next load or Start. That design is unchanged.
 
 **Waiting on the user's retest (29/09 build):**
 
-- **Does the board route stop the reload loop?** The loop in §2 happened
-  with the form first. Nothing has been seen live since the reorder.
+- ~~**Does the board route stop the reload loop?**~~ Answered 02/10 by
+  measurement (§2, "Added 02/10"): every switch reloads, the loop was the
+  coordinates. The form is first again (§13). Still to see live: a lap that
+  switches town through reloads without looping.
 - **Does every town get its turn?** Reported 28/09 on `SClone1` (board
   order W, M, S): "only hops between two towns; the first town on the board
   is never upgraded". Found in the code, not in a log: one task per saved
@@ -645,12 +817,16 @@ task only comes back on the next load or Start. That design is unchanged.
   town:
   `await (async () => { /* switch, then every 100 ms for 4 s record
   #js_cityBread text, !!.constructionSite, jQuery.active */ })()` — the
-  version in this session's transcript used the form to switch; with the
-  board first, click the board's town name instead. If the slot outlives the
+  version in this session's transcript used the form to switch, which is the
+  first route again since 02/10. Note that the switch reloads the page, so
+  the probe must record across the load (`sessionStorage`, as the 02/10
+  probes did). If the slot outlives the
   breadcrumb by more than 1200 ms, wait for the game to go idle like
   `switchTownWithGameForm` does.
 
-**Also waiting on the retest:** everything in §10 (each round's "try on the
+**Also waiting on the retest:** everything in §12 and §13 (needs a rebuild
+first),
+everything in §10 (each round's "try on the
 game" list is in the plan, §2.F–2.H), everything in the plan's §2.I–2.J
 (same, at the end of each part), the board dialog for another town (§9
 bug 5) and the stale upgrade button (§9 bug 6). One risk in bug 5's fix is known and
@@ -664,9 +840,8 @@ flashes and vanishes, wait for the game to go idle first, as
 
 - ~~B — the stale upgrade button.~~ Done 27/09, §9 bug 6.
 - ~~C — who reloads.~~ Done 28/09, §10: `backToCity(reason)`.
-- **Why the form reloads the page** (§2). Until that is known, Send Resources
-  without the Empire Overview board still falls back to the form and can
-  loop.
+- ~~**Why the form reloads the page** (§2).~~ Measured 02/10: the server
+  answers with a `reload`; the page lands (§2, "Added 02/10").
 
 **Blocked on the user: the names of `createPopup`'s last two parameters**
 (`arg4`, `arg5` in `core/ikariam/globals.ts`), the one review finding left
@@ -674,12 +849,19 @@ open against the naming rule. Every source, including the original, passes
 `"???", "class"`. Needed: `copy(ikariam.createPopup.toString())` from the
 console with both scripts off.
 
-**New item U (29/09, the user's idea):** building upgrade cost and time from
-a formula instead of `Constant.BuildingData`'s hard-coded tables. The user
-chose the formula route (not reading the game's own figures like IkaEasy)
-and **has the formula source; they will send it later**. Do not start, and
-do not go looking for a formula elsewhere, until it arrives. What the code
-does today and both options are in the plan, §4.2 "Ghi chú về U".
+**Item U (29/09, the user's idea) — mostly done 01/10, §11.** It began as
+"a formula instead of the tables"; the user then switched to the game's own
+figures in the tables. **Still open: levels past the 50 (30) the help page
+lists** — the user will find a source; do not invent one. Plan §4.2 "Ghi chú
+về U".
+
+**Item V (01/10, the user's idea): research effects as the game computes
+them.** Four points: building cost reduction (**done**, §11), scientists' gold
+cost, maximum population, satisfaction. **The user will write the details of
+the last three; do not start until they do.** Today's code for each, with
+file and formula, is in the plan, §4.2 "Ghi chú về V". The research data
+itself is only which topics are explored (`parseResearchAdvisor`), never an
+effect value; the effects are all hard-coded.
 
 Two questions in §6 of the plan are unanswered and are blocking real work:
 
@@ -687,23 +869,20 @@ Two questions in §6 of the plan are unanswered and are blocking real work:
    2.6, 2.7 and 2.8 are all board-side. The board is 10,767 lines of mechanical
    port using jQuery UI tabs; touching it is a different risk class from
    rebuilding the panel.
-2. **Take all 18 items in §4.2, or a subset?** The user was asked to mark the
-   ones they want. Until then E–R are not started.
+2. **Take all the items in §4.2 (now A–V), or a subset?** The user was asked
+   to mark the ones they want. Until then E–R are not started.
 
-Unblocked and ready to pick up: only **1.4** (`switchCity`, the last Phase 1
-item — half there: `gotoTown` has a form route since 26/09, but it is second
-and it reloaded the page, §2; the plan's "confirm from the response" part is
-not done, and that is probably what finding the reload needs — it likely
-needs a measurement on the live game). D, H and the second half of 2.4 were
-done on 28/09 (§10).
+Unblocked and ready to pick up: **nothing in the plan** since 02/10 — 1.4
+was the last Phase 1 item and is done (§13). D, H and the second half of 2.4
+were done on 28/09 (§10). What is left without a blocker is the small,
+unscheduled things in §7, each waiting for the user to say yes.
 
 ---
 
 ## 7. Loose ends worth knowing
 
-- **1.4 has no recorded reasoning.** It was deferred, but no note explaining why
-  was ever written into the code or the plan. Either do it, or write down why
-  not.
+- ~~**1.4 has no recorded reasoning.**~~ Done 02/10 (§13); the reasoning is in
+  the comment above `gotoTown` and in the plan's §2.L, part 5.
 - **A feature can pass its tests and still not exist.** `wine-warning.ts` was
   written, tested green, and reported as done while nothing imported it — the
   bundler dropped it entirely. It is wired in now. The check that settles it is
@@ -745,8 +924,8 @@ done on 28/09 (§10).
   empty (the timer turns off, §5). With work still saved the flag stays on
   on purpose, and the label then reads "Stop Timer" over a runner waiting for
   the keep-alive — which is now true, not a lie. The first half (Build's
-  timer runs queued shipments) is still open; it was checked on 26/09 and
-  was NOT the cause of the transport panel opening.
+  timer runs queued shipments) was checked on 26/09 and was NOT the cause of
+  the transport panel opening. **Fixed 02/10 (§13):** `allowsType`.
 
 - **Not yet confirmed on the live game after a rebuild (25/09):** the header
   refreshing after a manual shipment with the launcher moved out of the menu,
@@ -779,10 +958,26 @@ done on 28/09 (§10).
   upgrade behind it runs — showing the task the runner picked needs the
   runner to expose it. With a shipment still waiting, the queue never drains,
   so the next Auto Build lap has to come from the keep-alive reload and
-  `start()`, not `onDrain` — not checked live. "Warning wine" still toasts
+  `start()`, not `onDrain` — not checked live (since 02/10 this holds only
+  with both timers on: with Build's alone, a queue of shipments counts as
+  drained, §13). "Warning wine" still toasts
   every 5 s for a town that really is running dry. The toast for
   `skippingOtherAccount` shows just before a `confirm()` and may be hidden by
   it.
+- **Small things left from 30/09–01/10, not scheduled** (§11):
+  `core/format.ts`'s `TIME_FACTORS` makes a month 2,520,000 s (29.17 days)
+  where the game's is 30 days — every "M" the scripts print is off by about
+  3%; not fixed, out of scope. Discounts round with `Math.round`; one point of
+  the old wiki (64 × 0.98 = 62.72 shown as 62) hints the game floors — not
+  checked. A building past level 50 shows cost 0 and so reads as upgradable.
+  The Crawl Building button is still in the panel. No test in the repo covers
+  the time table, `isMaxLevel` or the 50% cap (checked with throwaway runs,
+  §11).
+- **Small things left from 02/10, not scheduled** (§13): display strings
+  outside §2.D's list — Transport Settings' table still shows the resource
+  id (`glass`), and the Auto Wine dialog writes `"—"` and `"h"` inline. A
+  scan that falls back to walking (model unreadable) stops at the first
+  switch now that a switch reloads.
 - **Two tabs of one account take turns holding the runner lock.** The
   keep-alive reloads the holder, the waiting tab is granted the lock, and
   the reloaded page waits. Only one drives at any moment, which is the
@@ -879,7 +1074,7 @@ Neither is seen live yet.
 
 ## 10. The 28–29/09 rounds: Auto Build laps, four plan items, two dialogs
 
-Committed as `1f7c0e7` (docs in `4841fb9`), not pushed; none seen on the live
+Committed as `1f7c0e7` (docs in `4841fb9`), pushed; none seen on the live
 game; `dist/` has all of it (§1). The
 decisions behind each are in §5 ("Added 28–29/09"); the full write-ups, in
 Vietnamese, are `improvement-plan.md` §2.F, §2.G and §2.H. Every new or
@@ -913,3 +1108,174 @@ Two tests needed more than the obvious to go red or green:
 What to try on the game is listed at the end of each plan section. The one
 that matters most: a log from `SClone1` showing each lap reaching all three
 towns (§6).
+
+---
+
+## 11. The 30/09–01/10 round: building data from the game (plan U, V)
+
+Committed as `6ed66c6` (the crawl button) and `c38dca4` (the data and the
+cap), docs in `b9f1d7a`; not pushed; none tried on the game; `dist/` has all
+of it (§1). The plan's write-up, in Vietnamese: §4.2, "Ghi chú về U" and
+"Ghi chú về V". Measured facts are in §2 ("Added 30/09–01/10"), decisions in
+§5.
+
+How it went, because the route matters for whoever continues:
+
+1. The user wanted formulas instead of the tables (U). The wiki pages the
+   user saved turned out to be out of date against the game.
+2. From one in-game table (Academy), exact formulas were fitted: wood
+   `floor(5·L·e^(0.292757·L)) + 28` (50/50 levels), crystal
+   `floor(5·L·e^(0.32156·L)) + 100` (46/46), time
+   `floor(105·L·e^(k·L)) − 98`, k ≈ 0.15617. **The user stopped this and chose
+   the game's tables.** The formulas are recorded in case levels past 50 ever
+   need extrapolating.
+3. The game's Help > building details dialog has every building. A temporary
+   **Crawl Building** button (`send-resources/features/building-help-crawler.ts`,
+   Data group) saves the building on screen to JSON; the user walked all 33 by
+   hand and saved them to `docs/wiki/`.
+4. `Constant.BuildingData` was regenerated by a script in the session's
+   scratchpad (not in the repo) from those files' `contentHtml`. Only that
+   block of `constants.ts` changed; the one comment in it (`//time is not
+   correct`, above `marineChartArchive`) went with the old time formula.
+
+| What | Where | Note |
+| ---- | ----- | ---- |
+| Costs for levels 1–50 (1–30), base figures | `constants.ts` `BuildingData.*.wood/wine/marble/glass/sulfur` | crystal is `glass`; index = current level (`[L − 1]` is the cost of level L) |
+| Time as seconds per level | `BuildingData.*.time`; `getUpgradeCost` reads `time[level] \|\| 0` | was `{a, b, c, d}` and a formula |
+| Effect tables | `academy.maxScientists`, `warehouse/dump.capacity`, `tavern.wineUse/basicBonus/wineBonus`, `museum.basicBonus`, `port.loadingSpeed` | each at the index the code already reads; `tavern.wineUse2` (s202) and `townHall.actionPointsMax` untouched — no game column |
+| Logical `maxLevel` | reduction buildings 50, production buildings 70, palace 20, blackMarket 25, shrineOfOlympus 21, others 0 | blackMarket and shrine come from their tables (tax floor, "Blessed Cities"), not from text — the user was told |
+| `isMaxLevel` | `models/building.ts` | `maxLevel > 0 && level >= maxLevel` |
+| `\|\| 0` for levels past the table | `models/city.ts`: warehouse/depot capacity, museum and tavern `basicBonus` | would be `NaN` otherwise |
+| 50% cap on reduction buildings | `REDUCTION_BUILDING_MAX_PERCENT` (`core/ikariam/model.ts`); `getUpgradeCost`; `modelWineConsumption`; `winePressSavingPercent` in `city.ts` (three callers) | was `level/100` with no cap, `Math.min(100, …)` in core |
+
+**The reduction buildings' scope, from the user:** Carpenter (wood) —
+building, units, ships; Architect (marble) — building; Optician (crystal) —
+building, units, ships, Workshop improvements, Academy experiments; Firework
+Test Area (sulfur) — building, units, ships; Wine Press (wine) — building,
+units, tavern. The code computes only building costs and tavern wine; it has
+no resource costs for units, ships, improvements or experiments
+(`Constant.UnitData` carries `baseTime` and `baseCost` only). Adding any of
+those later means applying the same cap.
+
+**Checked, and how.** Typecheck clean; 34 files, 500 tests. The crawler was
+run against `sample/wiki/town-hall.html` and its 50 rows matched the page;
+the Academy file matched the fitted formula at every level. The discount was
+run on a real `Building` with the new Academy data: 1.00 / 0.86 (three
+researches) / 0.76 (Carpenter 10) / 0.36 (Carpenter 50) / 0.36 (Carpenter 60).
+These were throwaway vitest runs from the scratchpad with their own config;
+**no test was added to the repo**, and none was proven red (§3). The user did
+not ask for tests.
+
+**Two traps from this round:**
+
+- **Vite cannot run a test file on another drive than its root** (root on
+  `D:`, file on `C:` gave `Cannot find module '/@id/D:/C:/…'`). For a
+  throwaway check from the scratchpad, make the scratchpad the root and import
+  the repo by absolute path; `vitest/config` does not resolve from there, so
+  export a plain object with `globals: true`.
+- **An effect cell's short figure is not the figure.** The first crawl
+  captured "11.81M" for a warehouse; the exact one was in the cell's `title`.
+  The button reads it (in `6ed66c6`).
+
+**What to try on the game:** the Build tab's tooltips and "+" marks against
+the game's own upgrade costs in a town with a reduction building; a building
+at or past its logical `maxLevel` (greyed, still clickable); storage totals
+and tavern satisfaction unchanged for levels ≤ 50.
+
+---
+
+## 12. The 02/10 round: one-row ↑/↓, and Auto Wine's Start does it all
+
+Not committed; not in `dist/`; not tried on the game. The plan's write-up, in
+Vietnamese, is §2.K; the decisions are in §5 ("Added 02/10"). 500 → 515
+tests, typecheck and prettier clean.
+
+| What | Where |
+| ---- | ----- |
+| `TaskQueue.moveOneStep(id, direction, withinType?)` | `core/task-queue.ts` |
+| `moveButtons()` — the ↑/↓ pair, first ↑ and last ↓ `disabled`; `MOVE_BUTTON` tooltips; `.ika-move:disabled` | `ui/actions.ts`, `messages.ts`, `ui/styles.ts` |
+| Queue view ↑/↓ (`queue.moveUp/moveDown`) | `ui/queue-view.ts`, `app.ts` |
+| Transport Settings ↑/↓ (`send.moveUp/moveDown`), a sixth, empty column | `ui/dialogs.ts`, `app.ts`, `messages.ts` |
+| Auto Build Settings ↑/↓ (`build.moveUp/moveDown`), `moveBuildingInQueue` | `ui/dialogs.ts`, `features/auto-build.ts`, `app.ts` |
+| `scanBuildings` resolves `true` when it finished, `false` when it refused | `features/auto-build.ts` |
+| `saveMeasuredReceivers` — what Load then Save would store, without the dialog | `features/auto-wine.ts` |
+| Start → `wine.autoRun` (`runAutoWine`); popup → `wine.autoRunFrom`; Save → queues (`wine.queueFrom` from its popup). `wine.chooseSource` and `wine.start` are gone; `startWineRun` is `queueWineRun` | `app.ts`, `ui/panel.ts`, `ui/dialogs.ts` (`openWineSourceDialog(onChosen)`) |
+
+**How the Start test proves the order.** `app.test.ts` mocks
+`scanBuildings` (hoisted, so the same mock survives `vi.resetModules()`), and
+the mock *draws the board* when called. The saved receivers can only carry
+the board's figures if Load ran after the scan. Moving
+`saveMeasuredReceivers()` above the scan turns that test red; so does
+dropping `withinType` from Transport Settings' ↑/↓ for its test — both seen
+with the round trip in §4. The rest is new code, with no old version to see
+red against.
+
+**Known, not measured:**
+
+- The scan's fresh figures reach Auto Wine only through the Empire Overview
+  board: Send Resources does not record fetched responses in its town cache.
+  Without the board, Start plans on the old cache.
+- The board's events are synchronous, but whether its DOM is redrawn before
+  Load reads it has not been seen live.
+- A scan that falls back to walking ends in `backToCity`, which can reload
+  the page; the rest of Start then never runs.
+- Shipping is still broken (§0, plan §2.A), and Start now switches the
+  Transport timer on by itself.
+
+**What to try on the game:** ↑/↓ in all three places, one row per press;
+Start with one source → "Sync finished" toast, wine shipments queued,
+Transport's button reads "Stop Timer"; Save in Auto Wine Settings → wine
+shipments queued, timer still off.
+
+---
+
+## 13. The later 02/10 round: stock, zero amounts, runner per timer, strings, 1.4
+
+Not committed; not in `dist/`; not tried on the game. The plan's write-up, in
+Vietnamese, is §2.L (five parts); the measured facts are in §2 ("Added
+02/10"), the decisions in §5 ("Added 02/10, later"). 515 → 537 tests,
+typecheck and prettier clean.
+
+| Part | What | Where |
+| ---- | ---- | ----- |
+| 1 | `readCurrentStock(resource)` (model, then `SEL.globalMenu.resource`, else 0). In `handleSendResource`, `available = stock − reserve`; short of the task and of one ship → `defer`. A `tooLittle(merchantsIdle)` closure runs before navigating and again at the form, before anything is entered | `game-state.ts`, `core/ikariam/selectors.ts`, `features/send-resources.ts` |
+| 2 | `readSendForm`: an empty field or one of digits worth 0 is skipped; anything else not all digits is invalid | `ui/dialogs.ts`, `messages.ts` |
+| 3 | `TaskRunnerOptions.allowsType`; `allowedTasks()` feeds `nextTask` and the defer-cooldown count. `app.ts`: `allowsTaskType`, `oneOffRunTypes` (Build's Start), `syncRunnerToFlags` also wants the runner for a one-off run, `onDrain` clears it | `core/task-queue.ts`, `app.ts` |
+| 4 | `RESOURCE_LABEL`, `DURATION`, `resourceLabel()`; `RESOURCE_OPTIONS` built from the labels; `describeTask` shows labels; `listBuildingsInCurrentTown` parses `Name (N)` and takes a non-number as 0 | `messages.ts`, `types.ts`, `features/wine-warning.ts`, `ui/queue-view.ts`, `features/auto-build.ts` |
+| 5 | `gotoTown`: form → board → dropdown; `ika_pendingTownSwitch` in `sessionStorage`, `SWITCH_LANDING_WINDOW_MS` = 30 s, cleared on arrival | `navigation.ts` |
+
+**Every part was seen red.** For each, the fix was broken on purpose — a
+string replaced in the source from PowerShell, the file copied to the
+scratchpad first and copied back after — and the matching tests failed:
+part 1's three stock tests against `HEAD`'s handler and its two freighter
+tests with the threshold forced to one merchant ship; part 2's two against
+the old parsing; part 3's three, one per removed piece (`allowsType`, the
+one-off lap, the cooldown count); part 4's building-name test (the old code
+gives `"Museum Đang xây NaN"`); part 5's form-first and loop-guard tests.
+Test "ships an order smaller than one ship when the stock covers it" is
+green on the old code on purpose: it pins that the new rule does not
+over-block.
+
+**How 1.4 was settled, for whoever doubts it.** Two console probes, written
+to `sessionStorage` so they survive the reload: the first hooked
+`HTMLFormElement.prototype.submit`, the `submit` event, `beforeunload` and
+`jQuery(document).ajaxSend`; the second logged `ajaxComplete` with the
+response's entry names. Both runs (scripts off and on) showed one ajax
+request and an unload ~0.3 s later; the response was the `reload` in §2.
+
+**Known, not measured:**
+
+- Each town switch now costs a page load; an Auto Build lap over many towns
+  reloads as many times. The board's name route is assumed to reload too.
+- Whether the runner picks the task up again after a switch's reload has not
+  been seen live. The log should read `Going to town X`, a reload, then the
+  task carrying on in X.
+- With only freighters idle, a small town waits for ~50,000 in stock or a
+  merchant ship to come home.
+- Shipping as a whole is still broken (§0, plan §2.A).
+
+**What to try on the game:** a queued amount above a town's stock, under one
+ship → the log names the shortfall, nothing ships; Transport Settings with
+0s → no error; Build's Start Timer alone with a shipment queued → it stays;
+the queue shows "Wine"/"Crystal"; an Auto Build lap that switches town
+through the form, one reload per town, without looping.
