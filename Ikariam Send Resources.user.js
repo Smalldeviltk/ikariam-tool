@@ -241,6 +241,8 @@
       freeTransporters: "#js_GlobalMenu_freeTransporters",
       freeFreighters: "#js_GlobalMenu_freeFreighters",
       wine: "#js_GlobalMenu_wine",
+      resource: (resource) =>
+        `#js_GlobalMenu_${resource === "glass" ? "crystal" : resource}`,
     },
     position: (n) => `#position${n}`,
     cityPositionLink: (n) => `#js_CityPosition${n}Link`,
@@ -542,6 +544,23 @@
       tasks.push(task);
       this.write(tasks);
     }
+    moveOneStep(id, direction, withinType) {
+      const tasks = this.list();
+      const index = tasks.findIndex((t) => t.id === id);
+      if (index < 0) return;
+      const step = direction === "up" ? -1 : 1;
+      let neighbour = index + step;
+      while (
+        withinType &&
+        neighbour >= 0 &&
+        neighbour < tasks.length &&
+        tasks[neighbour].type !== withinType
+      )
+        neighbour += step;
+      if (neighbour < 0 || neighbour >= tasks.length) return;
+      [tasks[index], tasks[neighbour]] = [tasks[neighbour], tasks[index]];
+      this.write(tasks);
+    }
     removeType(type) {
       this.write(this.list().filter((t) => t.type !== type));
     }
@@ -644,8 +663,13 @@
     async runOnce() {
       await this.tick();
     }
-    nextTask() {
+    allowedTasks() {
+      const { allowsType } = this.options;
       const tasks = this.queue.list();
+      return allowsType ? tasks.filter((task) => allowsType(task.type)) : tasks;
+    }
+    nextTask() {
+      const tasks = this.allowedTasks();
       const runnable = tasks.find((task) => !this.blockedTypes.has(task.type));
       if (runnable) return runnable;
       this.blockedTypes.clear();
@@ -691,7 +715,7 @@
           case "defer":
             this.queue.moveToBack(task.id);
             this.deferStreak += 1;
-            if (this.deferStreak >= this.queue.length) {
+            if (this.deferStreak >= this.allowedTasks().length) {
               const cooldown =
                 this.options.deferCooldownMs ?? DEFAULT_DEFER_COOLDOWN_MS;
               this.pausedUntil = Date.now() + cooldown;
@@ -1000,6 +1024,24 @@
     cancel: "Cancel",
     add: "Add",
   };
+  var RESOURCE_LABEL = {
+    wood: "Wood",
+    wine: "Wine",
+    marble: "Marble",
+    glass: "Crystal",
+    sulfur: "Sulfur",
+  };
+  var DURATION = {
+    unknown: "—",
+    underAnHour: "<1h",
+    hours: (hours) => `${hours}h`,
+    days: (days) => `${days}d`,
+    daysAndHours: (days, hours) => `${days}d ${hours}h`,
+  };
+  var MOVE_BUTTON = {
+    up: "Move up",
+    down: "Move down",
+  };
   var PANEL = {
     title: "Send Resources",
     launcher: "Send Resources",
@@ -1033,7 +1075,6 @@
     empty: "The queue is empty.",
     more: (count) => `+ ${count} more`,
     headerTask: "Task",
-    moveToBack: "Send to the back",
     remove: "Remove",
     clearAll: "Clear all",
     upgrade: (building, town) => `Upgrade ${building} in ${town}`,
@@ -1047,13 +1088,13 @@
     amount: "Amount",
     removeFirst: "Remove First",
     removeLast: "Remove Last",
-    columns: ["Origin", "Destination", "Resource", "Amount", "Source"],
+    columns: ["Origin", "Destination", "Resource", "Amount", "Source", ""],
     errors: {
       incomplete: "Please choose both towns.",
       sameTown: "Source and destination are the same!",
       noAmount: "Enter an amount for at least one resource.",
       invalidAmount: (resources) =>
-        `Amounts must be whole numbers greater than 0: ${resources}`,
+        `Amounts must be whole numbers (empty or 0 = none): ${resources}`,
     },
   };
   var WINE_DIALOG = {
@@ -1446,21 +1487,55 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       if (getTownNameFromList(i) === target) return i;
     return null;
   }
+  var PENDING_SWITCH_KEY = "ika_pendingTownSwitch";
+  var SWITCH_LANDING_WINDOW_MS = 3e4;
+  function readPendingSwitch() {
+    try {
+      const raw = sessionStorage.getItem(PENDING_SWITCH_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+  function forgetPendingSwitch() {
+    sessionStorage.removeItem(PENDING_SWITCH_KEY);
+  }
   async function gotoTown(townNumber) {
     const target = getTownNameFromList(townNumber);
     if (!target) throw new Error(`No town at dropdown index ${townNumber}`);
-    if (getCurrentTownName() === target) return;
+    if (getCurrentTownName() === target) {
+      forgetPendingSwitch();
+      return;
+    }
+    const pending = readPendingSwitch();
     if (
-      !clickBoardTownName(target) &&
+      pending?.target === target &&
+      Date.now() - pending.sentAt < SWITCH_LANDING_WINDOW_MS
+    ) {
+      const secondsAgo = Math.round((Date.now() - pending.sentAt) / 1e3);
+      throw new Error(
+        `The switch to "${target}" sent ${secondsAgo}s ago did not land (now in "${getCurrentTownName()}") - not sending it again`,
+      );
+    }
+    const sent = {
+      target,
+      sentAt: Date.now(),
+    };
+    sessionStorage.setItem(PENDING_SWITCH_KEY, JSON.stringify(sent));
+    if (
       !submitChangeCityForm(townNumber) &&
+      !clickBoardTownName(target) &&
       !clickDropdownTown(townNumber)
-    )
+    ) {
+      forgetPendingSwitch();
       throw new Error(`No way to switch to "${target}" on this page`);
+    }
     await waitFor(() => getCurrentTownName() === target, {
       intervalMs: 100,
       timeoutMs: TOWN_SWITCH_TIMEOUT_MS,
       label: `gotoTown(${target})`,
     });
+    forgetPendingSwitch();
   }
   function submitChangeCityForm(townNumber) {
     const cityId = townCityId(townNumber);
@@ -1553,6 +1628,12 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
   function readCurrentWine() {
     return (
       modelResource("wine") ?? parseAmount(qs(SEL.globalMenu.wine)?.textContent)
+    );
+  }
+  function readCurrentStock(resource) {
+    return (
+      modelResource(resource) ??
+      parseAmount(qs(SEL.globalMenu.resource(resource))?.textContent)
     );
   }
   var BASE_MERCHANT_CAPACITY = 500;
@@ -1662,16 +1743,21 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
         status: "retry",
         reason: "Out of action points",
       };
-    let sendable = amount;
-    if (reserve && reserve > 0 && resource === "wine") {
-      const available = readCurrentWine() - reserve;
-      if (available <= 0)
-        return {
-          status: "defer",
-          reason: "Source town has no spare wine",
-        };
-      sendable = Math.min(amount, available);
-    }
+    const keep = reserve && reserve > 0 && resource === "wine" ? reserve : 0;
+    const available = readCurrentStock(resource) - keep;
+    const tooLittle = (merchantsIdle) => {
+      const oneShip = merchantsIdle
+        ? getPerShipCapacity()
+        : getFreighterCapacity();
+      if (available >= amount || available >= oneShip) return null;
+      return {
+        status: "defer",
+        reason: `${getTownNameFromList(origin)} has ${Math.max(0, available)} ${resource} to spare, less than one ${merchantsIdle ? "merchant ship" : "freighter"}'s cargo`,
+      };
+    };
+    const shortBeforeLeaving = tooLittle(getFreeShips().merchants > 0);
+    if (shortBeforeLeaving) return shortBeforeLeaving;
+    const sendable = Math.min(amount, available);
     if (!qs(SEL.position(1)) && !qs(SEL.position(2))) {
       backToCity("shipment needs the town view to find the port");
       await waitForElement(SEL.position(1), {
@@ -1692,6 +1778,8 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
         reason: "Ships became unavailable en route",
       };
     const useMerchant = merchants > 0;
+    const shortAtTheForm = tooLittle(useMerchant);
+    if (shortAtTheForm) return shortAtTheForm;
     const capacity = useMerchant
       ? getPerShipCapacity() * merchants
       : getFreighterCapacity() * freighters;
@@ -2011,6 +2099,26 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     }
     if (filled === 0) showToast(AUTO_WINE.noFigures);
   }
+  function saveMeasuredReceivers() {
+    const senders = loadSenders();
+    const saved = loadReceivers();
+    const board = readWineBoard();
+    const receivers = [];
+    for (const town of getTownList()) {
+      const id = town.townNumber.toString();
+      if (senders.includes(id)) continue;
+      const measured = measuredStats(town.townName, board);
+      const winePerHour = measured
+        ? String(Math.round(measured.consume))
+        : (saved.find((entry) => entry.townNumber === id)?.winePerHour ?? "0");
+      if (Number(winePerHour) > 0)
+        receivers.push({
+          townNumber: id,
+          winePerHour,
+        });
+    }
+    saveReceivers(receivers);
+  }
   function collectWineSettings() {
     const senders = [];
     const receivers = [];
@@ -2221,6 +2329,22 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     if (index >= 0) town.queue.splice(index, 1);
     saveAutoBuild(list);
   }
+  function moveBuildingInQueue(positionId, buildingName, townName, direction) {
+    const { accountName } = getState();
+    const list = loadAutoBuild();
+    const town = findTown(findAccount(list, accountName), townName);
+    if (!town) return;
+    const { queue } = town;
+    const index = queue.findIndex(
+      (entry) =>
+        entry.buildingName === buildingName && entry.positionId === positionId,
+    );
+    const neighbour = index + (direction === "up" ? -1 : 1);
+    if (index < 0 || neighbour < 0 || neighbour >= queue.length) return;
+    if (queue[neighbour].positionId === positionId) return;
+    [queue[index], queue[neighbour]] = [queue[neighbour], queue[index]];
+    saveAutoBuild(list);
+  }
   function cleanAutoBuildConfig() {
     saveAutoBuild(
       loadAutoBuild()
@@ -2380,16 +2504,16 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
   async function scanBuildings(maxTowns = 14, queueIsRunning = () => false) {
     if (scanning) {
       showToast(SCAN.alreadyRunning);
-      return;
+      return false;
     }
     const limit = Math.min(getTownCount(), maxTowns);
     if (limit === 0) {
       showToast(SCAN.noTownList);
-      return;
+      return false;
     }
     if (queueIsRunning()) {
       showToast(SCAN.queueRunning);
-      return;
+      return false;
     }
     if (ownTownIds().length > 0) {
       scanning = true;
@@ -2403,7 +2527,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
         );
         logInfo(summary);
         showToast(summary);
-        return;
+        return true;
       } catch (e) {
         logInfo(
           `Sync failed, falling back to walking the towns - ${errorMessage(e)}`,
@@ -2435,16 +2559,16 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     const summary = SCAN.walkFinished(visited, limit, failed.join(", "));
     logInfo(summary);
     showToast(summary);
+    return true;
   }
   function listBuildingsInCurrentTown() {
     const slots = qsa(SEL.buildings).map((element) => {
-      let buildingName =
-        qs(SEL.buildingHover, element)
-          ?.getAttribute("title")
-          ?.trim()
-          .replace("(", "")
-          .replace(")", "")
-          .replace("Under construction", "0") ?? "";
+      const title =
+        qs(SEL.buildingHover, element)?.getAttribute("title")?.trim() ?? "";
+      const bracketed = title.match(/^(.*?)\s*\((.*)\)$/);
+      let buildingName = bracketed
+        ? `${bracketed[1]} ${/^\d+$/.test(bracketed[2].trim()) ? bracketed[2].trim() : "0"}`
+        : title;
       if (element.classList.contains("constructionSite"))
         buildingName = withLevel(buildingName, levelOf(buildingName) + 1);
       return {
@@ -2953,28 +3077,15 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       ),
     );
   }
-  var RESOURCE_OPTIONS = [
-    {
-      value: "wood",
-      label: "Wood",
-    },
-    {
-      value: "wine",
-      label: "Wine",
-    },
-    {
-      value: "marble",
-      label: "Marble",
-    },
-    {
-      value: "glass",
-      label: "Crystal",
-    },
-    {
-      value: "sulfur",
-      label: "Sulfur",
-    },
-  ];
+  var RESOURCE_OPTIONS = ["wood", "wine", "marble", "glass", "sulfur"].map(
+    (value) => ({
+      value,
+      label: RESOURCE_LABEL[value],
+    }),
+  );
+  function resourceLabel(resource) {
+    return RESOURCE_LABEL[resource] ?? resource;
+  }
   var handlers = new Map();
   function registerActions(map) {
     for (const [name, handler] of Object.entries(map))
@@ -2990,6 +3101,14 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
             .join("")
         : ""
     }`;
+  }
+  function moveButtons(names, data, position) {
+    const button = (name, title, label, disabled) =>
+      `<button class="button ika-move" title="${title}"${disabled ? " disabled" : ""} ${action(name, data)}>${label}</button>`;
+    return (
+      button(names.up, MOVE_BUTTON.up, "↑", position.isFirst) +
+      button(names.down, MOVE_BUTTON.down, "↓", position.isLast)
+    );
   }
   var installed$1 = false;
   function installActionDispatcher() {
@@ -3256,15 +3375,26 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       .join("");
   }
   function renderResourceTable() {
-    const rows = getState()
-      .queue.listOfType("sendResource")
+    const shipments = getState().queue.listOfType("sendResource");
+    const rows = shipments
       .map(
-        (task) => `<tr>
+        (task, index) => `<tr>
         <td>${escapeHtml(getTownNameFromList(task.data.origin))}</td>
         <td>${escapeHtml(getTownNameFromList(task.data.destination))}</td>
         <td>${task.data.resource}</td>
         <td>${task.data.amount}</td>
         <td>${escapeHtml(task.data.label ?? "")}</td>
+        <td>${moveButtons(
+          {
+            up: "send.moveUp",
+            down: "send.moveDown",
+          },
+          { "ika-task": task.id },
+          {
+            isFirst: index === 0,
+            isLast: index === shipments.length - 1,
+          },
+        )}</td>
       </tr>`,
       )
       .join("");
@@ -3364,14 +3494,16 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     const invalid = [];
     for (const resource of RESOURCE_OPTIONS) {
       const text = qs(`#${amountFieldId(resource.value)}`)?.value.trim() ?? "";
-      if (text === "") continue;
-      const amount = /^\d+$/.test(text) ? Number(text) : 0;
+      if (text !== "" && !/^\d+$/.test(text)) {
+        invalid.push(resource.label);
+        continue;
+      }
+      const amount = Number(text);
       if (amount > 0)
         amounts.push({
           resource: resource.value,
           amount,
         });
-      else invalid.push(resource.label);
     }
     return {
       origin,
@@ -3420,13 +3552,13 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
      <div id="winePlanPreview"></div>`,
     );
   }
-  function openWineSourceDialog() {
+  function openWineSourceDialog(onChosen) {
     const senders = loadSenders();
     const buttons = getTownList()
       .filter((town) => senders.includes(town.townNumber.toString()))
       .map(
         (town) =>
-          `<button style="margin-right:20px" class="button" ${action("wine.start", { "ika-town": town.townNumber })}>${escapeHtml(town.townName)}</button>`,
+          `<button style="margin-right:20px" class="button" ${action(onChosen, { "ika-town": town.townNumber })}>${escapeHtml(town.townName)}</button>`,
       )
       .join("");
     openPopup(
@@ -3488,17 +3620,28 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     const queue = getTownQueue(townName);
     if (queue.length === 0) return BUILD_DIALOG.emptyTown;
     return queue
-      .map(
-        (entry, index) =>
-          `<span>${index + 1}.${escapeHtml(entry.buildingName)}<button class="button" ${action(
-            "build.remove",
+      .map((entry, index) => {
+        const data = {
+          "ika-position": entry.positionId,
+          "ika-building": entry.buildingName,
+          "ika-town": townName,
+        };
+        return (
+          `<span>${index + 1}.${escapeHtml(entry.buildingName)}<button class="button" ${action("build.remove", data)}>-</button>` +
+          moveButtons(
             {
-              "ika-position": entry.positionId,
-              "ika-building": entry.buildingName,
-              "ika-town": townName,
+              up: "build.moveUp",
+              down: "build.moveDown",
             },
-          )}>-</button></span><br/>`,
-      )
+            data,
+            {
+              isFirst: index === 0,
+              isLast: index === queue.length - 1,
+            },
+          ) +
+          `</span><br/>`
+        );
+      })
       .join("");
   }
   function openAutoBuildDialog() {
@@ -3557,25 +3700,39 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       .sort((a, b) => (a.hoursLeft ?? Infinity) - (b.hoursLeft ?? Infinity));
   }
   function formatHours(hours) {
-    if (hours === null) return "—";
-    if (hours < 1) return "<1h";
-    if (hours < 24) return `${Math.floor(hours)}h`;
+    if (hours === null) return DURATION.unknown;
+    if (hours < 1) return DURATION.underAnHour;
+    if (hours < 24) return DURATION.hours(Math.floor(hours));
     const days = Math.floor(hours / 24);
     const rest = Math.floor(hours % 24);
-    return rest > 0 ? `${days}d ${rest}h` : `${days}d`;
+    return rest > 0 ? DURATION.daysAndHours(days, rest) : DURATION.days(days);
   }
   var QUEUE_LIST_ID = "ikaQueueList";
   var MAX_ROWS = 50;
   function describeTask(task) {
     if (task.type === "sendResource") {
       const { amount, resource, origin, destination, label } = task.data;
-      return `${label ? `[${label}] ` : ""}${formatInteger(amount)} ${resource}: ${getTownNameFromList(origin)} → ${getTownNameFromList(destination)}`;
+      return `${label ? `[${label}] ` : ""}${formatInteger(amount)} ${resourceLabel(resource)}: ${getTownNameFromList(origin)} → ${getTownNameFromList(destination)}`;
     }
     return QUEUE_VIEW.upgrade(task.data.buildingName, task.data.townName);
   }
-  function row(task, index, isHead) {
+  function row(task, index, isHead, isLast) {
     const marker = isHead ? " ▶" : "";
-    return `<tr data-ika-queue-id="${escapeHtml(task.id)}"${isHead ? ' class="active"' : ""}><td>${index + 1}${marker}</td><td>${escapeHtml(describeTask(task))}</td><td><button class="button" title="${QUEUE_VIEW.moveToBack}" ${action("queue.moveToBack", { "ika-task": task.id })}>↓</button><button class="button" title="${QUEUE_VIEW.remove}" ${action("queue.remove", { "ika-task": task.id })}>✕</button></td></tr>`;
+    return (
+      `<tr data-ika-queue-id="${escapeHtml(task.id)}"${isHead ? ' class="active"' : ""}><td>${index + 1}${marker}</td><td>${escapeHtml(describeTask(task))}</td><td>` +
+      moveButtons(
+        {
+          up: "queue.moveUp",
+          down: "queue.moveDown",
+        },
+        { "ika-task": task.id },
+        {
+          isFirst: index === 0,
+          isLast,
+        },
+      ) +
+      `<button class="button" title="${QUEUE_VIEW.remove}" ${action("queue.remove", { "ika-task": task.id })}>✕</button></td></tr>`
+    );
   }
   function renderQueue() {
     const queue = getState().queue;
@@ -3591,7 +3748,9 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     return (
       `<table class="fullTable ika-queue-table"><tr><th>#</th><th>${QUEUE_VIEW.headerTask}</th><th></th></tr>` +
       shown
-        .map((task, index) => row(task, index, head?.id === task.id))
+        .map((task, index) =>
+          row(task, index, head?.id === task.id, index === tasks.length - 1),
+        )
         .join("") +
       `</table>` +
       overflow +
@@ -3637,6 +3796,7 @@ th { font-weight: bold; }
 .ika-queue-table th, .ika-queue-table td { padding: 2px 4px; text-align: left; }
 .ika-queue-table tr.active { background: #efdca8; font-weight: bold; }
 .ika-queue-table button { padding: 0 4px; margin-left: 2px; height: 18px; line-height: 1; }
+.ika-move:disabled { opacity: 0.4; cursor: default; }
 .ika-queue-empty { font-style: italic; color: #6b5433; margin: 2px 0 4px; }
 
 .needingShip {
@@ -3671,7 +3831,7 @@ th { font-weight: bold; }
     return (
       group(
         PANEL.groups.wine,
-        `<button class="button" id="btnStartScriptAutoWine" ${action("wine.chooseSource")}>${BUTTON.start}</button><button class="button" ${action("wine.settings")}>${BUTTON.settings}</button><div id="${WINE_WARNING_ID}"></div>`,
+        `<button class="button" id="btnStartScriptAutoWine" ${action("wine.autoRun")}>${BUTTON.start}</button><button class="button" ${action("wine.settings")}>${BUTTON.settings}</button><div id="${WINE_WARNING_ID}"></div>`,
       ) +
       group(
         PANEL.groups.transport,
@@ -3807,9 +3967,22 @@ th { font-weight: bold; }
     return true;
   }
   function syncRunnerToFlags() {
-    const wanted = isAutoStart() || isFlagTrue(FLAG.isAutoBuildStart);
+    const wanted =
+      isAutoStart() ||
+      isFlagTrue(FLAG.isAutoBuildStart) ||
+      oneOffRunTypes.size > 0;
     if (wanted && !runner.isRunning) startRunner();
     else if (!wanted && runner.isRunning) stopRunner();
+  }
+  var oneOffRunTypes = new Set();
+  function allowsTaskType(type) {
+    if (oneOffRunTypes.has(type)) return true;
+    switch (type) {
+      case "sendResource":
+        return isAutoStart();
+      case "upgradeBuilding":
+        return isFlagTrue(FLAG.isAutoBuildStart);
+    }
   }
   function toggleQueueRunner() {
     const running = isAutoStart();
@@ -3817,8 +3990,47 @@ th { font-weight: bold; }
     setQueueButtonLabel(!running);
     syncRunnerToFlags();
   }
-  function startWineRun(fromTown) {
-    if (enqueueWineRun(fromTown) > 0) refreshQueueView();
+  function queueWineRun(fromTown) {
+    if (enqueueWineRun(fromTown) === 0) return false;
+    refreshQueueView();
+    return true;
+  }
+  async function runAutoWine(fromTown) {
+    if (!(await scanBuildings(void 0, () => runner.isRunning))) return;
+    saveMeasuredReceivers();
+    if (!queueWineRun(fromTown)) return;
+    if (!isAutoStart()) toggleQueueRunner();
+  }
+  function withWineSource(chooseAction, run) {
+    const senders = loadSenders();
+    if (senders.length === 0) {
+      showToast(WINE_DIALOG.noSourceTicked);
+      return;
+    }
+    if (senders.length === 1) {
+      run(senders[0]);
+      return;
+    }
+    openWineSourceDialog(chooseAction);
+  }
+  function moveQueuedTask(element, direction) {
+    const id = element.dataset.ikaTask;
+    if (!id) return;
+    getState().queue.moveOneStep(id, direction);
+    refreshQueueView();
+  }
+  function moveShipment(element, direction) {
+    const id = element.dataset.ikaTask;
+    if (!id) return;
+    getState().queue.moveOneStep(id, direction, "sendResource");
+    renderResourceTable();
+    refreshQueueView();
+  }
+  function moveSavedUpgrade(element, direction) {
+    const { ikaPosition, ikaBuilding, ikaTown } = element.dataset;
+    if (!ikaPosition || !ikaBuilding || !ikaTown) return;
+    moveBuildingInQueue(ikaPosition, ikaBuilding, ikaTown, direction);
+    refreshTownQueueCell(ikaTown);
   }
   function registerUiActions() {
     registerActions({
@@ -3859,6 +4071,8 @@ th { font-weight: bold; }
         if (last) queue.removeById(last.id);
         renderResourceTable();
       },
+      "send.moveUp": (element) => moveShipment(element, "up"),
+      "send.moveDown": (element) => moveShipment(element, "down"),
       "queue.toggle": toggleQueueRunner,
       "wine.settings": openAutoWineDialog,
       "wine.save": () => {
@@ -3866,6 +4080,7 @@ th { font-weight: bold; }
         saveSenders(senders);
         saveReceivers(receivers);
         closeDialog();
+        withWineSource("wine.queueFrom", queueWineRun);
       },
       "wine.load": loadConsumedWine,
       "wine.preview": () => {
@@ -3876,23 +4091,19 @@ th { font-weight: bold; }
         }
         renderWinePlanPreview(senders[0]);
       },
-      "wine.chooseSource": () => {
-        const senders = loadSenders();
-        if (senders.length === 0) {
-          showToast(WINE_DIALOG.noSourceTicked);
-          return;
-        }
-        if (senders.length === 1) {
-          startWineRun(senders[0]);
-          return;
-        }
-        openWineSourceDialog();
-      },
-      "wine.start": (element) => {
+      "wine.autoRun": () =>
+        withWineSource("wine.autoRunFrom", (town) => void runAutoWine(town)),
+      "wine.autoRunFrom": (element) => {
         const town = element.dataset.ikaTown;
         if (!town) return;
         closeDialog();
-        startWineRun(town);
+        runAutoWine(town);
+      },
+      "wine.queueFrom": (element) => {
+        const town = element.dataset.ikaTown;
+        if (!town) return;
+        closeDialog();
+        queueWineRun(town);
       },
       "build.settings": openAutoBuildDialog,
       "build.add": (element) => {
@@ -3907,9 +4118,13 @@ th { font-weight: bold; }
         removeBuildingFromQueue(ikaPosition, ikaBuilding, ikaTown);
         refreshTownQueueCell(ikaTown);
       },
+      "build.moveUp": (element) => moveSavedUpgrade(element, "up"),
+      "build.moveDown": (element) => moveSavedUpgrade(element, "down"),
       "build.save": closeDialog,
       "build.startNow": () => {
-        if (enqueueAutoBuild() > 0) startRunner();
+        if (enqueueAutoBuild() === 0) return;
+        oneOffRunTypes.add("upgradeBuilding");
+        syncRunnerToFlags();
       },
       "build.toggleTimer": () => {
         const running = isFlagTrue(FLAG.isAutoBuildStart);
@@ -3937,12 +4152,8 @@ th { font-weight: bold; }
         getState().queue.removeById(id);
         refreshQueueView();
       },
-      "queue.moveToBack": (element) => {
-        const id = element.dataset.ikaTask;
-        if (!id) return;
-        getState().queue.moveToBack(id);
-        refreshQueueView();
-      },
+      "queue.moveUp": (element) => moveQueuedTask(element, "up"),
+      "queue.moveDown": (element) => moveQueuedTask(element, "down"),
       "queue.clear": () => {
         const pending = getState().queue.length;
         if (pending === 0) return;
@@ -4045,8 +4256,10 @@ th { font-weight: bold; }
     runner = new TaskRunner(getState().queue, {
       intervalMs: QUEUE_INTERVAL_MS,
       canRun: holdsTabLock,
+      allowsType: allowsTaskType,
       isUiReady,
       onDrain: () => {
+        oneOffRunTypes.clear();
         stopRunner();
         setAutoStart(false);
         setQueueButtonLabel(false);
