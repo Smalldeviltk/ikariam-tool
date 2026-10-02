@@ -177,6 +177,8 @@
       freeTransporters: "#js_GlobalMenu_freeTransporters",
       freeFreighters: "#js_GlobalMenu_freeFreighters",
       wine: "#js_GlobalMenu_wine",
+      resource: (resource) =>
+        `#js_GlobalMenu_${resource === "glass" ? "crystal" : resource}`,
     },
     position: (n) => `#position${n}`,
     cityPositionLink: (n) => `#js_CityPosition${n}Link`,
