@@ -10,7 +10,7 @@ It deliberately does **not** repeat the feature status. That lives in
 second. [project-summary.md](../project-summary.md) covers what the TypeScript
 port changed and what is still unverified.
 
-Last updated: 02/10/2026.
+Last updated: 03/10/2026.
 
 ---
 
@@ -97,14 +97,16 @@ logical `maxLevel`. Reduction buildings are capped at 50%. Levels past 50
 have no figures yet. `dist/` built by the user on 01/10 at 02:23 contains all
 of it; none of it has been tried on the game.
 
-**02/10: two changes the user asked for, not committed** — see §12, and
+**02/10: two changes the user asked for, committed with §13 as `4f9436c`
+(docs in `3209964`), not pushed** — see §12, and
 `improvement-plan.md` §2.K: ↑/↓ buttons that move one row at a time in the
 queue view, Transport Settings and Auto Build Settings; and Auto Wine's
 **Start** doing the whole routine (scan, wait for it, Load, Save, queue,
 switch Transport's timer on), with **Save** in Auto Wine Settings now
 queueing the run too. Not in `dist/`, not tried on the game.
 
-**02/10, later: five more, not committed** — see §13, and
+**02/10, later: five more, in the same commits (`4f9436c`, docs
+`3209964`), not pushed** — see §13, and
 `improvement-plan.md` §2.L:
 
 - **A shipment waits rather than send a few units.** When the source holds
@@ -118,6 +120,25 @@ queueing the run too. Not in `dist/`, not tried on the game.
 - **1.4: a town switch reloads the page, by the game's own design**
   (measured; §2). `gotoTown` now switches through the form first and will not
   send the same switch twice after a reload that did not land.
+
+Not in `dist/`, not tried on the game.
+
+**03/10: three things the user asked for, NOT committed** — see §14, and
+`improvement-plan.md` §2.M:
+
+- **Send Resources has a left-menu entry again, like Empire Overview's —
+  WITHOUT the `expandable` class.** The 25/09 entry broke the header
+  refresh. Three console experiments on the live page settled why (§2,
+  "Added 03/10"): any extra `expandable` entry breaks it, before or after
+  Empire Overview's `slot99`; an IkaEasy-shaped entry (`slot<index>`, no
+  `expandable`) does not. The corner button is now only the fallback for a
+  page without `.menu_slots`. **Never give the entry `expandable`.**
+- **The Send Resources window remembers whether it was left open**, and
+  opens on the very first load — as the Empire Overview board does.
+- **Upgrade times on the board take two more reductions**: the server's
+  construction-time buff, typed per account in Send Resources' account
+  table (shown as text; ✎ opens a field, ✓ saves), and the town's Chronos'
+  Forge (×0.8 per level). Rounded to whole seconds.
 
 Not in `dist/`, not tried on the game.
 
@@ -137,11 +158,12 @@ working between loads) is
 |             |                                                                  |
 | ----------- | ---------------------------------------------------------------- |
 | Branch      | `refactor`, tracking `origin/refactor`                            |
-| Pushed      | `origin/refactor` is at `066eb44` (the plan's §2.I–2.J docs), pushed by the user; §10's `1f7c0e7` and `4841fb9` are before it, so pushed too (checked with `git log origin/refactor..HEAD` on 02/10). Three local commits since, not pushed: §11 is `6ed66c6` + `c38dca4`, its docs `b9f1d7a` |
-| Uncommitted | §12 and §13 (02/10): the code and tests in `src/`, this document and the plan (§2.K, §2.L, its header, and notes in §2, §2.A, §2.B, §2.D, §2.J, §5). `.gitignore` and `docs/So_sanh_2_script_Ikariam.md` are the user's, as before |
-| Tests       | 34 files, 537 tests, all passing (500 before §12, 515 after it). §11 added no test (see §11) |
+| Pushed      | `origin/refactor` is at `066eb44` (the plan's §2.I–2.J docs), pushed by the user; §10's `1f7c0e7` and `4841fb9` are before it, so pushed too (checked with `git log origin/refactor..HEAD` on 02/10). **Five local commits since, not pushed:** §11 is `6ed66c6` + `c38dca4`, its docs `b9f1d7a`; §12 and §13 are one code commit, `4f9436c` (25 files in `src/`), and one docs commit, `3209964` |
+| Committed 02/10 | At the user's request, in two commits as before: code and tests, then the two documents. The commit message went through a file (`git commit -F`): PowerShell 5.1 splits a here-string passed to a native command at its double quotes, and the first attempt failed with "pathspec did not match" — nothing was committed by it |
+| Uncommitted | §14 (03/10): 15 files in `src/` — `core/storage.ts`, `core/ui/window.ts`, `core/ikariam/selectors.ts`, `empire-overview/models/building.ts`, `send-resources/{app,messages,state,types}.ts`, `send-resources/features/summary-account.ts`, `send-resources/ui/panel.ts`, and the tests `core/storage.test.ts`, `core/ui/window.test.ts`, `empire-overview/models/building.test.ts`, `send-resources/app.test.ts`, `send-resources/ui/panel.test.ts`. This document's and the plan's updates since `3209964`. **`send-resources/features/barbarian.ts` is also modified, and not by §14** (`annotate(SEL.barbarianVillageResources, false)` → `true`) — it appeared during the 03/10 session; left alone, ask the user before committing it. `.gitignore` and `docs/So_sanh_2_script_Ikariam.md` are the user's, as before, left out of every commit |
+| Tests       | 34 files, 560 tests, all passing (500 before §12, 515 after it, 537 after §13). §11 added no test (see §11) |
 | Typecheck   | Clean (`tsc --noEmit` and the strict config)                      |
-| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 01/10 at 02:23 and contains §11 (grepped: `Crawl Building` and `building-help-` in Send Resources; the new Academy figure `568954467` present and the old `582271779` gone, `winePressSavingPercent` and the time `12873600` in Empire Overview; `Math.min(50, …)` in Send Resources' `modelWineConsumption`). Earlier markers were checked in earlier builds: §2.I–2.J (`ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows`) and §10 (`ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save`, `capped`) |
+| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 01/10 at 02:23 and contains §11 (grepped: `Crawl Building` and `building-help-` in Send Resources; the new Academy figure `568954467` present and the old `582271779` gone, `winePressSavingPercent` and the time `12873600` in Empire Overview; `Math.min(50, …)` in Send Resources' `modelWineConsumption`). Earlier markers were checked in earlier builds: §2.I–2.J (`ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows`) and §10 (`ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save`, `capped`). **§12, §13 and §14 are not in `dist/` yet.** After the next build, grep Send Resources for `wine.autoRun`, `ika-move`, `ika_pendingTownSwitch`, `to spare, less than one`, `ikaWindowOpen_`, `js-ika-build-time-buff` and `translateX(-146px)` (the menu entry's slide-out), and Empire Overview for `listAccount` (strings in `src/`, so they survive bundling) |
 
 What landed: the AJAX transport layer, the shared window widget, the rewritten
 panel, four features (sync-towns, transport-buttons, queue-view, wine-warning),
@@ -255,7 +277,8 @@ pasted by the user from the console with both scripts off.
   else, made the header update after a manual shipment. Giving it a `slot98`
   class like the game's own entries was not enough. Empire Overview's
   `slot99` entry has not been caught doing the same, but nothing proves it is
-  safe either.
+  safe either. **Narrowed 03/10: it is the `expandable` class** — see
+  "Added 03/10" below.
 
 Added 26–27/09, from the `SClone1` account (towns W-Clone1 297124, M-Clone1
 297155, S-Clone1 297348):
@@ -371,6 +394,40 @@ Added 02/10, from probes the user ran in the console (§13):
   `"resource"` for wood and `1`–`4` for the rest, as the board reads it
   (`Constant.ResourceIDs`).
 
+Added 03/10 (§14):
+
+- **Chronos' Forge leaves 0.8 of the construction time per level.** Its help
+  page's "Construction time reduction" column
+  (`docs/wiki/building-help-chronosForge-35.json`) reads −20%, −36%,
+  −48.8%, −59.04%, … −89.263% at level 10: exactly `1 − 0.8^level`. Not 1%
+  per level, and no 50% cap, unlike the reduction buildings. The page does
+  not say what it applies to. A search-result snippet of the fandom wiki's
+  Patch 14.0.0 page says every building **in its own town, except itself**;
+  the page itself could not be read (HTTP 402). The user confirmed that
+  scope.
+- **A foreign `expandable` entry in `.menu_slots` is what breaks the
+  header; one without `expandable` does not.** Three one-liners the user ran
+  on a city view, both scripts on (so Empire Overview's `slot99` entry was
+  present), one per load, each followed by a manual shipment:
+  A — `<li class="expandable slot98">` appended at the end, after `slot99`:
+  header **broken**. B — `<li class="slot<li count> ikaeasy_slot">`,
+  IkaEasy V4's shape (`js/utils.js`, `addToLeftMenu`), appended at the end:
+  header **fine**. C — `<li class="expandable slot98">` placed BEFORE
+  `slot99`: header **broken**. So neither the position nor the slot number
+  matters; `expandable` does. Why Empire Overview's own `expandable slot99`
+  is harmless is not known — it may be that it goes in at module
+  evaluation, before the game builds its menu — and was not needed.
+- **The game itself has a menu entry with no `slotNN`**: the first
+  `.menu_slots > .expandable` in `tools/output/output5.json` is
+  `<li class="expandable transportLauncher">` "Transport". The menu does
+  not need slot numbers.
+- **`slot99` comes from the original** (`legacy/Quản lý Ika Perseus -VN-
+  V2.js:145`), with no comment; most likely just a number past the game's.
+- **Both userscripts run at Tampermonkey's default `document-idle`**: no
+  `@run-at` in either header (checked in `dist/`). Empire Overview inserts
+  its menu entry at module evaluation (`debug.ts`), Send Resources inside
+  `start()`.
+
 ---
 
 ## 3. How this branch works, the hard way
@@ -405,6 +462,11 @@ code.** The 25/09 header bug had no console error. Reading code produced two
 plausible culprits in Empire Overview, both fixed, neither the cause. What
 found it was cheap: turn one script off, then remove one injected element at a
 time from the running page with a console one-liner. Ask for that first.
+The same bug's second half (03/10) went the same way: a source probe for the
+game's menu code was written, but three one-line insertions — each varying
+one property of the entry — answered it in one round, before the probe was
+needed. Elimination tells you WHICH difference matters; a source dump only
+tells you where to start looking.
 
 **Code carried over from the original scripts was written for an older game.**
 The `executeAjaxRequest` and `updateGlobalData` wrappers, and `loadUrl`'s town
@@ -519,6 +581,19 @@ reproduces production; `http.test.ts` and `startup.test.ts` both do it now.
 - **The Bash tool's auto-mode classifier sometimes returns no verdict** and
   the call fails. PowerShell and the dedicated file tools kept working; use
   them rather than retrying Bash.
+- **Commit messages: write them to a file and use `git commit -F <file>`.**
+  In Windows PowerShell 5.1, `git commit -F - @'…'@` (or `-m` with a
+  here-string) splits the text at its double quotes into separate
+  arguments; git took the pieces as pathspecs and refused ("did not match
+  any file(s) known to git"), committing nothing (02/10). A message file in
+  the scratchpad, written with the Write tool, worked first time.
+- **A red check for several fixes in one go** (used for every part of §13):
+  a small PowerShell function that copies the file to the scratchpad,
+  `.Replace()`s the fix out of its text, writes it back with
+  `[IO.File]::WriteAllText` (LF, no BOM), runs the one test file, and copies
+  the original back — then a full run at the end to confirm the restore.
+  Print "PATCH DID NOT APPLY" when the replace changed nothing, so a missed
+  match is never mistaken for a green test.
 
 **Markdown is not in the repo's prettier scope** (`npm run format` covers only
 `src/` and `build/`). Do not run prettier over `docs/` — it reflows every table
@@ -568,7 +643,9 @@ Added 25/09:
 
 - **Send Resources adds nothing to the game's own menus.** Its panel opens
   from a fixed button at the bottom left (`buildLauncher` in `panel.ts`). A
-  menu entry is what broke the header (§2).
+  menu entry is what broke the header (§2). *Superseded 03/10: an entry
+  without `expandable` is safe and is back; the button is the fallback
+  (§14).*
 - **Empire Overview observes the game's responses; it does not replace the
   game's functions.** Responses come from the page jQuery's `ajaxSuccess`
   (`observeGameResponses` in `main.ts`). The one wrapper left around a game
@@ -779,6 +856,49 @@ Added 02/10, later, each chosen by the user unless marked (§13):
   task throws instead, and the runner drops it after five. Chosen here, as
   the guard against the loop; the user was told.
 
+Added 03/10, each chosen by the user unless marked (§14):
+
+- **The Send Resources window remembers open/closed, and opens on the first
+  load.** `createWindow`'s `rememberOpen` + `openByDefault`; the state is
+  `ikaWindowOpen_<id>` in the account store, next to the position, and like
+  the position stays out of the data export. ×, Esc, Space and the corner
+  button all stay, and every one of them is remembered.
+- **Not `isSendResourceHidden`** (chosen here): the original's key would
+  have been the natural one, but Send Resources' CSS uses it to hide
+  `#empireBoard` (`ui/styles.ts`), so writing it on close would hide the
+  Empire Overview board on the next load.
+- **Send Resources' menu entry is IkaEasy-shaped**: `<li class="slot<li
+  count> ika-send-menu">`, appended at the end of `.menu_slots`, NO
+  `expandable` (§2, "Added 03/10"). The game's hover slide-out only applies
+  to `expandable` entries, so IkaEasy's CSS does it (`menuEntryStyles` in
+  `ui/panel.ts`: `width: 199px; translateX(-146px)`, `translateX(0)` on
+  hover, RTL too). Shaped after the experiment that worked, chosen by the
+  user. A regression test fails if `expandable` comes back.
+- **The corner button stays as the fallback**, shown only on a page without
+  `.menu_slots`.
+- **The buff is shown as text, edited only behind ✎, saved only by ✓**
+  (asked for in two steps). ✎ swaps the text for a field and the button
+  for ✓; ✓ saves, removes the field and redraws. Leaving the field saves
+  nothing. A refused figure keeps the field open. The table's 10 s redraw
+  is skipped while a field is open; ✓ removes the field first so its own
+  redraw is not skipped. ✎ and ✓ are dispatcher actions
+  (`account.editBuildTimeBuff`, `account.saveBuildTimeBuff`).
+- **The server's construction-time buff is typed in Send Resources' account
+  table**, one field per account, in percent (36 = 36%), not in the board's
+  Settings tab — so the board reads Send Resources' `listAccount` through
+  `localStorage` (`accountBuildTimeBuff` in `core/storage.ts`; the key is
+  `ACCOUNT_LIST_KEY`, which `KEY.listAccount` now uses). No Send Resources,
+  no row or a bad figure → 0.
+- **Upgrade time = `round(seconds × (1 − buff) × 0.8^forgeLevel × (1 +
+  government))` × 1000**, rounded to the nearest second after all three.
+  The government factor (Aristocracy −20%) is kept — asked and chosen. The
+  Forge counts in its own town only and never for its own upgrade.
+- **The buff field is text, not `type="number"`** (chosen here): a number
+  field turns "abc" into "", which reads as "no buff" and would silently
+  wipe the stored figure.
+- **The `s201`/`s202` divide-by-3 in the tooltip is untouched** — the user
+  did not mention it.
+
 ---
 
 ## 6. What is blocked, and on what
@@ -842,6 +962,11 @@ flashes and vanishes, wait for the game to go idle first, as
 - ~~C — who reloads.~~ Done 28/09, §10: `backToCity(reason)`.
 - ~~**Why the form reloads the page** (§2).~~ Measured 02/10: the server
   answers with a `reload`; the page lands (§2, "Added 02/10").
+
+~~**Blocked on a console probe: a left-menu entry for Send Resources.**~~
+**Resolved 03/10** without the probe: three console experiments showed the
+`expandable` class is the cause, and the entry is built without it (§2,
+§14). The `cityMenu` probe in the plan was never run and is not needed.
 
 **Blocked on the user: the names of `createPopup`'s last two parameters**
 (`arg4`, `arg5` in `core/ikariam/globals.ts`), the one review finding left
@@ -978,6 +1103,17 @@ unscheduled things in §7, each waiting for the user to say yes.
   id (`glass`), and the Auto Wine dialog writes `"—"` and `"h"` inline. A
   scan that falls back to walking (model unreadable) stops at the first
   switch now that a switch reloads.
+- **Small things left from 03/10, not scheduled** (§14): Space toggles
+  BOTH boards at once — both scripts bind it, as before. Whether the game
+  rounds construction times or floors them is not measured; `Math.round`
+  was the user's "round to the second". The buff field exists only for an
+  account with a row in the table (the current one gets it at startup).
+  The board knows a town's Forge level only once it has that town's
+  buildings. The menu entry has only been proven harmless as a console
+  one-liner, not as built code; its icon
+  (`cdn/all/both/minimized/transport.png`) and its slide-out CSS (which
+  relies on `#container #leftMenu .slot_menu`, like IkaEasy's; `#leftMenu`
+  itself has never been captured) have not been seen live.
 - **Two tabs of one account take turns holding the runner lock.** The
   keep-alive reloads the holder, the waiting tab is granted the lock, and
   the reloaded page waits. Only one drives at any moment, which is the
@@ -1186,7 +1322,8 @@ and tavern satisfaction unchanged for levels ≤ 50.
 
 ## 12. The 02/10 round: one-row ↑/↓, and Auto Wine's Start does it all
 
-Not committed; not in `dist/`; not tried on the game. The plan's write-up, in
+Committed as `4f9436c` together with §13 (docs in `3209964`); not pushed;
+not in `dist/`; not tried on the game. The plan's write-up, in
 Vietnamese, is §2.K; the decisions are in §5 ("Added 02/10"). 500 → 515
 tests, typecheck and prettier clean.
 
@@ -1231,7 +1368,8 @@ shipments queued, timer still off.
 
 ## 13. The later 02/10 round: stock, zero amounts, runner per timer, strings, 1.4
 
-Not committed; not in `dist/`; not tried on the game. The plan's write-up, in
+Committed as `4f9436c` together with §12 (docs in `3209964`); not pushed;
+not in `dist/`; not tried on the game. The plan's write-up, in
 Vietnamese, is §2.L (five parts); the measured facts are in §2 ("Added
 02/10"), the decisions in §5 ("Added 02/10, later"). 515 → 537 tests,
 typecheck and prettier clean.
@@ -1279,3 +1417,82 @@ ship → the log names the shortfall, nothing ships; Transport Settings with
 0s → no error; Build's Start Timer alone with a shipment queued → it stays;
 the queue shows "Wine"/"Crystal"; an Auto Build lap that switches town
 through the form, one reload per town, without looping.
+
+---
+
+## 14. The 03/10 round: the menu entry, the window's open state, build times
+
+**Not committed**; not in `dist/`; not tried on the game as built code
+(part 1's cause was measured with console one-liners). The plan's
+write-up, in Vietnamese, is §2.M (three parts); the measured facts are in §2
+("Added 03/10"), the decisions in §5 ("Added 03/10"). 537 → 560 tests,
+typecheck (both configs) and prettier clean.
+
+| Part | What | Where |
+| ---- | ---- | ----- |
+| 1 | Left-menu entry like Empire Overview's, **without `expandable`**: `<li class="slot<li count> ika-send-menu">` appended to `.menu_slots`, icon `MENU_ENTRY_ICON`, click toggles the window; IkaEasy's slide-out CSS (`menuEntryStyles`); the fixed corner button only when there is no `.menu_slots`; `SEL.menuSlots` added back | `send-resources/ui/panel.ts`, `core/ikariam/selectors.ts` |
+| 2 | `createWindow({ rememberOpen, openByDefault })`; the panel passes both. Stored as `ikaWindowOpen_<id>` in the account store | `core/ui/window.ts`, `send-resources/ui/panel.ts` |
+| 3 | "Build time -%" column in the account table: the figure as text (`BUILD_TIME_BUFF_VALUE_CLASS`) + ✎; ✎ → a text field (`BUILD_TIME_BUFF_CLASS`) + ✓; ✓ → `setBuildTimeBuff`, field removed, redraw (`editBuildTimeBuff`, `saveBuildTimeBuff`, actions `account.editBuildTimeBuff`/`account.saveBuildTimeBuff`); no 10 s redraw while a field is open. `accountBuildTimeBuff` + `ACCOUNT_LIST_KEY` in core; `getUpgradeCost`'s time with the buff, `CHRONOS_FORGE_TIME_FACTOR_PER_LEVEL` and `Math.round` to the second | `send-resources/features/summary-account.ts`, `app.ts`, `messages.ts`, `types.ts`, `state.ts`; `core/storage.ts`; `empire-overview/models/building.ts` |
+
+**How part 1 went.** The old Send Resources entry is in
+`git show 85f8246:src/send-resources/ui/panel.ts` (`buildLauncher`);
+`d41fe28` removed it. Read against Empire Overview's, it differed four
+ways at once: no `slotNN` (then `slot98`, still broken), its own image
+class, appended at the END of the `ul` after `slot99`, and inserted later
+(in `start()`, not at module evaluation). The game's `cityMenu.update` is
+not in the repo, so a read-only probe for it was written (plan §2.M part 1)
+— and never needed. Two things found while looking settled the direction:
+`tools/output/output5.json` shows the game's own "Transport" entry with no
+`slotNN`, and IkaEasy V4 adds several entries to the same menu with
+`slot<index> ikaeasy_slot` and no `expandable` (`js/utils.js`,
+`addToLeftMenu`; template `tpl/utils-leftSlot.ejs`; CSS in
+`css/ikaeasy.css`). Three one-liners (§2) then showed `expandable` is the
+cause. The entry was built in the shape of the one that worked.
+
+**Tests, and which were seen red.**
+
+- `panel.test.ts`: the 25/09 REGRESSION test ("adds nothing to the game's
+  menu") and "always a fixed button" are replaced by four: the entry has no
+  `expandable`, is `slot2` after the fixture's two game entries, which stay
+  untouched and first; no fixed button with the menu; a fixed button
+  without it; the entry toggles the window. Putting `expandable` back on
+  the entry turns the REGRESSION test **red**. Also 1 new and 4 changed
+  for part 2 (they assumed the window always starts closed; the toggle
+  test now clicks the menu entry).
+- `window.test.ts` (4): part 2, new code.
+- `building.test.ts` (7, `describe("Building.getUpgradeCost time")`):
+  the file now builds the avatar bar BEFORE importing `./building`,
+  because `empire.ts` reads the account name at module evaluation, and
+  stubs `database._globalData` (government + research). Against `HEAD`'s
+  `building.ts` the buff, Forge and combined tests went red; with
+  `Math.round` removed, four went red. The plain-table, bad-buff and
+  Forge-on-itself tests are green on the old code on purpose: they pin that
+  the change does not over-apply.
+- `storage.test.ts` (3): new code.
+- `app.test.ts` (6, "the account table's build time buff"): text until ✎;
+  ✓ saves and shows text again; nothing saved without ✓ (even on a
+  `change` event); refused figures keep the field open; empty → 0; the
+  10 s redraw leaves an open field alone. `app.test.ts` mocks the action
+  dispatcher, so the tests press a button by calling the action it carries
+  (`actions[button.dataset.ikaAction](button)`). Listeners from earlier
+  tests' `start()` stay on the shared document (§4), so the toast is
+  asserted with `toHaveBeenCalledWith`, never a count. New behaviour, no
+  old version to see red against — but "✓ then text again" was red on its
+  first run for a real reason: `renderSummary` saw the still-open field and
+  skipped the redraw. ✓ now removes the field first.
+
+**Two traps from this round:**
+
+- An `<input type="number">` sanitises "abc" to `""` in happy-dom as in a
+  browser, so a "refuses letters" test read the stored buff as 0. The
+  field is text (§5).
+- A redraw guard keyed on "a field is open" also blocks the redraw that is
+  meant to close it. Close first, then redraw.
+
+**What to try on the game:** a manual shipment with the new menu entry on
+the page → the header updates (the one check that matters most here); the
+entry's icon and its slide-out on hover; ✎ → a buff → ✓ in the account
+table, then the board's Build-tab time tooltip against the game's own
+upgrade time in a town with a Chronos' Forge and one without; upgrading the
+Forge itself (no reduction); reload with the Send Resources window open,
+then closed.
