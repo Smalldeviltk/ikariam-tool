@@ -63,7 +63,9 @@ import {
 } from "./features/auto-build";
 import {
   clearAccounts,
+  editBuildTimeBuff,
   renderSummary,
+  saveBuildTimeBuff,
   setAutoBuildChecked,
   setReloadGuard,
   updateCurrentAccount,
@@ -473,6 +475,8 @@ function registerUiActions(): void {
     /* ── Multi-account summary ── */
     "account.update": updateCurrentAccount,
     "account.clear": clearAccounts,
+    "account.editBuildTimeBuff": editBuildTimeBuff,
+    "account.saveBuildTimeBuff": saveBuildTimeBuff,
 
     /* ── Moving data between browsers ── */
     // The userscript build runs on Edge and the extension on Chrome. Those are

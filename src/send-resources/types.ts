@@ -42,6 +42,12 @@ export interface AccountSummary {
   timeWood?: number;
   woodIncome?: string;
   isAutoBuildChecked?: boolean;
+  /**
+   * The server's construction-time buff for this account, in percent (36
+   * means 36%). Entered by the player; the Empire Overview board reads it
+   * (`accountBuildTimeBuff` in `core/storage.ts`).
+   */
+  buildTimeBuffPercent?: number;
 }
 
 /** Building upgrade queue, nested account -> town. */

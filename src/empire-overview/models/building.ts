@@ -11,6 +11,15 @@ import { Utils } from "../utils";
 import { database } from "../database";
 import { events } from "../events";
 import { REDUCTION_BUILDING_MAX_PERCENT } from "@core/ikariam/model";
+import { accountBuildTimeBuff } from "@core/storage";
+import { accountName } from "../empire";
+
+/**
+ * Each level of Chronos' Forge leaves 80% of the construction time: its help
+ * page lists -20% at level 1, -36% at 2, -48.8% at 3 ... -89.263% at 10,
+ * which is exactly 1 - 0.8^level.
+ */
+const CHRONOS_FORGE_TIME_FACTOR_PER_LEVEL = 0.8;
 
 export function Building(city, pos) {
   this._position = pos;
@@ -154,6 +163,19 @@ export function Building(city, pos) {
         ? Math.min(building.getLevel, REDUCTION_BUILDING_MAX_PERCENT) / 100
         : 0;
     };
+    // Seconds per level from the game's help pages, like the costs below:
+    // index = current level. Levels past the table have no figure yet.
+    // The server's construction-time buff for this account comes off first,
+    // then this town's Chronos' Forge, which does not speed up its own
+    // upgrades.
+    const forge =
+      this._name === Constant.Buildings.CHRONOSFORGE
+        ? null
+        : this.city().getBuildingFromName(Constant.Buildings.CHRONOSFORGE);
+    const upgradeSeconds =
+      (time[level] || 0) *
+      (1 - accountBuildTimeBuff(accountName)) *
+      Math.pow(CHRONOS_FORGE_TIME_FACTOR_PER_LEVEL, forge ? forge.getLevel : 0);
     const reducedCost = (resource: string, buildingName: string) =>
       Math.round(
         (Constant.BuildingData[this._name][resource][level] || 0) *
@@ -165,9 +187,9 @@ export function Building(city, pos) {
       marble: reducedCost("marble", Constant.Buildings.ARCHITECT),
       glass: reducedCost("glass", Constant.Buildings.OPTICIAN),
       sulfur: reducedCost("sulfur", Constant.Buildings.FIREWORK_TEST_AREA),
-      // Seconds per level from the game's help pages, like the costs above:
-      // index = current level. Levels past the table have no figure yet.
-      time: (time[level] || 0) * 1000 * bonTime,
+      // The seconds above with the government's modifier, rounded to a whole
+      // second, then in milliseconds.
+      time: Math.round(upgradeSeconds * bonTime) * 1000,
     };
   },
   get getName() {

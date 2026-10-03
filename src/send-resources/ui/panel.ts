@@ -1,6 +1,6 @@
 /**
- * The control surface: a fixed launcher button, and a draggable window
- * holding everything else.
+ * The control surface: an entry in the game's left menu (or a fixed button on
+ * a page without one), and a draggable window holding everything else.
  *
  * WHAT THIS REPLACES
  * The original — and the port until now — appended a fixed `<div>` pinned at
@@ -8,15 +8,16 @@
  * written inline. It covered the game at some window sizes, could not be moved,
  * grouped nothing, and showed no state beyond two button labels.
  *
- * Now: a launcher button opens a window whose controls are grouped by
- * feature, and whose footer carries live status. The window remembers where
- * it was left.
+ * Now: the launcher opens a window whose controls are grouped by feature, and
+ * whose footer carries live status. The window remembers where it was left,
+ * and whether it was left open.
  *
  * The buttons themselves are unchanged — same `data-ika-action` names, same
  * handlers. This is a layout change, not a behaviour change.
  */
 
 import { addStyle, escapeHtml, qs } from "@core/dom";
+import { SEL } from "@core/ikariam/selectors";
 import {
   createWindow,
   setWindowFooter,
@@ -38,6 +39,9 @@ import { buildStyles } from "./styles";
 export const WINDOW_ID = "ikaSendResourcesWindow";
 export const LAUNCHER_CLASS = "ika-send-menu";
 export const WINE_WARNING_ID = "ikaWineWarning";
+
+/** The menu entry's icon: the game's own transport picture. */
+const MENU_ENTRY_ICON = "cdn/all/both/minimized/transport.png";
 
 let panelWindow: GameWindow | null = null;
 
@@ -87,19 +91,52 @@ function windowContent(): string {
 }
 
 /**
- * Put a way in on the page: a small fixed button.
+ * Put a way in on the page: an entry in the game's left city menu
+ * (`.menu_slots`), like Empire Overview's, or a small fixed button on a page
+ * without that menu.
  *
- * It used to go into the game's own left city menu (`.menu_slots`), next to
- * Empire Overview's entry. That broke the game. With this script on, a manual
- * shipment left the header showing the old resource and idle-ship counts;
- * removing just that menu entry from the page, and nothing else, made the
- * header refresh again. The game's `updateGlobalData` updates that menu
- * (`updateCurrentCityLeftMenu` -> `cityMenu.update`) before it redraws the
- * header, and an entry it did not draw itself stops it — a `slotNN` class like
- * the game's own entries was tried and was not enough. So nothing is added to
- * the game's menu at all.
+ * The entry carries NO `expandable` class, and that is what keeps the game
+ * working. An entry with it broke the header: after a manual shipment the
+ * resource and idle-ship counts stayed stale. The game's `updateGlobalData`
+ * updates this menu (`updateCurrentCityLeftMenu` -> `cityMenu.update`) before
+ * it redraws the header, and a foreign `expandable` entry stops it there.
+ * Measured on the live page (03/10) with Empire Overview's entry present: a
+ * second `expandable` entry broke the header whether placed before or after
+ * Empire Overview's `slot99`, and whatever its `slotNN`; an entry shaped like
+ * IkaEasy V4's (`slot<index>`, no `expandable` — its `addToLeftMenu`) did not.
+ *
+ * Without `expandable` the game's slide-out on hover does not apply, so the
+ * stylesheet does it instead, as IkaEasy's does (`buildStyles`).
  */
+/**
+ * The menu entry's slide-out on hover, taken from IkaEasy V4
+ * (`css/ikaeasy.css`, `li.ikaeasy_slot`): only the icon shows until the
+ * pointer is over it, as with the game's own entries.
+ */
+function menuEntryStyles(): string {
+  const entry = `#container #leftMenu .slot_menu li.${LAUNCHER_CLASS}`;
+  return `
+${entry} { width: 199px; transform: translateX(-146px); transition: 0.25s all linear; cursor: pointer; }
+${entry}:hover { transform: translateX(0) !important; z-index: 120000 !important; }
+.direction_rtl ${entry} { transform: translateX(146px); }
+.direction_rtl ${entry}:hover { transform: translateX(0) !important; }
+`;
+}
+
 function buildLauncher(onClick: () => void): void {
+  const menu = qs(SEL.menuSlots);
+  if (menu) {
+    const entry = document.createElement("li");
+    entry.className = `slot${menu.children.length} ${LAUNCHER_CLASS}`;
+    entry.innerHTML =
+      `<div class="image" style="background-image:url(${MENU_ENTRY_ICON});` +
+      `background-position:0 0;background-size:33px auto"></div>` +
+      `<div class="name"><span class="namebox">${escapeHtml(PANEL.launcher)}</span></div>`;
+    entry.addEventListener("click", onClick);
+    menu.appendChild(entry);
+    return;
+  }
+
   const launcher = document.createElement("button");
   launcher.className = `button ${LAUNCHER_CLASS}`;
   launcher.textContent = PANEL.launcher;
@@ -113,11 +150,14 @@ export function buildPanel(): void {
   if (qs(`#${WINDOW_ID}`)) return;
 
   addStyle(buildStyles());
+  addStyle(menuEntryStyles());
 
   panelWindow = createWindow({
     id: WINDOW_ID,
     title: PANEL.title,
     store: getState().account,
+    rememberOpen: true,
+    openByDefault: true,
   });
   panelWindow.content.innerHTML = windowContent();
 

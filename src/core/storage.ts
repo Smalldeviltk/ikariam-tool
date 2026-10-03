@@ -82,3 +82,33 @@ export function empireKeyPrefix(accountName: string): string {
 
 /** Matches an Empire Overview key; group 1 is the account, group 2 the key. */
 export const EMPIRE_KEY_PATTERN = /^\*\*\*(.*?)\*\*\*(.*)$/;
+
+/**
+ * Send Resources' table of every account, in `globalStore`. Spelled here
+ * because the Empire Overview board reads one field of it (below), and the two
+ * scripts share no module — only storage.
+ */
+export const ACCOUNT_LIST_KEY = "listAccount";
+
+/** The part of an account row the board reads. */
+interface AccountBuildTimeRow {
+  account: string;
+  /** The server's construction-time buff, in percent: 36 means 36%. */
+  buildTimeBuffPercent?: number;
+}
+
+/**
+ * The server's construction-time buff entered for an account in Send
+ * Resources' account table, as a fraction (36% -> 0.36). 0 when the account
+ * has no row, no figure, or a figure outside 0-100.
+ */
+export function accountBuildTimeBuff(accountName: string): number {
+  const rows = globalStore.getJSON<AccountBuildTimeRow[]>(ACCOUNT_LIST_KEY, []);
+  const percent = Array.isArray(rows)
+    ? rows.find((row) => row?.account === accountName)?.buildTimeBuffPercent
+    : undefined;
+  if (typeof percent !== "number" || !(percent >= 0 && percent < 100)) {
+    return 0;
+  }
+  return percent / 100;
+}

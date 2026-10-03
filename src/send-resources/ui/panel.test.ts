@@ -37,13 +37,26 @@ beforeEach(() => {
 });
 
 describe("buildPanel", () => {
-  it("creates the window closed, so it does not cover the game on load", () => {
+  it("shows the window on the first load, as the Empire Overview board does", () => {
     document.body.innerHTML += GAME_MENU;
     buildPanel();
 
     const win = document.querySelector<HTMLElement>(`#${WINDOW_ID}`)!;
     expect(win).toBeTruthy();
-    expect(win.hidden).toBe(true);
+    expect(win.hidden).toBe(false);
+  });
+
+  it("keeps the window closed on the next load when it was left closed", () => {
+    document.body.innerHTML += GAME_MENU;
+    buildPanel();
+    togglePanel();
+
+    document.body.innerHTML = `<div id="container"></div><div id="footer"></div>`;
+    buildPanel();
+
+    expect(document.querySelector<HTMLElement>(`#${WINDOW_ID}`)!.hidden).toBe(
+      true,
+    );
   });
 
   it("is idempotent — a second call does not build a second window", () => {
@@ -56,26 +69,39 @@ describe("buildPanel", () => {
   });
 
   it(
-    "REGRESSION: adds nothing to the game's own menu — an entry there stopped " +
-      "the game redrawing the header after a manual shipment, and removing " +
-      "just that entry from the live page fixed it",
+    "REGRESSION: adds its menu entry WITHOUT `expandable` — an `expandable` " +
+      "entry stopped the game redrawing the header after a manual shipment; " +
+      "one shaped like IkaEasy's (`slot<index>`, no `expandable`) did not",
     () => {
       document.body.innerHTML += GAME_MENU;
-      const before = document.querySelector(".menu_slots")!.innerHTML;
+      const gameEntries = document.querySelector(".menu_slots")!.innerHTML;
       buildPanel();
 
-      expect(
-        document.querySelector(`.menu_slots .${LAUNCHER_CLASS}`),
-      ).toBeNull();
-      expect(document.querySelector(".menu_slots")!.innerHTML).toBe(before);
+      const entry = document.querySelector<HTMLElement>(
+        `.menu_slots > li.${LAUNCHER_CLASS}`,
+      );
+      expect(entry).toBeTruthy();
+      expect(entry!.classList.contains("expandable")).toBe(false);
+      expect(entry!.classList.contains("slot2")).toBe(true);
+      expect(entry!.textContent).toContain("Send Resources");
+      // The game's own entries are untouched, and come first.
+      expect(document.querySelector(".menu_slots")!.innerHTML).toMatch(
+        new RegExp(`^${gameEntries}`),
+      );
     },
   );
 
+  it("shows no fixed button when the game menu is on the page", () => {
+    document.body.innerHTML += GAME_MENU;
+    buildPanel();
+
+    expect(document.querySelector(`button.${LAUNCHER_CLASS}`)).toBeNull();
+  });
+
   it(
-    "opens through a fixed button, even when the game menu is on the page — " +
+    "opens through a fixed button on a page without the game menu — " +
       "without it there is no way to open the window at all",
     () => {
-      document.body.innerHTML += GAME_MENU;
       buildPanel();
 
       const launcher = document.querySelector<HTMLElement>(
@@ -87,6 +113,21 @@ describe("buildPanel", () => {
     },
   );
 
+  it("opens and closes from the menu entry", () => {
+    document.body.innerHTML += GAME_MENU;
+    buildPanel();
+
+    const win = document.querySelector<HTMLElement>(`#${WINDOW_ID}`)!;
+    const entry = document.querySelector<HTMLElement>(
+      `.menu_slots > li.${LAUNCHER_CLASS}`,
+    )!;
+
+    entry.click();
+    expect(win.hidden).toBe(true);
+    entry.click();
+    expect(win.hidden).toBe(false);
+  });
+
   it("opens and closes from the launcher", () => {
     document.body.innerHTML += GAME_MENU;
     buildPanel();
@@ -95,10 +136,10 @@ describe("buildPanel", () => {
     const launcher = document.querySelector<HTMLElement>(`.${LAUNCHER_CLASS}`)!;
 
     launcher.click();
-    expect(win.hidden).toBe(false);
+    expect(win.hidden).toBe(true);
 
     launcher.click();
-    expect(win.hidden).toBe(true);
+    expect(win.hidden).toBe(false);
   });
 
   it("keeps every control, grouped by feature rather than in one row", () => {
@@ -225,9 +266,9 @@ describe("live state", () => {
 
   it("toggles from the Space hotkey", () => {
     const win = document.querySelector<HTMLElement>(`#${WINDOW_ID}`)!;
-    expect(win.hidden).toBe(true);
-    togglePanel();
     expect(win.hidden).toBe(false);
+    togglePanel();
+    expect(win.hidden).toBe(true);
   });
 });
 
@@ -245,6 +286,7 @@ describe("the queue group", () => {
   });
 
   it("redraws on the status tick, but only while the window is open", () => {
+    togglePanel();
     getState().queue.push({
       type: "sendResource",
       data: { origin: "0", destination: "1", resource: "wine", amount: 7 },

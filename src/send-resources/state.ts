@@ -10,7 +10,12 @@
  * lose their queues when they update.
  */
 
-import { accountStore, globalStore, type Store } from "@core/storage";
+import {
+  ACCOUNT_LIST_KEY,
+  accountStore,
+  globalStore,
+  type Store,
+} from "@core/storage";
 import { TaskQueue } from "@core/task-queue";
 import type { AccountSummary, AutoBuildAccount, WineReceiver } from "./types";
 
@@ -22,7 +27,7 @@ export const KEY = {
   listSender: "listSender",
   listReceiver: "listReceiver",
   /** Shared by all accounts. Old code: `getVar("listAccount", "[]", true)`. */
-  listAccount: "listAccount",
+  listAccount: ACCOUNT_LIST_KEY,
   listAutoBuild: "listAutoBuild",
   /** Unified queue — NEW key, see `migrateLegacyQueues`. */
   globalTaskQueue: "ikaGlobalTaskQueue",

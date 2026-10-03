@@ -105,6 +105,47 @@ describe("createWindow", () => {
   );
 });
 
+describe("remembering whether it was left open", () => {
+  const options = (store = accountStore("tester")) => ({
+    id: "test-window",
+    title: "Test",
+    store,
+    rememberOpen: true,
+    openByDefault: true,
+  });
+
+  it("opens on the first load when nothing is stored yet", () => {
+    expect(createWindow(options()).isOpen()).toBe(true);
+  });
+
+  it("stays closed on the next load after being closed", () => {
+    const store = accountStore("tester");
+    createWindow(options(store)).close();
+
+    document.body.innerHTML = `<div id="container"></div>`;
+    expect(createWindow(options(store)).isOpen()).toBe(false);
+  });
+
+  it("opens on the next load after being opened again", () => {
+    const store = accountStore("tester");
+    const first = createWindow(options(store));
+    first.close();
+    first.toggle();
+
+    document.body.innerHTML = `<div id="container"></div>`;
+    expect(createWindow(options(store)).isOpen()).toBe(true);
+  });
+
+  it("stores nothing for a window that does not ask to remember", () => {
+    const store = accountStore("tester");
+    const win = createWindow({ id: "test-window", title: "Test", store });
+    win.open();
+    win.close();
+
+    expect(store.get("ikaWindowOpen_test-window")).toBeNull();
+  });
+});
+
 describe("dragging", () => {
   it("moves the window by its header", () => {
     const win = createWindow({ id: "test-window", title: "Test" });

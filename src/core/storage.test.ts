@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  ACCOUNT_LIST_KEY,
+  accountBuildTimeBuff,
   accountStore,
   EMPIRE_KEY_PATTERN,
   empireKeyPrefix,
@@ -71,5 +73,33 @@ describe("key schemes", () => {
     accountStore("Bob").set("resource", "b");
     expect(accountStore("Alice").get("resource")).toBe("a");
     expect(accountStore("Bob").get("resource")).toBe("b");
+  });
+});
+
+describe("accountBuildTimeBuff", () => {
+  const rows = (...list: unknown[]) =>
+    localStorage.setItem(ACCOUNT_LIST_KEY, JSON.stringify(list));
+
+  it("turns the account's percentage into a fraction", () => {
+    rows(
+      { account: "Alice", buildTimeBuffPercent: 36 },
+      { account: "Bob", buildTimeBuffPercent: 10 },
+    );
+    expect(accountBuildTimeBuff("Alice")).toBeCloseTo(0.36);
+    expect(accountBuildTimeBuff("Bob")).toBeCloseTo(0.1);
+  });
+
+  it("is 0 with no table, no row or no figure", () => {
+    expect(accountBuildTimeBuff("Alice")).toBe(0);
+    rows({ account: "Bob", buildTimeBuffPercent: 10 }, { account: "Alice" });
+    expect(accountBuildTimeBuff("Alice")).toBe(0);
+    expect(accountBuildTimeBuff("Carol")).toBe(0);
+  });
+
+  it("is 0 for a figure that is not a percentage from 0 to below 100", () => {
+    for (const bad of [-5, 100, 150, "36", null]) {
+      rows({ account: "Alice", buildTimeBuffPercent: bad });
+      expect(accountBuildTimeBuff("Alice")).toBe(0);
+    }
   });
 });

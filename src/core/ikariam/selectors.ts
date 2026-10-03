@@ -23,6 +23,11 @@ export const SEL = {
   changeCityInput: "#js_cityIdOnChange",
   /** Shown by the game from the start of a request until it is handled. */
   loadingIndicator: "#loadingPreview",
+  /**
+   * The game's left city menu. Send Resources appends its entry here; Empire
+   * Overview uses the same list. Absent on some pages, so callers fall back.
+   */
+  menuSlots: ".menu_slots",
 
   /** Link back to the town view. */
   cityLink: "#js_cityLink > a",

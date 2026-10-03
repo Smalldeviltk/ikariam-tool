@@ -36,6 +36,13 @@ export interface WindowOptions {
   width?: string;
   /** Remembers the position between sessions when supplied. */
   store?: Store;
+  /**
+   * Also remember whether the window was left open, and show it that way on
+   * the next page load — as the Empire Overview board does. Needs `store`.
+   */
+  rememberOpen?: boolean;
+  /** Open on creation; with `rememberOpen`, only until a state is stored. */
+  openByDefault?: boolean;
   onClose?: () => void;
 }
 
@@ -206,6 +213,13 @@ export function createWindow(options: WindowOptions): GameWindow {
   );
   const position = clampToViewport(stored ?? DEFAULT_POSITION);
 
+  const openKey = `ikaWindowOpen_${options.id}`;
+  const openStore = options.rememberOpen ? options.store : undefined;
+  const startsOpen =
+    openStore?.getJSON<boolean>(openKey, options.openByDefault ?? false) ??
+    options.openByDefault ??
+    false;
+
   const root = document.createElement("div");
   root.id = options.id;
   root.className = "ika-window";
@@ -263,10 +277,12 @@ export function createWindow(options: WindowOptions): GameWindow {
       root.style.top = `${next.top}px`;
       applyMaxHeight();
       root.hidden = false;
+      openStore?.setJSON(openKey, true);
     },
     close() {
       if (root.hidden) return;
       root.hidden = true;
+      openStore?.setJSON(openKey, false);
       options.onClose?.();
     },
     toggle() {
@@ -288,6 +304,8 @@ export function createWindow(options: WindowOptions): GameWindow {
     .addEventListener("click", () => api.close());
 
   document.addEventListener("keydown", closeOnEscape);
+
+  if (startsOpen) api.open();
 
   return api;
 }

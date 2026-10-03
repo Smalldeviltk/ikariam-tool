@@ -21,6 +21,7 @@ import {
   SECONDS_PER_HOUR,
 } from "@core/format";
 import { SEL } from "@core/ikariam/selectors";
+import { showToast } from "@core/ui/window";
 import { backToCity } from "../navigation";
 import {
   FLAG,
@@ -34,10 +35,18 @@ import {
 } from "../state";
 import { ACCOUNT_SUMMARY } from "../messages";
 import type { AccountSummary } from "../types";
+import { action } from "../ui/actions";
 
 /** Where an account name links to: the game lobby, which switches to it. */
 const LOBBY_ACCOUNT_URL =
   "https://lobby.ikariam.gameforge.com/en_GB/accounts?redirectAccount=";
+
+/** The account table's figure for the server's construction-time buff. */
+export const BUILD_TIME_BUFF_VALUE_CLASS = "js-ika-build-time-buff-value";
+/** The field that stands in for that figure while it is being edited. */
+export const BUILD_TIME_BUFF_CLASS = "js-ika-build-time-buff";
+/** The ✎ / ✓ button next to that field. */
+export const BUILD_TIME_BUFF_BUTTON_CLASS = "js-ika-build-time-buff-button";
 
 const MS_PER_MINUTE = 60_000;
 const HOURS_PER_WEEK = 24 * 7;
@@ -125,6 +134,24 @@ export function setAutoBuildChecked(account: string, checked: boolean): void {
   }
 }
 
+/**
+ * Store the server's construction-time buff typed for an account, in percent
+ * (36 means 36%). Empty means none. Returns false, storing nothing, when the
+ * text is not a number from 0 up to (not including) 100.
+ */
+export function setBuildTimeBuff(account: string, text: string): boolean {
+  const trimmed = text.trim();
+  const percent = trimmed === "" ? 0 : Number(trimmed);
+  if (!Number.isFinite(percent) || percent < 0 || percent >= 100) return false;
+
+  const accounts = loadAccounts();
+  const row = accounts.find((entry) => entry.account === account);
+  if (!row) return false;
+  row.buildTimeBuffPercent = percent;
+  saveAccounts(accounts);
+  return true;
+}
+
 export function clearAccounts(): void {
   saveAccounts([]);
   renderSummary();
@@ -148,9 +175,81 @@ export function renderSummary(): void {
   }
 
   const container = qs("#summaryAccountList");
-  if (container) container.innerHTML = buildSummaryHtml(accounts, accountName);
+  // Not while a buff is open for editing: the redraw would throw the typed
+  // figure away, and close the field before ✓ was pressed.
+  const editing = !!container?.querySelector(`.${BUILD_TIME_BUFF_CLASS}`);
+  if (container && !editing) {
+    container.innerHTML = buildSummaryHtml(accounts, accountName);
+  }
 
   keepAliveTick();
+}
+
+/**
+ * The buff cell: the figure as plain text, and a ✎ button. Pressing ✎ puts a
+ * field in the figure's place and turns the button into ✓ (save).
+ */
+function buildTimeBuffCell(account: AccountSummary): string {
+  return (
+    `<td style="white-space: nowrap; text-align: right">` +
+    `<span class="${BUILD_TIME_BUFF_VALUE_CLASS}">${account.buildTimeBuffPercent ?? 0}</span> ` +
+    `<button class="button ${BUILD_TIME_BUFF_BUTTON_CLASS}" title="${ACCOUNT_SUMMARY.editBuildTimeBuff}" ` +
+    `${action("account.editBuildTimeBuff", { "ika-account": account.account })}>✎</button>` +
+    `</td>`
+  );
+}
+
+/** The element of a buff cell matching `selector`, from its button. */
+function inBuffCell<T extends HTMLElement>(
+  button: HTMLElement,
+  selector: string,
+): T | null {
+  return button.closest("td")?.querySelector<T>(selector) ?? null;
+}
+
+/**
+ * ✎: put a field in place of the figure, and offer ✓ to save it.
+ *
+ * The field is text, not `type="number"`: a number field turns "abc" into "",
+ * which would read as "no buff" and wipe the stored figure.
+ */
+export function editBuildTimeBuff(button: HTMLElement): void {
+  const value = inBuffCell(button, `.${BUILD_TIME_BUFF_VALUE_CLASS}`);
+  if (!value) return;
+  const field = document.createElement("input");
+  field.type = "text";
+  field.inputMode = "decimal";
+  field.className = BUILD_TIME_BUFF_CLASS;
+  field.style.cssText = "width: 4em; text-align: right";
+  field.value = value.textContent ?? "";
+  value.replaceWith(field);
+  field.focus();
+  field.select();
+  button.textContent = "✓";
+  button.title = ACCOUNT_SUMMARY.saveBuildTimeBuff;
+  button.dataset.ikaAction = "account.saveBuildTimeBuff";
+}
+
+/**
+ * ✓: store the typed buff and show the figure as text again. A figure that is
+ * not a percentage below 100 is refused with a toast, and the field stays so
+ * it can be corrected.
+ */
+export function saveBuildTimeBuff(button: HTMLElement): void {
+  const field = inBuffCell<HTMLInputElement>(
+    button,
+    `.${BUILD_TIME_BUFF_CLASS}`,
+  );
+  const account = button.dataset.ikaAccount;
+  if (!field || account === undefined) return;
+  if (!setBuildTimeBuff(account, field.value)) {
+    showToast(ACCOUNT_SUMMARY.invalidBuildTimeBuff);
+    field.focus();
+    return;
+  }
+  // Removed first: the redraw skips the table while a field is open.
+  field.remove();
+  renderSummary();
 }
 
 function buildSummaryHtml(
@@ -191,13 +290,15 @@ function buildSummaryHtml(
         <td style="text-align: right">${formatNumToStr(projectedWood, false, 0)}</td>
         <td style="text-align: right" class="woodWeek">${formatNumToStr(Number(account.woodIncome))}</td>
         <td style="text-align: right" class="woodWeek">${formatNumToStr(Number(account.woodIncome) * HOURS_PER_WEEK)}</td>
+        ${buildTimeBuffCell(account)}
       </tr>`;
     })
     .join("");
 
   return `<table id="summaryAccountTable" border="1" cellpadding="10px">
     <tr><th></th>${ACCOUNT_SUMMARY.columns.map((label) => `<th>${label}</th>`).join("")}
-        <th class="woodWeek">${ACCOUNT_SUMMARY.woodPerHour}</th><th class="woodWeek">${ACCOUNT_SUMMARY.woodPerWeek}</th></tr>
+        <th class="woodWeek">${ACCOUNT_SUMMARY.woodPerHour}</th><th class="woodWeek">${ACCOUNT_SUMMARY.woodPerWeek}</th>
+        <th title="${ACCOUNT_SUMMARY.buildTimeBuffHint}">${ACCOUNT_SUMMARY.buildTimeBuff}</th></tr>
     ${rows}
   </table>`;
 }

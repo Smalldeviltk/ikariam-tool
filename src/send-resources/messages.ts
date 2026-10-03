@@ -213,6 +213,14 @@ export const ACCOUNT_SUMMARY = {
   columns: ["Account", "Time Left", "Total Wood"],
   woodPerHour: "Wood Per h",
   woodPerWeek: "1 Week",
+  buildTimeBuff: "Build time -%",
+  buildTimeBuffHint:
+    "The server's construction-time buff for this account, in percent (36 = 36%). " +
+    "The Empire Overview board takes it off every upgrade time.",
+  editBuildTimeBuff: "Edit the build time buff",
+  saveBuildTimeBuff: "Save the build time buff",
+  invalidBuildTimeBuff:
+    "Build time buff must be a number from 0 to below 100 (e.g. 36 for 36%).",
 } as const;
 
 export const SHIP_CAPACITY = {

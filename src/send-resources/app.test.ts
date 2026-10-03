@@ -748,3 +748,100 @@ describe("startup", () => {
     expect(timers()).toBe(RUNNING);
   });
 });
+
+describe("the account table's build time buff", () => {
+  const field = () =>
+    document.querySelector<HTMLInputElement>(".js-ika-build-time-buff");
+  const shown = () =>
+    document.querySelector(".js-ika-build-time-buff-value")?.textContent;
+  const button = () =>
+    document.querySelector<HTMLElement>(".js-ika-build-time-buff-button")!;
+
+  /** Click the ✎ / ✓ button, through the action it names. */
+  function press(): void {
+    const target = button();
+    actions[target.dataset.ikaAction!](target);
+  }
+
+  /** ✎, type, ✓. */
+  function enterBuff(text: string): void {
+    press();
+    field()!.value = text;
+    press();
+  }
+
+  it("shows the figure as text, and a field only once ✎ is pressed", async () => {
+    await startWith({});
+    expect(shown()).toBe("0");
+    expect(field()).toBeNull();
+    expect(button().textContent).toBe("✎");
+
+    press();
+
+    expect(field()!.value).toBe("0");
+    expect(shown()).toBeUndefined();
+    expect(button().textContent).toBe("✓");
+    expect(button().dataset.ikaAction).toBe("account.saveBuildTimeBuff");
+  });
+
+  it("saves on ✓, where the board reads it, and shows text again", async () => {
+    await startWith({});
+    enterBuff("36");
+
+    const { accountBuildTimeBuff } = await import("@core/storage");
+    expect(accountBuildTimeBuff("tester")).toBeCloseTo(0.36);
+    expect(field()).toBeNull();
+    expect(shown()).toBe("36");
+    expect(button().textContent).toBe("✎");
+  });
+
+  it("stores nothing until ✓ is pressed", async () => {
+    await startWith({});
+    press();
+    field()!.value = "36";
+    field()!.dispatchEvent(new Event("change", { bubbles: true }));
+
+    const { accountBuildTimeBuff } = await import("@core/storage");
+    expect(accountBuildTimeBuff("tester")).toBe(0);
+  });
+
+  it(
+    "refuses a figure that is not a percentage below 100, keeps the old " +
+      "one, and leaves the field open to correct it",
+    async () => {
+      await startWith({});
+      enterBuff("20");
+      enterBuff("abc");
+
+      const { accountBuildTimeBuff } = await import("@core/storage");
+      expect(accountBuildTimeBuff("tester")).toBeCloseTo(0.2);
+      expect(showToast).toHaveBeenCalledWith(
+        expect.stringContaining("Build time buff"),
+      );
+      expect(field()!.value).toBe("abc");
+
+      field()!.value = "100";
+      press();
+      expect(accountBuildTimeBuff("tester")).toBeCloseTo(0.2);
+    },
+  );
+
+  it("takes an empty field as no buff", async () => {
+    await startWith({});
+    enterBuff("20");
+    enterBuff("");
+
+    const { accountBuildTimeBuff } = await import("@core/storage");
+    expect(accountBuildTimeBuff("tester")).toBe(0);
+  });
+
+  it("is not redrawn while open, so the typed figure survives the 10 s refresh", async () => {
+    await startWith({});
+    press();
+    field()!.value = "12";
+
+    vi.advanceTimersByTime(10_000);
+
+    expect(field()!.value).toBe("12");
+  });
+});
