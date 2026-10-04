@@ -34,6 +34,7 @@
   var IMPORT_NOTES = {
     keptExisting: (key) => `kept existing ${key}`,
     couldNotWrite: (key, reason) => `could not write ${key}: ${reason}`,
+    notOurs: (key) => `left out ${key}: not data of these scripts`,
   };
   var IMPORT_SUMMARY = {
     exportedAt: (when) => `Exported ${when}`,
@@ -195,6 +196,10 @@
       ...options,
     });
   }
+  function isTypingTarget(target) {
+    const tag = target?.nodeName?.toLowerCase();
+    return tag === "input" || tag === "textarea" || tag === "select";
+  }
   function clickIfPresent(selector, root) {
     const el = qs(selector, root);
     if (!el) return false;
@@ -209,6 +214,10 @@
     style.textContent = css;
     document.head.appendChild(style);
     return style;
+  }
+  function ensureStyle(id, css) {
+    if (document.getElementById(id)) return;
+    addStyle(typeof css === "function" ? css() : css).id = id;
   }
   function setInputValue(input, value) {
     input.focus();
@@ -318,8 +327,11 @@
       throw new Error("Account name unavailable (avatar bar not rendered)");
     return el.title;
   }
+  function readTownName(element) {
+    return element?.textContent?.trim() ?? "";
+  }
   function getCurrentTownName() {
-    return qs(SEL.cityBread)?.textContent?.trim() ?? "";
+    return readTownName(qs(SEL.cityBread));
   }
   var LOGGER_STORAGE_KEY = "loggerInfo";
   var TEXTAREA_ID = "txtLogger";
@@ -389,7 +401,7 @@
       try {
         Object.assign(context, provider());
       } catch (e) {
-        context.providerError = String(e?.message ?? e);
+        context.providerError = errorMessage(e);
       }
     return context;
   }
@@ -431,14 +443,13 @@
         existing.count += 1;
         existing.lastAt = now;
         const newest = existing.contexts[existing.contexts.length - 1];
-        if (!newest || now - newest.at >= RESNAPSHOT_INTERVAL_MS)
+        if (!newest || now - newest.at >= RESNAPSHOT_INTERVAL_MS) {
+          const [first, ...later] = existing.contexts;
           existing.contexts = [
-            existing.contexts[0],
-            ...existing.contexts.slice(1),
-            collectContext(extra),
-          ]
-            .filter(Boolean)
-            .slice(-3);
+            first,
+            ...[...later, collectContext(extra)].slice(-2),
+          ].filter(Boolean);
+        }
       } else {
         const context = collectContext(extra);
         records.push({
@@ -867,7 +878,7 @@
             break;
         }
       } catch (e) {
-        const message = e?.message ?? String(e);
+        const message = errorMessage(e);
         logInfo(`Error while running task ${task.type}: ${message}`);
         reportBug("task-error", e, {
           taskType: task.type,
@@ -953,8 +964,7 @@
 `;
   }
   function installStyles$1() {
-    if (document.getElementById("ika-window-style")) return;
-    addStyle(windowStyles()).id = WINDOW_STYLE_ID;
+    ensureStyle(WINDOW_STYLE_ID, windowStyles);
   }
   function clampToViewport(position) {
     const maxLeft = Math.max(0, window.innerWidth - MIN_VISIBLE_WIDTH);
@@ -1034,8 +1044,7 @@
     applyMaxHeight();
     window.addEventListener("resize", applyMaxHeight);
     const closeOnEscape = (event) => {
-      const tag = event.target?.tagName?.toLowerCase();
-      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      if (isTypingTarget(event.target)) return;
       if (event.key === "Escape" && !root.hidden) api.close();
     };
     makeDraggable(root, header, (moved) => {
@@ -1131,8 +1140,7 @@
 `;
   }
   function toastStack() {
-    if (!document.getElementById("ika-toast-style"))
-      addStyle(toastStyles()).id = TOAST_STYLE_ID;
+    ensureStyle(TOAST_STYLE_ID, toastStyles);
     let stack = document.getElementById(TOAST_STACK_ID);
     if (!stack) {
       stack = document.createElement("div");
@@ -1363,7 +1371,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     otherAccount: (accounts, current) =>
       `This export holds data for a different account (${accounts}), but you are logged in as "${current}".\n\nOK  = rewrite it onto "${current}"\nCancel = import only the account-independent entries`,
     skippingOtherAccount:
-      "Account-specific entries will be skipped. Nothing reads keys belonging to another account.",
+      "Account-specific entries are kept under the other account's name. Nothing in this account reads them.",
     confirmImport: (description) =>
       `Import this?\n\n${description}\n\nExisting settings with the same names will be OVERWRITTEN.`,
     imported: (imported, skipped, notes) =>
@@ -1573,6 +1581,9 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
   function modelMaxResource(resource) {
     return readResourceRecord(getModel()?.maxResources, resource);
   }
+  function reductionBuildingPercent(level) {
+    return Math.min(50, Math.max(0, level));
+  }
   function winePressLevel() {
     if (!qs(SEL.buildings)) return null;
     const press = qs(SEL.winePress);
@@ -1585,9 +1596,8 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     if (spendings === null) return null;
     const press = winePressLevel();
     if (press === null) return null;
-    return (
-      (Math.abs(spendings) * (100 - Math.min(50, Math.max(0, press)))) / 100
-    );
+    const saving = reductionBuildingPercent(press);
+    return (Math.abs(spendings) * (100 - saving)) / 100;
   }
   function modelCurrentCityId() {
     const selected = getModel()?.relatedCityData?.selectedCity;
@@ -1648,7 +1658,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     if (fromModel) return fromModel;
     const anchor = townAnchor(townNumber);
     if (!anchor) return "";
-    return (anchor.getAttribute("title") ?? anchor.innerHTML).trim();
+    return anchor.getAttribute("title")?.trim() ?? readTownName(anchor);
   }
   function getTownList() {
     const list = [];
@@ -1742,7 +1752,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
   }
   function clickBoardTownName(target) {
     for (const span of qsa(SEL.buildTabTownNames))
-      if (span.innerHTML.trim() === target) {
+      if (readTownName(span) === target) {
         span.click();
         return true;
       }
@@ -1904,6 +1914,133 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       );
     else showToast(SHIP_CAPACITY.notReadable);
   }
+  var RESOURCE_OPTIONS = ["wood", "wine", "marble", "glass", "sulfur"].map(
+    (value) => ({
+      value,
+      label: RESOURCE_LABEL[value],
+    }),
+  );
+  function resourceLabel(resource) {
+    return RESOURCE_LABEL[resource] ?? resource;
+  }
+  var handlers = new Map();
+  function registerActions(map) {
+    for (const [name, handler] of Object.entries(map))
+      handlers.set(name, handler);
+  }
+  function action(name, data) {
+    return `data-ika-action="${name}"${
+      data
+        ? Object.entries(data)
+            .map(
+              ([key, value]) => ` data-${key}="${escapeHtml(String(value))}"`,
+            )
+            .join("")
+        : ""
+    }`;
+  }
+  function moveButtons(names, data, position) {
+    const button = (name, title, label, disabled) =>
+      `<button class="button ika-move" title="${title}"${disabled ? " disabled" : ""} ${action(name, data)}>${label}</button>`;
+    return (
+      button(names.up, MOVE_BUTTON.up, "↑", position.isFirst) +
+      button(names.down, MOVE_BUTTON.down, "↓", position.isLast)
+    );
+  }
+  var installed$1 = false;
+  function installActionDispatcher() {
+    if (installed$1) return;
+    installed$1 = true;
+    document.addEventListener(
+      "click",
+      (event) => {
+        const target = event.target?.closest("[data-ika-action]");
+        if (!target) return;
+        const name = target.dataset.ikaAction;
+        if (!name) return;
+        const handler = handlers.get(name);
+        if (!handler) {
+          writeToConsole(
+            "warn",
+            `[ika] No handler registered for action "${name}"`,
+          );
+          return;
+        }
+        event.preventDefault();
+        handler(target, event);
+      },
+      true,
+    );
+  }
+  var QUEUE_LIST_ID = "ikaQueueList";
+  var MAX_ROWS = 50;
+  var QUEUE_SCROLL_CLASS = "ika-queue-scroll";
+  var currentTaskId = () => getState().queue.head()?.id ?? null;
+  function setCurrentTaskSource(source) {
+    currentTaskId = source;
+  }
+  function currentTask() {
+    const id = currentTaskId();
+    return id === null
+      ? void 0
+      : getState()
+          .queue.list()
+          .find((task) => task.id === id);
+  }
+  function describeTask(task) {
+    if (task.type === "sendResource") {
+      const { amount, resource, origin, destination, label } = task.data;
+      return `${label ? `[${label}] ` : ""}${formatInteger(amount)} ${resourceLabel(resource)}: ${getTownNameFromList(origin)} → ${getTownNameFromList(destination)}`;
+    }
+    return QUEUE_VIEW.upgrade(task.data.buildingName, task.data.townName);
+  }
+  function row(task, index, isCurrent, isLast) {
+    const marker = isCurrent ? " ▶" : "";
+    return (
+      `<tr data-ika-queue-id="${escapeHtml(task.id)}"${isCurrent ? ' class="active"' : ""}><td>${index + 1}${marker}</td><td>${escapeHtml(describeTask(task))}</td><td>` +
+      moveButtons(
+        {
+          up: "queue.moveUp",
+          down: "queue.moveDown",
+        },
+        { "ika-task": task.id },
+        {
+          isFirst: index === 0,
+          isLast,
+        },
+      ) +
+      `<button class="button" title="${QUEUE_VIEW.remove}" ${action("queue.remove", { "ika-task": task.id })}>✕</button></td></tr>`
+    );
+  }
+  function renderQueue() {
+    const tasks = getState().queue.list();
+    if (tasks.length === 0)
+      return `<p class="ika-queue-empty">${QUEUE_VIEW.empty}</p>`;
+    const current = currentTaskId();
+    const shown = tasks.slice(0, MAX_ROWS);
+    const overflow =
+      tasks.length > MAX_ROWS
+        ? `<p class="ika-queue-empty">${QUEUE_VIEW.more(tasks.length - MAX_ROWS)}</p>`
+        : "";
+    return (
+      `<div class="${QUEUE_SCROLL_CLASS}"><table class="fullTable ika-queue-table"><tr><th>#</th><th>${QUEUE_VIEW.headerTask}</th><th></th></tr>` +
+      shown
+        .map((task, index) =>
+          row(task, index, task.id === current, index === tasks.length - 1),
+        )
+        .join("") +
+      `</table></div>` +
+      overflow +
+      `<button class="button" ${action("queue.clear")}>${QUEUE_VIEW.clearAll}</button>`
+    );
+  }
+  function refreshQueueView() {
+    const host = qs(`#${QUEUE_LIST_ID}`);
+    if (!host) return;
+    host.innerHTML = renderQueue();
+    const scroll = host.querySelector(`.${QUEUE_SCROLL_CLASS}`);
+    if (scroll) capVisibleRows(scroll, "tr[data-ika-queue-id]", 10);
+  }
   var BACK_TO_TOWN_TIMEOUT_MS = 5e3;
   var POST_SUBMIT_TIMEOUT_MS = 5e3;
   var FORM_SETTLE_MS = 500;
@@ -1951,8 +2088,8 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     await gotoTown(origin);
     if (getActionPoints() <= 0)
       return {
-        status: "retry",
-        reason: "Out of action points",
+        status: "defer",
+        reason: `${getTownNameFromList(origin)} is out of action points`,
       };
     const keep = reserve && reserve > 0 && resource === "wine" ? reserve : 0;
     const available = readCurrentStock(resource) - keep;
@@ -2010,13 +2147,20 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     const field = qs(SEL.resourceField(resource));
     if (!field)
       return {
-        status: "retry",
+        status: "defer",
         reason: `No input field for ${resource}`,
       };
+    const noSubmit = {
+      status: "defer",
+      reason: "No submit button on the shipment form",
+    };
+    if (!qs(SEL.submit)) return noSubmit;
     setInputValue(field, String(sentAmount));
     await sleep(FORM_SETTLE_MS);
     recordRouteTime(origin, destination);
-    qs(SEL.submit)?.click();
+    const submit = qs(SEL.submit);
+    if (!submit) return noSubmit;
+    submit.click();
     await waitFor(() => !qs(SEL.shipmentForm), {
       timeoutMs: POST_SUBMIT_TIMEOUT_MS,
       label: "shipment form to close",
@@ -2040,10 +2184,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
   }
   function describeCurrentTransfer(task) {
     if (!task) return TRANSFER_STATUS.idle;
-    if (task.type === "upgradeBuilding")
-      return QUEUE_VIEW.upgrade(task.data.buildingName, task.data.townName);
-    const { amount, resource, origin, destination } = task.data;
-    return `${amount} ${resource} from ${getTownNameFromList(origin)} to ${getTownNameFromList(destination)}`;
+    return describeTask(task);
   }
   var TOWN_STATS_KEY = "ikaTownStats";
   function loadTownStats(store) {
@@ -2658,9 +2799,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       }
       return 0;
     }
-    const boardNames = qsa(SEL.buildTabTownNames).map(
-      (span) => span.textContent?.trim() ?? "",
-    );
+    const boardNames = qsa(SEL.buildTabTownNames).map(readTownName);
     const towns = account.townList
       .filter((town) => town.queue.length > 0)
       .sort(
@@ -2905,55 +3044,6 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     });
     return observer;
   }
-  var handlers = new Map();
-  function registerActions(map) {
-    for (const [name, handler] of Object.entries(map))
-      handlers.set(name, handler);
-  }
-  function action(name, data) {
-    return `data-ika-action="${name}"${
-      data
-        ? Object.entries(data)
-            .map(
-              ([key, value]) => ` data-${key}="${escapeHtml(String(value))}"`,
-            )
-            .join("")
-        : ""
-    }`;
-  }
-  function moveButtons(names, data, position) {
-    const button = (name, title, label, disabled) =>
-      `<button class="button ika-move" title="${title}"${disabled ? " disabled" : ""} ${action(name, data)}>${label}</button>`;
-    return (
-      button(names.up, MOVE_BUTTON.up, "↑", position.isFirst) +
-      button(names.down, MOVE_BUTTON.down, "↓", position.isLast)
-    );
-  }
-  var installed$1 = false;
-  function installActionDispatcher() {
-    if (installed$1) return;
-    installed$1 = true;
-    document.addEventListener(
-      "click",
-      (event) => {
-        const target = event.target?.closest("[data-ika-action]");
-        if (!target) return;
-        const name = target.dataset.ikaAction;
-        if (!name) return;
-        const handler = handlers.get(name);
-        if (!handler) {
-          writeToConsole(
-            "warn",
-            `[ika] No handler registered for action "${name}"`,
-          );
-          return;
-        }
-        event.preventDefault();
-        handler(target, event);
-      },
-      true,
-    );
-  }
   var LOBBY_ACCOUNT_URL =
     "https://lobby.ikariam.gameforge.com/en_GB/accounts?redirectAccount=";
   var BUILD_TIME_BUFF_VALUE_CLASS = "js-ika-build-time-buff-value";
@@ -3056,7 +3146,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     keepAliveTick();
   }
   function buildTimeBuffCell(account) {
-    return `<td style="white-space: nowrap; text-align: right"><span class="${BUILD_TIME_BUFF_VALUE_CLASS}">${account.buildTimeBuffPercent ?? 0}</span> <button class="button ${BUILD_TIME_BUFF_BUTTON_CLASS}" title="${ACCOUNT_SUMMARY.editBuildTimeBuff}" ${action("account.editBuildTimeBuff", { "ika-account": account.account })}>✎</button></td>`;
+    return `<td style="white-space: nowrap; text-align: right"><span class="${BUILD_TIME_BUFF_VALUE_CLASS}">${escapeHtml(String(account.buildTimeBuffPercent ?? 0))}</span> <button class="button ${BUILD_TIME_BUFF_BUTTON_CLASS}" title="${ACCOUNT_SUMMARY.editBuildTimeBuff}" ${action("account.editBuildTimeBuff", { "ika-account": account.account })}>✎</button></td>`;
   }
   function inBuffCell(button, selector) {
     return button.closest("td")?.querySelector(selector) ?? null;
@@ -3130,7 +3220,8 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     if (!isReloadSafe()) return;
     const minute = new Date().getUTCMinutes();
     if (minute % 2 !== 0) return;
-    if (minute === Number(getFlag(FLAG.reloadedMinute))) return;
+    const lastReload = getFlag(FLAG.reloadedMinute);
+    if (lastReload !== null && minute === Number(lastReload)) return;
     setFlag(FLAG.reloadedMinute, minute);
     setFlag(FLAG.isAutoReload, false);
     backToCity("keep-alive (even minute)");
@@ -3184,6 +3275,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     [BUG_REPORT_STORAGE_KEY]: "diagnostics",
     ikaDomReports: "diagnostics",
     [QUICK_UPGRADE_TRACE_KEY]: "diagnostics",
+    ikaAjaxTrace: "diagnostics",
   };
   var ACCOUNT_SUFFIXES = {
     listSender: "config",
@@ -3278,7 +3370,14 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       skipped: 0,
       notes: [],
     };
-    for (const entry of bundle.entries) {
+    for (const raw of bundle.entries) {
+      const entry =
+        raw && typeof raw.key === "string" ? classifyKey(raw.key) : null;
+      if (!entry || typeof raw.value !== "string") {
+        result.skipped++;
+        result.notes.push(IMPORT_NOTES.notOurs(String(raw?.key)));
+        continue;
+      }
       if (!groups.includes(entry.group)) {
         result.skipped++;
         continue;
@@ -3294,7 +3393,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
         continue;
       }
       try {
-        localStorage.setItem(targetKey, entry.value);
+        localStorage.setItem(targetKey, raw.value);
         result.imported++;
       } catch (e) {
         result.skipped++;
@@ -3380,14 +3479,13 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
         .then((json) => {
           const bundle = parseBundle(json);
           const { accountName } = getState();
-          const foreign = bundle.entries
-            .map((entry) => entry.account)
-            .filter((account) => !!account && account !== accountName);
+          const foreign = accountsInBundle(bundle).filter(
+            (account) => account !== accountName,
+          );
           let remapAccountTo;
           if (foreign.length > 0) {
-            const unique = [...new Set(foreign)].join(", ");
             const remap = confirm(
-              DATA_TRANSFER.otherAccount(unique, accountName),
+              DATA_TRANSFER.otherAccount(foreign.join(", "), accountName),
             );
             remapAccountTo = remap ? accountName : void 0;
             if (!remap) showToast(DATA_TRANSFER.skippingOtherAccount);
@@ -3508,15 +3606,6 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       ),
     );
   }
-  var RESOURCE_OPTIONS = ["wood", "wine", "marble", "glass", "sulfur"].map(
-    (value) => ({
-      value,
-      label: RESOURCE_LABEL[value],
-    }),
-  );
-  function resourceLabel(resource) {
-    return RESOURCE_LABEL[resource] ?? resource;
-  }
   var MARKER_CLASS = "ika-transport-buttons";
   var TRANSPORT_STYLE_ID = "ika-transport-buttons-style";
   var RESOURCES = RESOURCE_OPTIONS.map((option) => option.value);
@@ -3588,11 +3677,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     if (gap > 0) row.style.paddingRight = `${gap}px`;
   }
   function installStyles() {
-    if (document.getElementById("ika-transport-buttons-style")) return;
-    const style = document.createElement("style");
-    style.id = TRANSPORT_STYLE_ID;
-    style.textContent = transportStyles();
-    document.head.appendChild(style);
+    ensureStyle(TRANSPORT_STYLE_ID, transportStyles);
   }
   function capacityOf(kind) {
     return kind === "freighter" ? getFreighterCapacity() : getPerShipCapacity();
@@ -3679,11 +3764,15 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     return "ok";
   }
   function wineStatus() {
+    const senders = loadSenders();
     return getTownList().map((town) => {
       const measured = measuredStats(town.townName);
       const stock = measured?.stock ?? 0;
       const consume = measured?.consume ?? 0;
-      const hoursLeft = measured && consume > 0 ? stock / consume : null;
+      const hoursLeft =
+        !senders.includes(town.townNumber.toString()) && measured && consume > 0
+          ? stock / consume
+          : null;
       return {
         townNumber: town.townNumber.toString(),
         townName: town.townName,
@@ -3722,75 +3811,6 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       else forgetNotification(key);
     }
   }
-  var QUEUE_LIST_ID = "ikaQueueList";
-  var MAX_ROWS = 50;
-  var QUEUE_SCROLL_CLASS = "ika-queue-scroll";
-  var currentTaskId = () => getState().queue.head()?.id ?? null;
-  function setCurrentTaskSource(source) {
-    currentTaskId = source;
-  }
-  function currentTask() {
-    const id = currentTaskId();
-    return id === null
-      ? void 0
-      : getState()
-          .queue.list()
-          .find((task) => task.id === id);
-  }
-  function describeTask(task) {
-    if (task.type === "sendResource") {
-      const { amount, resource, origin, destination, label } = task.data;
-      return `${label ? `[${label}] ` : ""}${formatInteger(amount)} ${resourceLabel(resource)}: ${getTownNameFromList(origin)} → ${getTownNameFromList(destination)}`;
-    }
-    return QUEUE_VIEW.upgrade(task.data.buildingName, task.data.townName);
-  }
-  function row(task, index, isCurrent, isLast) {
-    const marker = isCurrent ? " ▶" : "";
-    return (
-      `<tr data-ika-queue-id="${escapeHtml(task.id)}"${isCurrent ? ' class="active"' : ""}><td>${index + 1}${marker}</td><td>${escapeHtml(describeTask(task))}</td><td>` +
-      moveButtons(
-        {
-          up: "queue.moveUp",
-          down: "queue.moveDown",
-        },
-        { "ika-task": task.id },
-        {
-          isFirst: index === 0,
-          isLast,
-        },
-      ) +
-      `<button class="button" title="${QUEUE_VIEW.remove}" ${action("queue.remove", { "ika-task": task.id })}>✕</button></td></tr>`
-    );
-  }
-  function renderQueue() {
-    const tasks = getState().queue.list();
-    if (tasks.length === 0)
-      return `<p class="ika-queue-empty">${QUEUE_VIEW.empty}</p>`;
-    const current = currentTaskId();
-    const shown = tasks.slice(0, MAX_ROWS);
-    const overflow =
-      tasks.length > MAX_ROWS
-        ? `<p class="ika-queue-empty">${QUEUE_VIEW.more(tasks.length - MAX_ROWS)}</p>`
-        : "";
-    return (
-      `<div class="${QUEUE_SCROLL_CLASS}"><table class="fullTable ika-queue-table"><tr><th>#</th><th>${QUEUE_VIEW.headerTask}</th><th></th></tr>` +
-      shown
-        .map((task, index) =>
-          row(task, index, task.id === current, index === tasks.length - 1),
-        )
-        .join("") +
-      `</table></div>` +
-      overflow +
-      `<button class="button" ${action("queue.clear")}>${QUEUE_VIEW.clearAll}</button>`
-    );
-  }
-  function refreshQueueView() {
-    const host = qs(`#${QUEUE_LIST_ID}`);
-    if (!host) return;
-    host.innerHTML = renderQueue();
-    const scroll = host.querySelector(`.${QUEUE_SCROLL_CLASS}`);
-    if (scroll) capVisibleRows(scroll, "tr[data-ika-queue-id]", 10);
-  }
   var RESOURCE_TABLE_SCROLL_ID = "resourceTableScroll";
   function openPopup(title, html) {
     const api = getIkariam();
@@ -3822,7 +3842,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
         (task, index) => `<tr>
         <td>${escapeHtml(getTownNameFromList(task.data.origin))}</td>
         <td>${escapeHtml(getTownNameFromList(task.data.destination))}</td>
-        <td>${resourceLabel(task.data.resource)}</td>
+        <td>${escapeHtml(resourceLabel(task.data.resource))}</td>
         <td>${task.data.amount}</td>
         <td>${escapeHtml(task.data.label ?? "")}</td>
         <td>${moveButtons(
@@ -3897,8 +3917,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
 }`;
   }
   function installSendAmountsStyles() {
-    if (document.getElementById(SEND_AMOUNTS_STYLE_ID)) return;
-    addStyle(sendAmountsStyles()).id = SEND_AMOUNTS_STYLE_ID;
+    ensureStyle(SEND_AMOUNTS_STYLE_ID, sendAmountsStyles);
   }
   function openSendResourcesDialog() {
     const towns = townOptions();
@@ -4090,9 +4109,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       .join("");
   }
   function openAutoBuildDialog() {
-    const townNames = qsa(SEL.buildTabTownNames).map((span) =>
-      span.innerHTML.trim(),
-    );
+    const townNames = qsa(SEL.buildTabTownNames).map(readTownName);
     const headers = headerCells(townNames.map(escapeHtml));
     const cells = townNames
       .map(
@@ -4144,10 +4161,6 @@ th { font-weight: bold; }
    toggle. The flag still hides the Empire Overview board, which has no such
    mechanism of its own. */
 #empireBoard { display: ${isFlagTrue(FLAG.isSendResourceHidden) ? "none" : "block"}; }
-
-/* The zoom toggle now scales the window in place rather than nudging a
-   fixed-position panel back onto the screen. */
-.zoom { transform: scale(0.8); transform-origin: top left; }
 .ika-queue-table { font-size: 10px; }
 .ika-queue-table th, .ika-queue-table td { padding: 2px 4px; text-align: left; }
 .ika-queue-table tr.active { background: #efdca8; font-weight: bold; }
@@ -4355,9 +4368,6 @@ ${entry}:hover { transform: translateX(0) !important; z-index: 120000 !important
     panelWindow?.toggle();
     if (panelWindow?.isOpen()) refreshQueueView();
   }
-  function toggleZoom() {
-    panelWindow?.root.classList.toggle("zoom");
-  }
   var CRITICAL_SELECTORS = {
     cityBread: SEL.cityBread,
     townList: SEL.townListContainer,
@@ -4446,7 +4456,7 @@ ${entry}:hover { transform: translateX(0) !important; z-index: 120000 !important
       try {
         return read();
       } catch (e) {
-        return { error: String(e?.message ?? e) };
+        return { error: errorMessage(e) };
       }
     };
     return {
@@ -4546,6 +4556,40 @@ ${entry}:hover { transform: translateX(0) !important; z-index: 120000 !important
     else if (!wanted && runner.isRunning) stopRunner();
   }
   var oneOffRunTypes = new Set();
+  var ONE_OFF_RUN_KEY = "ika_oneOffRunTypes";
+  function saveOneOffRunTypes() {
+    try {
+      if (oneOffRunTypes.size === 0) sessionStorage.removeItem(ONE_OFF_RUN_KEY);
+      else
+        sessionStorage.setItem(
+          ONE_OFF_RUN_KEY,
+          JSON.stringify([...oneOffRunTypes]),
+        );
+    } catch {}
+  }
+  function addOneOffRunType(type) {
+    oneOffRunTypes.add(type);
+    saveOneOffRunTypes();
+  }
+  function clearOneOffRunTypes() {
+    oneOffRunTypes.clear();
+    saveOneOffRunTypes();
+  }
+  function restoreOneOffRunTypes() {
+    let stored = [];
+    try {
+      stored = JSON.parse(sessionStorage.getItem(ONE_OFF_RUN_KEY) ?? "[]");
+    } catch {
+      stored = [];
+    }
+    oneOffRunTypes.clear();
+    if (Array.isArray(stored)) {
+      for (const type of stored)
+        if (getState().queue.listOfType(type).length > 0)
+          oneOffRunTypes.add(type);
+    }
+    saveOneOffRunTypes();
+  }
   function allowsTaskType(type) {
     if (oneOffRunTypes.has(type)) return true;
     switch (type) {
@@ -4694,7 +4738,7 @@ ${entry}:hover { transform: translateX(0) !important; z-index: 120000 !important
       "build.save": closeDialog,
       "build.startNow": () => {
         if (enqueueAutoBuild() === 0) return;
-        oneOffRunTypes.add("upgradeBuilding");
+        addOneOffRunType("upgradeBuilding");
         syncRunnerToFlags();
       },
       "build.toggleTimer": () => {
@@ -4758,7 +4802,6 @@ ${entry}:hover { transform: translateX(0) !important; z-index: 120000 !important
         showToast(BUG_REPORT.cleared);
       },
       "ship.calibrate": calibrateShipCapacity,
-      "panel.toggleZoom": toggleZoom,
       "log.clear": clearLog,
       "buildingHelp.save": saveBuildingHelpToFile,
     });
@@ -4771,8 +4814,7 @@ ${entry}:hover { transform: translateX(0) !important; z-index: 120000 !important
   }
   function registerHotkeys() {
     document.addEventListener("keydown", (event) => {
-      const tag = event.target?.nodeName.toLowerCase();
-      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      if (isTypingTarget(event.target)) return;
       switch (event.code) {
         case KEY_SEND_ALL_ARMY:
           sendAllArmy();
@@ -4823,7 +4865,7 @@ ${entry}:hover { transform: translateX(0) !important; z-index: 120000 !important
       allowsType: allowsTaskType,
       isUiReady,
       onDrain: () => {
-        oneOffRunTypes.clear();
+        clearOneOffRunTypes();
         stopRunner();
         setAutoStart(false);
         setQueueButtonLabel(false);
@@ -4871,6 +4913,7 @@ ${entry}:hover { transform: translateX(0) !important; z-index: 120000 !important
     const lapInProgress =
       getState().queue.listOfType("upgradeBuilding").length > 0;
     if (autoBuildStart && !loadedAfterRun && !lapInProgress) enqueueAutoBuild();
+    restoreOneOffRunTypes();
     syncRunnerToFlags();
   }
   setBuildInfo({
