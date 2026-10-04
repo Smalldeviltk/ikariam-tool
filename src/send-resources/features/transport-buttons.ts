@@ -33,7 +33,7 @@
  * `top: -56px; left: 403px`, which only holds at one zoom and one font size.
  */
 
-import { qs, qsa, setInputValue } from "@core/dom";
+import { ensureStyle, qs, qsa, setInputValue } from "@core/dom";
 import { formatInteger } from "@core/format";
 import { SEL } from "@core/ikariam/selectors";
 import { TRANSPORT_BUTTONS } from "../messages";
@@ -148,11 +148,7 @@ export function alignRowToField(field: Element, row: HTMLElement): void {
 }
 
 function installStyles(): void {
-  if (document.getElementById(TRANSPORT_STYLE_ID)) return;
-  const style = document.createElement("style");
-  style.id = TRANSPORT_STYLE_ID;
-  style.textContent = transportStyles();
-  document.head.appendChild(style);
+  ensureStyle(TRANSPORT_STYLE_ID, transportStyles);
 }
 
 /** Cargo one ship of this kind carries, as currently measured. */

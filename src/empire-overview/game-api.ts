@@ -15,7 +15,7 @@ import $, { pageJQuery } from "./jquery";
 import { Constant } from "./constants";
 import { MilitaryUnits } from "./models/military";
 import { Movement } from "./models/movement";
-import { Utils } from "./utils";
+import { languageText, Utils } from "./utils";
 import { database } from "./database";
 import { empire } from "./empire";
 import { events } from "./events";
@@ -86,15 +86,18 @@ function gameIsLoading(): boolean {
   return !!loading && loading.style.display === "block";
 }
 
-/** The board's strings in the language chosen in its settings. */
-function languageText(): any {
-  return Constant.LanguageData[database.settings.languageChange.value];
-}
-
 /** "Updated: ", which the parsers put before the name of what they read. */
 function updatedPrefix(): string {
   return languageText().toast_updated;
 }
+
+/**
+ * Added (not in the original): published with a response that one of these
+ * scripts fetched itself (`core/ikariam/http.ts`), rather than one the game
+ * loaded and drew. Nothing of such a response is on the page, so the view
+ * parsers that read the DOM must not run for it.
+ */
+export const FETCHED_RESPONSE = "fetched";
 
 export const ikariam: any = {
   _View: null,
@@ -493,7 +496,7 @@ export const ikariam: any = {
   },
   setupEventHandlers: function () {
     events("ajaxResponse").sub(
-      function (response) {
+      function (response, origin?: string) {
         var view, html, data, template;
         // Seen live on s303-en: an entry arrived with nothing at [1], and
         // `response[len][1].id` threw out of this subscriber. jQuery.Callbacks
@@ -511,6 +514,7 @@ export const ikariam: any = {
         });
         var len = response.length;
         var oldCity = this._currentCity;
+        const cityBeforeResponse = this._currentCity;
         while (len) {
           len--;
           var entry = response[len];
@@ -599,7 +603,24 @@ export const ikariam: any = {
             });
           }
         }
-        this.parseViewData(view, html, template);
+        // Outside the per-entry try above, so it needs its own: a parser that
+        // throws here would otherwise skip the `cityChanged` below.
+        try {
+          this.parseViewData(view, html, template, origin === FETCHED_RESPONSE);
+        } catch (e) {
+          reportBug("manual", e, { where: "parseViewData", view: view });
+        }
+        // Added (not in the original): a fetched town is recorded as the
+        // current town above, so its data lands on it — and then the player's
+        // town is put back. Left as it was, a scan ended with the board taking
+        // the last town scanned for the one on screen, and after a quick
+        // upgrade the town upgraded: the wrong row highlighted, that town's
+        // name and transport buttons doing nothing, and `loadUrl` deciding
+        // backwards whether a link needs a town switch.
+        if (origin === FETCHED_RESPONSE) {
+          this._currentCity = cityBeforeResponse;
+          return;
+        }
         if (oldCity !== this.CurrentCityId) {
           events("cityChanged").pub(this.CurrentCityId);
         }
@@ -635,8 +656,20 @@ export const ikariam: any = {
   Init: function () {
     this.setupEventHandlers();
   },
-  parseViewData: function (view, html, tData) {
+  parseViewData: function (view, html, tData, fetched?: boolean) {
     if (this.getCurrentCity) {
+      // Added (not in the original): of a fetched response only the Town
+      // Hall is parsed — a scan's request, read from the template data alone.
+      // Every other parser reads the view from the page, where a fetched
+      // view never is: the Palace and Museum parsers threw on it, and the
+      // Palace's first set the form of government to "" for every cost
+      // computed after it.
+      if (fetched) {
+        if (view === Constant.Buildings.TOWN_HALL) {
+          this.parseTownHall(tData, true);
+        }
+        return;
+      }
       switch (view) {
         case "finances":
           this.parseFinances(
@@ -695,6 +728,10 @@ export const ikariam: any = {
     var governmentType = $("#formOfRuleContent")
       .find("td.government_desc h3")
       .text();
+    // FIX (not in the original): no text means the Palace is not on the page.
+    // Storing "" broke every cost computed after it, since no form of
+    // government is called "" (`Constant.GovernmentData[""]` is undefined).
+    if (!governmentType) return;
     var changed = database.getGlobalData.getGovernmentType != governmentType;
     database.getGlobalData.governmentType = governmentType;
     if (changed)
@@ -1246,7 +1283,7 @@ export const ikariam: any = {
       updatedPrefix() + $("#academy h3#js_mainBoxHeaderTitle").text(),
     );
   },
-  parseTownHall: function (data) {
+  parseTownHall: function (data, quiet?: boolean) {
     var changes: any = {};
     var city = ikariam.getCurrentCity;
     var cultBon =
@@ -1265,7 +1302,11 @@ export const ikariam: any = {
     changes.priests = city.updatePriests(priests);
     changes.research = city.updateResearchers(researchers);
     events(Constant.Events.CITY_UPDATED).pub(ikariam.CurrentCityId, changes);
-    render.toast(updatedPrefix() + $("#js_TownHallCityName").text());
+    // Added (not in the original): `quiet` for a fetched Town Hall. The town
+    // name is read from the page, where a fetched view is not, so a scan
+    // raised one "Updated:" toast with no name per town.
+    if (!quiet)
+      render.toast(updatedPrefix() + $("#js_TownHallCityName").text());
   },
   parseTemple: function (data) {
     var priests = parseInt(data.js_TempleSlider.slider.ini_value) || 0;

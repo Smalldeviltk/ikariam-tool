@@ -35,6 +35,7 @@
  */
 
 import { sleep } from "../async";
+import { errorMessage } from "../format";
 import { pageWindow } from "./globals";
 
 /** Minimum gap between two requests. */
@@ -391,20 +392,49 @@ function recordQuickUpgrade(trace: QuickUpgradeTrace): void {
   }
 }
 
-function traceResponse(entries: unknown[]): string {
-  return JSON.stringify(entries).slice(0, TRACE_RESPONSE_CHARS);
+/** What a trace holds in place of a session token. */
+export const TOKEN_PLACEHOLDER = "<actionRequest>";
+
+/**
+ * A trace with every session token taken out. Bug Report saves the traces to
+ * a file the player shares, and the token must not travel with it (the
+ * crawler strips it for the same reason). Every token this run saw is
+ * replaced wherever it appears — a JSON field, a link, a hidden form field —
+ * and so is any value still written as `"actionRequest":"…"` or
+ * `actionRequest=…`, in case the game sent one this run never read.
+ */
+function redactTokens(text: string, tokens: ReadonlySet<string>): string {
+  let redacted = text;
+  for (const token of tokens) {
+    if (token) redacted = redacted.split(token).join(TOKEN_PLACEHOLDER);
+  }
+  return redacted
+    .replace(/("actionRequest"\s*:\s*")[^"]*/g, `$1${TOKEN_PLACEHOLDER}`)
+    .replace(/(actionRequest=)[^&"'\s\\]*/g, `$1${TOKEN_PLACEHOLDER}`);
+}
+
+function traceResponse(
+  entries: unknown[],
+  tokens: ReadonlySet<string>,
+): string {
+  // Taken out before cutting, so a token cannot survive split at the cut.
+  return redactTokens(JSON.stringify(entries), tokens).slice(
+    0,
+    TRACE_RESPONSE_CHARS,
+  );
 }
 
 /**
- * Start the next level of one building, without leaving the page (plan
- * §4.2, item E).
+ * Start the next level of one building, without leaving the page.
  *
  * Two requests: the building's own view, then the link of the upgrade
  * button in it. The link is the game's, not one put together here: the
  * button now carries `function=upgradeBuilding`, where IkaEasy's older code
  * built `action=UpgradeExistingBuilding` by hand. Both responses reach the
- * board like any other (`onResponse`), so it redraws the town. Each run is
- * recorded for Bug Report, whatever it came to.
+ * board like any other (`onResponse`), but neither shows the building being
+ * upgraded — the order's answer carries no town buildings — so the board
+ * loads the town again itself once the upgrade has started. Each run is
+ * recorded for Bug Report, whatever it came to, without the session token.
  */
 export async function upgradeBuildingNow(
   cityId: number | string,
@@ -424,7 +454,14 @@ export async function upgradeBuildingNow(
     outcome: null,
     error: null,
   };
+  // Every token this run sends or is sent, to take out of the trace.
+  const tokens = new Set<string>();
+  const noteToken = () => {
+    const token = actionRequestToken();
+    if (token) tokens.add(token);
+  };
   try {
+    noteToken();
     const view = await ikariamRequest(
       {
         view: buildingView,
@@ -435,10 +472,18 @@ export async function upgradeBuildingNow(
       },
       options,
     );
-    trace.viewResponse = traceResponse(view);
-    trace.upgradeButton = findUpgradeButton(view)?.outerHTML ?? null;
+    noteToken();
     const link = findUpgradeLink(view);
-    trace.upgradeLink = link;
+    const linkToken = link
+      ? new URLSearchParams(link.slice(link.indexOf("?") + 1)).get(
+          "actionRequest",
+        )
+      : null;
+    if (linkToken) tokens.add(linkToken);
+    trace.viewResponse = traceResponse(view, tokens);
+    const button = findUpgradeButton(view)?.outerHTML;
+    trace.upgradeButton = button ? redactTokens(button, tokens) : null;
+    trace.upgradeLink = link ? redactTokens(link, tokens) : null;
     if (!link) {
       trace.outcome = {
         started: false,
@@ -455,7 +500,8 @@ export async function upgradeBuildingNow(
     );
     // The link's own actionRequest and ajax are replaced by the request.
     const answer = await ikariamRequest(params, options);
-    trace.upgradeResponse = traceResponse(answer);
+    noteToken();
+    trace.upgradeResponse = traceResponse(answer, tokens);
     const feedback = responseFeedback(answer);
     const started = feedback?.type === SUCCESS_FEEDBACK_TYPE;
     trace.outcome = {
@@ -464,7 +510,7 @@ export async function upgradeBuildingNow(
     };
     return trace.outcome;
   } catch (e) {
-    trace.error = String((e as Error)?.message ?? e);
+    trace.error = redactTokens(errorMessage(e), tokens);
     throw e;
   } finally {
     recordQuickUpgrade(trace);
@@ -473,7 +519,7 @@ export async function upgradeBuildingNow(
 
 /**
  * Sent on `document` when a refresh of every town starts and when it ends,
- * for the Empire Overview board's sync indicator (plan item 2.6). The same
+ * for the Empire Overview board's sync indicator. The same
  * channel as the responses above, for the same reason: the two scripts
  * share no module, only the page.
  */

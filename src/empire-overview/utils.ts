@@ -8,6 +8,15 @@ import $ from "./jquery";
 import { Constant } from "./constants";
 import { database } from "./database";
 
+/**
+ * Added (not in the original): the board's strings in the language its
+ * settings name. English while the settings are not loaded yet — the table
+ * falls back for a language it does not have.
+ */
+export function languageText(): Record<string, string> {
+  return Constant.LanguageData[database.settings?.languageChange?.value];
+}
+
 export const Utils: any = {
   wrapInClosure: function (obj) {
     return (function (x) {

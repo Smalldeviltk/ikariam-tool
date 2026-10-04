@@ -1,5 +1,5 @@
 /**
- * Desktop notifications (plan §4.2, item J).
+ * Desktop notifications.
  *
  * The page's own `Notification` API, in both builds: the userscripts and the
  * extension run the same code, and both can notify while the game's tab is

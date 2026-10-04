@@ -199,7 +199,7 @@ describe("distributeWine with storage limits", () => {
   });
 });
 
-describe("whole ships (plan item S)", () => {
+describe("whole ships", () => {
   it(
     "rounds a share of one ship or more down to whole ships, and keeps the " +
       "rest at the source — 621 wine went as two ships, one carrying 1",
@@ -235,7 +235,7 @@ describe("whole ships (plan item S)", () => {
   });
 });
 
-describe("wine drunk on the way (plan item T)", () => {
+describe("wine drunk on the way", () => {
   it(
     "tops a town up to the same hours at the arrival — a town four hours " +
       "away has drunk four hours more by then",

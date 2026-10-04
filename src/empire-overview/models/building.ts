@@ -7,10 +7,10 @@
  */
 import $ from "../jquery";
 import { Constant } from "../constants";
-import { Utils } from "../utils";
+import { languageText, Utils } from "../utils";
 import { database } from "../database";
 import { events } from "../events";
-import { REDUCTION_BUILDING_MAX_PERCENT } from "@core/ikariam/model";
+import { reductionBuildingPercent } from "@core/ikariam/model";
 import { notify } from "@core/notifications";
 import { accountBuildTimeBuff } from "@core/storage";
 import { accountName } from "../empire";
@@ -23,16 +23,15 @@ import { accountName } from "../empire";
 const CHRONOS_FORGE_TIME_FACTOR_PER_LEVEL = 0.8;
 
 /**
- * Added (not in the original, plan §4.2 item J): the desktop notification
+ * Added (not in the original): the desktop notification
  * for a finished building. `completeUpgrade` runs up to 4s before the end,
  * and on a load for an upgrade that ended while the game was closed;
  * `notify` drops the second as stale, so a load does not announce it.
  */
 function notifyBuildFinished(building, completionTime) {
   if (!completionTime) return;
-  // English when the settings are not loaded yet (the table falls back).
-  var text = Constant.LanguageData[database.settings?.languageChange?.value];
-  var city = building.city();
+  const text = languageText();
+  const city = building.city();
   notify({
     kind: "buildFinished",
     key: ["buildFinished", city.getId, building._position, completionTime].join(
@@ -119,13 +118,13 @@ export function Building(city, pos) {
     var changed =
       name !== this._name ||
       level !== this._level ||
-      !!completion != this.isUpgrading; // todo
+      !!completion != this.isUpgrading;
     if (changed) {
       changes = {
         position: this._position,
         name: this.getName,
         upgraded: this.isUpgrading != !completion,
-      }; //todo
+      };
     }
     if (completion) {
       this._completionTime = completion * 1000;
@@ -185,9 +184,7 @@ export function Building(city, pos) {
     // cost once: 64% at most, never compounded.
     const reductionBy = (buildingName: string) => {
       const building = this.city().getBuildingFromName(buildingName);
-      return building
-        ? Math.min(building.getLevel, REDUCTION_BUILDING_MAX_PERCENT) / 100
-        : 0;
+      return building ? reductionBuildingPercent(building.getLevel) / 100 : 0;
     };
     // Seconds per level from the game's help pages, like the costs below:
     // index = current level. Levels past the table have no figure yet.
@@ -275,7 +272,7 @@ export function Building(city, pos) {
     // The game has no level cap any more. `maxLevel` is the level where the
     // building's effect stops growing, as its help page describes, and 0 for
     // a building whose page names none. Upgrading past it is still possible.
-    var maxLevel = Constant.BuildingData[this.getName].maxLevel;
+    const maxLevel = Constant.BuildingData[this.getName].maxLevel;
     return maxLevel > 0 && this.getLevel >= maxLevel;
   },
   get getPosition() {

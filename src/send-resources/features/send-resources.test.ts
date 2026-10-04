@@ -62,6 +62,12 @@ function installGame(options: {
   formDoesNotOpen?: boolean;
   /** Loading and sailing times the form shows, as the game prints them. */
   times?: { loading: string; journey: string };
+  /** Action points the header shows in the source town (11 by default). */
+  actionPoints?: number;
+  /** Draw the form without the cargo field for the resource. */
+  noCargoField?: boolean;
+  /** Draw the form without its submit button. */
+  noSubmit?: boolean;
 }) {
   const state = {
     view: "",
@@ -75,6 +81,12 @@ function installGame(options: {
   function render(view: string) {
     state.view = view;
     let body = HEADER + `<div id="js_cityBread">${TOWNS[0]}</div>`;
+    if (options.actionPoints !== undefined) {
+      body = body.replace(
+        `maxActionPoints">11<`,
+        `maxActionPoints">${options.actionPoints}<`,
+      );
+    }
     if (view === "form" && options.shipsAtForm) {
       const { merchants, freighters } = options.shipsAtForm;
       body = body
@@ -92,8 +104,11 @@ function installGame(options: {
       body +=
         `<form id="transportForm">` +
         `<input type="hidden" name="destinationCityId" value="${destination}">` +
-        `<input type="text" id="textfield_wine" value="0"/>` +
-        `<div id="submit"></div></form>` +
+        (options.noCargoField
+          ? ""
+          : `<input type="text" id="textfield_wine" value="0"/>`) +
+        (options.noSubmit ? "" : `<div id="submit"></div>`) +
+        `</form>` +
         (options.times
           ? `<span id="loadingTime">${options.times.loading}</span>` +
             `<span id="journeyTime">${options.times.journey}</span>`
@@ -149,7 +164,7 @@ afterEach(() => {
 describe("handleSendResource", () => {
   it(
     "opens the shipment form for the destination's city id, fills it and " +
-      "reports done — the port's town list is gone from the game (§2.A)",
+      "reports done — the port's town list is gone from the game",
     async () => {
       const game = installGame({ afterSubmit: "town" });
       game.render("town");
@@ -162,6 +177,53 @@ describe("handleSendResource", () => {
       expect(game.state.submitted).toBe(1);
       expect(game.state.sentTo).toBe("297035");
       expect(game.state.sentWine).toBe("1000");
+    },
+  );
+
+  it(
+    "REGRESSION: defers, opening nothing, when the source town is out of " +
+      "action points - a `retry` blocked shipments only in memory, so after " +
+      "an upgrade elsewhere switched town (a page load) the shipment ran " +
+      "again and switched back, a reload loop for as long as the town had " +
+      "no action points",
+    async () => {
+      const game = installGame({ afterSubmit: "town", actionPoints: 0 });
+      game.render("town");
+
+      await expect(run(shipment(1000))).resolves.toMatchObject({
+        status: "defer",
+        reason: expect.stringContaining("action points"),
+      });
+      expect(game.state.ajaxCalls).toEqual([]);
+    },
+  );
+
+  it(
+    "defers rather than retries when the form has no field for the " +
+      "resource - it is past a town switch, and a retry would loop the same way",
+    async () => {
+      const game = installGame({ afterSubmit: "town", noCargoField: true });
+      game.render("town");
+
+      await expect(run(shipment(1000))).resolves.toMatchObject({
+        status: "defer",
+      });
+      expect(game.state.submitted).toBe(0);
+    },
+  );
+
+  it(
+    "REGRESSION: keeps the order when the form has no submit button - the " +
+      "click went through `?.`, did nothing, and the shipment was still " +
+      "counted as sent",
+    async () => {
+      const game = installGame({ afterSubmit: "town", noSubmit: true });
+      game.render("town");
+
+      await expect(run(shipment(1000))).resolves.toMatchObject({
+        status: "defer",
+        reason: expect.stringContaining("submit"),
+      });
     },
   );
 
@@ -327,22 +389,18 @@ describe("handleSendResource", () => {
     expect(game.state.submitted).toBe(0);
   });
 
-  it(
-    "records the route's loading and sailing time for Auto Wine (plan item " +
-      "T), by city ids",
-    async () => {
-      const game = installGame({
-        afterSubmit: "town",
-        times: { loading: "3m 20s", journey: "1h 2m" },
-      });
-      game.render("town");
+  it("records the route's loading and sailing time for Auto Wine, by city ids", async () => {
+    const game = installGame({
+      afterSubmit: "town",
+      times: { loading: "3m 20s", journey: "1h 2m" },
+    });
+    game.render("town");
 
-      await run(shipment(1000));
+    await run(shipment(1000));
 
-      // W-Athens (297034) to M-Corinth (297035): 200 s + 3,720 s.
-      expect(routeSeconds("297034", "297035")).toBe(3_920);
-    },
-  );
+    // W-Athens (297034) to M-Corinth (297035): 200 s + 3,720 s.
+    expect(routeSeconds("297034", "297035")).toBe(3_920);
+  });
 
   it("records nothing when the form shows no time it can read", async () => {
     const game = installGame({ afterSubmit: "town" });
@@ -400,6 +458,30 @@ describe("describeCurrentTransfer", () => {
           },
         }),
       ).toBe("Upgrade Warehouse 3 in W-Athens");
+    },
+  );
+
+  it(
+    "names a shipment the way the queue does - it wrote the resource's id " +
+      "and an ungrouped amount, `1000 glass`, in the status line and in the " +
+      "'task dropped' notification",
+    () => {
+      document.body.innerHTML =
+        `<div id="dropDown_js_citySelectContainer"><div class="bg"><ul>` +
+        `<li><a title="W-Athens"> W-Athens</a></li>` +
+        `<li><a title="M-Corinth"> M-Corinth</a></li></ul></div></div>`;
+      expect(
+        describeCurrentTransfer({
+          id: "s1",
+          type: "sendResource",
+          data: {
+            origin: "0",
+            destination: "1",
+            resource: "glass",
+            amount: 12000,
+          },
+        }),
+      ).toBe("12,000 Crystal: W-Athens → M-Corinth");
     },
   );
 

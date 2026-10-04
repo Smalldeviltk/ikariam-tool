@@ -17,7 +17,7 @@ import { database } from "../database";
 import { empire } from "../empire";
 import { events } from "../events";
 import { ikariam } from "../game-api";
-import { REDUCTION_BUILDING_MAX_PERCENT } from "@core/ikariam/model";
+import { reductionBuildingPercent } from "@core/ikariam/model";
 
 /**
  * How much of the tavern's wine the town's Wine Press saves, in percent: 1%
@@ -25,7 +25,7 @@ import { REDUCTION_BUILDING_MAX_PERCENT } from "@core/ikariam/model";
  */
 function winePressSavingPercent(city): number {
   const press = city.getBuildingFromName(Constant.Buildings.VINEYARD);
-  return press ? Math.min(press.getLevel, REDUCTION_BUILDING_MAX_PERCENT) : 0;
+  return press ? reductionBuildingPercent(press.getLevel) : 0;
 }
 
 export function City(id) {
@@ -447,19 +447,21 @@ export function City(id) {
     return t;
   },
   get garrisonsea() {
-    var t = 0,
-      n = 0,
-      s = 0;
+    var portLevel = 0,
+      harbourLevel = 0,
+      shipyardLevel = 0;
     if (this.getBuildingFromName(Constant.Buildings.TRADING_PORT)) {
-      //todo
-      t = this.getBuildingFromName(Constant.Buildings.TRADING_PORT).getLevel;
+      portLevel = this.getBuildingFromName(
+        Constant.Buildings.TRADING_PORT,
+      ).getLevel;
     }
     if (this.getBuildingFromName(Constant.Buildings.SHIPYARD)) {
-      s = this.getBuildingFromName(Constant.Buildings.SHIPYARD).getLevel;
+      shipyardLevel = this.getBuildingFromName(
+        Constant.Buildings.SHIPYARD,
+      ).getLevel;
     }
-    //n = t > t ? t : t > s ? t : s;
-    n = t > s ? t : s;
-    return n * 25 + 125;
+    harbourLevel = portLevel > shipyardLevel ? portLevel : shipyardLevel;
+    return harbourLevel * 25 + 125;
   },
   get plundergold() {
     var i = 0;
@@ -547,7 +549,6 @@ export function City(id) {
     ];
   },
   get maxSci() {
-    //var i = 0;
     var i;
     if (this.getBuildingFromName(Constant.Buildings.ACADEMY)) {
       i = this.getBuildingFromName(Constant.Buildings.ACADEMY).getLevel;
@@ -746,7 +747,7 @@ export function City(id) {
     return this._capacities;
   },
   get _getSatisfactionData() {
-    var r: any = {
+    var satisfaction: any = {
       city: 196,
       museum: {
         cultural: 0,
@@ -763,28 +764,28 @@ export function City(id) {
     };
     if (this.getBuildingFromName(Constant.Buildings.MUSEUM)) {
       var eventBonus = 0; // bonus for a server transfer / merge
-      r.museum.cultural = this.getCulturalGoods * 50 + eventBonus;
+      satisfaction.museum.cultural = this.getCulturalGoods * 50 + eventBonus;
       // `|| 0` here and for the tavern: the tables stop at the last level
       // the game's help page lists.
-      r.museum.level =
+      satisfaction.museum.level =
         Constant.BuildingData[Constant.Buildings.MUSEUM].basicBonus[
           this.getBuildingFromName(Constant.Buildings.MUSEUM).getLevel
         ] || 0;
     }
-    r.government =
+    satisfaction.government =
       Constant.GovernmentData[database.getGlobalData.getGovernmentType]
         .happiness +
       Constant.GovernmentData[database.getGlobalData.getGovernmentType]
         .happinessWithoutTemple *
         Number(
           this.getBuildingFromName(Constant.Buildings.TEMPLE) == undefined,
-        ); //todo
+        );
     if (this.getBuildingFromName(Constant.Buildings.TAVERN)) {
       var wineUse;
       wineUse = Constant.BuildingData[Constant.Buildings.TAVERN].wineUse;
       if (ikariam.Server() == "s202")
         wineUse = Constant.BuildingData[Constant.Buildings.TAVERN].wineUse2;
-      r.tavern.level =
+      satisfaction.tavern.level =
         Constant.BuildingData[Constant.Buildings.TAVERN].basicBonus[
           this.getBuildingFromName(Constant.Buildings.TAVERN).getLevel
         ] || 0;
@@ -794,13 +795,13 @@ export function City(id) {
       );
       for (var i = 0; i < wineUse.length; i++) {
         if (Math.abs(wineUse[i] - consumption) <= 1) {
-          r.tavern.wineConsumption =
+          satisfaction.tavern.wineConsumption =
             Constant.BuildingData[Constant.Buildings.TAVERN].wineBonus[i];
           break;
         }
       }
     }
-    r.research =
+    satisfaction.research =
       database.getGlobalData.getResearchTopicLevel(2080) * 25 +
       database.getGlobalData.getResearchTopicLevel(2999) * 10 +
       (this.getBuildingFromName(Constant.Buildings.PALACE)
@@ -816,25 +817,28 @@ export function City(id) {
       database.getCityCount == 1
         ? 50 * database.getGlobalData.getResearchTopicLevel(3010)
         : 0);
-    r.priest =
+    satisfaction.priest =
       ((this._priests * 500) / this._getMaxPopulation) *
       Constant.GovernmentData[database.getGlobalData.getGovernmentType]
         .happinessBonusWithTempleConversion;
-    r.priest = r.priest <= 150 ? r.priest : 150;
-    r.city = 196;
+    satisfaction.priest =
+      satisfaction.priest <= 150 ? satisfaction.priest : 150;
+    satisfaction.city = 196;
     var total = 0;
-    for (var n in r) {
-      if (typeof r[n] === "object") {
-        for (var o in r[n]) {
-          total += r[n][o];
+    for (var source in satisfaction) {
+      if (typeof satisfaction[source] === "object") {
+        for (var part in satisfaction[source]) {
+          total += satisfaction[source][part];
         }
       } else {
-        total += r[n];
+        total += satisfaction[source];
       }
     }
-    r.total = total;
-    r.corruption = Math.round(this._population + this._pop.happiness - total);
-    return r;
+    satisfaction.total = total;
+    satisfaction.corruption = Math.round(
+      this._population + this._pop.happiness - total,
+    );
+    return satisfaction;
   },
   updatePopulation: function (population) {
     var changed = this._population != population;

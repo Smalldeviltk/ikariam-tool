@@ -30,7 +30,7 @@ const REQUIRES = [
  *
  * Keeps the original runtime model: sandboxed under Tampermonkey. Why this one
  * cannot switch to page context the way Send Resources did:
- *  - `GM_addStyle` in 21 places, plus `GM_openInTab` / `GM_xmlhttpRequest`
+ *  - `GM_addStyle` in 21 places
  *  - reaches page globals through `unsafeWindow.ikariam.templateView`
  *  - needs jQuery UI (`.tabs()`, `.draggable()`, `.button()`), which the page's
  *    own jQuery does not provide
@@ -64,9 +64,6 @@ export default defineConfig({
           "GM_setValue",
           "GM_deleteValue",
           "GM_addStyle",
-          "GM_registerMenuCommand",
-          "GM_xmlhttpRequest",
-          "GM_openInTab",
         ],
       },
       build: {

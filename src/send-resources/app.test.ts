@@ -612,6 +612,36 @@ describe("the Auto Build settings dialog", () => {
     expect(html).toContain('data-ika-action="build.save"');
     expect(html).toContain('data-ika-action="dialog.close"');
   });
+
+  it(
+    "REGRESSION: shows the saved list of a town whose name has an " +
+      "ampersand - the board's name was read as HTML, `A &amp; B`, so the " +
+      "dialog looked up a town that was never saved",
+    async () => {
+      const createPopup = vi.fn();
+      await startWith({});
+      document.getElementById("js_cityBread")!.textContent = "A & B";
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<div id="BuildTab"><div class="city_name">` +
+          `<span class="clickable">A &amp; B</span></div></div>`,
+      );
+      const { addBuildingToQueue } = await import("./features/auto-build");
+      addBuildingToQueue("5", "Academy 4");
+
+      Object.assign(window, { ikariam: { createPopup } });
+      try {
+        await actions["build.settings"](document.body);
+      } finally {
+        delete window.ikariam;
+      }
+
+      const html = String(createPopup.mock.lastCall?.[2]);
+      expect(html).toContain('data-ika-town-cell="A &amp; B"');
+      expect(html).not.toContain("&amp;amp;");
+      expect(html).toContain("1.Academy 5");
+    },
+  );
 });
 
 describe("Auto Build after the queue runs dry", () => {
@@ -773,6 +803,43 @@ describe("Auto Build after the queue runs dry", () => {
   );
 
   it(
+    "REGRESSION: Build's Start carries its lap across a page load - every " +
+      "town switch reloads the page, and the run was held in memory only, " +
+      "so the lap ended at its first switch with its upgrades left queued",
+    async () => {
+      saveAutoBuild([
+        {
+          accountName: "tester",
+          townList: ["Nowhere-1", "Nowhere-2"].map((townName) => ({
+            townName,
+            queue: [
+              {
+                positionId: "js_CityPosition4Link",
+                buildingName: "Warehouse 3",
+              },
+            ],
+          })),
+        },
+      ]);
+      installCityLink();
+      await startWith({});
+      await actions["build.startNow"](document.body);
+      expect(timers()).toBe(RUNNING);
+
+      // A town switch: the page loads again, Build's timer still off.
+      await startWith({});
+
+      expect(timers()).toBe(RUNNING);
+      // The lap still drains and ends the run.
+      await vi.advanceTimersByTimeAsync(5_000);
+      const state = await appState();
+      expect(state.getState().queue.listOfType("upgradeBuilding")).toEqual([]);
+      expect(timers()).toBe(IDLE);
+      expect(sessionStorage.getItem("ika_oneOffRunTypes")).toBeNull();
+    },
+  );
+
+  it(
     "REGRESSION: a keep-alive reload in the middle of a lap carries on with " +
       "it — every load queued a fresh lap from the first town, so the last " +
       "town of a long lap was never reached",
@@ -864,6 +931,23 @@ describe("the account table's build time buff", () => {
     expect(button().textContent).toBe("✓");
     expect(button().dataset.ikaAction).toBe("account.saveBuildTimeBuff");
   });
+
+  it(
+    "REGRESSION: shows a stored figure as text, never as markup - the " +
+      "account table comes from storage, which an imported file fills",
+    async () => {
+      localStorage.setItem(
+        "listAccount",
+        JSON.stringify([
+          { account: "tester", buildTimeBuffPercent: '<img id="planted">' },
+        ]),
+      );
+      await startWith({});
+
+      expect(document.getElementById("planted")).toBeNull();
+      expect(shown()).toBe('<img id="planted">');
+    },
+  );
 
   it("saves on ✓, where the board reads it, and shows text again", async () => {
     await startWith({});
@@ -1053,7 +1137,7 @@ describe("Bug Report", () => {
 
   it(
     "carries the board's quick upgrades with what the game answered, and " +
-      "says how many (plan §4.2 item E)",
+      "says how many",
     async () => {
       await startWith({});
       const trace = {

@@ -303,8 +303,8 @@ export const DATA_TRANSFER = {
     `OK  = rewrite it onto "${current}"\n` +
     "Cancel = import only the account-independent entries",
   skippingOtherAccount:
-    "Account-specific entries will be skipped. Nothing reads keys " +
-    "belonging to another account.",
+    "Account-specific entries are kept under the other account's name. " +
+    "Nothing in this account reads them.",
   confirmImport: (description: string) =>
     `Import this?\n\n${description}\n\n` +
     "Existing settings with the same names will be OVERWRITTEN.",

@@ -76,6 +76,9 @@ const GLOBAL_KEYS: Record<string, DataGroup> = {
   [BUG_REPORT_STORAGE_KEY]: "diagnostics",
   ikaDomReports: "diagnostics",
   [QUICK_UPGRADE_TRACE_KEY]: "diagnostics",
+  // Empire Overview's response trace (`TRACE_STORAGE_KEY` in
+  // `empire-overview/ajax-trace.ts`); spelled out for the same reason.
+  ikaAjaxTrace: "diagnostics",
 };
 
 /**
@@ -248,7 +251,18 @@ export function importData(
 
   const result: ImportResult = { imported: 0, skipped: 0, notes: [] };
 
-  for (const entry of bundle.entries) {
+  for (const raw of bundle.entries) {
+    // What the file says about an entry is not trusted: a file edited by
+    // hand, or not made by these scripts, could label any key — runtime
+    // state, the game's own — as `config`. Each key is classified again the
+    // way an export classifies it, and only a string value is written.
+    const entry =
+      raw && typeof raw.key === "string" ? classifyKey(raw.key) : null;
+    if (!entry || typeof raw.value !== "string") {
+      result.skipped++;
+      result.notes.push(IMPORT_NOTES.notOurs(String(raw?.key)));
+      continue;
+    }
     if (!groups.includes(entry.group)) {
       result.skipped++;
       continue;
@@ -270,7 +284,7 @@ export function importData(
     }
 
     try {
-      localStorage.setItem(targetKey, entry.value);
+      localStorage.setItem(targetKey, raw.value);
       result.imported++;
     } catch (e) {
       result.skipped++;

@@ -24,7 +24,7 @@
 import { qs, qsa } from "@core/dom";
 import { sleep, waitFor } from "@core/async";
 import { compareValues, errorMessage, MS_PER_SECOND } from "@core/format";
-import { getCurrentTownName } from "@core/ikariam/globals";
+import { getCurrentTownName, readTownName } from "@core/ikariam/globals";
 import { SEL } from "@core/ikariam/selectors";
 import { logInfo } from "@core/logger";
 import type { Task, TaskResult } from "@core/task-queue";
@@ -258,9 +258,7 @@ export function enqueueAutoBuild(): number {
     return 0;
   }
 
-  const boardNames = qsa(SEL.buildTabTownNames).map(
-    (span) => span.textContent?.trim() ?? "",
-  );
+  const boardNames = qsa(SEL.buildTabTownNames).map(readTownName);
   const towns = account.townList
     .filter((town) => town.queue.length > 0)
     .sort(
@@ -657,7 +655,7 @@ function buildingLevelText(reading: SlotReading): string | null {
 }
 
 /**
- * Write each building's level on the city view (plan §4.2, item K).
+ * Write each building's level on the city view.
  *
  * The level comes from the same title the settings dialog reads. A label is
  * only written when its text changed, so the observer below, which sees the

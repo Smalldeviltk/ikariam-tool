@@ -2,9 +2,10 @@
  * Userscript-manager API shims for the Chrome extension build.
  *
  * Empire Overview was written against Tampermonkey and reaches for APIs that do
- * not exist in a plain page: `GM_addStyle` (21 call sites), `GM_openInTab`,
- * `GM_xmlhttpRequest`, `GM_registerMenuCommand`, and the bare `unsafeWindow`
- * identifier.
+ * not exist in a plain page: `GM_addStyle` (21 call sites) and the bare
+ * `unsafeWindow` identifier. (`GM_openInTab`, `GM_xmlhttpRequest` and
+ * `GM_registerMenuCommand` had no caller left once the update check was
+ * removed, and their shims went with it.)
  *
  * Injected into the page world those are all just globals, so the shims below
  * install browser-native equivalents before the feature code loads.
@@ -16,25 +17,9 @@
 
 import { addStyle } from "../core/dom";
 
-/** The part of `GM_xmlhttpRequest`'s argument the code actually uses. */
-interface GmXhrDetails {
-  method?: string;
-  url: string;
-  headers?: Record<string, string>;
-  onload?: (response: {
-    responseText: string;
-    status: number;
-    statusText: string;
-  }) => void;
-  onerror?: (error: unknown) => void;
-}
-
 interface ShimTarget {
   unsafeWindow?: unknown;
   GM_addStyle?: (css: string) => HTMLStyleElement;
-  GM_openInTab?: (url: string, options?: unknown) => unknown;
-  GM_xmlhttpRequest?: (details: GmXhrDetails) => unknown;
-  GM_registerMenuCommand?: (name: string, fn: () => void) => number;
   [key: string]: unknown;
 }
 
@@ -50,44 +35,6 @@ if (typeof target.unsafeWindow === "undefined") {
 
 if (typeof target.GM_addStyle !== "function") {
   target.GM_addStyle = addStyle;
-}
-
-if (typeof target.GM_openInTab !== "function") {
-  target.GM_openInTab = (url: string) => window.open(url, "_blank");
-}
-
-if (typeof target.GM_registerMenuCommand !== "function") {
-  // Tampermonkey's menu has no equivalent here. The only call site is commented
-  // out in the original, so a no-op loses nothing.
-  target.GM_registerMenuCommand = () => 0;
-}
-
-if (typeof target.GM_xmlhttpRequest !== "function") {
-  /**
-   * `fetch`-backed stand-in supporting the subset the code actually uses:
-   * `method`, `url`, `headers`, `onload`, `onerror`.
-   *
-   * Note this does NOT get Tampermonkey's cross-origin exemption — a page-world
-   * fetch is bound by the page's CORS rules. The sole caller is
-   * `empire.CheckForUpdates`, which is disabled in the original anyway, so a
-   * failure surfaces through `onerror` rather than breaking anything.
-   */
-  target.GM_xmlhttpRequest = (details: GmXhrDetails) => {
-    fetch(details.url, {
-      method: details.method ?? "GET",
-      headers: details.headers,
-    })
-      .then(async (response) => {
-        const responseText = await response.text();
-        details.onload?.({
-          responseText,
-          status: response.status,
-          statusText: response.statusText,
-        });
-      })
-      .catch((error) => details.onerror?.(error));
-    return undefined;
-  };
 }
 
 export {};

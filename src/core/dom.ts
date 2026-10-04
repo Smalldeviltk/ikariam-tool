@@ -28,19 +28,13 @@ export function waitForElement<T extends Element = HTMLElement>(
   });
 }
 
-/** Wait until the selector matches at least `min` elements, then return them. */
-export function waitForElements<T extends Element = HTMLElement>(
-  selector: string,
-  min = 1,
-  options: WaitForOptions = {},
-): Promise<T[]> {
-  return waitFor(
-    () => {
-      const list = qsa<T>(selector);
-      return list.length >= min ? list : null;
-    },
-    { label: `waitForElements(${selector})`, ...options },
-  );
+/**
+ * Whether a key event comes from a field the player is typing in, where a
+ * shortcut key must not act.
+ */
+export function isTypingTarget(target: EventTarget | null): boolean {
+  const tag = (target as Element | null)?.nodeName?.toLowerCase();
+  return tag === "input" || tag === "textarea" || tag === "select";
 }
 
 /** Click an element if it exists. Returns whether a click happened. */
@@ -62,6 +56,16 @@ export function addStyle(css: string): HTMLStyleElement {
   style.textContent = css;
   document.head.appendChild(style);
   return style;
+}
+
+/**
+ * Add a stylesheet once, under `id`: nothing happens while one with that id
+ * is in the page. `css` may be a function, so the text is only built when
+ * the sheet is added.
+ */
+export function ensureStyle(id: string, css: string | (() => string)): void {
+  if (document.getElementById(id)) return;
+  addStyle(typeof css === "function" ? css() : css).id = id;
 }
 
 /**

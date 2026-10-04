@@ -11,11 +11,6 @@ import { database } from "../database";
 import { empire } from "../empire";
 
 export function GlobalData() {
-  this._version = {
-    lastUpdateCheck: 0,
-    latestVersion: null,
-    installedVersion: 0,
-  };
   this._research = {
     topics: {},
     lastUpdate: 0,
@@ -162,8 +157,5 @@ export function GlobalData() {
   addLocalisedString: function (string, value) {
     if (this.getLocalisedString(string) == string)
       this.localStrings[string.toLowerCase().split(" ").join("_")] = value;
-  },
-  isOldVersion: function () {
-    return this._version.latestVersion < this._version.installedVersion;
   },
 };

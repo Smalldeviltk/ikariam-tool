@@ -114,7 +114,7 @@ function windowContent(): string {
   );
 }
 
-/** A checkbox switching one kind of desktop notification (plan §4.2, J). */
+/** A checkbox switching one kind of desktop notification. */
 function notificationSwitch(
   kind: NotificationKind,
   label: string,
@@ -317,8 +317,4 @@ export function setTransferInfo(text: string): void {
 export function togglePanel(): void {
   panelWindow?.toggle();
   if (panelWindow?.isOpen()) refreshQueueView();
-}
-
-export function toggleZoom(): void {
-  panelWindow?.root.classList.toggle("zoom");
 }

@@ -38,14 +38,14 @@
  * is reported in `unused`, to be split on the next run. So `targetHours` is
  * the level the uncapped towns reach, and a capped town may end below it.
  *
- * ── Wine drunk on the way (plan item T) ─────────────────────────────────────
+ * ── Wine drunk on the way ──────────────────────────────────────────────────
  * A town keeps drinking while its wine is at sea. With `transitHours` known,
  * everything here works on the stock it will have when the ships arrive,
  * `stock − consume × transitHours` (never below 0), so it is topped up to the
  * same hours at arrival rather than at departure. `stock` in the result stays
  * the stock now; `finalHours` is counted from arrival.
  *
- * ── Whole ships (plan item S) ───────────────────────────────────────────────
+ * ── Whole ships ────────────────────────────────────────────────────────────
  * With `shipCapacity`, a share of one ship or more is rounded DOWN to whole
  * ships — 621 wine went as two merchant ships, one of them carrying 1 — and
  * the part rounded off stays at the source, in `unused`. A share under one

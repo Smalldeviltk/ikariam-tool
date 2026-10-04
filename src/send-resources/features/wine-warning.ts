@@ -18,6 +18,7 @@ import {
 import { measuredStats } from "./auto-wine";
 import { DURATION, NOTIFICATIONS } from "../messages";
 import { getTownList } from "../navigation";
+import { loadSenders } from "../state";
 
 /** Below this, a town is worth acting on now. */
 export const CRITICAL_HOURS = 12;
@@ -50,14 +51,23 @@ function severityOf(hours: number | null): WineSeverity {
 
 /** Every town, with whatever is known about its wine. */
 export function wineStatus(): TownWineStatus[] {
+  const senders = loadSenders();
   return getTownList().map((town) => {
     const measured = measuredStats(town.townName);
     const stock = measured?.stock ?? 0;
     const consume = measured?.consume ?? 0;
 
+    // A town ticked as an Auto Wine source makes the wine it hands out, and
+    // each run leaves it one hour of its own consumption on purpose
+    // (`getSourceReserve`). Stock over consumption leaves its production out,
+    // so it read as running dry, and was notified, after every run. It is
+    // counted as one that does not run out.
+    const isSource = senders.includes(town.townNumber.toString());
+
     // A town that drinks nothing never runs out. That is not the same as a
     // town nothing is known about, but the advice is identical: do nothing.
-    const hoursLeft = measured && consume > 0 ? stock / consume : null;
+    const hoursLeft =
+      !isSource && measured && consume > 0 ? stock / consume : null;
 
     return {
       townNumber: town.townNumber.toString(),
@@ -93,8 +103,8 @@ export function formatHours(hours: number | null): string {
 }
 
 /**
- * A desktop notification for each town under `CRITICAL_HOURS` (plan §4.2,
- * item J). Once per town: the town is said again only after it has been back
+ * A desktop notification for each town under `CRITICAL_HOURS`. Once per
+ * town: the town is said again only after it has been back
  * above the line, like the board's own wine warning. A town nothing is known
  * about is left as it was.
  */

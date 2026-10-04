@@ -18,7 +18,7 @@
  * decision).
  */
 
-import { addStyle } from "@core/dom";
+import { ensureStyle, isTypingTarget } from "@core/dom";
 import { WINDOW_CLOSE_TITLE } from "@core/messages";
 import type { Store } from "@core/storage";
 
@@ -137,8 +137,7 @@ function windowStyles(): string {
 }
 
 function installStyles(): void {
-  if (document.getElementById(WINDOW_STYLE_ID)) return;
-  addStyle(windowStyles()).id = WINDOW_STYLE_ID;
+  ensureStyle(WINDOW_STYLE_ID, windowStyles);
 }
 
 /**
@@ -253,8 +252,7 @@ export function createWindow(options: WindowOptions): GameWindow {
 
   const closeOnEscape = (event: KeyboardEvent) => {
     // Not while typing: every settings dialog here is full of text inputs.
-    const tag = (event.target as HTMLElement)?.tagName?.toLowerCase();
-    if (tag === "input" || tag === "textarea" || tag === "select") return;
+    if (isTypingTarget(event.target)) return;
     if (event.key === "Escape" && !root.hidden) api.close();
   };
 
@@ -371,9 +369,7 @@ function toastStyles(): string {
 }
 
 function toastStack(): HTMLElement {
-  if (!document.getElementById(TOAST_STYLE_ID)) {
-    addStyle(toastStyles()).id = TOAST_STYLE_ID;
-  }
+  ensureStyle(TOAST_STYLE_ID, toastStyles);
   let stack = document.getElementById(TOAST_STACK_ID);
   if (!stack) {
     stack = document.createElement("div");

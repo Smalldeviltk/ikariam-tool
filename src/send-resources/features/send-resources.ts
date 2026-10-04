@@ -9,9 +9,9 @@
  *  - No separate `isAutoSendResourceRunning` flag. "One action at a time" is
  *    enforced by `TaskRunner`, and it guards both directions rather than just
  *    one as the old flag did.
- *  - When a shipment cannot start (no ships, no action points) the task returns
- *    `retry` instead of silently doing nothing, so the order stays queued
- *    rather than being consumed for free.
+ *  - When a shipment cannot start the task stays queued rather than being
+ *    consumed for free: `retry` with no idle ships, `defer` when the source
+ *    town is out of action points.
  */
 
 import { qs, setInputValue, waitForElement } from "@core/dom";
@@ -32,7 +32,8 @@ import {
 import { getActionPoints, getFreeShips, readCurrentStock } from "../game-state";
 import { getFreighterCapacity, getPerShipCapacity } from "../ship-capacity";
 import { getState, recordRouteSeconds } from "../state";
-import { QUEUE_VIEW, TRANSFER_STATUS } from "../messages";
+import { TRANSFER_STATUS } from "../messages";
+import { describeTask } from "../ui/queue-view";
 import type { ResourceId } from "../types";
 
 /**
@@ -117,8 +118,17 @@ export async function handleSendResource(
 
   await gotoTown(origin);
 
+  // From here on the page has (most likely) been reloaded into `origin`, so a
+  // `retry` is the wrong answer to anything specific to this town: it blocks
+  // shipments only in this page's memory. A town switch for another task
+  // reloads the page, the shipment runs first again and switches back, and
+  // the two pages take turns for as long as the condition lasts. `defer`
+  // moves the task to the back of the stored queue instead.
   if (getActionPoints() <= 0) {
-    return { status: "retry", reason: "Out of action points" };
+    return {
+      status: "defer",
+      reason: `${getTownNameFromList(origin)} is out of action points`,
+    };
   }
 
   /**
@@ -205,6 +215,9 @@ export async function handleSendResource(
   // navigation pass in between — a returning fleet in that window would make an
   // earlier reading wrong, and the capacity below is computed from it.
   const { merchants, freighters } = getFreeShips();
+  // A `retry` is right here, unlike above: ships belong to the account, so no
+  // shipment can sail, and the idle-ship check before `gotoTown` returns the
+  // same answer on the next page without switching town.
   if (merchants <= 0 && freighters <= 0) {
     return { status: "retry", reason: "Ships became unavailable en route" };
   }
@@ -228,8 +241,18 @@ export async function handleSendResource(
   const sentAmount = Math.min(capacity, sendable);
   const field = qs<HTMLInputElement>(SEL.resourceField(resource));
   if (!field) {
-    return { status: "retry", reason: `No input field for ${resource}` };
+    // Past the town switch: `defer`, for the reason given at `gotoTown`.
+    return { status: "defer", reason: `No input field for ${resource}` };
   }
+  // A missing button used to be clicked through `?.`, which does nothing —
+  // and the shipment was still logged as sent and taken off the order. Looked
+  // for before anything is entered, and again at the click, since the game
+  // may draw the form anew in between. Nothing has left before that click.
+  const noSubmit: TaskResult = {
+    status: "defer",
+    reason: "No submit button on the shipment form",
+  };
+  if (!qs(SEL.submit)) return noSubmit;
   // Not a bare `.value =`: the game recalculates the ship count and mission
   // summary from the field's own events. See `setInputValue`.
   setInputValue(field, String(sentAmount));
@@ -237,7 +260,9 @@ export async function handleSendResource(
   await sleep(FORM_SETTLE_MS);
   // Before the submit, while the form still shows this convoy's times.
   recordRouteTime(origin, destination);
-  qs<HTMLElement>(SEL.submit)?.click();
+  const submit = qs<HTMLElement>(SEL.submit);
+  if (!submit) return noSubmit;
+  submit.click();
 
   // PAST THIS POINT THE GOODS HAVE LEFT. Nothing below may throw: the runner
   // deliberately keeps a thrown task queued, so a throw here would send the
@@ -270,14 +295,9 @@ export async function handleSendResource(
  */
 export function describeCurrentTransfer(task: Task | undefined): string {
   if (!task) return TRANSFER_STATUS.idle;
-  // An upgrade is named the way the queue names it; the line read "Nothing
-  // is transferring" while the runner was on one.
-  if (task.type === "upgradeBuilding") {
-    return QUEUE_VIEW.upgrade(task.data.buildingName, task.data.townName);
-  }
-  const { amount, resource, origin, destination } = task.data;
-  return (
-    `${amount} ${resource} from ${getTownNameFromList(origin)} ` +
-    `to ${getTownNameFromList(destination)}`
-  );
+  // Named the way the queue names it — an upgrade too (the line read "Nothing
+  // is transferring" while the runner was on one), and a shipment with its
+  // resource's label and a grouped amount rather than `1000 glass`. The line
+  // is also the body of the "task dropped" notification.
+  return describeTask(task);
 }

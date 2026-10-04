@@ -22,6 +22,7 @@
  */
 
 import { reportBug } from "./bug-report";
+import { errorMessage } from "./format";
 import { logInfo, writeToConsole } from "./logger";
 import type { Store } from "./storage";
 
@@ -80,12 +81,17 @@ export type NewTask = DistributiveOmit<Task, "id"> & { id?: string };
  * Outcome of one handler run; decides what happens to the task.
  *
  * The distinction between `retry` and `defer` matters. `retry` is for blockers
- * that stop every task OF THIS TYPE (no ships at all, no action points for a
- * shipment) — the task holds its place among its own type, because rotating
- * them would only burn navigations, while tasks of another type queued behind
- * it still run (see `TaskRunner.nextTask`). `defer` is for blockers specific to
- * THIS task (this town is already building, this town has no port) where other
- * queued tasks could still succeed.
+ * that stop every task OF THIS TYPE (no idle ships at all for a shipment) —
+ * the task holds its place among its own type, because rotating them would
+ * only burn navigations, while tasks of another type queued behind it still
+ * run (see `TaskRunner.nextTask`). `defer` is for blockers specific to THIS
+ * task (this town is already building, has no port, is out of action points)
+ * where other queued tasks could still succeed.
+ *
+ * The block a `retry` sets lives in memory, so a page load clears it. A
+ * handler that has already switched town (which reloads the page) must not
+ * answer `retry`: the next task's own switch reloads again, and the blocked
+ * task runs first on the new page and switches back.
  *
  * Getting that wrong causes head-of-line blocking: the original moved on to the
  * next town when one was mid-construction, and a plain `retry` here would instead
@@ -393,7 +399,7 @@ export interface TaskRunnerOptions {
 }
 
 export class TaskRunner {
-  private readonly handlers = new Map<TaskType, TaskHandler<any>>();
+  private readonly handlers = new Map<TaskType, TaskHandler>();
   private timer: number | null = null;
   /**
    * The core guarantee of the whole design: one task touching the DOM at a
@@ -588,7 +594,7 @@ export class TaskRunner {
       // A thrown handler does NOT drop the task: most throws here are the DOM
       // not being ready yet, and the next tick will succeed. A genuinely broken
       // task must return `failed` explicitly.
-      const message = (e as Error)?.message ?? String(e);
+      const message = errorMessage(e);
       logInfo(`Error while running task ${task.type}: ${message}`);
       reportBug("task-error", e, { taskType: task.type, taskData: task.data });
       // Never a bare `console.error`: on the game's page it is not a

@@ -89,12 +89,17 @@ export function readAccountName(): string {
 }
 
 /**
- * Name of the currently open town.
+ * A town's name as an element shows it.
  *
  * Read as TEXT, like every name it is compared with (the dropdown's `title`,
- * the model's `name`). `innerHTML` would read a town called `A & B` as
- * `A &amp; B`, and a switch to it would never be seen to land.
+ * the model's `name`, the names Auto Build stores). `innerHTML` would read a
+ * town called `A & B` as `A &amp; B`, and it would never match.
  */
+export function readTownName(element: Element | null | undefined): string {
+  return element?.textContent?.trim() ?? "";
+}
+
+/** Name of the currently open town, from the breadcrumb. */
 export function getCurrentTownName(): string {
-  return qs(SEL.cityBread)?.textContent?.trim() ?? "";
+  return readTownName(qs(SEL.cityBread));
 }

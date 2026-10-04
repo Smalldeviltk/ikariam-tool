@@ -192,7 +192,8 @@ export function renderSummary(): void {
 function buildTimeBuffCell(account: AccountSummary): string {
   return (
     `<td style="white-space: nowrap; text-align: right">` +
-    `<span class="${BUILD_TIME_BUFF_VALUE_CLASS}">${account.buildTimeBuffPercent ?? 0}</span> ` +
+    // Escaped: the figure comes from storage, which an imported file fills.
+    `<span class="${BUILD_TIME_BUFF_VALUE_CLASS}">${escapeHtml(String(account.buildTimeBuffPercent ?? 0))}</span> ` +
     `<button class="button ${BUILD_TIME_BUFF_BUTTON_CLASS}" title="${ACCOUNT_SUMMARY.editBuildTimeBuff}" ` +
     `${action("account.editBuildTimeBuff", { "ika-account": account.account })}>✎</button>` +
     `</td>`
@@ -317,7 +318,10 @@ function keepAliveTick(): void {
 
   const minute = new Date().getUTCMinutes();
   if (minute % 2 !== 0) return;
-  if (minute === Number(getFlag(FLAG.reloadedMinute))) return;
+  // Compared only when one was stored: `Number(null)` is 0, so a minute :00
+  // read as already reloaded before any reload had happened.
+  const lastReload = getFlag(FLAG.reloadedMinute);
+  if (lastReload !== null && minute === Number(lastReload)) return;
 
   setFlag(FLAG.reloadedMinute, minute);
   setFlag(FLAG.isAutoReload, false);

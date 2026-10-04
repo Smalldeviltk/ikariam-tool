@@ -155,6 +155,11 @@ export function modelMaxResource(resource: string): number | null {
  */
 export const REDUCTION_BUILDING_MAX_PERCENT = 50;
 
+/** What a reduction building of this level takes off, in percent. */
+export function reductionBuildingPercent(level: number): number {
+  return Math.min(REDUCTION_BUILDING_MAX_PERCENT, Math.max(0, level));
+}
+
 /**
  * Level of this town's Wine Press, 0 when it has none, or null when the page
  * is not showing a city view and therefore cannot be asked.
@@ -204,7 +209,7 @@ export function modelWineConsumption(): number | null {
   const press = winePressLevel();
   if (press === null) return null;
 
-  const saving = Math.min(REDUCTION_BUILDING_MAX_PERCENT, Math.max(0, press));
+  const saving = reductionBuildingPercent(press);
   return (Math.abs(spendings) * (100 - saving)) / 100;
 }
 

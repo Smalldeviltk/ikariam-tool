@@ -95,6 +95,26 @@ describe("deduplication", () => {
     for (let i = 0; i < 10; i++) reportBug("manual", new Error("same"));
     expect(getBugs()[0].contexts.length).toBeLessThanOrEqual(3);
   });
+
+  it(
+    "REGRESSION: keeps the first snapshot, how it started, beside the two " +
+      "latest - cutting the whole list to the newest three dropped it from " +
+      "the fourth snapshot on",
+    () => {
+      vi.useFakeTimers();
+      try {
+        for (let step = 0; step < 5; step++) {
+          vi.setSystemTime(new Date(Date.UTC(2026, 9, 4, 12, step)));
+          reportBug("manual", new Error("same"), { step });
+        }
+        expect(getBugs()[0].contexts.map((context) => context.step)).toEqual([
+          0, 3, 4,
+        ]);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
 });
 
 describe("context providers", () => {

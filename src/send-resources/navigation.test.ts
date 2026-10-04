@@ -287,6 +287,35 @@ describe("gotoTown town switching", () => {
     expect(via).toBe("board");
   });
 
+  it(
+    "REGRESSION: finds a town whose name has an ampersand on the board - " +
+      "the name was read as HTML, `A &amp; B`, and never matched",
+    async () => {
+      // As the page carries it: the markup escapes the ampersand.
+      document.body.innerHTML =
+        townDropdown(["W-Athens", "A &amp; B"]) +
+        `<div id="js_cityBread">W-Athens</div>` +
+        `<div id="BuildTab"><div class="city_name">` +
+        `<span class="clickable">A &amp; B</span></div></div>`;
+
+      let via = "";
+      document
+        .querySelector("#BuildTab span.clickable")!
+        .addEventListener("click", () => {
+          via = "board";
+          document.getElementById("js_cityBread")!.textContent = "A & B";
+        });
+      document
+        .querySelectorAll("#dropDown_js_citySelectContainer a")
+        .forEach((a) =>
+          a.addEventListener("click", () => void (via = "dropdown")),
+        );
+
+      await gotoTown(1);
+      expect(via).toBe("board");
+    },
+  );
+
   it("returns immediately when already in the target town", async () => {
     document.body.innerHTML =
       townDropdown(["W-Athens"]) + `<div id="js_cityBread">W-Athens</div>`;

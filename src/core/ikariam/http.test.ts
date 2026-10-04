@@ -8,6 +8,7 @@ import {
   onResponse,
   quickUpgradeTraces,
   resetHttpState,
+  TOKEN_PLACEHOLDER,
   responseFeedback,
   SUCCESS_FEEDBACK_TYPE,
   upgradeBuildingNow,
@@ -313,7 +314,7 @@ describe("the bridge between the two scripts", () => {
   });
 });
 
-describe("the sync announcement (plan item 2.6)", () => {
+describe("the sync announcement", () => {
   it(
     "reaches the other script's copy of this module — the board hears when " +
       "Send Resources starts and ends a refresh of every town",
@@ -336,7 +337,7 @@ describe("the sync announcement (plan item 2.6)", () => {
   );
 });
 
-describe("quick upgrade (plan §4.2 item E)", () => {
+describe("quick upgrade", () => {
   /** A building view as the game sends it, with its upgrade button. */
   function buildingView(href: string): unknown[] {
     return [
@@ -345,7 +346,8 @@ describe("quick upgrade (plan §4.2 item E)", () => {
         "changeView",
         [
           "academy",
-          `<div id="buildingUpgrade"><a id="js_buildingUpgradeButton" class="button" href="${href}">Upgrade</a></div>`,
+          `<div id="buildingUpgrade"><a id="js_buildingUpgradeButton" class="button" href="${href}">Upgrade</a></div>` +
+            `<form><input type="hidden" name="actionRequest" value="token-after-view"></form>`,
         ],
       ],
     ];
@@ -458,13 +460,40 @@ describe("quick upgrade (plan §4.2 item E)", () => {
         cityId: "297042",
         buildingView: "academy",
         position: "5",
-        upgradeLink: UPGRADE_LINK,
+        upgradeLink: UPGRADE_LINK.replace("token-in-link", TOKEN_PLACEHOLDER),
         outcome: { started: true, reason: null },
         error: null,
       });
       expect(trace.upgradeButton).toContain("js_buildingUpgradeButton");
       expect(trace.viewResponse).toContain("changeView");
       expect(trace.upgradeResponse).toContain("provideFeedback");
+    },
+  );
+
+  it(
+    "REGRESSION: keeps no session token in what Bug Report saves - the " +
+      "trace held the raw responses, the button and its link, all carrying " +
+      "the token, in a file the player is asked to share",
+    async () => {
+      mockFetchSequence([
+        buildingView(UPGRADE_LINK),
+        [
+          ["updateGlobalData", { actionRequest: "token-after-upgrade" }],
+          ...feedback(SUCCESS_FEEDBACK_TYPE),
+        ],
+      ]);
+      await upgradeBuildingNow(297042, "academy", 5, { minGapMs: 0 });
+
+      const saved = JSON.stringify(quickUpgradeTraces());
+      for (const token of [
+        "token-from-model",
+        "token-after-view",
+        "token-in-link",
+        "token-after-upgrade",
+      ]) {
+        expect(saved).not.toContain(token);
+      }
+      expect(saved).toContain(TOKEN_PLACEHOLDER);
     },
   );
 

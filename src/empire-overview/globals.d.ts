@@ -7,13 +7,6 @@
  */
 
 declare function GM_addStyle(css: string): HTMLStyleElement;
-declare function GM_openInTab(url: string, options?: unknown): unknown;
-declare function GM_xmlhttpRequest(details: Record<string, unknown>): unknown;
-declare function GM_registerMenuCommand(
-  name: string,
-  fn: () => void,
-  accessKey?: string,
-): number;
 
 /**
  * Helpers that `jquery-ext.ts` attaches to `$` via `$.extend({...})`.

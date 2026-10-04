@@ -43,6 +43,7 @@ export const IMPORT_NOTES = {
   keptExisting: (key: string) => `kept existing ${key}`,
   couldNotWrite: (key: string, reason: string) =>
     `could not write ${key}: ${reason}`,
+  notOurs: (key: string) => `left out ${key}: not data of these scripts`,
 } as const;
 
 /** The breakdown shown before an import is applied. */

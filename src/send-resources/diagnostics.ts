@@ -15,12 +15,12 @@
 import {
   buildBugReport,
   clearBugs,
-  exportBugReport,
   getBugs,
   registerContextProvider,
   summariseBugs,
 } from "@core/bug-report";
 import { qs, qsa } from "@core/dom";
+import { errorMessage } from "@core/format";
 import { getCurrentTownName, pageWindow } from "@core/ikariam/globals";
 import { quickUpgradeTraces } from "@core/ikariam/http";
 import { recentLogLines } from "@core/logger";
@@ -103,12 +103,12 @@ const SHIPMENT_CONTROLS =
 const OWN_CONTROLS = `#${WINDOW_ID}, .${LAUNCHER_CLASS}, #${DIALOG_ID}`;
 
 /**
- * The shipment screen as the game draws it today — the capture the trading
- * port fix waits on (`docs/improvement-plan.md` §2.A). Only on screen after
- * "Transport goods" was clicked; otherwise `present` is false.
+ * The shipment screen as the game draws it today — what the shipment handler
+ * fills in, so a report shows whether the game has changed it. Only on screen
+ * after "Transport goods" was clicked; otherwise `present` is false.
  *
- * The same fields as the console command the plan gave: the form around the
- * wine field, and every control of the game's that is showing.
+ * The form around the wine field, and every control of the game's that is
+ * showing.
  */
 function captureShipmentForm(): Record<string, unknown> {
   const wineField = qs<HTMLInputElement>(SEL.wineField);
@@ -156,8 +156,8 @@ function captureCreatePopupSource(): string | null {
 }
 
 /**
- * Game data the plan is still waiting on, read from the page as it is when
- * Bug Report is pressed. Each piece is caught on its own, so one that fails
+ * Data read from the game itself, from the page as it is when Bug Report is
+ * pressed. Each piece is caught on its own, so one that fails
  * cannot take the rest of the report with it.
  */
 export function captureGameData(): Record<string, unknown> {
@@ -165,13 +165,13 @@ export function captureGameData(): Record<string, unknown> {
     try {
       return read();
     } catch (e) {
-      return { error: String((e as Error)?.message ?? e) };
+      return { error: errorMessage(e) };
     }
   };
   return {
     shipmentForm: capture(captureShipmentForm),
     createPopupSource: capture(captureCreatePopupSource),
-    // What the game answered the board's quick upgrades (plan §4.2, E).
+    // What the game answered the board's quick upgrades.
     quickUpgrades: capture(quickUpgradeTraces),
   };
 }
@@ -248,4 +248,4 @@ export function installDiagnostics(): void {
   };
 }
 
-export { clearBugs, exportBugReport, getBugs, summariseBugs };
+export { clearBugs, getBugs, summariseBugs };

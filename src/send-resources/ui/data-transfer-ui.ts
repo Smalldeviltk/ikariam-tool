@@ -8,6 +8,7 @@
  */
 
 import {
+  accountsInBundle,
   DEFAULT_GROUPS,
   type DataGroup,
   describeBundle,
@@ -99,18 +100,14 @@ export function importDataFromFile(): void {
       .then((json) => {
         const bundle = parseBundle(json);
         const { accountName } = getState();
-        const foreign = bundle.entries
-          .map((entry) => entry.account)
-          .filter(
-            (account): account is string =>
-              !!account && account !== accountName,
-          );
+        const foreign = accountsInBundle(bundle).filter(
+          (account) => account !== accountName,
+        );
 
         let remapAccountTo: string | undefined;
         if (foreign.length > 0) {
-          const unique = [...new Set(foreign)].join(", ");
           const remap = confirm(
-            DATA_TRANSFER.otherAccount(unique, accountName),
+            DATA_TRANSFER.otherAccount(foreign.join(", "), accountName),
           );
           remapAccountTo = remap ? accountName : undefined;
           if (!remap) {

@@ -13,6 +13,9 @@ import { FLAG, KEY } from "../send-resources/state";
 import { TOWN_STATS_KEY } from "../send-resources/town-cache";
 import { BUG_REPORT_STORAGE_KEY } from "./bug-report";
 import { LOGGER_STORAGE_KEY } from "./logger";
+import { QUICK_UPGRADE_TRACE_KEY } from "./ikariam/http";
+import { NOTIFICATION_SETTINGS_KEY, NOTIFIED_KEY } from "./notifications";
+import { TRACE_STORAGE_KEY } from "../empire-overview/ajax-trace";
 
 const ACCOUNT = "Smalldevil";
 
@@ -213,6 +216,60 @@ describe("importData", () => {
     );
   });
 
+  it(
+    "REGRESSION: trusts nothing a file says about its entries - it wrote any " +
+      "key the file labelled as config, runtime state and the game's own " +
+      "included, and any value",
+    () => {
+      localStorage.clear();
+      const bundle = JSON.parse(JSON.stringify(exportData()));
+      bundle.entries = [
+        // Runtime state, labelled config.
+        {
+          key: `${ACCOUNT}ikaGlobalTaskQueue`,
+          group: "config",
+          account: ACCOUNT,
+          suffix: "ikaGlobalTaskQueue",
+          value: '[{"id":"planted"}]',
+        },
+        // A key that is not ours at all.
+        {
+          key: "someGameKey",
+          group: "config",
+          account: null,
+          suffix: "someGameKey",
+          value: "overwritten",
+        },
+        // Ours, but not a string.
+        {
+          key: "ika_perShipCapacity",
+          group: "config",
+          account: null,
+          suffix: "ika_perShipCapacity",
+          value: { not: "a string" },
+        },
+        null,
+        // A genuine entry still goes in.
+        {
+          key: `${ACCOUNT}listSender`,
+          group: "config",
+          account: ACCOUNT,
+          suffix: "listSender",
+          value: '["0"]',
+        },
+      ];
+
+      const result = importData(JSON.stringify(bundle));
+
+      expect(localStorage.getItem(`${ACCOUNT}ikaGlobalTaskQueue`)).toBeNull();
+      expect(localStorage.getItem("someGameKey")).toBeNull();
+      expect(localStorage.getItem("ika_perShipCapacity")).toBeNull();
+      expect(localStorage.getItem(`${ACCOUNT}listSender`)).toBe('["0"]');
+      expect(result.imported).toBe(1);
+      expect(result.skipped).toBe(4);
+    },
+  );
+
   it("honours a narrower group selection on import", () => {
     const json = JSON.stringify(
       exportData({ groups: ["config", "measurements"] }),
@@ -284,8 +341,22 @@ describe("every key the scripts write is classified", () => {
   });
 
   it("covers the core modules' own keys", () => {
-    for (const key of [LOGGER_STORAGE_KEY, BUG_REPORT_STORAGE_KEY]) {
+    for (const key of [
+      LOGGER_STORAGE_KEY,
+      BUG_REPORT_STORAGE_KEY,
+      QUICK_UPGRADE_TRACE_KEY,
+    ]) {
       expect(classifyKey(key), key).toMatchObject({ group: "diagnostics" });
     }
+    expect(classifyKey(NOTIFICATION_SETTINGS_KEY)).toMatchObject({
+      group: "config",
+    });
+    expect(classifyKey(NOTIFIED_KEY)).toMatchObject({ group: "runtime" });
+  });
+
+  it("covers Empire Overview's response trace", () => {
+    expect(classifyKey(TRACE_STORAGE_KEY)).toMatchObject({
+      group: "diagnostics",
+    });
   });
 });

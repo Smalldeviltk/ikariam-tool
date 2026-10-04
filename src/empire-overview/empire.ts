@@ -95,7 +95,7 @@ export const empire: any = {
   // Empire Overview on greasyfork (script 764) and offered to
   // install that over this fork. Nothing called it automatically, so the
   // checkbox did nothing either. This fork has no update source of its own
-  // yet (improvement-plan.md §4.2, item R).
+  // yet.
   HardReset: function () {
     var lang = database.settings.languageChange.value;
     // The original assigned `database = {}`, which worked because `database`

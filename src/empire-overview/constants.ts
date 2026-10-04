@@ -479,10 +479,6 @@ export const Constant: any = {
       current_Version: "Current Version<b>:</b>",
       ikariam_Version: "Ikariam Version<b>:</b>",
       reset: "Reset all settings to default",
-      goto_website: "Goto the scripts greasyfork.org website",
-      website: "Website",
-      Report_bug: "Report a bug in the script",
-      report: "Report Bug",
       save: "Save",
       save_settings: "Save settings<b>!</b>&nbsp;",
       newsticker: "Hide news ticker",
@@ -500,13 +496,11 @@ export const Constant: any = {
       alert_palace1:
         "There is still no palace present in your city.\n Please explore expansion and build a palace.",
       alert_toast: "Data Reset, reloading the page in a few seconds",
-      alert_daily: "Please enable 'Automatically confirm the daily bonus '",
       alert_wine: "Warning wine > ",
       toast_updated: "Updated: ",
       toast_movementAdded: "Movement added",
-      toast_remoteVersionUnreadable: "Could not read the remote version.",
       syncIndicator: "Spins while Send Resources refreshes every town",
-      // Desktop notifications (not in the original, plan §4.2 item J)
+      // Desktop notifications (not in the original)
       notifyBuildFinished: "Building finished",
       notifyBuildFinished_description:
         "Desktop notification when a building finishes upgrading, while the game is open",
@@ -518,12 +512,12 @@ export const Constant: any = {
       notice_arrival: "Arrived in ",
       notice_from: "From ",
       notice_otherTown: "another player's town",
-      // Quick upgrade from the Build tab (not in the original, plan §4.2 item E)
+      // Quick upgrade from the Build tab (not in the original)
       quickUpgrade: "Upgrade now",
       quickUpgrade_started: "Upgrade started: ",
       quickUpgrade_refused: "The game did not start the upgrade: ",
       quickUpgrade_failed: "Upgrade request failed: ",
-      // Tooltip on the stock figure (not in the original, plan item 2.8)
+      // Tooltip on the stock figure (not in the original)
       stockTip_stock: "In stock",
       stockTip_production: "Production",
       stockTip_consumption: "Consumption",

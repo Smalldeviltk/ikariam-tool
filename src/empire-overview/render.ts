@@ -6,7 +6,7 @@
  */
 import $, { isChrome } from "./jquery";
 import { Constant } from "./constants";
-import { Utils } from "./utils";
+import { languageText, Utils } from "./utils";
 import { database } from "./database";
 import { empire } from "./empire";
 import { events } from "./events";
@@ -20,6 +20,7 @@ import {
 import { reportBug } from "@core/bug-report";
 import { errorMessage } from "@core/format";
 import { fetchTown, upgradeBuildingNow } from "@core/ikariam/http";
+import { escapeHtml } from "@core/dom";
 
 /**
  * Added (not in the original): the town tables grew by one row per town with
@@ -31,12 +32,12 @@ import { fetchTown, upgradeBuildingNow } from "@core/ikariam/http";
 export const VISIBLE_TOWN_ROWS = 5;
 
 /**
- * Added (not in the original, plan §4.2 item J): a notification checkbox.
+ * Added (not in the original): a notification checkbox.
  * Ticking it first asks the browser for permission; a refusal unticks it
  * again and says why.
  */
 function switchNotification(kind: NotificationKind, box: HTMLInputElement) {
-  var wanted = box.checked;
+  const wanted = box.checked;
   void setNotificationEnabled(kind, wanted).then(function (on) {
     box.checked = on;
     if (wanted && !on) render.toastAlert(notificationRefusal());
@@ -48,18 +49,18 @@ export const QUICK_UPGRADE_CLASS = "empire_quickUpgrade";
 
 /** The city and building a Build tab cell stands for. */
 function cityBuildingOfCell(target) {
-  var city = database.getCityFromId(
+  const city = database.getCityFromId(
     target.parents("tr").attr("id").split("_").pop(),
   );
-  var className = target.parents("td").attr("class").split(" ").pop();
-  var building = city.getBuildingsFromName(className.slice(0, -1))[
+  const className = target.parents("td").attr("class").split(" ").pop();
+  const building = city.getBuildingsFromName(className.slice(0, -1))[
     className.charAt(className.length - 1)
   ];
   return { city: city, building: building };
 }
 
 /**
- * Added (not in the original, plan §4.2 item E): start the next level from
+ * Added (not in the original): start the next level from
  * the Build tab, without leaving the page. The button stays disabled until
  * the game has answered, so a second click cannot send a second order.
  * Each run is kept for Bug Report (`upgradeBuildingNow`).
@@ -72,8 +73,8 @@ function cityBuildingOfCell(target) {
  * it is recorded, and the toast stands.
  */
 function quickUpgrade(city, building, button) {
-  var text = Constant.LanguageData[database.settings.languageChange.value];
-  var label =
+  const text = languageText();
+  const label =
     database.getGlobalData.getLocalisedString(building.getName) +
     " (" +
     city.getName +
@@ -118,7 +119,7 @@ function quickUpgrade(city, building, button) {
 const TOWN_TAB_IDS = ["ResTab", "BuildTab", "ArmyTab"];
 
 /**
- * Added (not in the original, plan item 2.6): a small sync mark in the Town
+ * Added (not in the original): a small sync mark in the Town
  * header of every town table, spinning while Send Resources refreshes every
  * town. `main.ts` puts `SYNCING_CLASS` on the board for the length of the
  * refresh (`onSyncChange`); the state lives on the board rather than on the
@@ -792,7 +793,7 @@ export const render: any = {
           city.getWonder,
           "Brunnen des<br>Poseidon",
           "kein Tempel in",
-          city._name,
+          escapeHtml(String(city._name)),
           size,
         ]);
       }
@@ -866,8 +867,6 @@ export const render: any = {
         var rMov = database.getGlobalData.getResourceMovementsToCity(
           city.getId,
         );
-        var test: any = ""; //ToDo
-        test = $("#js_MilitaryMovementsEventRow1546373TargetLink");
         var table =
           "<table>\n    <thead>{0}</thead>\n    <tbody>{1}</tbody>\n    <tfoot>{2}</tfoot>\n</table>";
         var row =
@@ -900,7 +899,9 @@ export const render: any = {
                   false,
                   0,
                 ),
-                origin ? origin.getName : rMov[movID].getOriginCityId,
+                origin
+                  ? escapeHtml(String(origin.getName))
+                  : rMov[movID].getOriginCityId,
                 Utils.FormatRemainingTime(rMov[movID].getArrivalTime - $.now()),
                 rMov[movID].isLoading
                   ? Constant.LanguageData[lang].loading +
@@ -1100,7 +1101,7 @@ export const render: any = {
         }
       }
       /**
-       * Added (not in the original, plan item 2.8): one summary of a
+       * Added (not in the original): one summary of a
        * resource on its stock figure, which showed no tooltip. The figures
        * the bar and the production line show, in one place.
        */
@@ -1112,13 +1113,13 @@ export const render: any = {
         ) {
           return "";
         }
-        var text = Constant.LanguageData[lang];
-        var resource = city.getResource(resourceName);
-        var storage = city.maxResourceCapacities;
-        var current = resource.getCurrent;
-        var perHour = resource.getProduction * 3600;
-        var drunkPerHour = resource.getConsumption;
-        var row = function (value, label, cls?) {
+        const text = Constant.LanguageData[lang];
+        const resource = city.getResource(resourceName);
+        const storage = city.maxResourceCapacities;
+        const current = resource.getCurrent;
+        const perHour = resource.getProduction * 3600;
+        const drunkPerHour = resource.getConsumption;
+        const row = function (value, label, cls?) {
           return (
             '<tr class="data"><td' +
             (cls ? ' class="' + cls + '"' : "") +
@@ -1129,7 +1130,7 @@ export const render: any = {
             "</td></tr>"
           );
         };
-        var rows =
+        let rows =
           row(Utils.FormatNumToStr(current, false, 0), text.stockTip_stock) +
           row(
             Utils.FormatNumToStr(storage.capacity, false, 0) +
@@ -1174,7 +1175,7 @@ export const render: any = {
               "Red",
             );
         }
-        var emptyIn = resource.getEmptyTime;
+        const emptyIn = resource.getEmptyTime;
         if (isFinite(emptyIn) && emptyIn > 0) {
           rows += row(
             Utils.FormatTimeLengthToStr(emptyIn * 3600000, 2),
@@ -1182,7 +1183,7 @@ export const render: any = {
             "Red",
           );
         }
-        var fullIn = resource.getFullTime;
+        const fullIn = resource.getFullTime;
         if (fullIn > 0) {
           rows += row(
             Utils.FormatTimeLengthToStr(fullIn * 3600000, 2),
@@ -1755,7 +1756,7 @@ export const render: any = {
       '"> ' +
       Constant.LanguageData[lang].onIkaLogs +
       "</nobr></span>" +
-      // Added (not in the original, plan §4.2 item J). Stored by
+      // Added (not in the original). Stored by
       // core/notifications, which Send Resources reads too, not in
       // database.settings.
       " <hr>" +
@@ -1887,16 +1888,6 @@ export const render: any = {
       '<button data-tooltip="' +
       Constant.LanguageData[lang].reset +
       '" id="empire_Reset_Button">Reset</button>' +
-      '<button data-tooltip="' +
-      Constant.LanguageData[lang].goto_website +
-      '" id="empire_Website_Button">' +
-      Constant.LanguageData[lang].website +
-      "</button>" +
-      '<button data-tooltip="' +
-      Constant.LanguageData[lang].Report_bug +
-      '" id="empire_Bug_Button">' +
-      Constant.LanguageData[lang].report +
-      "</button>" +
       '<button data-tooltip="Check All" id="empire_CheckAll_Button">Check All</button>' +
       '<button data-tooltip="Check" id="empire_Check_Button">Check</button>' +
       '<button data-tooltip="' +
@@ -2106,9 +2097,10 @@ export const render: any = {
       .on("change", "#empire_languageChange", function () {
         database.settings.languageChange.value = this.value;
       })
-      // The project-page and feedback buttons opened a tab in the original
-      // too, and it had both disabled; they stay inert.
-      .on("click", "#empire_Website_Button", function () {})
+      // REMOVED (not in the original): the Website and Report Bug buttons.
+      // The original had both disabled, so they did nothing here either, and
+      // Website still pointed at the original's greasyfork page. Bug Report
+      // is in the Send Resources panel.
       .on("click", "#empire_Reset_Button", function () {
         empire.HardReset();
       })
@@ -2118,12 +2110,10 @@ export const render: any = {
       .on("click", "#empire_Check_Button", function () {
         empire.Check();
       })
-      .on("click", "#empire_Bug_Button", function () {})
       .on("change", "input[type='checkbox']", function () {
         this.blur();
       });
     $(document).ready(function () {
-      //todo
       if (
         $("#empire_dailyBonus").attr("checked") &&
         $("#dailyActivityBonus form")
@@ -2142,14 +2132,6 @@ export const render: any = {
     });
     $("#empire_Reset_Button").button({
       icons: { primary: "ui-icon-alert" },
-      text: true,
-    });
-    $("#empire_Website_Button").button({
-      icons: { primary: "ui-icon-home" },
-      text: true,
-    });
-    $("#empire_Bug_Button").button({
-      icons: { primary: "ui-icon-notice" },
       text: true,
     });
     $("#empire_CheckAll_Button").button({
@@ -2558,7 +2540,7 @@ export const render: any = {
         rows += Utils.format(resourceRow, [
           city.getId,
           resourceCells,
-          city._name,
+          escapeHtml(String(city._name)),
           city.getTradeGood,
           progSci,
           info,
@@ -2674,7 +2656,7 @@ export const render: any = {
         body += Utils.format(bodyRow, [
           city.getId,
           rowCells,
-          city._name,
+          escapeHtml(String(city._name)),
           barracksLink,
           shipyardLink,
           cost,
@@ -2841,7 +2823,11 @@ export const render: any = {
             }
           });
         }
-        body += Utils.format(buildingRow, [city.getId, rowCells, city._name]);
+        body += Utils.format(buildingRow, [
+          city.getId,
+          rowCells,
+          escapeHtml(String(city._name)),
+        ]);
       });
       return body;
     }
@@ -3110,15 +3096,14 @@ export const render: any = {
                   : " upgradable"
                 : ""),
           );
-        // Added (not in the original, plan §4.2 item E). Only where the
+        // Added (not in the original). Only where the
         // level shows as upgradable: enough resources, nothing being built.
         if (building.isUpgradable && !city.isUpgrading) {
           cell.append(
             '<button class="' +
               QUICK_UPGRADE_CLASS +
               '" title="' +
-              Constant.LanguageData[database.settings.languageChange.value]
-                .quickUpgrade +
+              languageText().quickUpgrade +
               '">&#9650;</button>',
           );
         }
@@ -3209,14 +3194,6 @@ export const render: any = {
     $("#SettingsTab").html(render.getSettingsTable());
     $("#empire_Reset_Button").button({
       icons: { primary: "ui-icon-alert" },
-      text: true,
-    });
-    $("#empire_Website_Button").button({
-      icons: { primary: "ui-icon-home" },
-      text: true,
-    });
-    $("#empire_Bug_Button").button({
-      icons: { primary: "ui-icon-notice" },
       text: true,
     });
     $("#empire_CheckAll_Button").button({
@@ -3318,7 +3295,11 @@ export const render: any = {
               var feedback = 0;
               while (len--) {
                 if (response[len][0] == "provideFeedback") {
-                  feedback = response[len][1][0].type;
+                  // FIX (not in the original): guarded like `formSubmitID`.
+                  // This subscriber sees every response, and `[name, null]`
+                  // is a shape the game sends.
+                  const entry = response[len][1];
+                  feedback = entry && entry[0] ? entry[0].type : 0;
                   break;
                 }
               }
@@ -3617,8 +3598,8 @@ export const render: any = {
       "click",
       "td.building span.clickable",
       function (event) {
-        var building = cityBuildingOfCell($(event.target)).building;
-        var params = building.getUrlParams;
+        const building = cityBuildingOfCell($(event.target)).building;
+        const params = building.getUrlParams;
         if (unsafeWindow.ikariam.templateView)
           unsafeWindow.ikariam.templateView.id = null;
         ikariam.loadUrl(true, "city", params);
@@ -3630,7 +3611,7 @@ export const render: any = {
       "td.building button." + QUICK_UPGRADE_CLASS,
       function (event) {
         // A disabled button (an order on its way) fires no click.
-        var found = cityBuildingOfCell($(event.target));
+        const found = cityBuildingOfCell($(event.target));
         quickUpgrade(found.city, found.building, $(this));
         return false;
       },
@@ -3918,13 +3899,13 @@ export const render: any = {
                   // full for a town that makes more than it drinks — both
                   // under the threshold often enough to raise "Warning wine"
                   // every 5 s for a town that was fine.
-                  var drains = isFinite(time);
+                  const drains = isFinite(time);
                   time =
                     time > 1
                       ? Math.floor(time) + (60 - new Date().getMinutes()) / 60
                       : 0;
                   time *= 3600000;
-                  var $emptyTime = rescells
+                  const $emptyTime = rescells
                     .find("span.emptytime")
                     .removeClass("Red Green");
                   if (drains)
@@ -3937,7 +3918,7 @@ export const render: any = {
                     drains && database.settings.wineWarningTime.value > 0
                       ? Utils.FormatTimeLengthToStr(time, 2)
                       : "";
-                  var underThreshold =
+                  const underThreshold =
                     drains &&
                     time < database.settings.wineWarningTime.value * 3600000;
                   if (!underThreshold) {

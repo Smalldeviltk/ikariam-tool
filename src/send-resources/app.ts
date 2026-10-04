@@ -14,7 +14,7 @@
  *   4. Resume whatever automation the user left running last session
  */
 
-import { qs } from "@core/dom";
+import { isTypingTarget, qs } from "@core/dom";
 import { getAccountName, getCurrentTownName } from "@core/ikariam/globals";
 import { DIALOG_ID, SEL } from "@core/ikariam/selectors";
 import { installErrorHandlers } from "@core/bug-report";
@@ -118,7 +118,6 @@ import {
   setAutoBuildButtonLabel,
   setQueueButtonLabel,
   setTransferInfo,
-  toggleZoom,
 } from "./ui/panel";
 import {
   currentTask,
@@ -232,8 +231,58 @@ function syncRunnerToFlags(): void {
 /**
  * Task types a one-off run asked for, allowed until the queue drains: Build's
  * Start runs one lap of upgrades without switching Build's timer on.
+ *
+ * Kept in `sessionStorage` too (this tab only, like `ika_pendingTownSwitch`,
+ * and out of the data export): every town switch reloads the page, and a set
+ * held in memory alone ended the lap at its first switch, leaving the rest of
+ * its upgrades queued with nothing to run them.
  */
 const oneOffRunTypes = new Set<TaskType>();
+const ONE_OFF_RUN_KEY = "ika_oneOffRunTypes";
+
+function saveOneOffRunTypes(): void {
+  try {
+    if (oneOffRunTypes.size === 0) sessionStorage.removeItem(ONE_OFF_RUN_KEY);
+    else
+      sessionStorage.setItem(
+        ONE_OFF_RUN_KEY,
+        JSON.stringify([...oneOffRunTypes]),
+      );
+  } catch {
+    // Without sessionStorage the run still goes on until the next reload.
+  }
+}
+
+function addOneOffRunType(type: TaskType): void {
+  oneOffRunTypes.add(type);
+  saveOneOffRunTypes();
+}
+
+function clearOneOffRunTypes(): void {
+  oneOffRunTypes.clear();
+  saveOneOffRunTypes();
+}
+
+/**
+ * After a page load, take back the one-off run of the page before — but only
+ * for a type that still has tasks queued; the rest of that run is over.
+ */
+function restoreOneOffRunTypes(): void {
+  let stored: unknown = [];
+  try {
+    stored = JSON.parse(sessionStorage.getItem(ONE_OFF_RUN_KEY) ?? "[]");
+  } catch {
+    stored = [];
+  }
+  oneOffRunTypes.clear();
+  if (Array.isArray(stored)) {
+    for (const type of stored as TaskType[]) {
+      if (getState().queue.listOfType(type).length > 0)
+        oneOffRunTypes.add(type);
+    }
+  }
+  saveOneOffRunTypes();
+}
 
 /** The runner's `allowsType`: a task type runs while its own switch is on. */
 function allowsTaskType(type: TaskType): boolean {
@@ -440,7 +489,7 @@ function registerUiActions(): void {
     "build.save": closeDialog,
     "build.startNow": () => {
       if (enqueueAutoBuild() === 0) return;
-      oneOffRunTypes.add("upgradeBuilding");
+      addOneOffRunType("upgradeBuilding");
       syncRunnerToFlags();
     },
     "build.toggleTimer": () => {
@@ -504,8 +553,8 @@ function registerUiActions(): void {
     "data.import": importDataFromFile,
 
     /* ── Diagnostics ── */
-    // Saved even with no bug recorded: the report also carries the game data
-    // the plan is waiting on (`captureGameData`). A file rather than the
+    // Saved even with no bug recorded: the report also carries data read from
+    // the game itself (`captureGameData`). A file rather than the
     // clipboard: a report full of repeats ran past what a chat paste keeps,
     // and the end — where the game data is — was cut off.
     "bug.report": () => {
@@ -533,7 +582,6 @@ function registerUiActions(): void {
 
     /* ── Misc ── */
     "ship.calibrate": calibrateShipCapacity,
-    "panel.toggleZoom": toggleZoom,
     "log.clear": clearLog,
     // Temporary: saves the building shown in the game's help dialog.
     "buildingHelp.save": saveBuildingHelpToFile,
@@ -559,8 +607,7 @@ function registerUiActions(): void {
  */
 function registerHotkeys(): void {
   document.addEventListener("keydown", (event) => {
-    const tag = (event.target as HTMLElement | null)?.nodeName.toLowerCase();
-    if (tag === "input" || tag === "textarea" || tag === "select") return;
+    if (isTypingTarget(event.target)) return;
 
     switch (event.code) {
       case KEY_SEND_ALL_ARMY:
@@ -626,7 +673,7 @@ export function start(): void {
     allowsType: allowsTaskType,
     isUiReady,
     onDrain: () => {
-      oneOffRunTypes.clear();
+      clearOneOffRunTypes();
       stopRunner();
       setAutoStart(false);
       setQueueButtonLabel(false);
@@ -692,5 +739,6 @@ export function start(): void {
   const lapInProgress =
     getState().queue.listOfType("upgradeBuilding").length > 0;
   if (autoBuildStart && !loadedAfterRun && !lapInProgress) enqueueAutoBuild();
+  restoreOneOffRunTypes();
   syncRunnerToFlags();
 }

@@ -35,7 +35,7 @@ import { database } from "./database";
 import { debug } from "./debug";
 import { empire } from "./empire";
 import { events } from "./events";
-import { ikariam } from "./game-api";
+import { FETCHED_RESPONSE, ikariam } from "./game-api";
 import { render, SYNCING_CLASS } from "./render";
 import "./helpers";
 import "./resource-production";
@@ -75,11 +75,13 @@ if (debug) {
  * the same path and are indistinguishable downstream.
  */
 onIkariamResponse((entries) => {
-  events("ajaxResponse").pub(entries);
+  // Marked as fetched: none of it is on the page, so the board must not read
+  // its view from the DOM (`parseViewData`).
+  events("ajaxResponse").pub(entries, FETCHED_RESPONSE);
 });
 
 /**
- * Added (not in the original, plan item 2.6): spin the Town headers' sync
+ * Added (not in the original): spin the Town headers' sync
  * mark while Send Resources refreshes every town. The class goes on the
  * board, not on the marks, so the tables can be redrawn meanwhile.
  */

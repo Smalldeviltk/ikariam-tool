@@ -239,8 +239,8 @@ export function planWineRun(fromTown: string): WineRunPlan {
     supply,
     reserve,
     boardAvailable: board.size > 0,
-    // Whole merchant ships (plan item S), and the wine drunk on the way to
-    // each town (plan item T).
+    // Whole merchant ships, and the wine drunk on the way to
+    // each town.
     ...distributeWine(buildWineTowns(receivers, board, fromTown), supply, {
       shipCapacity: getPerShipCapacity(),
     }),

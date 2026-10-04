@@ -49,10 +49,6 @@ th { font-weight: bold; }
    toggle. The flag still hides the Empire Overview board, which has no such
    mechanism of its own. */
 #empireBoard { display: ${panelDisplay}; }
-
-/* The zoom toggle now scales the window in place rather than nudging a
-   fixed-position panel back onto the screen. */
-.zoom { transform: scale(0.8); transform-origin: top left; }
 .ika-queue-table { font-size: 10px; }
 .ika-queue-table th, .ika-queue-table td { padding: 2px 4px; text-align: left; }
 .ika-queue-table tr.active { background: #efdca8; font-weight: bold; }

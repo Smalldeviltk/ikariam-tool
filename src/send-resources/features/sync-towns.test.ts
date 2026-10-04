@@ -159,7 +159,7 @@ describe("syncAllTowns", () => {
   });
 });
 
-describe("the sync announcement (plan item 2.6)", () => {
+describe("the sync announcement", () => {
   function listen(): string[] {
     const heard: string[] = [];
     document.addEventListener("ika:syncStarted", () => heard.push("started"));

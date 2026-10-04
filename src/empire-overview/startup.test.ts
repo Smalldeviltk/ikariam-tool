@@ -54,9 +54,6 @@ function installGrants(): void {
     GM_getValue: (k: string, d?: unknown) => (store.has(k) ? store.get(k) : d),
     GM_setValue: (k: string, v: unknown) => void store.set(k, v),
     GM_deleteValue: (k: string) => void store.delete(k),
-    GM_registerMenuCommand: () => 0,
-    GM_xmlhttpRequest: () => undefined,
-    GM_openInTab: () => undefined,
   });
 }
 
@@ -133,6 +130,32 @@ async function boot(): Promise<void> {
   document.dispatchEvent(new Event("DOMContentLoaded"));
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
+
+/**
+ * Every interval a test's board starts, stopped once the test is over.
+ *
+ * `vi.resetModules()` gives each test a fresh board but leaves the previous
+ * one's timers running: each town projects its population every second and
+ * redraws its row of a board that is gone by then, and throws. A throw used
+ * to kill that board's topic in silence; now that subscribers are isolated
+ * it is reported, and a test that checks the bug reporter would read another
+ * test's board.
+ */
+const realSetInterval = globalThis.setInterval;
+const startedIntervals: ReturnType<typeof setInterval>[] = [];
+
+beforeEach(() => {
+  globalThis.setInterval = ((...args: Parameters<typeof setInterval>) => {
+    const id = realSetInterval(...args);
+    startedIntervals.push(id);
+    return id;
+  }) as typeof setInterval;
+});
+
+afterEach(() => {
+  globalThis.setInterval = realSetInterval;
+  for (const id of startedIntervals.splice(0)) clearInterval(id);
+});
 
 describe("Empire Overview startup", () => {
   beforeEach(() => {
@@ -229,8 +252,19 @@ describe("Empire Overview startup", () => {
   );
 
   it(
+    "offers no Website or Report Bug button - both did nothing, Website " +
+      "still pointing at the original's greasyfork page",
+    async () => {
+      await boot();
+      expect(document.querySelector("#empire_Reset_Button")).not.toBeNull();
+      expect(document.querySelector("#empire_Website_Button")).toBeNull();
+      expect(document.querySelector("#empire_Bug_Button")).toBeNull();
+    },
+  );
+
+  it(
     "puts a sync mark in the Town header of all three town tables, and " +
-      "spins it while Send Resources refreshes every town (plan item 2.6)",
+      "spins it while Send Resources refreshes every town",
     async () => {
       await boot();
       const marks = document.querySelectorAll(
@@ -555,40 +589,36 @@ describe("Empire Overview startup", () => {
     },
   );
 
-  it(
-    "summarises a resource on its stock figure, which showed no tooltip " +
-      "(plan item 2.8)",
-    async () => {
-      await boot();
-      const { render } = await import("./render");
-      const { database } = await import("./database");
-      const wine = database.getCityFromId(297034).getResource("wine");
-      wine._current = 1200;
-      wine._consumption = 100;
+  it("summarises a resource on its stock figure, which showed no tooltip", async () => {
+    await boot();
+    const { render } = await import("./render");
+    const { database } = await import("./database");
+    const wine = database.getCityFromId(297034).getResource("wine");
+    wine._current = 1200;
+    wine._consumption = 100;
 
-      const stock = document.querySelector(
-        "#ResTab td.resource.wine span.current",
-      )!;
-      expect(stock.getAttribute("data-tooltip")).toBe("dynamic");
+    const stock = document.querySelector(
+      "#ResTab td.resource.wine span.current",
+    )!;
+    expect(stock.getAttribute("data-tooltip")).toBe("dynamic");
 
-      const tip: string = render.toolTip.dynamicTip(297034, stock);
-      expect(tip).toContain("icon_wine.png");
-      expect(tip).toContain("« In stock");
-      expect(tip).toContain("« Capacity");
-      expect(tip).toContain("« Safe");
-      expect(tip).toContain("« Consumption / 1h");
-      expect(tip).toContain("« Empty in");
+    const tip: string = render.toolTip.dynamicTip(297034, stock);
+    expect(tip).toContain("icon_wine.png");
+    expect(tip).toContain("« In stock");
+    expect(tip).toContain("« Capacity");
+    expect(tip).toContain("« Safe");
+    expect(tip).toContain("« Consumption / 1h");
+    expect(tip).toContain("« Empty in");
 
-      // Gold has its own tooltips and no store.
-      const gold = document.querySelector(
-        "#ResTab td.resource.gold span.current",
-      );
-      expect(gold).toBeTruthy();
-      expect(render.toolTip.dynamicTip(297034, gold)).toBe("");
-    },
-  );
+    // Gold has its own tooltips and no store.
+    const gold = document.querySelector(
+      "#ResTab td.resource.gold span.current",
+    );
+    expect(gold).toBeTruthy();
+    expect(render.toolTip.dynamicTip(297034, gold)).toBe("");
+  });
 
-  describe("the quick upgrade button (plan §4.2 item E)", () => {
+  describe("the quick upgrade button", () => {
     /**
      * W-Athens with an Academy at position 5, and a Build tab row holding
      * its cell. `upgradable` stands in for the board's own cost check,
@@ -739,6 +769,172 @@ describe("Empire Overview startup", () => {
         vi.doUnmock("@core/ikariam/http");
       }
     });
+  });
+
+  it(
+    "REGRESSION: draws a town's name as text, never as markup - the name " +
+      "comes from stored data, which an imported file fills",
+    async () => {
+      await boot();
+      const { render } = await import("./render");
+      const { database } = await import("./database");
+      // The rows put the name inside `data-tooltip="…"`: a quote in it would
+      // close the attribute and add any attribute after it.
+      database.getCityFromId(297034)._name = 'x" data-planted="1';
+
+      render.DrawTables();
+
+      expect(document.querySelector("[data-planted]")).toBeNull();
+    },
+  );
+
+  describe("a response or a subscriber that throws", () => {
+    /** A town's global data, as a response carries it. */
+    const townData = (id: number) => [
+      "updateGlobalData",
+      {
+        backgroundData: { id, position: [] },
+        headerData: {
+          currentResources: { resource: 100, 1: 100, 2: 100, 3: 100, 4: 100 },
+          resourceProduction: 0,
+          producedTradegood: 1,
+          wineSpendings: 0,
+        },
+      },
+    ];
+
+    /** What `core/ikariam/http.ts` announces for a response it fetched. */
+    const announceFetched = (entries: unknown[]) =>
+      document.dispatchEvent(
+        new CustomEvent("ika:ajaxResponse", { detail: entries }),
+      );
+
+    const bugReports = (): string =>
+      localStorage.getItem("ikaBugReports") ?? "[]";
+
+    it(
+      "REGRESSION: a subscriber that throws stops neither the others nor " +
+        "any later publish - jQuery's Callbacks left `firing` set, and " +
+        "queued every later publish on that topic for ever",
+      async () => {
+        await boot();
+        const { events } = await import("./events");
+        const seen: unknown[] = [];
+        const recorder = (value: unknown) => seen.push(value);
+        events("isolationProbe").sub(() => {
+          throw new Error("subscriber failed");
+        });
+        events("isolationProbe").sub(recorder);
+
+        events("isolationProbe").pub(1);
+        events("isolationProbe").pub(2);
+        expect(seen).toEqual([1, 2]);
+        expect(bugReports()).toContain("subscriber failed");
+
+        // `unsub` still finds a handler that was subscribed wrapped.
+        events("isolationProbe").unsub(recorder);
+        events("isolationProbe").pub(3);
+        expect(seen).toEqual([1, 2]);
+      },
+    );
+
+    it(
+      "REGRESSION: a fetched Palace view - the quick upgrade on a Palace " +
+        "cell - neither stops the board recording nor blanks the form of " +
+        "government",
+      async () => {
+        await boot();
+        const { events } = await import("./events");
+        const { database } = await import("./database");
+        const government = database.getGlobalData.getGovernmentType;
+        const recorded: unknown[] = [];
+        events("updateCityData").sub((id: unknown) => recorded.push(id));
+
+        announceFetched([
+          townData(297034),
+          ["changeView", ["palace", "<div id='palace'></div>"]],
+        ]);
+        expect(database.getGlobalData.getGovernmentType).toBe(government);
+
+        // The board still hears the next response.
+        events("ajaxResponse").pub([townData(297034)]);
+        expect(recorded).toEqual([297034, 297034]);
+      },
+    );
+
+    it(
+      "still reads a fetched Town Hall - a scan's request - from its " +
+        "template data, without an 'Updated:' toast that has no town name",
+      async () => {
+        await boot();
+        const { database } = await import("./database");
+
+        announceFetched([
+          townData(297034),
+          ["changeView", ["townHall", ""]],
+          [
+            "updateTemplateData",
+            {
+              js_TownHallSatisfactionOverviewCultureBoniTreatyBonusValue: {
+                text: "0",
+              },
+              js_TownHallPopulationGraphPriestCount: { text: "5" },
+              js_TownHallPopulationGraphScientistCount: { text: "7" },
+            },
+          ],
+        ]);
+
+        expect(database.getCityFromId(297034)._priests).toBe(5);
+        expect(document.body.textContent).not.toContain("Updated:");
+      },
+    );
+
+    it(
+      "REGRESSION: a fetched town does not become the board's current " +
+        "town - after a scan the board took the last town scanned for the " +
+        "one on screen, after a quick upgrade the town upgraded",
+      async () => {
+        await boot();
+        const { events } = await import("./events");
+        const { ikariam } = await import("./game-api");
+        const changes: unknown[] = [];
+        events("cityChanged").sub((id: unknown) => changes.push(id));
+        expect(ikariam.CurrentCityId).toBe(297034);
+
+        announceFetched([townData(297035)]);
+        expect(ikariam.CurrentCityId).toBe(297034);
+        expect(changes).toEqual([]);
+
+        // A response the game drew still moves it.
+        events("ajaxResponse").pub([townData(297035)]);
+        expect(ikariam.CurrentCityId).toBe(297035);
+        expect(changes).toEqual([297035]);
+      },
+    );
+
+    it(
+      "the game's upgrade button tolerates a provideFeedback entry with " +
+        "nothing in it",
+      async () => {
+        await boot();
+        const { events } = await import("./events");
+        document.body.insertAdjacentHTML(
+          "beforeend",
+          '<a id="js_buildingUpgradeButton" ' +
+            'href="?action=CityScreen&function=upgradeBuilding&cityId=297034&position=5">up</a>',
+        );
+        document.getElementById("js_buildingUpgradeButton")!.click();
+
+        events("ajaxResponse").pub([["provideFeedback", null]]);
+
+        const fromResponses = (
+          JSON.parse(bugReports()) as { contexts?: { topic?: string }[] }[]
+        ).filter((report) =>
+          report.contexts?.some((context) => context.topic === "ajaxResponse"),
+        );
+        expect(fromResponses).toEqual([]);
+      },
+    );
   });
 
   it("records nothing in the bug reporter", async () => {

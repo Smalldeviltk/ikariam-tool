@@ -24,6 +24,7 @@
 
 import { pageWindow } from "./ikariam/globals";
 import { writeToConsole } from "./logger";
+import { errorMessage } from "./format";
 import { BUGS_NONE_RECORDED } from "./messages";
 
 /** Where recorded bugs are kept. */
@@ -150,7 +151,7 @@ function collectContext(extra?: Record<string, unknown>): BugContext {
       Object.assign(context, provider());
     } catch (e) {
       // A broken provider must not stop the bug being recorded.
-      context.providerError = String((e as Error)?.message ?? e);
+      context.providerError = errorMessage(e);
     }
   }
   return context;
@@ -228,13 +229,13 @@ export function reportBug(
       if (!newest || now - newest.at >= RESNAPSHOT_INTERVAL_MS) {
         // Keep the first snapshot plus the most recent ones: the first shows
         // how it started, the latest shows whether anything has changed since.
+        // The first is kept apart: cutting the whole list to the newest
+        // `MAX_CONTEXTS` dropped it from the fourth snapshot on.
+        const [first, ...later] = existing.contexts;
         existing.contexts = [
-          existing.contexts[0],
-          ...existing.contexts.slice(1),
-          collectContext(extra),
-        ]
-          .filter(Boolean)
-          .slice(-MAX_CONTEXTS);
+          first,
+          ...[...later, collectContext(extra)].slice(-(MAX_CONTEXTS - 1)),
+        ].filter(Boolean);
       }
     } else {
       const context = collectContext(extra);

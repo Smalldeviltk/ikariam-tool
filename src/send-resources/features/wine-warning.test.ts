@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { initState, getState } from "../state";
+import { initState, getState, saveSenders } from "../state";
 import { saveTownStats } from "../town-cache";
 import {
   CRITICAL_HOURS,
@@ -200,6 +200,24 @@ describe("notifyLowWine", () => {
       );
       // M-Aegina has no figures: neither said nor forgotten.
       expect(forgetNotification).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it(
+    "REGRESSION: says nothing about a town ticked as an Auto Wine source - " +
+      "each run leaves it one hour of wine on purpose, and it makes its own, " +
+      "so it read as running dry after every run",
+    () => {
+      const athens = wineStatus().find((t) => t.townName === "W-Athens")!;
+      expect(athens.severity).toBe("critical");
+      saveSenders([athens.townNumber]);
+
+      notifyLowWine("tester");
+
+      expect(notify).not.toHaveBeenCalled();
+      const asSource = wineStatus().find((t) => t.townName === "W-Athens")!;
+      expect(asSource.hoursLeft).toBeNull();
+      expect(asSource.severity).toBe("ok");
     },
   );
 

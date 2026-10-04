@@ -147,7 +147,7 @@ describe("buildWineTowns", () => {
 
   it(
     "carries the recorded time of the route from the source, so the plan " +
-      "counts the wine drunk on the way (plan item T)",
+      "counts the wine drunk on the way",
     () => {
       // City ids are what routes are recorded by.
       document.body.innerHTML =

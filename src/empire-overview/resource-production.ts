@@ -53,7 +53,7 @@ export const ResourceProduction: any = new (function () {
    * fallback, so a page where the press cannot be read behaves as before.
    */
   function wineDrain() {
-    var net = modelWineConsumption();
+    const net = modelWineConsumption();
     return net === null ? unsafeWindow.ikariam.model.wineSpendings : net;
   }
   this.updateProd = function () {
@@ -103,7 +103,7 @@ $(function () {
       reportBug("manual", e, { where: "production span: reposition" });
     }
     // Called on the model, as the original did, whatever `this` the game used.
-    var result =
+    const result =
       unsafeWindow.ikariam.model.ResourceProduction_updateGlobalData.apply(
         unsafeWindow.ikariam.model,
         arguments,

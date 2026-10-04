@@ -7,7 +7,7 @@
 
 import { reportSelectorMiss } from "@core/bug-report";
 import {
-  addStyle,
+  ensureStyle,
   capVisibleRows,
   escapeHtml,
   qs,
@@ -15,7 +15,11 @@ import {
   removeElement,
 } from "@core/dom";
 import { formatInteger } from "@core/format";
-import { getCurrentTownName, getIkariam } from "@core/ikariam/globals";
+import {
+  getCurrentTownName,
+  getIkariam,
+  readTownName,
+} from "@core/ikariam/globals";
 import { DIALOG_ID, SEL } from "@core/ikariam/selectors";
 import { showToast } from "@core/ui/window";
 import { getTownList, getTownNameFromList } from "../navigation";
@@ -87,7 +91,7 @@ export function renderResourceTable(): void {
       (task, index) => `<tr>
         <td>${escapeHtml(getTownNameFromList(task.data.origin))}</td>
         <td>${escapeHtml(getTownNameFromList(task.data.destination))}</td>
-        <td>${resourceLabel(task.data.resource)}</td>
+        <td>${escapeHtml(resourceLabel(task.data.resource))}</td>
         <td>${task.data.amount}</td>
         <td>${escapeHtml(task.data.label ?? "")}</td>
         <td>${moveButtons(
@@ -166,8 +170,7 @@ function sendAmountsStyles(): string {
 }
 
 function installSendAmountsStyles(): void {
-  if (document.getElementById(SEND_AMOUNTS_STYLE_ID)) return;
-  addStyle(sendAmountsStyles()).id = SEND_AMOUNTS_STYLE_ID;
+  ensureStyle(SEND_AMOUNTS_STYLE_ID, sendAmountsStyles);
 }
 
 export function openSendResourcesDialog(): void {
@@ -409,9 +412,7 @@ export function renderTownQueue(townName: string): string {
 }
 
 export function openAutoBuildDialog(): void {
-  const townNames = qsa<HTMLElement>(SEL.buildTabTownNames).map((span) =>
-    span.innerHTML.trim(),
-  );
+  const townNames = qsa<HTMLElement>(SEL.buildTabTownNames).map(readTownName);
 
   const headers = headerCells(townNames.map(escapeHtml));
   const cells = townNames

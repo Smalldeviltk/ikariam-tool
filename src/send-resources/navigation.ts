@@ -7,7 +7,11 @@
 
 import { clickIfPresent, qs, qsa, waitForElement } from "@core/dom";
 import { waitFor } from "@core/async";
-import { getCurrentTownName, pageWindow } from "@core/ikariam/globals";
+import {
+  getCurrentTownName,
+  pageWindow,
+  readTownName,
+} from "@core/ikariam/globals";
 import { modelCityName } from "@core/ikariam/model";
 import { SEL } from "@core/ikariam/selectors";
 import { logInfo } from "@core/logger";
@@ -75,8 +79,9 @@ export function getTownNameFromList(townNumber: number | string): string {
 
   const anchor = townAnchor(townNumber);
   if (!anchor) return "";
-  // `title` carries the clean name; innerHTML has the stray leading space.
-  return (anchor.getAttribute("title") ?? anchor.innerHTML).trim();
+  // `title` carries the clean name; the text has a stray leading space, which
+  // `readTownName` trims.
+  return anchor.getAttribute("title")?.trim() ?? readTownName(anchor);
 }
 
 /**
@@ -277,7 +282,7 @@ function submitChangeCityForm(townNumber: number | string): boolean {
  */
 function clickBoardTownName(target: string): boolean {
   for (const span of qsa<HTMLElement>(SEL.buildTabTownNames)) {
-    if (span.innerHTML.trim() === target) {
+    if (readTownName(span) === target) {
       span.click();
       return true;
     }

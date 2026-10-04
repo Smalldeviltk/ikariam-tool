@@ -9,18 +9,18 @@ import { Constant } from "../constants";
 import { MilitaryUnits } from "../models/military";
 import { database } from "../database";
 import { events } from "../events";
+import { languageText } from "../utils";
 import { notify } from "@core/notifications";
 
 /**
- * Added (not in the original, plan §4.2 item J): the desktop notification
+ * Added (not in the original): the desktop notification
  * for an arrival, whoever owns the town it reached. A movement that arrived
  * while the game was closed is dropped by `notify` as stale.
  */
 function notifyArrival(movement) {
-  // English when the settings are not loaded yet (the table falls back).
-  var text = Constant.LanguageData[database.settings?.languageChange?.value];
-  var townName = function (cityId) {
-    var city = database.getCityFromId(cityId);
+  const text = languageText();
+  const townName = function (cityId) {
+    const city = database.getCityFromId(cityId);
     return city ? city.getName : text.notice_otherTown;
   };
   notify({
