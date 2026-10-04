@@ -18,6 +18,7 @@
 // @grant        GM_setValue
 // @grant        GM_xmlhttpRequest
 // @grant        unsafeWindow
+// @grant        window.focus
 // ==/UserScript==
 
 (function () {
@@ -117,11 +118,19 @@
       return obj;
     },
   });
+  var NOTIFICATION_PERMISSION = {
+    blocked:
+      "The browser did not allow notifications for this site. Allow them in the site settings (the icon left of the address), then tick the box again.",
+    unsupported: "This browser cannot show notifications.",
+  };
   function errorMessage(error) {
     if (error instanceof Error) return error.message;
     return String(error);
   }
   var DEFAULT_TIMEOUT_MS = 15e3;
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
   function waitFor(predicate, options = {}) {
     const {
       intervalMs = 200,
@@ -170,6 +179,7 @@
     changeCityForm: "#changeCityForm",
     changeCityInput: "#js_cityIdOnChange",
     loadingIndicator: "#loadingPreview",
+    menuSlots: ".menu_slots",
     cityLink: "#js_cityLink > a",
     backlinkButton: "#js_backlinkButton",
     globalMenu: {
@@ -181,14 +191,17 @@
         `#js_GlobalMenu_${resource === "glass" ? "crystal" : resource}`,
     },
     position: (n) => `#position${n}`,
-    cityPositionLink: (n) => `#js_CityPosition${n}Link`,
     buildings: "div[id^='position'].building:not(.buildingGround)",
     winePress: "div[id^='position'].building.vineyard",
     buildingHover: ".hoverable",
     constructionSite: ".constructionSite",
     safehouse: "div.building.safehouse > a",
     buildingUpgradeButton: "#js_buildingUpgradeButton",
-    dockCities: ".cities.clearfix > li > a",
+    shipmentForm: "#transportForm",
+    shipmentLoadingTime: "#loadingTime",
+    shipmentJourneyTime: "#journeyTime",
+    shipmentDestination: (cityId) =>
+      `#transportForm input[name="destinationCityId"][value="${cityId}"]`,
     resourceField: (resource) => `#textfield_${resource}`,
     wineField: "#textfield_wine",
     submit: "#submit",
@@ -220,6 +233,13 @@
   }
   function getCurrentTownName() {
     return qs(SEL.cityBread)?.textContent?.trim() ?? "";
+  }
+  function writeToConsole(level, ...args) {
+    try {
+      const write =
+        typeof console[level] === "function" ? console[level] : console.log;
+      if (typeof write === "function") write.apply(console, args);
+    } catch {}
   }
   var BUG_REPORT_STORAGE_KEY = "ikaBugReports";
   var MAX_RECORDS = 50;
@@ -318,7 +338,8 @@
       save(records);
       const count = existing ? existing.count : 1;
       if (isLogWorthy(count))
-        console.warn(
+        writeToConsole(
+          "warn",
           `[ika] bug recorded (${kind}): ${message}` +
             (count > 1 ? ` [x${count}]` : ""),
         );
@@ -342,6 +363,10 @@
       reportBug("unhandled-rejection", event.reason);
     });
   }
+  var DEFAULT_MIN_GAP_MS = 300;
+  var REQUEST_TIMEOUT_MS = 15e3;
+  var latestToken = null;
+  var lastRequestAt = 0;
   var RESPONSE_EVENT = "ika:ajaxResponse";
   var listeners = [];
   function onResponse(handler) {
@@ -358,6 +383,212 @@
       document.removeEventListener(RESPONSE_EVENT, listener);
       const index = listeners.indexOf(listener);
       if (index >= 0) listeners.splice(index, 1);
+    };
+  }
+  function publishResponse(entries) {
+    try {
+      document.dispatchEvent(
+        new CustomEvent(RESPONSE_EVENT, { detail: entries }),
+      );
+    } catch {}
+  }
+  function actionRequestToken() {
+    const model = pageWindow.ikariam?.model;
+    const fromModel =
+      typeof model?.actionRequest === "string" ? model.actionRequest : null;
+    return latestToken ?? fromModel;
+  }
+  function absorbToken(entries) {
+    for (const entry of entries) {
+      if (!Array.isArray(entry)) continue;
+      const payload = entry[1];
+      if (payload && typeof payload.actionRequest === "string") {
+        latestToken = payload.actionRequest;
+        return;
+      }
+    }
+  }
+  async function ikariamRequest(params, options = {}) {
+    const token = actionRequestToken();
+    if (!token)
+      throw new Error("No actionRequest available - the game has not loaded");
+    const gap = options.minGapMs ?? DEFAULT_MIN_GAP_MS;
+    const since = Date.now() - lastRequestAt;
+    if (lastRequestAt !== 0 && since < gap) await sleep(gap - since);
+    lastRequestAt = Date.now();
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params))
+      query.set(key, String(value));
+    query.set("actionRequest", token);
+    query.set("ajax", "1");
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      options.timeoutMs ?? REQUEST_TIMEOUT_MS,
+    );
+    let text;
+    try {
+      const response = await fetch("/index.php?" + query.toString(), {
+        credentials: "same-origin",
+        signal: controller.signal,
+      });
+      if (!response.ok)
+        throw new Error(`Ikariam request failed with HTTP ${response.status}`);
+      text = await response.text();
+    } finally {
+      clearTimeout(timeout);
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw new Error(
+        `Ikariam returned ${text.length} bytes that are not JSON - session expired, or this is a login page`,
+      );
+    }
+    if (!Array.isArray(parsed))
+      throw new Error("Ikariam returned JSON that is not a response array");
+    absorbToken(parsed);
+    publishResponse(parsed);
+    return parsed;
+  }
+  function fetchTown(cityId, options) {
+    return ikariamRequest(
+      {
+        view: "townHall",
+        cityId,
+        position: 0,
+        backgroundView: "city",
+        currentCityId: cityId,
+      },
+      options,
+    );
+  }
+  function htmlToText(html) {
+    return (
+      new DOMParser().parseFromString(html, "text/html").body.textContent ?? ""
+    )
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+  function responseFeedback(entries) {
+    for (const entry of entries) {
+      if (!Array.isArray(entry) || entry[0] !== "provideFeedback") continue;
+      const first = Array.isArray(entry[1]) ? entry[1][0] : null;
+      if (!first || typeof first !== "object") continue;
+      const { type, text } = first;
+      return {
+        type: Number(type),
+        text: typeof text === "string" && text.trim() ? htmlToText(text) : null,
+      };
+    }
+    return null;
+  }
+  function findUpgradeButton(value) {
+    if (typeof value === "string") {
+      if (!value.includes("js_buildingUpgradeButton")) return null;
+      return new DOMParser()
+        .parseFromString(value, "text/html")
+        .querySelector("#js_buildingUpgradeButton");
+    }
+    if (!value || typeof value !== "object") return null;
+    for (const child of Object.values(value)) {
+      const button = findUpgradeButton(child);
+      if (button) return button;
+    }
+    return null;
+  }
+  function findUpgradeLink(value) {
+    const href = findUpgradeButton(value)?.getAttribute("href");
+    return href && href !== "#" ? href : null;
+  }
+  var QUICK_UPGRADE_TRACE_KEY = "ikaQuickUpgradeTrace";
+  var TRACE_RESPONSE_CHARS = 2e4;
+  function quickUpgradeTraces() {
+    try {
+      const raw = localStorage.getItem(QUICK_UPGRADE_TRACE_KEY);
+      const list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list : [];
+    } catch {
+      return [];
+    }
+  }
+  function recordQuickUpgrade(trace) {
+    try {
+      const list = [...quickUpgradeTraces(), trace].slice(-5);
+      localStorage.setItem(QUICK_UPGRADE_TRACE_KEY, JSON.stringify(list));
+    } catch {}
+  }
+  function traceResponse(entries) {
+    return JSON.stringify(entries).slice(0, TRACE_RESPONSE_CHARS);
+  }
+  async function upgradeBuildingNow(cityId, buildingView, position, options) {
+    const trace = {
+      at: new Date().toISOString(),
+      cityId: String(cityId),
+      buildingView,
+      position: String(position),
+      viewResponse: null,
+      upgradeButton: null,
+      upgradeLink: null,
+      upgradeResponse: null,
+      outcome: null,
+      error: null,
+    };
+    try {
+      const view = await ikariamRequest(
+        {
+          view: buildingView,
+          cityId,
+          position,
+          backgroundView: "city",
+          currentCityId: cityId,
+        },
+        options,
+      );
+      trace.viewResponse = traceResponse(view);
+      trace.upgradeButton = findUpgradeButton(view)?.outerHTML ?? null;
+      const link = findUpgradeLink(view);
+      trace.upgradeLink = link;
+      if (!link) {
+        trace.outcome = {
+          started: false,
+          reason: responseFeedback(view)?.text ?? null,
+        };
+        return trace.outcome;
+      }
+      const params = {};
+      new URLSearchParams(link.slice(link.indexOf("?") + 1)).forEach(
+        (value, key) => {
+          params[key] = value;
+        },
+      );
+      const answer = await ikariamRequest(params, options);
+      trace.upgradeResponse = traceResponse(answer);
+      const feedback = responseFeedback(answer);
+      const started = feedback?.type === 10;
+      trace.outcome = {
+        started,
+        reason: started ? null : (feedback?.text ?? null),
+      };
+      return trace.outcome;
+    } catch (e) {
+      trace.error = String(e?.message ?? e);
+      throw e;
+    } finally {
+      recordQuickUpgrade(trace);
+    }
+  }
+  var SYNC_STARTED_EVENT = "ika:syncStarted";
+  var SYNC_FINISHED_EVENT = "ika:syncFinished";
+  function onSyncChange(handler) {
+    const started = () => handler(true);
+    const finished = () => handler(false);
+    document.addEventListener(SYNC_STARTED_EVENT, started);
+    document.addEventListener(SYNC_FINISHED_EVENT, finished);
+    return () => {
+      document.removeEventListener(SYNC_STARTED_EVENT, started);
+      document.removeEventListener(SYNC_FINISHED_EVENT, finished);
     };
   }
   function boardHealth() {
@@ -497,453 +728,201 @@
     };
     return retEvents;
   })();
-  function Building(city, pos) {
-    this._position = pos;
-    this._level = 0;
-    this._name = null;
-    this.city = Utils.wrapInClosure(city);
-    this._updateTimer = null;
-    this._statusPoll = null;
+  var NOTIFICATION_SETTINGS_KEY = "ikaNotifications";
+  var NOTIFIED_KEY = "ikaNotified";
+  var NOTIFIED_MEMORY_MS = 168 * 36e5;
+  function readJson(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch {
+      return fallback;
+    }
   }
-  Building.prototype = {
-    startUpgradeTimer: function () {
-      if (this._updateTimer) {
-        this._updateTimer();
-        delete this._updateTimer;
-      }
-      if (this._statusPoll) {
-        this._statusPoll();
-        delete this._statusPoll;
-      }
-      if (this._completionTime)
-        if (this._completionTime - jq.now() < 5e3) this.completeUpgrade();
-        else
-          this._updateTimer = events.scheduleActionAtTime(
-            this.completeUpgrade.bind(this),
-            this._completionTime - 4e3,
+  function writeJson(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (e) {
+      writeToConsole("warn", e);
+    }
+  }
+  function notificationApi() {
+    return globalThis.Notification;
+  }
+  function isNotificationEnabled(kind) {
+    return readJson(NOTIFICATION_SETTINGS_KEY, {})[kind] === true;
+  }
+  async function setNotificationEnabled(kind, enabled) {
+    let on = enabled;
+    if (on) {
+      const api = notificationApi();
+      if (!api) on = false;
+      else if (api.permission !== "granted")
+        try {
+          on = (await api.requestPermission()) === "granted";
+        } catch (e) {
+          writeToConsole("warn", e);
+          on = false;
+        }
+    }
+    const settings = readJson(NOTIFICATION_SETTINGS_KEY, {});
+    settings[kind] = on;
+    writeJson(NOTIFICATION_SETTINGS_KEY, settings);
+    return on;
+  }
+  function notificationRefusal() {
+    return notificationApi()
+      ? NOTIFICATION_PERMISSION.blocked
+      : NOTIFICATION_PERMISSION.unsupported;
+  }
+  function notify(notice) {
+    if (!isNotificationEnabled(notice.kind)) return false;
+    const api = notificationApi();
+    if (!api || api.permission !== "granted") return false;
+    const now = Date.now();
+    if (notice.happenedAt !== void 0 && now - notice.happenedAt > 12e4)
+      return false;
+    const shown = readJson(NOTIFIED_KEY, {});
+    if (notice.key in shown) return false;
+    for (const [key, at] of Object.entries(shown))
+      if (now - at > NOTIFIED_MEMORY_MS) delete shown[key];
+    shown[notice.key] = now;
+    writeJson(NOTIFIED_KEY, shown);
+    try {
+      const shownNotice = new api(notice.title, {
+        body: notice.body,
+        tag: notice.key,
+      });
+      shownNotice.onclick = () => {
+        window.focus();
+        shownNotice.close();
+      };
+    } catch (e) {
+      writeToConsole("warn", e);
+      return false;
+    }
+    return true;
+  }
+  function makeStore(prefix) {
+    const fullKey = (key) => prefix + key;
+    function get(key, fallback) {
+      const raw = localStorage.getItem(fullKey(key));
+      if (raw === null && fallback !== void 0) return fallback;
+      return raw;
+    }
+    return {
+      get,
+      set(key, value) {
+        localStorage.setItem(fullKey(key), value);
+      },
+      remove(key) {
+        localStorage.removeItem(fullKey(key));
+      },
+      getJSON(key, fallback) {
+        const raw = localStorage.getItem(fullKey(key));
+        if (raw === null) return fallback;
+        try {
+          return JSON.parse(raw);
+        } catch {
+          writeToConsole(
+            "warn",
+            `[ika] Corrupt JSON at "${fullKey(key)}", using default`,
           );
-      this._statusPoll = function (a, b) {
-        return events.scheduleActionAtInterval(
-          function () {
-            if (a != this.isUpgradable || b != this.isUpgrading) {
-              var changes = {
-                position: this._position,
-                name: this.getName,
-                upgraded: this.isUpgrading != b,
-              };
-              events(Constant.Events.BUILDINGS_UPDATED).pub([changes]);
-              a = this.isUpgradable;
-              b = this.isUpgrading;
-            }
-          }.bind(this),
-          3e3,
-        );
-      }.call(this, this.isUpgradable, this.isUpgrading);
-    },
-    update: function (data) {
-      var changes;
-      var name = data.building.split(" ")[0];
-      var level = parseInt(data.level) || 0;
-      database.getGlobalData.addLocalisedString(name, data.name);
-      var completion =
-        "undefined" !== typeof data.completed ? parseInt(data.completed) : 0;
-      var changed =
-        name !== this._name ||
-        level !== this._level ||
-        !!completion != this.isUpgrading;
-      if (changed)
-        changes = {
-          position: this._position,
-          name: this.getName,
-          upgraded: this.isUpgrading != !completion,
-        };
-      if (completion) {
-        this._completionTime = completion * 1e3;
-        this.startUpgradeTimer();
-      } else if (this._completionTime) delete this._completionTime;
-      this._name = name;
-      this._level = level;
-      if (changed) return changes;
-      return false;
-    },
-    get getUrlParams() {
-      return {
-        view: this.getName,
-        cityId: this.city().getId,
-        position: this.getPosition,
-      };
-    },
-    get getUpgradeCost() {
-      var level = this._level + this.isUpgrading;
-      if (this.isEmpty)
-        return {
-          wood: Infinity,
-          glass: 0,
-          marble: 0,
-          sulfur: 0,
-          wine: 0,
-          time: 0,
-        };
-      var time = Constant.BuildingData[this._name].time;
-      var bon = 1;
-      var bonTime =
-        1 +
-        Constant.GovernmentData[database.getGlobalData.getGovernmentType]
-          .buildingTime;
-      bon -= database.getGlobalData.getResearchTopicLevel(
-        Constant.Research.Economy.PULLEY,
-      )
-        ? 0.02
-        : 0;
-      bon -= database.getGlobalData.getResearchTopicLevel(
-        Constant.Research.Economy.GEOMETRY,
-      )
-        ? 0.04
-        : 0;
-      bon -= database.getGlobalData.getResearchTopicLevel(
-        Constant.Research.Economy.SPIRIT_LEVEL,
-      )
-        ? 0.08
-        : 0;
-      const reductionBy = (buildingName) => {
-        const building = this.city().getBuildingFromName(buildingName);
-        return building ? Math.min(building.getLevel, 50) / 100 : 0;
-      };
-      const reducedCost = (resource, buildingName) =>
-        Math.round(
-          (Constant.BuildingData[this._name][resource][level] || 0) *
-            (bon - reductionBy(buildingName)),
-        );
-      return {
-        wood: reducedCost("wood", Constant.Buildings.CARPENTER),
-        wine: reducedCost("wine", Constant.Buildings.VINEYARD),
-        marble: reducedCost("marble", Constant.Buildings.ARCHITECT),
-        glass: reducedCost("glass", Constant.Buildings.OPTICIAN),
-        sulfur: reducedCost("sulfur", Constant.Buildings.FIREWORK_TEST_AREA),
-        time: (time[level] || 0) * 1e3 * bonTime,
-      };
-    },
-    get getName() {
-      return this._name;
-    },
-    get getType() {
-      return Constant.BuildingData[this.getName].type;
-    },
-    get getLevel() {
-      return this._level;
-    },
-    get isEmpty() {
-      return this._name == "buildingGround" || this._name === null;
-    },
-    get isUpgrading() {
-      return this._completionTime > jq.now();
-    },
-    subtractUpgradeResourcesFromCity: function () {
-      var cost = this.getUpgradeCost;
-      jq.each(
-        Constant.Resources,
-        function (key, resourceName) {
-          this.city()
-            .getResource(resourceName)
-            .increment(cost[resourceName] * -1);
-        }.bind(this),
-      );
-      this._completionTime = jq.now() + cost.time;
-    },
-    get isUpgradable() {
-      if (this.isEmpty || this.isMaxLevel) return false;
-      var cost = this.getUpgradeCost;
-      var upgradable = true;
-      jq.each(
-        Constant.Resources,
-        function (key, value) {
-          upgradable =
-            upgradable &&
-            (!cost[value] ||
-              cost[value] <= this.city().getResource(value).getCurrent);
-        }.bind(this),
-      );
-      return upgradable;
-    },
-    get getCompletionTime() {
-      return this._completionTime;
-    },
-    get getCompletionDate() {},
-    get isMaxLevel() {
-      var maxLevel = Constant.BuildingData[this.getName].maxLevel;
-      return maxLevel > 0 && this.getLevel >= maxLevel;
-    },
-    get getPosition() {
-      return this._position;
-    },
-    completeUpgrade: function () {
-      this._level++;
-      delete this._completionTime;
-      delete this._updateTimer;
-      events(Constant.Events.BUILDINGS_UPDATED).pub(this.city().getId, [
-        {
-          position: this._position,
-          name: this.getName,
-          upgraded: true,
-        },
-      ]);
-    },
-  };
-  function CityResearch(city) {
-    this._researchersLastUpdate = 0;
-    this._researchers = 0;
-    this._researchCostLastUpdate = 0;
-    this._researchCost = 0;
-    this.city = Utils.wrapInClosure(city);
+          return fallback;
+        }
+      },
+      setJSON(key, value) {
+        localStorage.setItem(fullKey(key), JSON.stringify(value));
+      },
+    };
   }
-  CityResearch.prototype = {
-    updateResearchers: function (researchers) {
-      var changed = this._researchers !== researchers;
-      this._researchers = researchers;
-      this._researchersLastUpdate = jq.now();
-      this._researchCost = this.getResearchCost;
-      return changed;
-    },
-    updateCost: function (cost) {
-      var changed = this._researchCost !== cost;
-      this._researchCost = cost;
-      this._researchCostLastUpdate = jq.now();
-      this._researchers = this.getResearchers;
-      return changed;
-    },
-    get getResearchers() {
-      if (this._researchersLastUpdate < this._researchCostLastUpdate)
-        return Math.floor(this._researchCost / this._researchCostModifier);
-      else return this._researchers;
-    },
-    get getResearch() {
-      return this.researchData.total;
-    },
-    get researchData() {
-      if (!this._researchData)
-        this._researchData = Utils.cacheFunction(
-          this.researchDataCached.bind(this),
-          1e3,
-        );
-      return this._researchData();
-    },
-    researchDataCached: function () {
-      var resBon =
-        0 +
-        database.getGlobalData.getResearchTopicLevel(
-          Constant.Research.Science.PAPER,
-        ) *
-          0.02 +
-        database.getGlobalData.getResearchTopicLevel(
-          Constant.Research.Science.INK,
-        ) *
-          0.04 +
-        database.getGlobalData.getResearchTopicLevel(
-          Constant.Research.Science.MECHANICAL_PEN,
-        ) *
-          0.08 +
-        database.getGlobalData.getResearchTopicLevel(
-          Constant.Research.Science.SCIENTIFIC_FUTURE,
-        ) *
-          0.02;
-      var premBon = database.getGlobalData.hasPremiumFeature(
-        Constant.Premium.RESEARCH_POINTS_BONUS_EXTREME_LENGTH,
-      )
-        ? 0 +
-          Constant.PremiumData[
-            Constant.Premium.RESEARCH_POINTS_BONUS_EXTREME_LENGTH
-          ].bonus
-        : database.getGlobalData.hasPremiumFeature(
-              Constant.Premium.RESEARCH_POINTS_BONUS,
-            )
-          ? 0 +
-            Constant.PremiumData[Constant.Premium.RESEARCH_POINTS_BONUS].bonus
-          : 0;
-      var goods =
-        Constant.GovernmentData[database.getGlobalData.getGovernmentType]
-          .researchPerCulturalGood * this.city()._culturalGoods;
-      var researchers = this.getResearchers;
-      var corruptionSpend = researchers * this.city().getCorruption;
-      var nonCorruptedResearchers =
-        researchers * (1 - this.city().getCorruption);
-      var premiumResBonus = nonCorruptedResearchers * premBon;
-      var researchBonus = nonCorruptedResearchers * resBon;
-      var premiumGoodsBonus = goods * premBon;
-      var serverTyp = 1;
-      if (ikariam.Server() == "s201" || ikariam.Server() == "s202")
-        serverTyp = 3;
-      return {
-        scientists: researchers,
-        researchBonus,
-        premiumScientistBonus: premiumResBonus,
-        premiumResearchBonus: researchBonus * premBon,
-        culturalGoods: goods,
-        premiumCulturalGoodsBonus: premiumGoodsBonus,
-        corruption: corruptionSpend,
-        total:
-          (nonCorruptedResearchers +
-            researchBonus +
-            premiumResBonus +
-            goods +
-            premiumGoodsBonus +
-            researchBonus * premBon) *
-          Constant.GovernmentData[database.getGlobalData.getGovernmentType]
-            .researchBonus *
-          serverTyp,
-      };
-    },
-    get _researchCostModifier() {
-      var serverTyp = 1;
-      if (ikariam.Server() == "s201" || ikariam.Server() == "s202")
-        serverTyp = 3;
-      return (
-        (6 +
-          Constant.GovernmentData[database.getGlobalData.getGovernmentType]
-            .researcherCost -
-          database.getGlobalData.getResearchTopicLevel(
-            Constant.Research.Science.LETTER_CHUTE,
-          ) *
-            3) *
-        serverTyp
-      );
-    },
-    get getResearchCost() {
-      return this.getResearchers * this._researchCostModifier;
-    },
-  };
-  function Population(city) {
-    this._population = 0;
-    this._citizens = 0;
-    this._resourceWorkers = 0;
-    this._tradeWorkers = 0;
-    this._priests = 0;
-    this._culturalGoods = 0;
-    this._popChanged = jq.now();
-    this._citizensChanged = jq.now();
-    this._culturalGoodsChanged = jq.now();
-    this._priestsChanged = jq.now();
-    this.city = Utils.wrapInClosure(city);
-  }
-  Population.prototype = {
-    updatePopulationData: function (
-      population,
-      citizens,
-      priests,
-      culturalGoods,
-    ) {
-      var changes = [];
-      if (population && population != this._population) {
-        changes.push({ population: true });
-        this.population = population;
-      }
-      if (citizens && citizens != this._priests) {
-        changes.push({ citizens: true });
-        this.citizens = citizens;
-      }
-      if (priests && priests != this._priests) {
-        changes.push({ priests: true });
-        this.priests = priests;
-      }
-    },
-    updateWorkerData: function (resourceName, workers) {},
-    updatePriests: function (newCount) {},
-    updateCulturalGoods: function (newCount) {},
-    get population() {
-      return this._population;
-    },
-    set population(newVal) {
-      this._population = newVal;
-      this._popChanged = jq.now();
-    },
-    get citizens() {
-      return this._citizens;
-    },
-    set citizens(newVal) {
-      this._citizens = newVal;
-      this._citizensChanged = jq.now();
-    },
-    get priests() {
-      return this._priests;
-    },
-    set priests(newVal) {
-      this._priests = newVal;
-      this._priestsChanged = jq.now();
-    },
-  };
-  function Resource(city, name) {
-    this._current = 0;
-    this._production = 0;
-    this._consumption = 0;
-    this._currentChangedDate = jq.now();
-    this.city = Utils.wrapInClosure(city);
-    this._name = name;
-  }
-  Resource.prototype = {
-    get name() {
-      return this._name;
-    },
-    update: function (current, production, consumption) {
-      var changed =
-        current % this._current > 10 ||
-        production != this._production ||
-        consumption != this._consumption;
-      this._current = current;
-      this._production = production;
-      this._consumption = consumption;
-      this._currentChangedDate = jq.now();
-      return changed;
-    },
-    project: function () {
-      var limit = Math.floor(jq.now() / 1e3);
-      var start = Math.floor(this._currentChangedDate / 1e3);
-      while (limit > start) {
-        this._current += this._production;
-        if (Math.floor(start / 3600) != Math.floor((start + 1) / 3600))
-          if (this._current > this._consumption)
-            this._current -= this._consumption;
-          else {
-            this.city().projectPopData(start * 1e3);
-            this._consumption = 0;
-          }
-        start++;
-      }
-      this._currentChangedDate = limit * 1e3;
-      this.city().projectPopData(limit * 1e3);
-    },
-    increment: function (amount) {
-      if (amount !== 0) {
-        this._current += amount;
-        return true;
-      }
-      return false;
-    },
-    get getEmptyTime() {
-      var net = this.getProduction * 3600 - this.getConsumption;
-      return net < 0 ? (this.getCurrent / net) * -1 : Infinity;
-    },
-    get getFullTime() {
-      var net = this.getProduction * 3600 - this.getConsumption;
-      return net > 0
-        ? (this.city().maxResourceCapacities.capacity - this.getCurrent) / net
-        : 0;
-    },
-    get getCurrent() {
-      return Math.floor(this._current);
-    },
-    get getProduction() {
-      return this._production || 0;
-    },
-    get getConsumption() {
-      return this._consumption || 0;
-    },
-  };
+  var globalStore = makeStore("");
   function empireKeyPrefix(accountName) {
     return `***${accountName}***`;
+  }
+  var ACCOUNT_LIST_KEY = "listAccount";
+  function accountBuildTimeBuff(accountName) {
+    const rows = globalStore.getJSON(ACCOUNT_LIST_KEY, []);
+    const percent = Array.isArray(rows)
+      ? rows.find((row) => row?.account === accountName)?.buildTimeBuffPercent
+      : void 0;
+    if (typeof percent !== "number" || !(percent >= 0 && percent < 100))
+      return 0;
+    return percent / 100;
   }
   jq(".menu_slots > .expandable:last").after(
     '<li class="expandable slot99 empire_Menu" onclick=""><div class="empire_Menu image" style="background-image: url(cdn/all/both/minimized/weltinfo.png); background-position: 0px 0px; background-size:33px auto"></div></div><div class="name"><span class="namebox">Empire Overview</span></div></li>',
   );
+  function switchNotification(kind, box) {
+    var wanted = box.checked;
+    setNotificationEnabled(kind, wanted).then(function (on) {
+      box.checked = on;
+      if (wanted && !on) render.toastAlert(notificationRefusal());
+    });
+  }
+  function cityBuildingOfCell(target) {
+    var city = database.getCityFromId(
+      target.parents("tr").attr("id").split("_").pop(),
+    );
+    var className = target.parents("td").attr("class").split(" ").pop();
+    return {
+      city,
+      building: city.getBuildingsFromName(className.slice(0, -1))[
+        className.charAt(className.length - 1)
+      ],
+    };
+  }
+  function quickUpgrade(city, building, button) {
+    var text = Constant.LanguageData[database.settings.languageChange.value];
+    var label =
+      database.getGlobalData.getLocalisedString(building.getName) +
+      " (" +
+      city.getName +
+      ")";
+    button.prop("disabled", true);
+    upgradeBuildingNow(city.getId, building.getName, building.getPosition)
+      .then(function (outcome) {
+        if (outcome.started) {
+          render.toastAlert(text.quickUpgrade_started + label);
+          return fetchTown(city.getId).then(
+            function () {},
+            function (e) {
+              reportBug("manual", e, {
+                where: "quick upgrade refresh",
+                cityId: city.getId,
+              });
+            },
+          );
+        } else
+          render.toastAlert(
+            text.quickUpgrade_refused +
+              label +
+              (outcome.reason ? ": " + outcome.reason : ""),
+          );
+      })
+      .catch(function (e) {
+        reportBug("manual", e, {
+          where: "quick upgrade",
+          cityId: city.getId,
+          building: building.getName,
+          position: building.getPosition,
+        });
+        render.toastAlert(text.quickUpgrade_failed + errorMessage(e));
+      })
+      .finally(function () {
+        button.prop("disabled", false);
+      });
+  }
   var TOWN_TAB_IDS = ["ResTab", "BuildTab", "ArmyTab"];
+  var SYNCING_CLASS = "empire_syncing";
+  function syncIndicatorHtml(lang) {
+    return (
+      '<span class="empire_syncIndicator" title="' +
+      Constant.LanguageData[lang].syncIndicator +
+      '">&#8635;</span>'
+    );
+  }
+  var wineWarnedCityIds = new Set();
   function fitTownRows(panel) {
     const table = panel.querySelector(":scope > table");
     if (!table) return;
@@ -1093,7 +1072,7 @@
           case "incoming":
             return getIncomingTip();
           case "current":
-            return "";
+            return getStockTip();
           case "progressbar":
             if (resourceName !== Constant.Resources.GOLD)
               return getProgressTip();
@@ -1821,6 +1800,94 @@
               ],
             );
         }
+        function getStockTip() {
+          if (
+            !city ||
+            !resourceName ||
+            resourceName === Constant.Resources.GOLD
+          )
+            return "";
+          var text = Constant.LanguageData[lang];
+          var resource = city.getResource(resourceName);
+          var storage = city.maxResourceCapacities;
+          var current = resource.getCurrent;
+          var perHour = resource.getProduction * 3600;
+          var drunkPerHour = resource.getConsumption;
+          var row = function (value, label, cls) {
+            return (
+              '<tr class="data"><td' +
+              (cls ? ' class="' + cls + '"' : "") +
+              ">" +
+              value +
+              "</td><td>« " +
+              label +
+              "</td></tr>"
+            );
+          };
+          var rows =
+            row(Utils.FormatNumToStr(current, false, 0), text.stockTip_stock) +
+            row(
+              Utils.FormatNumToStr(storage.capacity, false, 0) +
+                (storage.capacity > 0
+                  ? " (" +
+                    Utils.FormatNumToStr(
+                      (current / storage.capacity) * 100,
+                      false,
+                      0,
+                    ) +
+                    "%)"
+                  : ""),
+              text.capacity,
+            ) +
+            row(Utils.FormatNumToStr(storage.safe, false, 0), text.safe);
+          if (perHour)
+            rows +=
+              row(
+                Utils.FormatNumToStr(perHour, true, 0),
+                text.stockTip_production + " / 1" + text.hour,
+              ) +
+              row(
+                Utils.FormatNumToStr(perHour * 24, true, 0),
+                text.stockTip_production + " / 1" + text.day,
+              );
+          if (drunkPerHour)
+            rows +=
+              row(
+                Utils.FormatNumToStr(-drunkPerHour, true, 0),
+                text.stockTip_consumption + " / 1" + text.hour,
+                "Red",
+              ) +
+              row(
+                Utils.FormatNumToStr(-drunkPerHour * 24, true, 0),
+                text.stockTip_consumption + " / 1" + text.day,
+                "Red",
+              ) +
+              row(
+                Utils.FormatNumToStr(-drunkPerHour * 24 * 7, true, 0),
+                text.stockTip_consumption + " / 1" + text.week,
+                "Red",
+              );
+          var emptyIn = resource.getEmptyTime;
+          if (isFinite(emptyIn) && emptyIn > 0)
+            rows += row(
+              Utils.FormatTimeLengthToStr(emptyIn * 36e5, 2),
+              text.stockTip_emptyIn,
+              "Red",
+            );
+          var fullIn = resource.getFullTime;
+          if (fullIn > 0)
+            rows += row(
+              Utils.FormatTimeLengthToStr(fullIn * 36e5, 2),
+              text.stockTip_fullIn,
+            );
+          return (
+            '<table><thead><tr><th colspan="2"><img src="cdn/all/both/resources/icon_' +
+            resourceName +
+            '.png" style="height: 14px;"></th></tr></thead><tbody>' +
+            rows +
+            "</tbody></table>"
+          );
+        }
         function getProgressTip() {
           if (resourceName == "population" || resourceName == "ui-corner-all")
             return "";
@@ -2323,13 +2390,19 @@
         '"> ' +
         Constant.LanguageData[lang].onIkaLogs +
         '</nobr></span> <hr> <span class="categories">' +
-        Constant.LanguageData[lang].global_category +
-        '</span> <span><input type="checkbox" id="empire_autoUpdates" ' +
-        (database.settings.autoUpdates.value ? 'checked="checked"' : "") +
+        Constant.LanguageData[lang].notifications_category +
+        '</span> <span><input type="checkbox" id="empire_notifyBuildFinished" ' +
+        (isNotificationEnabled("buildFinished") ? 'checked="checked"' : "") +
         '/><nobr data-tooltip="' +
-        Constant.LanguageData[lang].autoUpdates_description +
+        Constant.LanguageData[lang].notifyBuildFinished_description +
         '"> ' +
-        Constant.LanguageData[lang].autoUpdates +
+        Constant.LanguageData[lang].notifyBuildFinished +
+        '</nobr></span> <span><input type="checkbox" id="empire_notifyArrival" ' +
+        (isNotificationEnabled("arrival") ? 'checked="checked"' : "") +
+        '/><nobr data-tooltip="' +
+        Constant.LanguageData[lang].notifyArrival_description +
+        '"> ' +
+        Constant.LanguageData[lang].notifyArrival +
         "</nobr></span></div>";
       var display =
         '<div class="options"> <span class="categories">' +
@@ -2428,10 +2501,6 @@
         Constant.LanguageData[lang].goto_website +
         '" id="empire_Website_Button">' +
         Constant.LanguageData[lang].website +
-        '</button><button data-tooltip="' +
-        Constant.LanguageData[lang].Check_for_updates +
-        '" id="empire_Update_Button">' +
-        Constant.LanguageData[lang].check +
         '</button><button data-tooltip="' +
         Constant.LanguageData[lang].Report_bug +
         '" id="empire_Bug_Button">' +
@@ -2536,9 +2605,6 @@
         .on("change", "#empire_hideOnCityView", function () {
           database.settings.hideOnCityView.value = this.checked;
         })
-        .on("change", "#empire_autoUpdates", function () {
-          database.settings.autoUpdates.value = this.checked;
-        })
         .on("change", "#empire_smallFont", function () {
           database.settings.smallFont.value = this.checked;
           if (this.checked) GM_addStyle("#empireBoard {font-size:8pt}");
@@ -2567,6 +2633,12 @@
         })
         .on("change", "#empire_wineWarning", function () {
           database.settings.wineWarning.value = this.checked;
+        })
+        .on("change", "#empire_notifyBuildFinished", function () {
+          switchNotification("buildFinished", this);
+        })
+        .on("change", "#empire_notifyArrival", function () {
+          switchNotification("arrival", this);
         })
         .on("change", "#empire_wineOut", function () {
           database.settings.wineOut.value = this.checked;
@@ -2639,9 +2711,6 @@
         .on("click", "#empire_Check_Button", function () {
           empire.Check();
         })
-        .on("click", "#empire_Update_Button", function () {
-          empire.CheckForUpdates.call(empire, true);
-        })
         .on("click", "#empire_Bug_Button", function () {})
         .on("change", "input[type='checkbox']", function () {
           this.blur();
@@ -2666,10 +2735,6 @@
       });
       jq("#empire_Website_Button").button({
         icons: { primary: "ui-icon-home" },
-        text: true,
-      });
-      jq("#empire_Update_Button").button({
-        icons: { primary: "ui-icon-info" },
         text: true,
       });
       jq("#empire_Bug_Button").button({
@@ -3003,7 +3068,9 @@
     getResourceTable: function () {
       var lang = database.settings.languageChange.value;
       var header =
-        '<colgroup span="2"/>\n      <colgroup span="1"/>\n    <colgroup span="1"/>\n    <colgroup span="2"/>\n    <colgroup span="2"/>\n    <colgroup span="2"/>\n    <colgroup span="2"/>\n    <colgroup span="2"/>\n   <colgroup span="2"/>\n    <colgroup span="2"/>\n<thead>\n<tr class="header_row">\n    <th class="city_name" data-tooltip="{10}" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=ikipedia&helpId=18\')">{0}</th>\n    <th class="action_points icon actionpointImage" data-tooltip="{1}"></th>\n    \n    <th class="empireactions">\n       <div class="trading" data-tooltip="' +
+        '<colgroup span="2"/>\n      <colgroup span="1"/>\n    <colgroup span="1"/>\n    <colgroup span="2"/>\n    <colgroup span="2"/>\n    <colgroup span="2"/>\n    <colgroup span="2"/>\n    <colgroup span="2"/>\n   <colgroup span="2"/>\n    <colgroup span="2"/>\n<thead>\n<tr class="header_row">\n    <th class="city_name" data-tooltip="{10}" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=ikipedia&helpId=18\')">' +
+        syncIndicatorHtml(lang) +
+        '{0}</th>\n    <th class="action_points icon actionpointImage" data-tooltip="{1}"></th>\n    \n    <th class="empireactions">\n       <div class="trading" data-tooltip="' +
         Constant.LanguageData[lang].transport +
         '" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=militaryAdvisor\')"></div>\n<div class="agora" data-tooltip="' +
         Constant.LanguageData[lang].agora +
@@ -3029,7 +3096,7 @@
         Constant.LanguageData[lang].transporting +
         ' {2}" style="cursor:pointer;"></div>\n        </td>\n    <td class="population" data-tooltip="dynamic">\n        <span class= "pop" data-tooltip="dynamic"></span>\n        <span></span>\n        <div class="progressbarPop ui-progressbar ui-widget ui-widget-content ui-corner-all" data-tooltip="dynamic">\n            <div class="ui-progressbar-value ui-widget-header ui-corner-left" style="width: 95%"></div>\n        </div>\n    </td>\n    \n    <td class="population_happiness">   <span class="happy"  data-tooltip="dynamic"><img align=right height="18" hspace="8" vspace="2"></span><br><span class="growth clickbar"></span>\n </td>\n    <td class="research" data-tooltip="dynamic">\n        <span class="scientists" data-tooltip="dynamic"></span>\n        <span></span>\n    {4}   \n   </div>\n    </td>\n    {1}\n    </tr>\n';
       var resourceCell =
-        '<td class="resource {0}">\n    <span class="icon safeImage"></span>\n    <span class="current"></span>\n   <span class="incoming" data-tooltip="dynamic"></span>\n    <div class="progressbar ui-progressbar ui-widget ui-widget-content ui-corner-all" data-tooltip="dynamic">\n    <div class="ui-progressbar-value ui-widget-header ui-corner-left" style="width: 95%"></div>\n    </div>\n  </td>\n<td class="resource {0}">\n    <span class="prodconssubsum production Green" data-tooltip="dynamic"></span>\n    <span class="prodconssubsum consumption Red" data-tooltip="dynamic"></span>\n    <span class="emptytime Red"></span>\n</td>';
+        '<td class="resource {0}">\n    <span class="icon safeImage"></span>\n    <span class="current" data-tooltip="dynamic"></span>\n   <span class="incoming" data-tooltip="dynamic"></span>\n    <div class="progressbar ui-progressbar ui-widget ui-widget-content ui-corner-all" data-tooltip="dynamic">\n    <div class="ui-progressbar-value ui-widget-header ui-corner-left" style="width: 95%"></div>\n    </div>\n  </td>\n<td class="resource {0}">\n    <span class="prodconssubsum production Green" data-tooltip="dynamic"></span>\n    <span class="prodconssubsum consumption Red" data-tooltip="dynamic"></span>\n    <span class="emptytime Red"></span>\n</td>';
       var footer =
         '<tr>\n    <td colspan="2"></td>\n   <td id="t_sigma" class="total" data-tooltip="dynamic">Σ</td>\n    <td id="t_population" class="total"></td><td id="t_growth" class="total"></td>\n    <td id="t_research" class="total" data-tooltip="dynamic"></td>\n        <td id="t_currentgold" class="total"></td>\n    <td id="t_goldincome" class="total" data-tooltip="dynamic">\n        <span class="Green"></span>\n      <span class="Red"></span>\n         <td id="t_currentwood" class="total"></td>\n    <td id="t_woodincome" class="total" data-tooltip="dynamic">\n        <span class="Green"></span>\n        <span class="Red"></span>\n    </td>\n    <td id="t_currentwine" class="total"></td>\n    <td id="t_wineincome" class="total" data-tooltip="dynamic">\n        <span class="Green"></span>\n        <span class="Red"></span>\n    </td>\n    <td id="t_currentmarble" class="total"></td>\n    <td id="t_marbleincome" class="total"data-tooltip="dynamic">\n        <span class="Green"></span>\n        <span class="Red"></span>\n    </td>\n    <td id="t_currentglass" class="total"></td>\n    <td id="t_glassincome" class="total" data-tooltip="dynamic">\n        <span class="Green"></span>\n        <span class="Red"></span>\n    </td>\n    <td id="t_currentsulfur" class="total"></td>\n    <td id="t_sulfurincome" class="total" data-tooltip="dynamic">\n        <span class="Green"></span>\n        <span class="Red"></span>\n    </td>\n</tr>';
       return Utils.format(table, [getHead(), getBody(), getFooter()]);
@@ -3085,7 +3152,9 @@
       var table =
         '<table class="army">\n    {0}\n    <tbody>{1}</tbody>\n    <tfoot>{2}</tfoot>\n</table>';
       var headerRow =
-        '<thead><tr class="header_row">\n    <th class="city_name">{0}</th>\n    <th data-tooltip="{1}" class="icon actionpointImage action_points" >\n <th class="empireactions" colspan="2">\n       <div class="spio" data-tooltip="' +
+        '<thead><tr class="header_row">\n    <th class="city_name">' +
+        syncIndicatorHtml(lang) +
+        '{0}</th>\n    <th data-tooltip="{1}" class="icon actionpointImage action_points" >\n <th class="empireactions" colspan="2">\n       <div class="spio" data-tooltip="' +
         Constant.LanguageData[lang].espionage +
         '" style="cursor:pointer;"></div>\n<div class="combat"data-tooltip="' +
         Constant.LanguageData[lang].combat +
@@ -3205,7 +3274,9 @@
       var headerCell =
         '<th data-tooltip="{0}" style="background-color: transparent; background-image: url(\'{1}\'); \n background-repeat: no-repeat; background-attachment: scroll; background-position: center center; background-clip: \n border-box; background-origin: padding-box; background-size: 50px auto; cursor: pointer;" colspan="{2}" class="icon" onclick="ajaxHandlerCall(\'?view=buildingDetail&helpId=1&buildingId={3}\');return false;">&nbsp;</th>';
       var headerRow =
-        '<thead><tr class="header_row">\n    <th class="city_name">{0}</th>\n    <th data-tooltip="{1}" class="action_points icon actionpointImage"></th>\n  <th class="empireactions">\n  <div class="contracts" data-tooltip="' +
+        '<thead><tr class="header_row">\n    <th class="city_name">' +
+        syncIndicatorHtml(lang) +
+        '{0}</th>\n    <th data-tooltip="{1}" class="action_points icon actionpointImage"></th>\n  <th class="empireactions">\n  <div class="contracts" data-tooltip="' +
         Constant.LanguageData[lang].contracts +
         '" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=diplomacyTreaty\')"></div></th>\n    {2}\n</tr></thead>';
       var buildingCell =
@@ -3559,7 +3630,7 @@
         cell = $node.find("td.building." + building.getName + idx);
       } else cell = $node.find("td.building." + building.getName + idx);
       if (!building.isEmpty)
-        if (cell.length)
+        if (cell.length) {
           cell
             .html("<span>" + building.getLevel + "</span>")
             .find("span")
@@ -3574,7 +3645,14 @@
                     : " upgradable"
                   : ""),
             );
-        else return false;
+          if (building.isUpgradable && !city.isUpgrading)
+            cell.append(
+              '<button class="empire_quickUpgrade" title="' +
+                Constant.LanguageData[database.settings.languageChange.value]
+                  .quickUpgrade +
+                '">&#9650;</button>',
+            );
+        } else return false;
       return true;
     },
     updateCityBuildingRow: function (city, $node) {
@@ -3654,10 +3732,6 @@
       });
       jq("#empire_Website_Button").button({
         icons: { primary: "ui-icon-home" },
-        text: true,
-      });
-      jq("#empire_Update_Button").button({
-        icons: { primary: "ui-icon-info" },
         text: true,
       });
       jq("#empire_Bug_Button").button({
@@ -4030,17 +4104,20 @@
         "click",
         "td.building span.clickable",
         function (event) {
-          var target = jq(event.target);
-          var city = database.getCityFromId(
-            target.parents("tr").attr("id").split("_").pop(),
-          );
-          var className = target.parents("td").attr("class").split(" ").pop();
-          var params = city.getBuildingsFromName(className.slice(0, -1))[
-            className.charAt(className.length - 1)
-          ].getUrlParams;
+          var params = cityBuildingOfCell(jq(event.target)).building
+            .getUrlParams;
           if (unsafeWindow.ikariam.templateView)
             unsafeWindow.ikariam.templateView.id = null;
           ikariam.loadUrl(true, "city", params);
+          return false;
+        },
+      );
+      jq("#empire_Tabs").on(
+        "click",
+        "td.building button.empire_quickUpgrade",
+        function (event) {
+          var found = cityBuildingOfCell(jq(event.target));
+          quickUpgrade(found.city, found.building, jq(this));
           return false;
         },
       );
@@ -4326,17 +4403,23 @@
                       drains && database.settings.wineWarningTime.value > 0
                         ? Utils.FormatTimeLengthToStr(time, 2)
                         : "";
-                    if (
+                    if (!(
                       drains &&
-                      time < database.settings.wineWarningTime.value * 36e5 &&
-                      database.settings.wineWarning.value != 1
-                    )
+                      time < database.settings.wineWarningTime.value * 36e5
+                    ))
+                      wineWarnedCityIds.delete(city.getId);
+                    else if (
+                      database.settings.wineWarning.value != 1 &&
+                      !wineWarnedCityIds.has(city.getId)
+                    ) {
+                      wineWarnedCityIds.add(city.getId);
                       render.toastAlert(
                         "!!! " +
                           Constant.LanguageData[lang].alert_wine +
                           city._name +
                           " !!!",
                       );
+                    }
                   } else {
                     var time = currentResource.getFullTime;
                     time =
@@ -4535,11 +4618,10 @@
       }
     },
   };
-  var EMPIRE_STORAGE_PREFIX = empireKeyPrefix(readAccountName());
+  var accountName = readAccountName();
+  var EMPIRE_STORAGE_PREFIX = empireKeyPrefix(accountName);
   var empire = {
     version: 1.1831,
-    scriptId: 764,
-    scriptName: "Empire Overview",
     logger: null,
     loaded: false,
     setVar: function (varname, varvalue) {
@@ -4567,66 +4649,6 @@
       ikariam.Init();
       render.Init();
       database.Init(ikariam.Host());
-    },
-    CheckForUpdates: function (forced) {
-      var lang = database.settings.languageChange.value;
-      if (
-        forced ||
-        (database.getGlobalData.LastUpdateCheck + 864e5 <= jq.now() &&
-          database.settings.autoUpdates.value)
-      )
-        try {
-          GM_xmlhttpRequest({
-            method: "GET",
-            url:
-              "https://greasyfork.org/scripts/" +
-              empire.scriptId +
-              "-empire-overview/code/Empire_Overview.meta.js",
-            headers: { "Cache-Control": "no-cache" },
-            onload: function (resp) {
-              var remote_version,
-                rt = resp.responseText;
-              database.getGlobalData.LastUpdateCheck = jq.now();
-              var versionMatch = /@version\s*(.*?)\s*$/m.exec(rt);
-              if (!versionMatch) {
-                if (forced)
-                  render.toast(
-                    Constant.LanguageData[
-                      database.settings.languageChange.value
-                    ].toast_remoteVersionUnreadable,
-                  );
-                return;
-              }
-              remote_version = parseFloat(versionMatch[1]);
-              if (empire.version != -1) {
-                if (remote_version > empire.version) {
-                  if (
-                    confirm(
-                      Constant.LanguageData[lang].alert_update +
-                        empire.scriptName +
-                        '". \n' +
-                        Constant.LanguageData[lang].alert_update1,
-                    )
-                  )
-                    GM_openInTab(
-                      "https://greasyfork.org/scripts/" +
-                        empire.scriptId +
-                        "-empire-overview",
-                    );
-                } else if (forced)
-                  render.toast(
-                    Constant.LanguageData[lang].alert_noUpdate +
-                      empire.scriptName +
-                      '".',
-                  );
-              }
-              database.getGlobalData.latestVersion = remote_version;
-            },
-          });
-        } catch (err) {
-          if (forced)
-            render.toast(Constant.LanguageData[lang].alert_error + "\n" + err);
-        }
     },
     HardReset: function () {
       var lang = database.settings.languageChange.value;
@@ -4686,6 +4708,479 @@
       database.settings.wineWarningTime.value = 96;
       document.location =
         document.getElementById("js_cityLink").children[0].href;
+    },
+  };
+  var CHRONOS_FORGE_TIME_FACTOR_PER_LEVEL = 0.8;
+  function notifyBuildFinished(building, completionTime) {
+    if (!completionTime) return;
+    var text = Constant.LanguageData[database.settings?.languageChange?.value];
+    var city = building.city();
+    notify({
+      kind: "buildFinished",
+      key: [
+        "buildFinished",
+        city.getId,
+        building._position,
+        completionTime,
+      ].join(":"),
+      title: text.notice_buildFinished + city.getName,
+      body:
+        database.getGlobalData.getLocalisedString(building.getName) +
+        text.notice_level +
+        (building._level + 1),
+      happenedAt: completionTime,
+    });
+  }
+  function Building(city, pos) {
+    this._position = pos;
+    this._level = 0;
+    this._name = null;
+    this.city = Utils.wrapInClosure(city);
+    this._updateTimer = null;
+    this._statusPoll = null;
+  }
+  Building.prototype = {
+    startUpgradeTimer: function () {
+      if (this._updateTimer) {
+        this._updateTimer();
+        delete this._updateTimer;
+      }
+      if (this._statusPoll) {
+        this._statusPoll();
+        delete this._statusPoll;
+      }
+      if (this._completionTime)
+        if (this._completionTime - jq.now() < 5e3) this.completeUpgrade();
+        else
+          this._updateTimer = events.scheduleActionAtTime(
+            this.completeUpgrade.bind(this),
+            this._completionTime - 4e3,
+          );
+      this._statusPoll = function (a, b) {
+        return events.scheduleActionAtInterval(
+          function () {
+            if (a != this.isUpgradable || b != this.isUpgrading) {
+              var changes = {
+                position: this._position,
+                name: this.getName,
+                upgraded: this.isUpgrading != b,
+              };
+              events(Constant.Events.BUILDINGS_UPDATED).pub([changes]);
+              a = this.isUpgradable;
+              b = this.isUpgrading;
+            }
+          }.bind(this),
+          3e3,
+        );
+      }.call(this, this.isUpgradable, this.isUpgrading);
+    },
+    update: function (data) {
+      var changes;
+      var name = data.building.split(" ")[0];
+      var level = parseInt(data.level) || 0;
+      database.getGlobalData.addLocalisedString(name, data.name);
+      var completion =
+        "undefined" !== typeof data.completed ? parseInt(data.completed) : 0;
+      var changed =
+        name !== this._name ||
+        level !== this._level ||
+        !!completion != this.isUpgrading;
+      if (changed)
+        changes = {
+          position: this._position,
+          name: this.getName,
+          upgraded: this.isUpgrading != !completion,
+        };
+      if (completion) {
+        this._completionTime = completion * 1e3;
+        this.startUpgradeTimer();
+      } else if (this._completionTime) delete this._completionTime;
+      this._name = name;
+      this._level = level;
+      if (changed) return changes;
+      return false;
+    },
+    get getUrlParams() {
+      return {
+        view: this.getName,
+        cityId: this.city().getId,
+        position: this.getPosition,
+      };
+    },
+    get getUpgradeCost() {
+      var level = this._level + this.isUpgrading;
+      if (this.isEmpty)
+        return {
+          wood: Infinity,
+          glass: 0,
+          marble: 0,
+          sulfur: 0,
+          wine: 0,
+          time: 0,
+        };
+      var time = Constant.BuildingData[this._name].time;
+      var bon = 1;
+      var bonTime =
+        1 +
+        Constant.GovernmentData[database.getGlobalData.getGovernmentType]
+          .buildingTime;
+      bon -= database.getGlobalData.getResearchTopicLevel(
+        Constant.Research.Economy.PULLEY,
+      )
+        ? 0.02
+        : 0;
+      bon -= database.getGlobalData.getResearchTopicLevel(
+        Constant.Research.Economy.GEOMETRY,
+      )
+        ? 0.04
+        : 0;
+      bon -= database.getGlobalData.getResearchTopicLevel(
+        Constant.Research.Economy.SPIRIT_LEVEL,
+      )
+        ? 0.08
+        : 0;
+      const reductionBy = (buildingName) => {
+        const building = this.city().getBuildingFromName(buildingName);
+        return building ? Math.min(building.getLevel, 50) / 100 : 0;
+      };
+      const forge =
+        this._name === Constant.Buildings.CHRONOSFORGE
+          ? null
+          : this.city().getBuildingFromName(Constant.Buildings.CHRONOSFORGE);
+      const upgradeSeconds =
+        (time[level] || 0) *
+        (1 - accountBuildTimeBuff(accountName)) *
+        Math.pow(
+          CHRONOS_FORGE_TIME_FACTOR_PER_LEVEL,
+          forge ? forge.getLevel : 0,
+        );
+      const reducedCost = (resource, buildingName) =>
+        Math.round(
+          (Constant.BuildingData[this._name][resource][level] || 0) *
+            (bon - reductionBy(buildingName)),
+        );
+      return {
+        wood: reducedCost("wood", Constant.Buildings.CARPENTER),
+        wine: reducedCost("wine", Constant.Buildings.VINEYARD),
+        marble: reducedCost("marble", Constant.Buildings.ARCHITECT),
+        glass: reducedCost("glass", Constant.Buildings.OPTICIAN),
+        sulfur: reducedCost("sulfur", Constant.Buildings.FIREWORK_TEST_AREA),
+        time: Math.round(upgradeSeconds * bonTime) * 1e3,
+      };
+    },
+    get getName() {
+      return this._name;
+    },
+    get getType() {
+      return Constant.BuildingData[this.getName].type;
+    },
+    get getLevel() {
+      return this._level;
+    },
+    get isEmpty() {
+      return this._name == "buildingGround" || this._name === null;
+    },
+    get isUpgrading() {
+      return this._completionTime > jq.now();
+    },
+    subtractUpgradeResourcesFromCity: function () {
+      var cost = this.getUpgradeCost;
+      jq.each(
+        Constant.Resources,
+        function (key, resourceName) {
+          this.city()
+            .getResource(resourceName)
+            .increment(cost[resourceName] * -1);
+        }.bind(this),
+      );
+      this._completionTime = jq.now() + cost.time;
+    },
+    get isUpgradable() {
+      if (this.isEmpty || this.isMaxLevel) return false;
+      var cost = this.getUpgradeCost;
+      var upgradable = true;
+      jq.each(
+        Constant.Resources,
+        function (key, value) {
+          upgradable =
+            upgradable &&
+            (!cost[value] ||
+              cost[value] <= this.city().getResource(value).getCurrent);
+        }.bind(this),
+      );
+      return upgradable;
+    },
+    get getCompletionTime() {
+      return this._completionTime;
+    },
+    get getCompletionDate() {},
+    get isMaxLevel() {
+      var maxLevel = Constant.BuildingData[this.getName].maxLevel;
+      return maxLevel > 0 && this.getLevel >= maxLevel;
+    },
+    get getPosition() {
+      return this._position;
+    },
+    completeUpgrade: function () {
+      notifyBuildFinished(this, this._completionTime);
+      this._level++;
+      delete this._completionTime;
+      delete this._updateTimer;
+      events(Constant.Events.BUILDINGS_UPDATED).pub(this.city().getId, [
+        {
+          position: this._position,
+          name: this.getName,
+          upgraded: true,
+        },
+      ]);
+    },
+  };
+  function CityResearch(city) {
+    this._researchersLastUpdate = 0;
+    this._researchers = 0;
+    this._researchCostLastUpdate = 0;
+    this._researchCost = 0;
+    this.city = Utils.wrapInClosure(city);
+  }
+  CityResearch.prototype = {
+    updateResearchers: function (researchers) {
+      var changed = this._researchers !== researchers;
+      this._researchers = researchers;
+      this._researchersLastUpdate = jq.now();
+      this._researchCost = this.getResearchCost;
+      return changed;
+    },
+    updateCost: function (cost) {
+      var changed = this._researchCost !== cost;
+      this._researchCost = cost;
+      this._researchCostLastUpdate = jq.now();
+      this._researchers = this.getResearchers;
+      return changed;
+    },
+    get getResearchers() {
+      if (this._researchersLastUpdate < this._researchCostLastUpdate)
+        return Math.floor(this._researchCost / this._researchCostModifier);
+      else return this._researchers;
+    },
+    get getResearch() {
+      return this.researchData.total;
+    },
+    get researchData() {
+      if (!this._researchData)
+        this._researchData = Utils.cacheFunction(
+          this.researchDataCached.bind(this),
+          1e3,
+        );
+      return this._researchData();
+    },
+    researchDataCached: function () {
+      var resBon =
+        0 +
+        database.getGlobalData.getResearchTopicLevel(
+          Constant.Research.Science.PAPER,
+        ) *
+          0.02 +
+        database.getGlobalData.getResearchTopicLevel(
+          Constant.Research.Science.INK,
+        ) *
+          0.04 +
+        database.getGlobalData.getResearchTopicLevel(
+          Constant.Research.Science.MECHANICAL_PEN,
+        ) *
+          0.08 +
+        database.getGlobalData.getResearchTopicLevel(
+          Constant.Research.Science.SCIENTIFIC_FUTURE,
+        ) *
+          0.02;
+      var premBon = database.getGlobalData.hasPremiumFeature(
+        Constant.Premium.RESEARCH_POINTS_BONUS_EXTREME_LENGTH,
+      )
+        ? 0 +
+          Constant.PremiumData[
+            Constant.Premium.RESEARCH_POINTS_BONUS_EXTREME_LENGTH
+          ].bonus
+        : database.getGlobalData.hasPremiumFeature(
+              Constant.Premium.RESEARCH_POINTS_BONUS,
+            )
+          ? 0 +
+            Constant.PremiumData[Constant.Premium.RESEARCH_POINTS_BONUS].bonus
+          : 0;
+      var goods =
+        Constant.GovernmentData[database.getGlobalData.getGovernmentType]
+          .researchPerCulturalGood * this.city()._culturalGoods;
+      var researchers = this.getResearchers;
+      var corruptionSpend = researchers * this.city().getCorruption;
+      var nonCorruptedResearchers =
+        researchers * (1 - this.city().getCorruption);
+      var premiumResBonus = nonCorruptedResearchers * premBon;
+      var researchBonus = nonCorruptedResearchers * resBon;
+      var premiumGoodsBonus = goods * premBon;
+      var serverTyp = 1;
+      if (ikariam.Server() == "s201" || ikariam.Server() == "s202")
+        serverTyp = 3;
+      return {
+        scientists: researchers,
+        researchBonus,
+        premiumScientistBonus: premiumResBonus,
+        premiumResearchBonus: researchBonus * premBon,
+        culturalGoods: goods,
+        premiumCulturalGoodsBonus: premiumGoodsBonus,
+        corruption: corruptionSpend,
+        total:
+          (nonCorruptedResearchers +
+            researchBonus +
+            premiumResBonus +
+            goods +
+            premiumGoodsBonus +
+            researchBonus * premBon) *
+          Constant.GovernmentData[database.getGlobalData.getGovernmentType]
+            .researchBonus *
+          serverTyp,
+      };
+    },
+    get _researchCostModifier() {
+      var serverTyp = 1;
+      if (ikariam.Server() == "s201" || ikariam.Server() == "s202")
+        serverTyp = 3;
+      return (
+        (6 +
+          Constant.GovernmentData[database.getGlobalData.getGovernmentType]
+            .researcherCost -
+          database.getGlobalData.getResearchTopicLevel(
+            Constant.Research.Science.LETTER_CHUTE,
+          ) *
+            3) *
+        serverTyp
+      );
+    },
+    get getResearchCost() {
+      return this.getResearchers * this._researchCostModifier;
+    },
+  };
+  function Population(city) {
+    this._population = 0;
+    this._citizens = 0;
+    this._resourceWorkers = 0;
+    this._tradeWorkers = 0;
+    this._priests = 0;
+    this._culturalGoods = 0;
+    this._popChanged = jq.now();
+    this._citizensChanged = jq.now();
+    this._culturalGoodsChanged = jq.now();
+    this._priestsChanged = jq.now();
+    this.city = Utils.wrapInClosure(city);
+  }
+  Population.prototype = {
+    updatePopulationData: function (
+      population,
+      citizens,
+      priests,
+      culturalGoods,
+    ) {
+      var changes = [];
+      if (population && population != this._population) {
+        changes.push({ population: true });
+        this.population = population;
+      }
+      if (citizens && citizens != this._priests) {
+        changes.push({ citizens: true });
+        this.citizens = citizens;
+      }
+      if (priests && priests != this._priests) {
+        changes.push({ priests: true });
+        this.priests = priests;
+      }
+    },
+    updateWorkerData: function (resourceName, workers) {},
+    updatePriests: function (newCount) {},
+    updateCulturalGoods: function (newCount) {},
+    get population() {
+      return this._population;
+    },
+    set population(newVal) {
+      this._population = newVal;
+      this._popChanged = jq.now();
+    },
+    get citizens() {
+      return this._citizens;
+    },
+    set citizens(newVal) {
+      this._citizens = newVal;
+      this._citizensChanged = jq.now();
+    },
+    get priests() {
+      return this._priests;
+    },
+    set priests(newVal) {
+      this._priests = newVal;
+      this._priestsChanged = jq.now();
+    },
+  };
+  function Resource(city, name) {
+    this._current = 0;
+    this._production = 0;
+    this._consumption = 0;
+    this._currentChangedDate = jq.now();
+    this.city = Utils.wrapInClosure(city);
+    this._name = name;
+  }
+  Resource.prototype = {
+    get name() {
+      return this._name;
+    },
+    update: function (current, production, consumption) {
+      var changed =
+        current % this._current > 10 ||
+        production != this._production ||
+        consumption != this._consumption;
+      this._current = current;
+      this._production = production;
+      this._consumption = consumption;
+      this._currentChangedDate = jq.now();
+      return changed;
+    },
+    project: function () {
+      var limit = Math.floor(jq.now() / 1e3);
+      var start = Math.floor(this._currentChangedDate / 1e3);
+      while (limit > start) {
+        this._current += this._production;
+        if (Math.floor(start / 3600) != Math.floor((start + 1) / 3600))
+          if (this._current > this._consumption)
+            this._current -= this._consumption;
+          else {
+            this.city().projectPopData(start * 1e3);
+            this._consumption = 0;
+          }
+        start++;
+      }
+      this._currentChangedDate = limit * 1e3;
+      this.city().projectPopData(limit * 1e3);
+    },
+    increment: function (amount) {
+      if (amount !== 0) {
+        this._current += amount;
+        return true;
+      }
+      return false;
+    },
+    get getEmptyTime() {
+      var net = this.getProduction * 3600 - this.getConsumption;
+      return net < 0 ? (this.getCurrent / net) * -1 : Infinity;
+    },
+    get getFullTime() {
+      var net = this.getProduction * 3600 - this.getConsumption;
+      return net > 0
+        ? (this.city().maxResourceCapacities.capacity - this.getCurrent) / net
+        : 0;
+    },
+    get getCurrent() {
+      return Math.floor(this._current);
+    },
+    get getProduction() {
+      return this._production || 0;
+    },
+    get getConsumption() {
+      return this._consumption || 0;
     },
   };
   function winePressSavingPercent(city) {
@@ -5566,6 +6061,20 @@
       return res;
     },
   };
+  function notifyArrival(movement) {
+    var text = Constant.LanguageData[database.settings?.languageChange?.value];
+    var townName = function (cityId) {
+      var city = database.getCityFromId(cityId);
+      return city ? city.getName : text.notice_otherTown;
+    };
+    notify({
+      kind: "arrival",
+      key: "arrival:" + movement._id + ":" + movement._arrivalTime,
+      title: text.notice_arrival + townName(movement._targetCityId),
+      body: text.notice_from + townName(movement._originCityId),
+      happenedAt: movement._arrivalTime,
+    });
+  }
   function Movement(
     id,
     originCityId,
@@ -5675,6 +6184,7 @@
     },
     updateTransportComplete: function () {
       if (this.isCompleted && !this._updatedCity) {
+        notifyArrival(this);
         var city = database.getCityFromId(this._targetCityId);
         var changes = [];
         if (city) {
@@ -6193,7 +6703,7 @@
       var factors = [];
       var locStr = [];
       factors.year = 31536e3;
-      factors.month = 252e4;
+      factors.month = 2592e3;
       factors.day = 86400;
       factors.hour = 3600;
       factors.minute = 60;
@@ -6791,6 +7301,13 @@
           while (len) {
             len--;
             var entry = response[len];
+            if (
+              Array.isArray(entry) &&
+              entry.length === 2 &&
+              typeof entry[0] === "string" &&
+              entry[1] === null
+            )
+              continue;
             if (!Array.isArray(entry) || entry.length < 2 || entry[1] == null) {
               reportBug("manual", new Error("Malformed ajaxResponse entry"), {
                 entry: JSON.stringify(entry ?? null).slice(0, 200),
@@ -8443,7 +8960,6 @@
         hideOnCityView: "Force hide on city view",
         onTop: "Show on top of Ikariam windows",
         windowTennis: "Show above ikariam on mouseover",
-        autoUpdates: "Automaticly check for updates",
         smallFont: "Use smaller font size",
         goldShort: "Reduce total gold display",
         alternativeBuildingList: "Use alternative building list",
@@ -8460,8 +8976,6 @@
         reset: "Reset all settings to default",
         goto_website: "Goto the scripts greasyfork.org website",
         website: "Website",
-        Check_for_updates: "Force a check for updates",
-        check: "Check for updates",
         Report_bug: "Report a bug in the script",
         report: "Report Bug",
         save: "Save",
@@ -8481,16 +8995,32 @@
         alert_palace1:
           "There is still no palace present in your city.\n Please explore expansion and build a palace.",
         alert_toast: "Data Reset, reloading the page in a few seconds",
-        alert_error: "An error occurred while checking for updates: ",
-        alert_noUpdate: 'No update is available for "',
-        alert_update:
-          'There is an update available for the Greasemonkey script "',
-        alert_update1: "Would you like to go to the install page now?",
         alert_daily: "Please enable 'Automatically confirm the daily bonus '",
         alert_wine: "Warning wine > ",
         toast_updated: "Updated: ",
         toast_movementAdded: "Movement added",
         toast_remoteVersionUnreadable: "Could not read the remote version.",
+        syncIndicator: "Spins while Send Resources refreshes every town",
+        notifyBuildFinished: "Building finished",
+        notifyBuildFinished_description:
+          "Desktop notification when a building finishes upgrading, while the game is open",
+        notifyArrival: "Fleet arrived",
+        notifyArrival_description:
+          "Desktop notification when one of your movements arrives, while the game is open",
+        notice_buildFinished: "Finished in ",
+        notice_level: " level ",
+        notice_arrival: "Arrived in ",
+        notice_from: "From ",
+        notice_otherTown: "another player's town",
+        quickUpgrade: "Upgrade now",
+        quickUpgrade_started: "Upgrade started: ",
+        quickUpgrade_refused: "The game did not start the upgrade: ",
+        quickUpgrade_failed: "Upgrade request failed: ",
+        stockTip_stock: "In stock",
+        stockTip_production: "Production",
+        stockTip_consumption: "Consumption",
+        stockTip_emptyIn: "Empty in",
+        stockTip_fullIn: "Full in",
         en: "English",
         phalanx: "Hoplite",
         steamgiant: "Steam Giant",
@@ -8527,8 +9057,6 @@
         onTop_description: "Show board on top of Ikariam windows",
         windowTennis_description:
           "Bring board to the top on mouseover<br>Send behind ikariam windows on mouseout<br>Ignores 'on top' option",
-        autoUpdates_description:
-          "Enable automatic update checking<br>(Once every 24hrs)",
         smallFont_description: "Use a smaller font for the data tables",
         goldShort_description: "Total gold display shorten on the Board",
         alternativeBuildingList_description: "Use alternative building table",
@@ -8561,11 +9089,11 @@
           "Hide the Control center in world, island and city view",
         visibility_category: "<b>Board Visibility</b>",
         display_category: "<b>Display Settings</b>",
-        global_category: "<b>Global Settings</b>",
         army_category: "<b>Army Settings</b>",
         building_category: "<b>Building Settings</b>",
         resource_category: "<b>Resource Settings</b>",
         language_category: "<b>Language Settings</b>",
+        notifications_category: "<b>Notifications</b>",
         Initialize_Board: "<b>Initialize Board</b>",
         on_your_Town_Hall:
           "on your Town Hall and go through each town with that view open",
@@ -9262,7 +9790,11 @@
           188600, 262845, 365781, 508333, 705545, 978106, 1354459, 1873675,
           2589401, 3575245, 4932155, 6798502, 9363856, 12887807, 17725664,
           24363545, 33466242, 45942544, 63034293, 86437820, 118469445,
-          162290984, 222216933, 304132802, 416064676, 568954467,
+          162290984, 222216933, 304132802, 416064676, 568954467, 777714914,
+          1062664910, 1451481860, 1981856706, 2705103762, 3691067729,
+          5034792676, 6865583898, 9359318914, 12755169492, 17378311116,
+          23670758353, 32233226603, 43881953755, 59725815403, 81270964923,
+          110562801074, 150378549862, 204488467473, 278010064851, 377888414576,
         ],
         glass: [
           0, 0, 0, 0, 224, 306, 432, 623, 912, 1345, 1990, 2944, 4349, 6412,
@@ -9271,6 +9803,11 @@
           4709607, 6698809, 9519462, 13516116, 19175079, 27182379, 38505308,
           54507092, 77108082, 109012258, 154025415, 217501974, 306972238,
           433022666, 610530905, 860397999, 1211977313, 1706479424, 2401743957,
+          3378925426, 4751858549, 6680173792, 9387660674, 13187972873,
+          18520602695, 26001217066, 36492074090, 51200511453, 71816671241,
+          100706056373, 141178699635, 197865360592, 277243216601, 388370330955,
+          543911645713, 761571982417, 0xf838584400, 1492068334252,
+          2087802418948, 2920797436186,
         ],
         marble: 0,
         sulfur: 0,
@@ -9281,14 +9818,19 @@
           87540, 104400, 129600, 154800, 190800, 230400, 280800, 338400, 410400,
           496800, 597600, 72e4, 867600, 1044e3, 1252800, 1504800, 1807200,
           2167200, 2595600, 3110400, 3715200, 4406400, 5270400, 6307200,
-          7603200, 9072e3, 108e5, 12873600,
+          7603200, 9072e3, 108e5, 12873600, 15379200, 18316800, 21772800,
+          26064e3, 30931200, 36806400, 43891200, 52185600, 62035200, 7344e4,
+          83808e3, 9936e4, 120096e3, 14688e4, 1728e5, 204768e3, 24624e4,
+          288576e3, 346464e3, 409536e3, 482976e3,
         ],
         icon: "cdn/all/both/img/city/academy_l.png",
         maxScientists: [
           0, 8, 11, 16, 22, 28, 35, 43, 51, 60, 69, 78, 89, 99, 110, 122, 134,
           146, 158, 171, 184, 198, 212, 226, 241, 256, 271, 286, 302, 318, 334,
           351, 368, 385, 402, 420, 438, 456, 474, 493, 511, 531, 550, 569, 589,
-          609, 629, 650, 671, 692, 713,
+          609, 629, 650, 671, 692, 713, 734, 755, 777, 799, 821, 844, 866, 889,
+          912, 935, 958, 982, 1006, 1030, 1054, 1078, 1102, 1127, 1152, 1177,
+          1202,
         ],
       },
       alchemist: {
@@ -9301,6 +9843,9 @@
           1645175, 2159201, 2831084, 3708647, 4854048, 6348032, 8295448,
           10832381, 14135388, 18433436, 24023354, 31289801, 40731075, 52992468,
           68909347, 89562805, 116351507, 151084440, 196100619, 254423546,
+          329960464, 427759362, 554340376, 718123063, 929977164, 1203932416,
+          1558093183, 2015816794, 2607231376, 3371190630, 4357790985,
+          5631612343, 7275889833, 9397883183, 12135786537, 15667619358,
         ],
         glass: 0,
         marble: [
@@ -9309,7 +9854,10 @@
           135078, 178753, 236174, 311580, 410502, 540142, 709882, 931927,
           1222157, 1601209, 2095901, 2741056, 3581877, 4677012, 6102517,
           7956991, 10368196, 13501625, 17571569, 22855399, 29712019, 38605676,
-          50136690, 65081100, 84441797, 109514474, 141972642,
+          50136690, 65081100, 84441797, 109514474, 141972642, 183977224,
+          238317787, 308594523, 399452679, 516884493, 668618021, 864617745,
+          1117729006, 1444507426, 1866286255, 2410549658, 3112699367,
+          4018327026, 5186136507, 6691701620, 8632297273,
         ],
         sulfur: 0,
         wine: 0,
@@ -9319,7 +9867,9 @@
           39540, 44640, 50340, 56700, 63780, 71640, 80340, 9e4, 97200, 111600,
           122400, 136800, 154800, 174300, 190800, 212400, 237600, 262800,
           295200, 327600, 363600, 399600, 442800, 493200, 543600, 601200, 666e3,
-          738e3, 813600,
+          738e3, 813600, 9e5, 986400, 1094400, 1202400, 1332e3, 1461600,
+          1612800, 1778400, 1958400, 2152800, 2376e3, 2613600, 2872800, 3160800,
+          3470400, 3816e3,
         ],
         icon: "cdn/all/both/img/city/alchemist_l.png",
       },
@@ -9332,6 +9882,13 @@
           21637, 25450, 29894, 35069, 41090, 48092, 56227, 65673, 76634, 89345,
           104077, 121142, 140899, 163762, 190205, 220775, 256102, 296907,
           344021, 398398, 461134, 533489, 616907, 713049, 823818, 951401,
+          1098306, 1267409, 1462010, 1685893, 1943395, 2239490, 2579877,
+          2971088, 3420608, 3937010, 4530115, 5211173, 5993064, 6890536,
+          7920476, 9102208, 10457855, 12012734, 13795810, 15840227, 18183899,
+          20870195, 23948717, 27476192, 31517483, 36146757, 41448801, 47520541,
+          54472762, 62432086, 71543214, 81971497, 93905859, 107562151,
+          123186956, 141061943, 161508833, 184895066, 211640258, 242223578,
+          277192153, 317170659, 362872256, 415111067, 474816395, 543048952,
         ],
         glass: 0,
         marble: [
@@ -9339,7 +9896,14 @@
           1606, 1918, 2284, 2711, 3210, 3791, 4467, 5252, 6163, 7220, 8443,
           9858, 11494, 13384, 15564, 18079, 20976, 24312, 28151, 32566, 37640,
           43468, 50160, 57838, 66645, 76741, 88310, 101561, 116731, 134094,
-          153956, 176672, 202639, 232315, 266218, 304937, 349144,
+          153956, 176672, 202639, 232315, 266218, 304937, 349144, 399600,
+          457174, 522850, 597750, 683147, 780486, 891412, 1017791, 1161743,
+          1325676, 1512321, 1724783, 1966583, 2241717, 2554721, 2910740,
+          3315614, 3775964, 4299301, 4894145, 5570153, 6338281, 7210943,
+          8202216, 9328055, 10606542, 12058169, 13706157, 15576816, 17699952,
+          20109333, 22843207, 25944894, 29463457, 33454455, 37980801, 43113726,
+          48933877, 55532551, 63013093, 71492478, 81103103, 91994799, 104337126,
+          118321950, 134166362,
         ],
         sulfur: 0,
         wine: 0,
@@ -9348,7 +9912,12 @@
           3180, 3509, 3840, 4260, 4680, 5100, 5640, 6180, 6780, 7440, 8100,
           8880, 9720, 10620, 11580, 12600, 13740, 14940, 16260, 17700, 19200,
           20880, 22620, 24540, 26640, 28860, 31260, 33840, 36600, 39643, 42840,
-          46260, 49980, 54019, 58260, 62880, 67800, 73140,
+          46260, 49980, 54019, 58260, 62880, 67800, 73140, 78840, 84960, 91440,
+          98520, 106080, 114120, 122880, 132120, 142080, 152760, 164160, 176400,
+          187200, 201600, 216e3, 230400, 252e3, 266400, 288e3, 309600, 331200,
+          352800, 381600, 410400, 439200, 468e3, 504e3, 54e4, 576e3, 619200,
+          662400, 712800, 756e3, 813600, 871200, 928800, 993600, 1065600,
+          1137600, 1224e3, 1303200, 1396800, 1490400, 1598400, 1706400, 1821600,
         ],
         icon: "cdn/all/both/img/city/architect_l.png",
       },
@@ -9361,7 +9930,11 @@
           34935, 44028, 55399, 69606, 87337, 109447, 136992, 171279, 213927,
           266933, 332769, 414484, 515846, 641501, 797182, 989960, 1228548,
           1523687, 1888605, 2339594, 2896709, 3584636, 4433747, 5481399,
-          6773536, 8366637, 10330125,
+          6773536, 8366637, 10330125, 12749303, 15728974, 19397853, 23914009,
+          29471492, 36308498, 44717338, 55056667, 67766457, 83386333, 102578020,
+          126152837, 155105337, 190654486, 234294059, 287854299, 353577364,
+          434209609, 533114477, 654410553, 803140399, 985476992, 1208976120,
+          1482884933, 1818519098, 2229723780,
         ],
         glass: 0,
         marble: [
@@ -9370,6 +9943,11 @@
           49087, 61629, 77250, 96688, 120857, 150884, 188162, 234409, 291745,
           362783, 450747, 559605, 694248, 860696, 1066360, 1320358, 1633905,
           2020794, 2497980, 3086299, 3811353, 4704588, 5804620, 7158856,
+          8825486, 10875914, 13397738, 16498407, 20309680, 24993103, 30746698,
+          37813147, 46489817, 57141010, 70212947, 86252094, 105927570,
+          130058537, 159647683, 195922144, 240383514, 294868951, 361625838,
+          443402985, 543562033, 666213517, 816383036, 1000214141, 1225216072,
+          1500566198,
         ],
         sulfur: 0,
         wine: 0,
@@ -9378,7 +9956,10 @@
           4800, 5580, 6420, 7380, 8460, 9660, 10980, 12420, 13980, 15780, 17760,
           19920, 22260, 24900, 27780, 30960, 34500, 38340, 42540, 47220, 52320,
           57900, 64020, 70800, 78180, 86220, 93600, 104400, 115200, 126e3,
-          136800, 151200, 165600, 183600, 201600, 219600, 241200, 266400,
+          136800, 151200, 165600, 183600, 201600, 219600, 241200, 266400, 288e3,
+          316800, 352080, 381600, 417600, 460800, 504e3, 547200, 597600, 655200,
+          712800, 777600, 849600, 928800, 1015200, 1108800, 1211880, 1317600,
+          144e4, 1562400, 1706400, 1857600, 2023200, 2203200, 2397600, 2613600,
         ],
         icon: "cdn/all/both/img/city/barracks_l.png",
       },
@@ -9391,7 +9972,10 @@
           102671, 123062, 147226, 175832, 209662, 249633, 296819, 352476,
           418074, 495332, 586257, 693197, 818894, 966549, 1139897, 1343300,
           1581844, 1861460, 2189065, 2572719, 3021814, 3547294, 4161902,
-          4880477, 5720294, 6701457, 7847359, 9185217, 10746683,
+          4880477, 5720294, 6701457, 7847359, 9185217, 10746683, 12568566,
+          14693664, 17171723, 20060559, 23427356, 27350165, 31919650, 37241112,
+          43436822, 50648745, 59041677, 68806897, 80166378, 93377690, 108739656,
+          126598916, 147357523, 171481740, 199512231, 232075847, 269899277,
         ],
         glass: 0,
         marble: [
@@ -9400,7 +9984,10 @@
           79233, 94348, 112152, 133104, 157738, 186675, 220640, 260476, 307164,
           361845, 425844, 500704, 588216, 690459, 809849, 949192, 1111739,
           1301268, 1522157, 1779483, 2079132, 2427927, 2833773, 3305825,
-          3854691, 4492652, 5233925, 6094966,
+          3854691, 4492652, 5233925, 6094966, 7094821, 8255524, 9602565,
+          11165424, 12978195, 15080293, 17517284, 20341833, 23614802, 27406512,
+          31798203, 36883717, 42771433, 49586502, 57473430, 66599040, 77155893,
+          89366240, 103486558, 119812790, 138686366,
         ],
         sulfur: 0,
         wine: 0,
@@ -9410,6 +9997,9 @@
           34500, 38460, 42780, 47580, 52800, 58560, 64836, 71640, 79140, 87300,
           93600, 104400, 115200, 126e3, 140400, 151200, 169200, 183600, 201600,
           219600, 241200, 266400, 288e3, 316800, 347820, 378e3, 414e3, 45e4,
+          489600, 532800, 583200, 633600, 692880, 748800, 813600, 885600,
+          964800, 1051200, 1144800, 1238400, 1346400, 1461600, 1591200, 1728008,
+          1872e3, 2030400, 2203200, 2390400, 2592120,
         ],
         icon: "cdn/all/both/img/city/blackmarket_l.png",
       },
@@ -9422,7 +10012,12 @@
           127518, 161074, 203133, 255797, 321672, 403995, 506784, 635019,
           794874, 993998, 1241864, 1550195, 1933500, 2409721, 3001041, 3734876,
           4645098, 5773538, 7171843, 8903756, 11047926, 13701367, 16983708,
-          21042427, 26059285, 32258238, 39915158,
+          21042427, 26059285, 32258238, 39915158, 49369794, 61040457, 75442069,
+          93208340, 115118997, 142133229, 175430758, 216462250, 267011199,
+          329269881, 405932553, 500309819, 616468907, 759405767, 935256133,
+          1151554333, 1417550667, 1744600495, 2146641197, 2640776819,
+          3247994597, 3994042998, 4910507626, 6036129376, 7418419248,
+          9115636374,
         ],
         glass: 0,
         marble: [
@@ -9431,7 +10026,11 @@
           94547, 119286, 150284, 189083, 237602, 298223, 373902, 468304, 585975,
           732545, 914991, 1141950, 1424111, 1774699, 2210071, 2750444, 3420809,
           4252036, 5282253, 6558537, 8138994, 10095321, 12515969, 15510020,
-          19211966, 23787590,
+          19211966, 23787590, 29441194, 36424487, 45047521, 55692120, 68828400,
+          85035064, 105024330, 129672573, 160057942, 197506578, 243649349,
+          300491522, 370498286, 456699728, 562819667, 693433753, 854163442,
+          1051913983, 1295166329, 1594335203, 1962208201, 2414484253,
+          2970433849, 3653708448, 4493332720, 5524920747,
         ],
         sulfur: 0,
         wine: 0,
@@ -9441,7 +10040,10 @@
           56220, 63540, 71640, 80700, 9e4, 100800, 111600, 126e3, 140400,
           158400, 176400, 198e3, 219600, 244800, 273600, 306e3, 338400, 378e3,
           417600, 464400, 514800, 572400, 633600, 702e3, 778860, 860400, 952320,
-          1051200, 1159200,
+          1051200, 1159200, 1281600, 1411200, 1562400, 1720800, 1893600, 2088e3,
+          2304e3, 2541600, 2793600, 3081600, 3391200, 3729600, 4104e3, 4514400,
+          4960800, 5356800, 5875200, 6566400, 7084800, 7776e3, 864e4, 9504e3,
+          10512e3, 11404800, 12614400, 13824e3,
         ],
         icon: "cdn/all/both/img/city/branchoffice_l.png",
       },
@@ -9453,7 +10055,14 @@
           1968, 2398, 2911, 3521, 4245, 5104, 6122, 7325, 8745, 10421, 12395,
           14719, 17452, 20663, 24432, 28853, 34034, 40101, 47203, 55508, 65216,
           76556, 89795, 105244, 123262, 144265, 168737, 197238, 230416, 269023,
-          313930, 366145, 426835, 497350, 579253, 674351, 784736,
+          313930, 366145, 426835, 497350, 579253, 674351, 784736, 912826,
+          1061416, 1233737, 1433526, 1665097, 1933436, 2244306, 2604358,
+          3021276, 3503929, 4062559, 4708986, 5456852, 6321899, 7322291,
+          8478980, 9816136, 11361633, 13147619, 15211156, 17594977, 20348343,
+          23528033, 27199486, 31438113, 36330807, 41977679, 48494060, 56012802,
+          64686917, 74692631, 86232876, 99541317, 114886990, 132579620,
+          152975747, 176485758, 203581997, 234808053, 270789476, 312246049,
+          360005948, 415021970, 478390210, 551371516, 635416147,
         ],
         glass: 0,
         marble: [
@@ -9461,7 +10070,14 @@
           1847, 2256, 2755, 3362, 4099, 4993, 6077, 7389, 8976, 10892, 13203,
           15990, 19346, 23385, 28241, 34077, 41084, 49492, 59576, 71660, 86136,
           103465, 124200, 148998, 178640, 214058, 256358, 306856, 367117, 439e3,
-          524716, 626889, 748636, 893662,
+          524716, 626889, 748636, 893662, 1066359, 1271947, 1516613, 1807703,
+          2153931, 2565628, 3055047, 3636710, 4327837, 5148833, 6123876,
+          7281612, 8655974, 10287151, 12222736, 14519078, 17242891, 20473141,
+          24303287, 28843927, 34225924, 40604098, 48161590, 57115014, 67720550,
+          80281130, 95154931, 112765405, 133613117, 158289727, 187494490,
+          222053743, 262943901, 311318598, 368540721, 436220214, 516258685,
+          610902043, 722802593, 855092301, 1011469224, 1196299450, 1414737356,
+          1672867424, 1977871509, 2338226090,
         ],
         sulfur: 0,
         wine: 0,
@@ -9470,7 +10086,12 @@
           3840, 4260, 4680, 5220, 5700, 6240, 6840, 7500, 8160, 8880, 9660,
           10500, 11340, 12300, 13320, 14340, 15480, 16680, 17940, 19320, 20760,
           22260, 23940, 25620, 27480, 29400, 31500, 33660, 36024, 38460, 41040,
-          43800, 46740, 49860, 53160, 56580, 60300, 64200,
+          43800, 46740, 49860, 53160, 56580, 60300, 64200, 68280, 72600, 77280,
+          82080, 87240, 92760, 98400, 104520, 111e3, 117720, 124920, 132480,
+          140520, 148920, 157920, 167280, 177240, 187200, 194400, 208800, 216e3,
+          230400, 244800, 259200, 273600, 295200, 309600, 324e3, 348840, 367200,
+          388800, 410400, 432e3, 453600, 482400, 511200, 54e4, 568800, 597600,
+          633600, 669600, 705600, 741600, 784800, 828e3, 871200,
         ],
         icon: "cdn/all/both/img/city/carpentering_l.png",
       },
@@ -9483,7 +10104,8 @@
           114736, 140951, 172875, 211707, 258897, 316188, 385682, 469907,
           571907, 695339, 844601, 1024978, 1242818, 1505740, 1822893, 2205251,
           2665978, 3220858, 3888809, 4692504, 5659103, 6821133, 8217540,
-          9894942, 11909126, 14326838, 17227911, 20707815,
+          9894942, 11909126, 14326838, 17227911, 20707815, 24880690, 29882971,
+          35877705, 43059703, 51661685, 61961598,
         ],
         glass: [
           600, 733, 904, 1122, 1397, 1742, 2172, 2704, 3360, 4166, 5152, 6354,
@@ -9491,7 +10113,8 @@
           54456, 65440, 78526, 94098, 112611, 134603, 160703, 191656, 228336,
           271771, 323172, 383960, 455804, 540669, 640857, 759072, 898489,
           1062830, 1256461, 1484503, 1752955, 2068850, 2440427, 2877336,
-          3390878, 3994283, 4703037, 5535264,
+          3390878, 3994283, 4703037, 5535264, 6512167, 7658553, 9003429,
+          10580719, 12430083, 14597877,
         ],
         marble: [
           409, 563, 762, 1017, 1343, 1754, 2270, 2914, 3713, 4700, 5916, 7408,
@@ -9499,7 +10122,8 @@
           69989, 84646, 102209, 123231, 148370, 178405, 214259, 257025, 307997,
           368704, 440958, 526899, 629056, 750417, 894513, 1065510, 1268327,
           1508768, 1793680, 2131136, 2530654, 3003454, 3562756, 4224135,
-          5005933, 5929750, 7021015, 8309654,
+          5005933, 5929750, 7021015, 8309654, 9830887, 11626147, 13744172,
+          16242280, 19187866, 22660159,
         ],
         sulfur: [
           288, 411, 576, 794, 1078, 1447, 1922, 2528, 3298, 4273, 5499, 7038,
@@ -9507,7 +10131,8 @@
           83322, 102795, 126608, 155700, 191204, 234493, 287226, 351409, 429467,
           524328, 639526, 779327, 948878, 1154383, 1403320, 1704704, 2069389,
           2510448, 3043618, 3687837, 4465889, 5405177, 6538649, 7905916,
-          9554576, 11541820, 13936347, 16820655,
+          9554576, 11541820, 13936347, 16820655, 20293795, 24474667, 29505964,
+          35558898, 42838859, 51592191,
         ],
         wine: 0,
         time: [
@@ -9516,7 +10141,8 @@
           69240, 82980, 97200, 115200, 140400, 165600, 198e3, 237600, 280800,
           334800, 399600, 471600, 558e3, 662400, 781200, 925200, 1090800,
           1288800, 1519200, 1789200, 2106e3, 2480400, 2851200, 3369600, 3974400,
-          4665600, 5529600, 648e4,
+          4665600, 5529600, 648e4, 7603200, 8812800, 10519200, 12268800,
+          14342400, 16761600,
         ],
         icon: "cdn/all/both/img/city/dump_l.png",
         capacity: [
@@ -9526,7 +10152,8 @@
           2812938, 3125764, 3470326, 3849813, 4267731, 4727938, 5234678,
           5792618, 6406895, 7083160, 7827629, 8647142, 9549229, 10542171,
           11635085, 12838002, 14161964, 15619121, 17222851, 18987875, 20930400,
-          23068268, 25421121, 28010582, 30860462, 33996976,
+          23068268, 25421121, 28010582, 30860462, 33996976, 37448992, 41248298,
+          45429902, 50032358, 55098129, 60673986,
         ],
       },
       embassy: {
@@ -9538,7 +10165,8 @@
           36516, 45023, 55431, 68153, 83688, 102641, 125745, 153886, 188136,
           229792, 280422, 341918, 416566, 507128, 616935, 750005, 911185,
           1106319, 1342449, 1628062, 1973380, 2390712, 2894879, 3503717,
-          4238691, 5125621, 6195562,
+          4238691, 5125621, 6195562, 7485859, 9041403, 10916153, 13174952,
+          15895700, 19171974, 23116156, 27863188, 33575073, 40446263, 48710126,
         ],
         glass: 0,
         marble: [
@@ -9547,7 +10175,9 @@
           58864, 73642, 91987, 114737, 142923, 177811, 220956, 274271, 340100,
           421322, 521466, 644861, 796808, 983803, 1213799, 1496532, 1843913,
           2270514, 2794154, 3436613, 4224511, 5190369, 6373908, 7823631,
-          9598744, 11771507, 14430087,
+          9598744, 11771507, 14430087, 17682033, 21658506, 26519433, 32459766,
+          39717108, 48580984, 59404112, 72616121, 88740216, 108413447,
+          132411341,
         ],
         sulfur: 0,
         wine: 0,
@@ -9557,6 +10187,8 @@
           23880, 25800, 27840, 3e4, 32280, 34740, 37380, 40140, 43080, 46200,
           49560, 53100, 56880, 60840, 65040, 69540, 74280, 79320, 84660, 9e4,
           93600, 100800, 108e3, 115200, 122400, 129600, 140400, 147600, 158400,
+          168720, 179280, 187200, 201600, 208800, 223200, 237600, 252e3, 266400,
+          288e3, 302400,
         ],
         icon: "cdn/all/both/img/city/embassy_l.png",
       },
@@ -9568,7 +10200,12 @@
           2309, 2738, 3241, 3830, 4518, 5322, 6260, 7351, 8621, 10096, 11807,
           13792, 16091, 18752, 21829, 25384, 29490, 34227, 39690, 45985, 53236,
           61583, 71185, 82226, 94916, 109493, 126232, 145444, 167485, 192762,
-          221738, 254944, 292983, 336543, 386409, 443476, 508765,
+          221738, 254944, 292983, 336543, 386409, 443476, 508765, 583435,
+          668813, 766406, 877933, 1005347, 1150876, 1317057, 1506774, 1723310,
+          1970403, 2252306, 2573850, 2940540, 3358627, 3835226, 4378426,
+          4997415, 5702648, 6505999, 7420967, 8462888, 9649187, 10999658,
+          12536790, 14286119, 16276653, 18541329, 21117547, 24047765, 27380190,
+          31169540, 35477921, 40375824, 45943241, 52270943, 59461924,
         ],
         glass: 0,
         marble: [
@@ -9576,7 +10213,12 @@
           2259, 2724, 3276, 3927, 4695, 5599, 6662, 7911, 9375, 11091, 13099,
           15446, 18188, 21388, 25119, 29465, 34526, 40412, 47256, 55208, 64440,
           75154, 87580, 101984, 118673, 137999, 160370, 186252, 216186, 250790,
-          290778, 336969, 390308, 451879, 522927, 604886, 699401,
+          290778, 336969, 390308, 451879, 522927, 604886, 699401, 808362,
+          933942, 1078634, 1245301, 1437230, 1658193, 1912519, 2205176, 2541860,
+          2929112, 3374426, 3886397, 4474881, 5151179, 5928242, 6820913,
+          7846202, 9023599, 10375434, 11927284, 13708448, 15752479, 18097800,
+          20788406, 23874667, 27414243, 31473137, 36126890, 41461951, 47577250,
+          54585976, 62617631, 71820366, 82363644, 94441297, 108275010,
         ],
         sulfur: 0,
         wine: 0,
@@ -9585,7 +10227,11 @@
           3660, 4080, 4500, 4920, 5400, 5940, 6480, 7080, 7740, 8400, 9180,
           9960, 10836, 11700, 12720, 13740, 14880, 16080, 17400, 18780, 20280,
           21840, 23520, 25320, 27300, 29340, 31560, 33900, 36360, 39060, 41880,
-          44940, 48180, 51600, 55260, 59160, 63360, 67740,
+          44940, 48180, 51600, 55260, 59160, 63360, 67740, 72480, 77400, 82800,
+          88440, 94440, 100920, 107760, 114960, 122640, 130800, 139560, 148680,
+          158520, 168960, 18e4, 187200, 201600, 216e3, 230400, 244800, 259200,
+          273600, 295200, 309600, 331200, 352800, 374400, 396e3, 424800, 453600,
+          482400, 511200, 54e4, 576e3, 612e3, 648e3,
         ],
         icon: "cdn/all/both/img/city/fireworker_l.png",
       },
@@ -9599,6 +10245,10 @@
           1559914, 2045951, 2680825, 3509497, 4590363, 5999234, 7834482,
           10223701, 13332318, 17374727, 22628674, 29453848, 38315888, 49817388,
           64737919, 84085687, 109164190, 141658199, 183744665, 238235716,
+          308763015, 400015379, 518044987, 670661903, 867942283, 1122882900,
+          1452243986, 1877634334, 2426908106, 3135962563, 4051051403,
+          5231761165, 6754840087, 8719122907, 11251864302, 14516882742,
+          18725030790, 24147654600, 31133893693, 40132913824, 51722475965,
         ],
         glass: 0,
         marble: [
@@ -9607,7 +10257,11 @@
           123823, 164072, 217057, 286731, 378251, 498349, 655799, 862037,
           1131957, 1484943, 1946215, 2548570, 3334630, 4359771, 5695902,
           7436363, 9702264, 12650686, 16485294, 21470051, 27946958, 36358975,
-          47279646, 61451363, 79834790, 103672678, 134572257,
+          47279646, 61451363, 79834790, 103672678, 134572257, 174611566,
+          226476673, 293638709, 380582226, 493099698, 638671271, 826954314,
+          1070414450, 1385138785, 1791883778, 2317425233, 2996297247,
+          3873031817, 5005042838, 6466339333, 8352305672, 10785854490,
+          13925345426, 17974775083, 23196887913, 29930043129,
         ],
         sulfur: 0,
         wine: 0,
@@ -9617,7 +10271,10 @@
           42360, 47760, 53700, 60360, 67740, 75900, 84960, 93600, 104400,
           115200, 129600, 144e3, 162e3, 18e4, 198e3, 223200, 244800, 273600,
           302400, 334800, 370800, 410400, 453600, 500400, 550800, 608400,
-          673200, 741600, 817200,
+          673200, 741600, 817200, 9e5, 986400, 1087200, 1202400, 1317600,
+          1447200, 1598400, 1749600, 1929600, 2116800, 2325600, 2548800,
+          2800800, 3067200, 3369600, 3693600, 4046400, 4442400, 4867200, 5328e3,
+          5702400,
         ],
         icon: "cdn/all/both/img/city/forester_l.png",
       },
@@ -9631,6 +10288,10 @@
           1669486, 2189901, 2869754, 3757232, 4914928, 6424109, 8390239,
           10950125, 14281162, 18613275, 24244366, 31560268, 41060521, 53391660,
           69390195, 90138092, 117034361, 151887423, 197034258, 255494043,
+          331166262, 429086060, 555753360, 719556936, 931320745, 1205007649,
+          1558625676, 2015394929, 2605249851, 3366772885, 4349683021,
+          5618037955, 7254353841, 9364904792, 12086538969, 15595443995,
+          20118417612, 25947357610, 33457888088, 43133299638, 55595315617,
         ],
         glass: 0,
         marble: [
@@ -9639,7 +10300,11 @@
           126115, 167232, 221402, 292688, 386399, 509467, 670936, 882601,
           1159836, 1522669, 1997174, 2617284, 3427138, 4484121, 5862811,
           7660088, 10001754, 13051100, 17020006, 22183296, 28897318, 37623972,
-          48961787, 63686093, 82800949, 107606250, 139784419,
+          48961787, 63686093, 82800949, 107606250, 139784419, 181512397,
+          235606256, 305707931, 396526266, 514148126, 666439856, 863565255,
+          1118653714, 1448661967, 1875485319, 2427390376, 3140861984,
+          4062983755, 5254505894, 6793798150, 8781942551, 11349293634,
+          14663927879, 18942524937, 24464378687, 31589436071,
         ],
         sulfur: 0,
         wine: 0,
@@ -9649,7 +10314,9 @@
           41340, 46680, 52560, 59100, 66360, 74460, 83400, 9e4, 100800, 115200,
           129600, 144e3, 158400, 176400, 198e3, 219600, 244800, 27e4, 298800,
           331200, 367200, 406800, 45e4, 496800, 550800, 608400, 673200, 741600,
-          817200,
+          817200, 9e5, 993600, 1094400, 1202400, 1324800, 1461600, 1605600,
+          1771200, 1944e3, 2138400, 2347200, 2577600, 2836800, 3117e3, 342e4,
+          3751200, 4118400, 4514400, 4953600, 5356800, 5875200,
         ],
         icon: "cdn/all/both/img/city/glassblowing_l.png",
       },
@@ -9664,7 +10331,10 @@
           763237383, 1137038037, 1692444828, 2517093724, 3740666824, 5554964954,
           8243521216, 12225273190, 18118943395, 26837912520, 39729978483,
           58783167344, 86928713578, 128486945063, 189823275214, 280313022883,
-          413760045065, 610482062587,
+          413760045065, 610482062587, 900375176069, 1327416199435,
+          1956275754470, 2882029326903, 4244414197679, 6248755460074,
+          9196673978538, 0xc4e76bef3e4, 19902554108845, 29265670944153,
+          43021693605699,
         ],
         glass: 0,
         marble: [
@@ -9675,7 +10345,10 @@
           1162482579, 1760644292, 2664286633, 4028427942, 6086323349,
           9188763911, 13863034479, 20901328346, 31493284284, 47424590290,
           71374479368, 107361204408, 161408875854, 242545338021, 364294956277,
-          546911100944, 820713886868, 1231078954391,
+          546911100944, 820713886868, 1231078954391, 1845891965570,
+          2766684568588, 4145265715715, 6208554037673, 9295646416753,
+          0xca767ba282b, 20817672094679, 31139060278300, 46563940007195,
+          69609603580947, 0x5e9de4a7d210,
         ],
         sulfur: 0,
         wine: 0,
@@ -9685,7 +10358,8 @@
           115200, 129600, 147600, 165600, 183600, 205200, 230400, 255600, 288e3,
           320400, 352800, 392400, 435600, 486e3, 536400, 594e3, 658800, 727200,
           802800, 885600, 979200, 108e4, 1188e3, 1310400, 1443600, 1587600,
-          1746e3, 1918800, 2109600, 2318400,
+          1746e3, 1918800, 2109600, 2318400, 2541600, 2793600, 3067200, 3362400,
+          3686400, 4039200, 4428e3, 4852800, 5313600, 5702400, 6220800,
         ],
         icon: "cdn/all/both/img/city/museum_r.png",
         basicBonus: [
@@ -9693,7 +10367,8 @@
           590, 670, 759, 857, 965, 1086, 1219, 1367, 1530, 1711, 1912, 2134,
           2380, 2652, 2953, 3286, 3655, 4064, 4516, 5016, 5569, 6182, 6859,
           7609, 8439, 9357, 10372, 11496, 12739, 14115, 15637, 17321, 19184,
-          21245, 23526, 26050,
+          21245, 23526, 26050, 28843, 31933, 35352, 39136, 43324, 47958, 53087,
+          58763, 65046, 72e3, 79698,
         ],
       },
       optician: {
@@ -9704,7 +10379,14 @@
           1949, 2355, 2838, 3408, 4082, 4877, 5813, 6914, 8206, 9723, 11500,
           13581, 16014, 18858, 22178, 26052, 30568, 35829, 41953, 49077, 57361,
           66987, 78167, 91143, 106198, 123655, 143890, 167332, 194479, 225904,
-          262267, 304327, 352960, 409173, 474124, 549150, 635784,
+          262267, 304327, 352960, 409173, 474124, 549150, 635784, 735793,
+          851207, 984362, 1137942, 1315035, 1519188, 1754476, 2025583, 2337887,
+          2697569, 3111726, 3588503, 4137258, 4768728, 5495240, 6330936,
+          7292050, 8397203, 9667759, 11128222, 12806698, 14735417, 16951337,
+          19496830, 22420473, 25777948, 29633076, 34058999, 39139535, 44970722,
+          51662594, 59341206, 68150955, 78257233, 89849460, 103144565,
+          118390951, 135873041, 155916471, 178894040, 205232497, 235420316,
+          270016584, 309661151, 355086252, 407129778,
         ],
         glass: 0,
         marble: [
@@ -9712,7 +10394,14 @@
           1691, 2053, 2481, 2987, 3585, 4289, 5117, 6091, 7234, 8575, 10146,
           11985, 14136, 16648, 19582, 23004, 26994, 31642, 37053, 43350, 50671,
           59181, 69065, 80541, 93858, 109304, 127212, 147965, 172006, 199844,
-          232066, 269351, 312478, 362345, 419987, 486596,
+          232066, 269351, 312478, 362345, 419987, 486596, 563543, 652406,
+          755002, 873420, 1010064, 1167699, 1349503, 1559135, 1800794, 2079310,
+          2400237, 2769949, 3195778, 3686140, 4250705, 4900577, 5648508,
+          6509138, 7499276, 8638210, 9948088, 11454320, 13186064, 15176776,
+          17464838, 20094276, 23115590, 26586691, 30573998, 35153662, 40412995,
+          46452094, 53385703, 61345340, 70481744, 80967659, 93001040, 106808701,
+          122650515, 140824199, 161670797, 185580962, 213002133, 244446747,
+          280501647, 321838835,
         ],
         sulfur: 0,
         wine: 0,
@@ -9721,7 +10410,12 @@
           3226, 3585, 3960, 4380, 4800, 5340, 5880, 6420, 7080, 7740, 8460,
           9240, 10080, 11040, 12e3, 13080, 14220, 15420, 16740, 18120, 19680,
           21300, 23040, 24900, 26940, 29100, 31380, 33900, 36540, 39360, 42420,
-          45660, 49140, 52860, 56820, 61080, 65640, 70500,
+          45660, 49140, 52860, 56820, 61080, 65640, 70500, 75720, 81240, 87120,
+          93480, 100200, 107400, 115080, 123360, 132120, 141480, 151440, 162120,
+          173400, 18e4, 194400, 208800, 223200, 237600, 252e3, 273600, 295200,
+          309600, 331200, 352800, 381600, 403200, 432e3, 460800, 496800, 525600,
+          561600, 597600, 640800, 684e3, 727200, 770400, 828e3, 878400, 936e3,
+          1000800, 1065600, 1130400, 1202400, 1281600, 1368e3, 1454400,
         ],
         icon: "cdn/all/both/img/city/optician_l.png",
       },
@@ -9858,7 +10552,10 @@
           49725, 61627, 76256, 94217, 116250, 143252, 176316, 216770, 266228,
           326652, 400422, 490428, 600173, 733911, 896794, 1095068, 1336300,
           1629653, 1986223, 2419438, 2945548, 3584209, 4359192, 5299237,
-          6439084, 7820712, 9494838,
+          6439084, 7820712, 9494838, 11522722, 13978341, 16951007, 20548529,
+          24901014, 30165444, 36531197, 44226685, 53527352, 64765297, 78340852,
+          94736535, 114533810, 138433273, 167278922, 202087360, 244082910,
+          294739834, 355833117, 429499503, 518310883,
         ],
         glass: 0,
         marble: [
@@ -9867,7 +10564,10 @@
           65520, 83856, 107177, 136808, 174423, 222134, 282600, 359176, 456081,
           578629, 733508, 929124, 1176049, 1487566, 1880361, 2375390, 2998956,
           3784068, 4772137, 6015095, 7578051, 9542612, 12011033, 15111408,
-          19004156,
+          19004156, 23890128, 30020738, 37710615, 47353406, 59441515, 74590742,
+          93571044, 117344930, 147115377, 184385610, 231033698, 289405581,
+          362431119, 453768791, 567986121, 710784617, 889280166, 1112352498,
+          1391080717, 1739285988, 2174207679,
         ],
         sulfur: 0,
         wine: 0,
@@ -9877,14 +10577,19 @@
           39360, 46440, 54720, 64380, 75648, 88680, 100800, 118800, 140400,
           165600, 190800, 223200, 262440, 302400, 352800, 410400, 475200,
           554400, 640800, 745200, 860400, 997200, 1152e3, 1335600, 1540800,
-          1782e3, 2055600, 2372400,
+          1782e3, 2055600, 2372400, 2736e3, 3153600, 3636e3, 4190400, 4831200,
+          5529600, 6393600, 7257600, 8467200, 9676800, 11059200, 12787200,
+          14688e3, 16934400, 19526400, 22291200, 25747200, 29548800, 33868800,
+          3888e4, 44582400,
         ],
         loadingSpeed: [
           10, 30, 60, 96, 132, 168, 216, 264, 312, 372, 438, 510, 588, 672, 768,
           870, 984, 1110, 1248, 1398, 1566, 1746, 1950, 2172, 2418, 2682, 2982,
           3306, 3660, 4056, 4488, 4962, 5490, 6066, 6696, 7392, 8160, 9006,
           9930, 10950, 12072, 13308, 14664, 16158, 17802, 19608, 21600, 23784,
-          26190, 28836, 31746,
+          26190, 28836, 31746, 34950, 38466, 42342, 46602, 51294, 56448, 62118,
+          68358, 75222, 82770, 91074, 100206, 110256, 121308, 133470, 146844,
+          161550, 177732, 195534, 215118, 236652,
         ],
         icon: "cdn/all/both/img/city/port_l.png",
       },
@@ -9896,7 +10601,11 @@
           3302, 3946, 4696, 5567, 6577, 7748, 9103, 10668, 12476, 14560, 16961,
           19724, 22901, 26552, 30742, 35549, 41060, 47373, 54600, 62869, 72324,
           83129, 95472, 109563, 125643, 143983, 164892, 188720, 215863, 246772,
-          281953, 321984, 367518, 419294, 478147, 545025, 620998,
+          281953, 321984, 367518, 419294, 478147, 545025, 620998, 707280,
+          805240, 916430, 1042602, 1185738, 1348080, 1532160, 1740842, 1977358,
+          2245364, 2548986, 2892887, 3282333, 3723267, 4222407, 4787326,
+          5426583, 6149827, 6967959, 7893271, 8939637, 10122705, 11460129,
+          12971821, 14680237, 16610702,
         ],
         glass: 0,
         marble: [
@@ -9904,7 +10613,11 @@
           1630, 1970, 2373, 2848, 3410, 4073, 4853, 5770, 6848, 8113, 9597,
           11335, 13369, 15749, 18530, 21777, 25567, 29988, 35140, 41142, 48130,
           56261, 65718, 76711, 89485, 104320, 121542, 141527, 164709, 191589,
-          222746, 258848, 300664, 349084, 405133,
+          222746, 258848, 300664, 349084, 405133, 469993, 545028, 631808,
+          732144, 848124, 982151, 1136997, 1315848, 1522383, 1760826, 2036052,
+          2353663, 2720113, 3142824, 3630340, 4192484, 4840564, 5587581,
+          6448485, 7440470, 8583301, 9899703, 11415798, 13161605, 15171626,
+          17485503,
         ],
         sulfur: 0,
         wine: 0,
@@ -9914,6 +10627,9 @@
           25230, 27300, 29520, 31860, 34380, 37020, 39780, 42720, 45900, 49200,
           52680, 56340, 60240, 64380, 68700, 73320, 78180, 83280, 88680, 93600,
           97200, 104400, 111600, 118800, 126e3, 133200, 140400, 151200, 158400,
+          170880, 18e4, 187200, 201600, 208800, 223200, 237600, 252e3, 266400,
+          280800, 295200, 309600, 331200, 350640, 367200, 388800, 410400, 432e3,
+          453600, 475200, 504e3, 532800, 561600, 590400, 619200, 655200,
         ],
         icon: "cdn/all/both/img/city/safehouse_l.png",
       },
@@ -9926,7 +10642,11 @@
           73416, 93417, 118680, 150556, 190735, 241333, 304994, 385024, 485552,
           611733, 77e4, 968379, 1216878, 1527967, 1917188, 2403892, 3012175,
           3772023, 4720743, 5904734, 7381687, 9223306, 11518694, 14378537,
-          17940294, 22374635, 27893402,
+          17940294, 22374635, 27893402, 34759483, 43299029, 53916587, 67113828,
+          83512731, 103884267, 129183897, 160595473, 199585552, 247970564,
+          307999853, 382458363, 474793563, 589272333, 731174840, 907034120,
+          1124932074, 1394865133, 1729195936, 2143211178, 2655810510,
+          3290357176, 4075728249, 5047611149, 6250104040, 7737691095,
         ],
         glass: 0,
         marble: [
@@ -9935,7 +10655,11 @@
           84210, 106825, 135333, 171234, 216402, 273177, 344483, 433969, 546185,
           686805, 862899, 1083277, 1358905, 1703436, 2133857, 2671296, 3342022,
           4178689, 5221868, 6521957, 8141538, 10158304, 12668676, 15792287,
-          19677534, 24508442,
+          19677534, 24508442, 30513160, 37974483, 47242847, 58752416, 73040970,
+          90774491, 112777551, 140070881, 173917778, 215881460, 267895914,
+          332353397, 412212517, 511131690, 633633905, 785310155, 973070517,
+          1205454057, 1493011264, 1848775940, 2288847403, 2833108709,
+          3506112580, 4338174051, 5366717967, 6637940566,
         ],
         sulfur: 0,
         wine: 0,
@@ -9944,7 +10668,10 @@
           9240, 10080, 10980, 11940, 12960, 13980, 15060, 16200, 17460, 18720,
           20040, 21420, 22860, 24420, 26040, 27660, 29460, 31260, 33180, 35220,
           37320, 39480, 41820, 44160, 46680, 49320, 52020, 54900, 57840, 60960,
-          64200, 67560, 71100, 74820, 78600, 82620, 86820, 9e4, 93600,
+          64200, 67560, 71100, 74820, 78600, 82620, 86820, 9e4, 93600, 100320,
+          105240, 110400, 115680, 121320, 127080, 133080, 139320, 145920,
+          152640, 159720, 167040, 174720, 18e4, 187200, 194400, 201600, 216e3,
+          223200, 237600, 244800, 252e3, 266400, 280800, 288e3, 302400,
         ],
         icon: "cdn/all/both/img/city/shipyard_l.png",
       },
@@ -9958,6 +10685,11 @@
           1620495, 2128021, 2791789, 3659254, 4792128, 6270626, 8198965,
           10712494, 13986913, 18250212, 23798127, 31014120, 40395228, 52585482,
           68419105, 88976328, 115655515, 150266307, 195149923, 253334457,
+          328735355, 426414121, 552912124, 716681217, 928639131, 1202885667,
+          1557626105, 2016361500, 2609422837, 3375947965, 4366428738,
+          5645992286, 7298627357, 9432627108, 12187597426, 15743479803,
+          20332166192, 26252448402, 33889256777, 43738415585, 56438492967,
+          72811773523, 93916960029, 121116953847, 156166018024, 201321852966,
         ],
         glass: 0,
         marble: [
@@ -9966,7 +10698,12 @@
           130662, 173079, 228903, 302288, 398654, 525073, 690763, 907730,
           1191607, 1562737, 2047577, 2680522, 3506260, 4582831, 5985583,
           7812290, 10189778, 13282495, 17303591, 22529243, 29317171, 38130559,
-          49568956, 64408192, 83651900, 108598039, 140924741,
+          49568956, 64408192, 83651900, 108598039, 140924741, 182801081,
+          237029979, 307232501, 398085540, 515628233, 667656967, 864234451,
+          1118345703, 1446743214, 1871035619, 2419089871, 3126836847,
+          4040596140, 5220068873, 6742189887, 8706085400, 11239452452,
+          14506766767, 18719841670, 24151409683, 31152589913, 40175350135,
+          51801388235, 66779263169, 86072126155, 110919071260,
         ],
         sulfur: 0,
         wine: 0,
@@ -9976,7 +10713,10 @@
           40440, 45660, 51420, 57900, 65040, 72960, 81780, 9e4, 100800, 111600,
           126e3, 140400, 158400, 176280, 194400, 216e3, 241200, 266400, 295200,
           327600, 363600, 403200, 446400, 493200, 547200, 605940, 666e3, 738e3,
-          813600,
+          813600, 892800, 986400, 1087200, 1202400, 1324800, 1461600, 1605600,
+          1771200, 1944e3, 2145600, 2354400, 2594520, 2851200, 3132e3, 3441600,
+          378e4, 4152120, 4557600, 4996800, 5356800, 5875200, 6566400, 7084800,
+          7776e3, 864e4, 9504e3,
         ],
         icon: "cdn/all/both/img/city/stonemason_l.png",
       },
@@ -10019,7 +10759,13 @@
           34082, 41743, 51045, 62329, 76006, 92566, 112602, 136824, 166085,
           201408, 244021, 295396, 357296, 431835, 521545, 629456, 759196,
           915107, 1102381, 1327229, 1597075, 1920794, 2308989, 2774329, 3331942,
-          3999895, 4799754,
+          3999895, 4799754, 5757257, 6903119, 8273983, 9913549, 11873940,
+          14217294, 17017690, 20363412, 24359672, 29131815, 34829162, 41629556,
+          49744784, 59427012, 70976440, 84750392, 101174140, 120753736,
+          144091280, 171903056, 205041069, 244518633, 291540758, 347540240,
+          414220508, 493606516, 588105142, 700576903, 834421076, 993676735,
+          1183142665, 1408519653, 1676579353, 1995364633, 2374427278,
+          2825109995, 3360880928, 3997730460,
         ],
         glass: 0,
         marble: [
@@ -10027,7 +10773,14 @@
           1266, 1710, 2308, 3112, 4189, 5631, 7559, 10133, 13563, 18130, 24204,
           32273, 42981, 57179, 75985, 100877, 133795, 177298, 234745, 310556,
           410539, 542317, 715903, 944433, 1245140, 1640619, 2160487, 2843554,
-          3740651, 4918343, 6463762, 8490934, 11149032, 14633158,
+          3740651, 4918343, 6463762, 8490934, 11149032, 14633158, 19198412,
+          25178253, 33008464, 43258398, 56671748, 74219703, 97170251, 127178517,
+          166404508, 217666523, 284641058, 372123181, 486365670, 635520651,
+          830214630, 1084297097, 1415814960, 1848280762, 2412323e3, 3147833434,
+          4106760628, 5356743793, 6985839067, 9108665931, 11874399495,
+          15477161810, 20169530747, 26280099801, 34236301094, 44594065899,
+          58076367086, 75623298040, 98457134552, 128166854036, 166817920262,
+          217094872723, 282486505653, 367526335620,
         ],
         sulfur: 0,
         wine: 0,
@@ -10036,14 +10789,22 @@
           9780, 10980, 12240, 13620, 15060, 16680, 18360, 20160, 22080, 24180,
           26400, 28815, 31320, 34020, 36960, 40080, 43380, 46920, 50640, 54660,
           58920, 63480, 68340, 73500, 79020, 84840, 9e4, 97200, 104400, 111600,
-          118800, 126e3, 136800, 144e3, 154800, 165600, 176400, 190800,
+          118800, 126e3, 136800, 144e3, 154800, 165600, 176400, 190800, 201600,
+          216e3, 230400, 244800, 259200, 273600, 295200, 316800, 338400, 36e4,
+          381600, 403200, 432e3, 453600, 482400, 519120, 547200, 583200, 619200,
+          655200, 698400, 741600, 784800, 828e3, 878400, 936e3, 993600, 1051200,
+          1116e3, 1180800, 1252800, 1324800, 1404e3, 1483200, 1569600, 1663200,
+          1756800, 1864800,
         ],
         icon: "cdn/all/both/img/city/taverne_r.png",
         wineUse: [
           0, 4, 8, 13, 18, 24, 30, 36, 43, 51, 59, 68, 78, 88, 99, 111, 123,
           136, 150, 165, 181, 198, 216, 235, 255, 277, 300, 324, 350, 378, 407,
           439, 472, 507, 544, 584, 625, 670, 717, 766, 819, 875, 933, 995, 1061,
-          1130, 1202, 1279, 1360, 1445, 1534,
+          1130, 1202, 1279, 1360, 1445, 1534, 1628, 1726, 1830, 1938, 2052,
+          2172, 2297, 2428, 2565, 2708, 2858, 3015, 3178, 3349, 3527, 3713,
+          3907, 4108, 4319, 4537, 4765, 5001, 5247, 5503, 5768, 6044, 6330,
+          6627, 6934, 7253, 7584, 7926, 8280, 8647, 9027, 9420, 9826, 10245,
         ],
         wineUse2: [
           0, 12, 24, 36, 48, 61, 73, 86, 99, 112, 125, 138, 152, 165, 179, 193,
@@ -10057,14 +10818,20 @@
           0, 12, 24, 36, 48, 61, 73, 86, 99, 112, 125, 138, 152, 165, 179, 193,
           207, 222, 236, 251, 266, 282, 297, 313, 329, 345, 361, 378, 395, 412,
           430, 448, 466, 484, 502, 521, 540, 560, 580, 600, 620, 641, 662, 683,
-          705, 727, 749, 772, 795, 819, 843,
+          705, 727, 749, 772, 795, 819, 843, 867, 891, 916, 942, 968, 994, 1021,
+          1048, 1075, 1103, 1131, 1160, 1189, 1219, 1249, 1280, 1311, 1343,
+          1375, 1408, 1441, 1475, 1509, 1544, 1579, 1615, 1651, 1688, 1726,
+          1764, 1803, 1843, 1883, 1923, 1965, 2007, 2050, 2093,
         ],
         wineBonus: [
           0, 60, 120, 181, 242, 304, 367, 430, 494, 559, 624, 691, 758, 826,
           896, 966, 1037, 1109, 1182, 1256, 1332, 1408, 1485, 1564, 1644, 1725,
           1807, 1891, 1975, 2061, 2149, 2238, 2328, 2419, 2512, 2606, 2702,
           2800, 2898, 2999, 3101, 3204, 3310, 3416, 3525, 3635, 3747, 3861,
-          3976, 4094, 4213,
+          3976, 4094, 4213, 4334, 4457, 4582, 4709, 4838, 4969, 5103, 5238,
+          5375, 5515, 5657, 5801, 5947, 6096, 6247, 6400, 6556, 6714, 6875,
+          7038, 7204, 7373, 7544, 7718, 7895, 8075, 8257, 8442, 8631, 8822,
+          9016, 9213, 9414, 9617, 9824, 10034, 10248, 10464,
         ],
       },
       townHall: {
@@ -10076,7 +10843,13 @@
           94453, 117304, 145447, 180072, 222631, 274895, 339023, 417643, 513958,
           631864, 776102, 952440, 1167886, 1430960, 1752011, 2143604, 2620995,
           3202699, 3911176, 4773667, 5823201, 7099813, 8652017, 10538589,
-          12830714, 15614591, 18994567,
+          12830714, 15614591, 18994567, 23096938, 28074523, 34112197, 41433567,
+          50309037, 61065520, 74098190, 89884629, 109001917, 132147228,
+          160162676, 194065280, 235083079, 284698684, 344701763, 417252303,
+          504956850, 610960360, 739056885, 893822887, 1080777844, 1306577676,
+          1579247686, 1908463069, 2305886652, 2785575507, 3364470453,
+          4062985259, 4905715807, 5922293565, 7148412626, 8627065526,
+          10410030130,
         ],
         glass: 0,
         marble: [
@@ -10085,7 +10858,13 @@
           157392, 204915, 266384, 345810, 448337, 580562, 750942, 970304,
           1252515, 1615313, 2081388, 2679747, 3447452, 4431846, 5693374,
           7309181, 9377690, 12024426, 15409422, 19736642, 25265952, 32328344,
-          41345276, 52853241, 67534979, 86259109,
+          41345276, 52853241, 67534979, 86259109, 110130443, 140553860,
+          179315367, 228684958, 291547093, 371566226, 473396708, 602948945,
+          767726837, 977255499, 1243623348, 1582169030, 2012351749, 2558853812,
+          3252977147, 4134411927, 5253476153, 6673951219, 8476671605,
+          10764068676, 13665921466, 17346634194, 22014444723, 27933074959,
+          35436469088, 44947435965, 57001227308, 72275355347, 91627297095,
+          116142166376, 147192982667, 186516857881, 236311295935,
         ],
         sulfur: 0,
         wine: 0,
@@ -10095,7 +10874,11 @@
           60960, 72480, 86040, 100800, 118800, 140400, 165600, 198e3, 230400,
           273600, 320400, 378e3, 442800, 522e3, 612e3, 716400, 838800, 979200,
           1144800, 1335600, 1562400, 1821600, 2124e3, 2473200, 2851200, 3283200,
-          3888e3, 4492800,
+          3888e3, 4492800, 5284800, 6048e3, 7084800, 8121600, 9504e3, 11059200,
+          1296e4, 15033600, 1728e4, 20044800, 23328e3, 27129600, 31276800,
+          36410400, 41990400, 48729600, 56332800, 65318400, 7344e4, 83808e3,
+          9936e4, 114912e3, 131328e3, 152064e3, 177984e3, 204768e3, 235872e3,
+          273024e3, 320544e3, 3672e5, 425088e3, 48816e4, 568857600,
         ],
         icon: "cdn/all/both/img/city/townhall_l.png",
         actionPointsMax: [
@@ -10113,7 +10896,12 @@
           2379, 2817, 3331, 3933, 4639, 5463, 6426, 7548, 8854, 10374, 12139,
           14189, 16565, 19319, 22506, 26194, 30456, 35380, 41065, 47623, 55184,
           63896, 73931, 85482, 98772, 114056, 131624, 151809, 174992, 201607,
-          232150, 267188, 307368, 353430, 406216, 466690, 535948,
+          232150, 267188, 307368, 353430, 406216, 466690, 535948, 615244,
+          706006, 809863, 928674, 1064555, 1219919, 1397517, 1600485, 1832390,
+          2097300, 2399847, 2745305, 3139680, 3589809, 4103476, 4689538,
+          5358077, 6120565, 6990052, 7981388, 9111460, 10399480, 11867292,
+          13539740, 15445069, 17615391, 20087210, 22902021, 26106983, 29755692,
+          33909049, 38636255, 44015931, 50137395, 57102103, 65025303,
         ],
         glass: 0,
         marble: [
@@ -10121,7 +10909,12 @@
           2072, 2503, 3015, 3621, 4337, 5183, 6179, 7352, 8730, 10349, 12248,
           14473, 17077, 20123, 23682, 27838, 32686, 38340, 44927, 52596, 61520,
           71899, 83963, 97978, 114250, 133135, 155042, 180443, 209883, 243990,
-          283489, 329213, 382126, 443336, 514120, 595948, 690515,
+          283489, 329213, 382126, 443336, 514120, 595948, 690515, 799771,
+          925958, 1071662, 1239852, 1433950, 1657886, 1916186, 2214048, 2557453,
+          2953276, 3409415, 3934950, 4540312, 5237487, 6040241, 6964387,
+          8028084, 9252184, 10660628, 12280898, 14144542, 16287767, 18752124,
+          21585291, 24841972, 28584924, 32886135, 37828176, 43505744, 50027433,
+          57517763, 66119502, 75996322, 87335847, 100353137, 115294678,
         ],
         sulfur: 0,
         wine: 0,
@@ -10130,7 +10923,11 @@
           3143, 3453, 3780, 4140, 4500, 4980, 5460, 5940, 6540, 7140, 7800,
           8460, 9240, 10080, 10980, 12e3, 13020, 14160, 15360, 16740, 18120,
           19680, 21360, 23100, 25020, 27120, 29340, 31740, 34320, 37080, 40080,
-          43260, 46680, 50417, 54360, 58620, 63180, 68040, 73320,
+          43260, 46680, 50417, 54360, 58620, 63180, 68040, 73320, 78840, 84960,
+          91320, 98280, 105720, 113640, 122160, 131280, 141120, 151560, 162720,
+          174600, 187200, 194400, 208800, 230400, 244800, 259200, 280800,
+          302400, 324e3, 350880, 374400, 396e3, 424800, 460800, 489600, 525600,
+          561600, 604800, 640800, 692520, 734400, 784800, 842400, 9e5,
         ],
         icon: "cdn/all/both/img/city/vineyard_l.png",
       },
@@ -10143,7 +10940,11 @@
           61924, 75539, 91989, 111843, 135783, 164621, 199330, 241072, 291232,
           351464, 423739, 510409, 614275, 738675, 887583, 1065731, 1278750,
           1533339, 1837468, 2200609, 2634024, 3151098, 3767730, 4502806,
-          5378751, 6422188, 7664717, 9143835,
+          5378751, 6422188, 7664717, 9143835, 10904027, 12998057, 15488500,
+          18449547, 21969140, 26151513, 31120180, 37021474, 44028734, 52347255,
+          62220140, 73935213, 87833195, 104317364, 123864965, 147040701,
+          174512658, 207071127, 245650828, 291357155, 345497178, 409616234,
+          485541140, 575431197, 681838400, 807778512,
         ],
         glass: 0,
         marble: [
@@ -10152,7 +10953,11 @@
           79771, 97157, 118142, 143447, 173934, 210631, 254767, 307809, 371507,
           447949, 539624, 649499, 781107, 938658, 1127163, 1352588, 1622028,
           1943927, 2328322, 2787146, 3334583, 3987485, 4765867, 5693503,
-          6798617, 8114710, 9681542,
+          6798617, 8114710, 9681542, 11546286, 13764901, 16403753, 19541537,
+          23271547, 27704364, 32971037, 39226842, 46655728, 55475574, 65944410,
+          78367762, 93107337, 110591292, 131326362, 155912197, 185058295,
+          219604010, 260542181, 309047043, 366507192, 434564503, 515160091,
+          610588570, 723562105, 857286020,
         ],
         sulfur: 0,
         wine: 0,
@@ -10162,6 +10967,10 @@
           42300, 47340, 52860, 58920, 65640, 72960, 81e3, 89820, 97200, 108e3,
           118800, 133200, 147600, 162e3, 176400, 198e3, 216e3, 237600, 262800,
           288e3, 313200, 347340, 378e3, 414e3, 453600, 496800, 543600, 594e3,
+          648e3, 712800, 777600, 849600, 921600, 1008e3, 1101600, 1202400,
+          1310400, 1425600, 1558080, 1692e3, 1843200, 2008800, 2181600, 2376e3,
+          2584800, 2815200, 306e4, 3326400, 3614400, 3924e3, 4269600, 4636800,
+          5032800, 5356800,
         ],
         icon: "cdn/all/both/img/city/wall.png",
       },
@@ -10174,7 +10983,10 @@
           29490, 36298, 44612, 54753, 67113, 82163, 100473, 122731, 149768,
           182589, 222401, 270664, 329136, 399936, 485615, 589244, 714523,
           865899, 1048725, 1269436, 1535772, 1857030, 2244386, 2711262, 3273779,
-          3951291, 4767033,
+          3951291, 4767033, 5748888, 6930312, 8351438, 10060401, 12114919,
+          14584187, 17551148, 21115202, 25395448, 30534569, 36703467, 44106817,
+          52989690, 63645487, 76425420, 91749830, 110121726, 132142950,
+          158533508, 190154637, 228036379,
         ],
         glass: 0,
         marble: [
@@ -10183,6 +10995,10 @@
           26555, 32530, 39792, 48613, 59317, 72297, 88024, 107067, 130109,
           157972, 191644, 232313, 281405, 340635, 412059, 498147, 601861,
           726755, 877090, 1057976, 1275536, 1537106, 1851477, 2229174, 2682801,
+          3227447, 3881170, 4665579, 5606523, 6734926, 8087759, 9709237,
+          11652210, 13979844, 16767626, 20105743, 24101937, 28884893, 34608288,
+          41455622, 49645962, 59440809, 71152265, 85152776, 101886740,
+          121884328,
         ],
         sulfur: 0,
         wine: 0,
@@ -10192,7 +11008,9 @@
           39840, 46740, 54720, 63900, 74580, 86880, 100800, 115200, 133200,
           154800, 18e4, 208800, 244800, 280800, 324e3, 374400, 434880, 500400,
           576e3, 662400, 763200, 874800, 1004400, 1155600, 1324800, 1522800,
-          1746e3, 2001600,
+          1746e3, 2001600, 2289600, 2620800, 3002400, 3441600, 3931200, 45e5,
+          5148e3, 5875200, 6566400, 7603200, 864e4, 9849600, 11404800, 1296e4,
+          14860800, 16934400, 19180800, 21945600, 25056e3, 28512e3, 32486400,
         ],
         icon: "cdn/all/both/img/city/warehouse_l.png",
         capacity: [
@@ -10202,7 +11020,10 @@
           1058219, 1185296, 1326787, 1484315, 1659689, 1854922, 2072251,
           2314170, 2583452, 2883186, 3216806, 3588141, 4001450, 4461475,
           4973498, 5543400, 6177729, 6883778, 7669672, 8544459, 9518218,
-          10602179, 11808850, 13152172,
+          10602179, 11808850, 13152172, 14647675, 16312668, 18166438, 20230485,
+          22528768, 25088e3, 27937954, 31111829, 34646636, 38583648, 42968887,
+          47853679, 53295268, 59357506, 66111616, 73637056, 82022472, 91366774,
+          101780328, 113386298, 126322134,
         ],
       },
       winegrower: {
@@ -10215,6 +11036,11 @@
           1669538, 2189971, 2869849, 3757360, 4915100, 6424340, 8390549,
           10950541, 14281719, 18614019, 24245360, 31561594, 41062287, 53394009,
           69393318, 90142239, 117039862, 151894714, 197043912, 255506818,
+          331183152, 429108374, 555782817, 719595793, 931371969, 1205075131,
+          1558714520, 2015511826, 2605403565, 3366974897, 4349948360,
+          5618386285, 7254810880, 9365504165, 12087324619, 15596473328,
+          20119765591, 25949122092, 33460196762, 43136319076, 55599263026,
+          71648784336, 92313418392,
         ],
         glass: 0,
         marble: [
@@ -10223,7 +11049,12 @@
           130662, 173079, 228903, 302288, 398654, 525073, 690763, 907730,
           1191607, 1562737, 2047577, 2680522, 3506260, 4582831, 5985583,
           7812290, 10189778, 13282495, 17303591, 22529243, 29317171, 38130559,
-          49568956, 64408192, 83651900, 108598039, 140924741,
+          49568956, 64408192, 83651900, 108598039, 140924741, 182801081,
+          237029979, 307232501, 398085540, 515628233, 667656967, 864234451,
+          1118345703, 1446743214, 1871035619, 2419089871, 3126836847,
+          4040596140, 5220068873, 6742189887, 8706085400, 11239452452,
+          14506766767, 18719841670, 24151409683, 31152589913, 40175350135,
+          51801388235,
         ],
         sulfur: 0,
         wine: 0,
@@ -10233,7 +11064,9 @@
           40860, 46080, 51960, 58440, 65640, 73620, 82500, 9e4, 100800, 115200,
           126e3, 140400, 158400, 176400, 194400, 216e3, 241200, 27e4, 298800,
           331200, 367200, 406800, 45e4, 496800, 547200, 607560, 669600, 738e3,
-          813600,
+          813600, 9e5, 986400, 1094400, 1202400, 1324800, 1461600, 1605600,
+          1764e3, 1944e3, 2138400, 2347200, 2584800, 2836800, 3117600, 3427200,
+          3758400, 4125600, 4528800, 4968e3, 5356800, 5875200, 6393600, 7084800,
         ],
         icon: "cdn/all/both/img/city/winegrower_l.png",
       },
@@ -10246,6 +11079,11 @@
           22780, 26329, 30385, 35017, 40301, 46326, 53189, 61004, 69896, 80008,
           91501, 104555, 119377, 136196, 155273, 176902, 201412, 229177, 260616,
           296201, 336465, 382006, 433499, 491701, 557468, 631758, 715651,
+          810362, 917256, 1037869, 1173924, 1327360, 1500358, 1695362, 1915124,
+          2162731, 2441651, 2755778, 3109484, 3507677, 3955866, 4460234,
+          5027720, 5666109, 6384135, 7191597, 8099486, 9120131, 10267353,
+          11556658, 13005424, 14633140, 16461649, 18515440, 20821952, 23411945,
+          26319885, 29584392, 33248734, 37361388, 41976658, 47155372, 52965660,
         ],
         glass: 0,
         marble: [
@@ -10253,7 +11091,12 @@
           2590, 3102, 3699, 4394, 5203, 6142, 7231, 8493, 9954, 11642, 13591,
           15839, 18431, 21416, 24850, 28799, 33336, 38546, 44524, 51379, 59236,
           68236, 78540, 90331, 103815, 119231, 136847, 156967, 179938, 206155,
-          236065, 270175, 309061, 353377, 403866, 461368, 526838,
+          236065, 270175, 309061, 353377, 403866, 461368, 526838, 601358,
+          686156, 782621, 892333, 1017073, 1158870, 1320014, 1503103, 1711080,
+          1947274, 2215457, 2519897, 2865427, 3257516, 3702352, 4206940,
+          4779197, 5428090, 6163750, 6997647, 7942738, 9013685, 10227059,
+          11601594, 13158465, 14921607, 16918069, 19178416, 21737185, 24633397,
+          27911129, 31620179, 35816790, 40564484, 45934998, 52009340,
         ],
         sulfur: 0,
         wine: 0,
@@ -10263,6 +11106,11 @@
           28500, 30600, 32760, 35040, 37440, 39960, 42600, 45360, 48240, 51240,
           54360, 57660, 61140, 64740, 68460, 72420, 76500, 80820, 85320, 9e4,
           93600, 97200, 104400, 108e3, 115200, 122400, 126e3, 133200, 140400,
+          149400, 156840, 164520, 172560, 18e4, 187200, 194400, 201600, 216e3,
+          223200, 237600, 244800, 259200, 273600, 280800, 295200, 309600, 324e3,
+          338400, 352800, 367200, 388800, 403200, 424800, 439200, 460800,
+          482400, 496800, 525240, 547200, 568800, 590400, 619200, 640800,
+          669600, 698400,
         ],
         icon: "cdn/all/both/img/city/workshop_l.png",
       },
@@ -10275,7 +11123,9 @@
           91996, 108535, 127811, 150255, 176366, 206713, 241957, 282854, 330277,
           385227, 448859, 522496, 607660, 706101, 819824, 951133, 1102674,
           1277479, 1479028, 1711311, 1978900, 2287039, 2641735, 3049869,
-          3519323, 4059125, 4679607, 5392601, 6211644,
+          3519323, 4059125, 4679607, 5392601, 6211644, 7152229, 8232078,
+          9471464, 10893571, 12524910, 14395793, 16540860, 18999714, 21817600,
+          25046220, 28744637,
         ],
         glass: [
           189, 434, 746, 1142, 1637, 2254, 3016, 3953, 5101, 6501, 8203, 10264,
@@ -10283,7 +11133,9 @@
           88914, 106416, 127143, 151663, 180645, 214870, 255253, 302865, 358958,
           424998, 502697, 594054, 701406, 827483, 975468, 1149079, 1352651,
           1591241, 1870745, 2198036, 2581124, 3029339, 3553551, 4166416,
-          4882671, 5719468, 6696769, 7837797,
+          4882671, 5719468, 6696769, 7837797, 9169571, 10723510, 12536153,
+          14649979, 17114363, 19986691, 23333642, 27232685, 31773809, 37061529,
+          43217209,
         ],
         marble: [
           298, 684, 1178, 1803, 2586, 3561, 4768, 6253, 8073, 10293, 12993,
@@ -10291,7 +11143,9 @@
           118057, 141630, 169589, 202715, 241923, 288288, 343068, 407736,
           484018, 573933, 679843, 804510, 951164, 1123579, 1326163, 1564066,
           1843299, 2170880, 2554995, 3005197, 3532623, 4150260, 4873248,
-          5719226, 6708748, 7865756, 9218128, 10798328, 12644142,
+          5719226, 6708748, 7865756, 9218128, 10798328, 12644142, 14799548,
+          17315720, 20252191, 23678207, 27674302, 32334110, 37766495, 44097984,
+          51475631, 60070305, 70080524,
         ],
         sulfur: 0,
         wine: 0,
@@ -10301,7 +11155,8 @@
           33540, 37980, 42900, 48420, 54600, 61560, 69300, 77940, 87540, 97200,
           108e3, 122400, 136800, 154800, 173700, 190800, 216e3, 241200, 27e4,
           298800, 334800, 374400, 417600, 464400, 514800, 576e3, 640800, 709200,
-          788400,
+          788400, 878400, 972e3, 108e4, 1202400, 1332e3, 1476e3, 1634400,
+          1814400, 2008800, 2224800, 2462400,
         ],
         icon: "cdn/all/both/img/city/marinechartarchive_l.png",
       },
@@ -10316,7 +11171,7 @@
           99622440, 120315951, 145177010, 175024134, 210833625, 253769552,
           305219359, 366836156, 440588935, 528822163, 634326523, 760422840,
           911061640, 1090941242, 1305647782, 1561821242, 1867352247, 2231615313,
-          2665745240, 3182964588, 3798971587,
+          2665745240, 3182964588, 3798971587, 4532399597,
         ],
         glass: [
           234877, 254052, 278455, 309196, 347598, 395231, 453962, 526001,
@@ -10326,6 +11181,7 @@
           31398538, 37016459, 43606772, 51333167, 60386337, 70988358, 83397779,
           97915522, 114891730, 134733712, 157915143, 184986745, 216588660,
           253464789, 296479415, 346636455, 405101766, 473228981, 552589432,
+          645006794,
         ],
         marble: [
           278332, 302275, 333116, 372406, 422006, 484154, 561527, 657330,
@@ -10335,7 +11191,7 @@
           40959142, 48700281, 57857513, 68682954, 81472720, 96574489, 114396345,
           135417124, 160198517, 189399206, 223791400, 264280155, 311925951,
           367971059, 433870350, 511327270, 602335848, 709229736, 834739459,
-          982059228,
+          982059228, 1154924913,
         ],
         sulfur: 0,
         wine: 0,
@@ -10346,7 +11202,7 @@
           9676800, 11404800, 13478400, 15984e3, 18835200, 22204800, 26092800,
           30758400, 34128e3, 41904e3, 4968e4, 57456e3, 68256e3, 78624e3,
           91584e3, 107568e3, 128390400, 149472e3, 173232e3, 202176e3, 236304e3,
-          275616e3, 323136e3, 375408e3, 43848e4, 50976e4, 593568e3,
+          275616e3, 323136e3, 375408e3, 43848e4, 50976e4, 593568e3, 687744e3,
         ],
         icon: "cdn/all/both/img/city/dockyard_l.png",
       },
@@ -10359,7 +11215,12 @@
           123672, 156877, 198712, 251358, 317539, 400653, 504931, 635649,
           799373, 1004276, 1260522, 1580751, 1980670, 2479792, 3102346, 3878410,
           4845302, 6049311, 7547835, 9412017, 11730015, 14611033, 18190309,
-          22635269, 28153130, 35000291, 43493921, 54026264,
+          22635269, 28153130, 35000291, 43493921, 54026264, 67082287, 83261462,
+          103304623, 128127102, 158859583, 196898470, 243967984, 302196697,
+          374211834, 463255503, 573327849, 709363414, 877448349, 1085087898,
+          1341535751, 1658199540, 2049139983, 2531685269, 3127187176,
+          3861951490, 4768382833, 5886393074, 7265133880, 8965127744,
+          11060888855, 13644146100,
         ],
         wine: [
           0, 0, 81, 101, 127, 163, 209, 271, 351, 455, 589, 762, 984, 1267,
@@ -10367,6 +11228,10 @@
           22428, 28180, 35361, 44319, 55484, 69387, 86688, 108199, 134927,
           168115, 209298, 260372, 323676, 402095, 499188, 619341, 767960,
           951706, 1178781, 1459283, 1805645, 2233162, 2760655, 3411267, 4213458,
+          5202213, 6420528, 7921235, 9769234, 12044236, 14844122, 18289057,
+          22526540, 27737579, 34144276, 42019086, 51696199, 63585434, 78189286,
+          96123776, 118143983, 145175285, 178351602, 219062186, 269008866,
+          330276090, 405416590, 497556169, 610521851, 748998583, 918720835,
         ],
         marble: [
           0, 0, 0, 0, 178, 218, 273, 348, 451, 590, 778, 1030, 1366, 1813, 2407,
@@ -10374,28 +11239,45 @@
           49451, 64501, 84025, 109329, 142093, 184480, 239270, 310040, 401381,
           519191, 671041, 866641, 1118449, 1442428, 1859040, 2394492, 3082341,
           3965542, 5099061, 6553210, 8417902, 10808082, 13870656, 17793322,
-          22815833,
+          22815833, 29244350, 37469742, 47990897, 61444420, 78642464, 100620903,
+          128700680, 164565879, 210363140, 268828140, 343446553, 438658833,
+          560120679, 715034345, 912569944, 1164401129, 1485386135, 1894433469,
+          2415602217, 3079500319, 3925061335, 5001801834, 6372689106,
+          8117783759, 10338866069, 13165311097,
         ],
         glass: [
           0, 0, 0, 0, 0, 0, 0, 0, 243, 316, 415, 546, 718, 946, 1244, 1635,
           2146, 2812, 3678, 4802, 6258, 8143, 10579, 13721, 17770, 22982, 29683,
           38289, 49331, 63487, 81618, 104822, 134496, 172415, 220838, 282634,
           361446, 461901, 589870, 752802, 960141, 1223862, 1559139, 1985193,
-          2526371, 3213493, 4085571, 5191965, 6595117, 8373991,
+          2526371, 3213493, 4085571, 5191965, 6595117, 8373991, 10628426,
+          13484610, 17102019, 21682122, 27479402, 34815227, 44095341, 55831913,
+          70671323, 89429164, 113134348, 143084657, 180916705, 228694038,
+          289018058, 365167666, 461275029, 582546797, 735542486, 928524740,
+          1171900009, 1478772873, 1865643286, 2353283450, 2967840494,
+          3742222945,
         ],
         sulfur: [
           0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 155, 216, 298, 408, 557, 756, 1022,
           1377, 1850, 2479, 3312, 4416, 5875, 7801, 10341, 13685, 18084, 23865,
           31454, 41406, 54447, 71520, 93855, 123051, 161191, 210980, 275934,
           360622, 470975, 614693, 801765, 1045148, 1361639, 1773010, 2307470,
-          3001556, 3902576, 5071772, 6588394, 8554970,
+          3001556, 3902576, 5071772, 6588394, 8554970, 11104107, 14407273,
+          18686126, 24227140, 31400462, 40684253, 52696060, 68233283, 88325326,
+          114300849, 147874406, 191258100, 247305440, 319696633, 413177264,
+          533865633, 689648509, 890690626, 1150090537, 1484724755, 1916334103,
+          2472921590, 3190550920, 4115660190, 5308038005, 6844651217,
         ],
         time: [
           56, 64, 76, 92, 113, 142, 179, 228, 291, 374, 479, 615, 788, 1008,
           1287, 1641, 2088, 2651, 3360, 4200, 5340, 6720, 8460, 10680, 13380,
           16800, 21e3, 26280, 32760, 40860, 50880, 63360, 78720, 97200, 118800,
           147600, 183600, 230400, 284400, 352800, 435600, 536400, 662400,
-          817200, 1008e3, 1245600, 1533600, 1886400, 2322e3, 2851200,
+          817200, 1008e3, 1245600, 1533600, 1886400, 2322e3, 2851200, 3513600,
+          4323120, 5306400, 6393600, 7948800, 9676800, 11923200, 14688e3,
+          18144e3, 22118400, 27129600, 33350400, 40780800, 50112e3, 61344e3,
+          7344e4, 88992e3, 109728e3, 136512e3, 167616e3, 204768e3, 251424e3,
+          304128e3, 372384e3, 457056e3, 556416e3,
         ],
         icon: "cdn/all/both/img/city/shrineOfOlympus_l.png",
       },
@@ -10658,7 +11540,7 @@
   }
   render.LoadCSS = function () {
     GM_addStyle(
-      '/* Global board styles */\n #js_GlobalMenu_wood, #js_GlobalMenu_wine, #js_GlobalMenu_marble, #js_GlobalMenu_crystal, #js_GlobalMenu_sulfur {font-size:95%; position:absolute; top:0px; right:5px}\n span.resourceProduction {font-size:85%;position:absolute;right:5px; padding-top: 13px}\n #empireBoard .clickable {\n    color: #542c0f;\n    font-weight: 600; }\n#empireBoard .clickable:hover, #empireBoard .clickbar:hover {\n    cursor: pointer;\n    text-decoration: underline; }\n#empireBoard .Bold, #empireBoard .Red, #empireBoard .Blue, #empireBoard .Green {\n    font-weight: normal; }\n#empireBoard .Green {\n    color: green !important; }\n#empireBoard .Red {\n    color: red !important; }\n#empireBoard .Blue {\n    color: blue !important; }\n#empireBoard .icon {\n    background-clip: border-box;\n    background-repeat: no-repeat;\n    background-position: center;\n    background-color: transparent;\n    background-size: auto 20px; }\n#empireBoard .safeImage {\n    background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAJCAYAAAD+WDajAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAEFJREFUeNpi/P//PwMIhOrzQhhAsPriZ0YQzYQugcxnQhaE6YABxhA9HhRdyICJAQ/AayzxOtFdzYRuFLIVAAEGANwqFwuukYKqAAAAAElFTkSuQmCC");\n    background-size: auto auto !important; }\n#empireBoard .transportImage {\n    background-image: url(cdn/all/both/actions/transport.jpg); }\n#empireBoard .tradeImage {\n    background-image: url(cdn/all/both/actions/trade.jpg); }\n#empireBoard .plunderImage {\n    background-image: url(cdn/all/both/actions/plunder.jpg); }\n#empireBoard .merchantImage {\n    background-image: url(cdn/all/both/minimized/merchantNavy.png);\n    background-position: 0 -5px; }\n#empireBoard .woodImage {\n    background-image: url(cdn/all/both/resources/icon_wood.png);}\n#empireBoard .wineImage {\n    background-image: url(cdn/all/both/resources/icon_wine.png); }\n#empireBoard .marbleImage {\n    background-image: url(cdn/all/both/resources/icon_marble.png); }\n#empireBoard .sulfurImage {\n    background-image: url(cdn/all/both/resources/icon_sulfur.png); }\n#empireBoard .goldImage {\n    background-image: url(cdn/all/both/resources/icon_gold.png); }\n#empireBoard .glassImage {\n    background-image: url(cdn/all/both/resources/icon_glass.png); }\n#empireBoard .sawMillImage {\n    background-image: url(cdn/all/both/characters/y100_worker_wood_faceleft.png); }\n#empireBoard .mineImage {\n    background-image: url(cdn/all/both/characters/y100_worker_tradegood_faceleft.png); }\n#empireBoard .researchImage {\n    background-image: url(cdn/all/both/layout/bulb-on.png); }\n#empireBoard .populationImage {\n    background-image: url(cdn/all/both/resources/icon_population.png); }\n#empireBoard .goldImage {\n    background-image: url(cdn/all/both/resources/icon_gold.png); }\n#empireBoard .expensesImage {\n    background-image: url(cdn/all/both/resources/icon_upkeep.png); }\n#empireBoard .happyImage {\n    background-image: url(cdn/all/both/smilies/happy.png); }\n#empireBoard .actionpointImage {\n    background-image: url(cdn/all/both/resources/icon_actionpoints.png); }\n#empireBoard .growthImage {\n    background-image: url(cdn/all/both/icons/growth_positive.png); }\n#empireBoard .scientistImage {\n    background-image: url(cdn/all/both/characters/40h/scientist_r.png); }\n#empireBoard .priestImage {\n    background-image: url(cdn/all/both/characters/40h/templer_r.png); }\n#empireBoard .citizenImage {\n    background-image: url(cdn/all/both/characters/40h/citizen_r.png); }\n#empireBoard .cityIcon {\n    background-image: url(cdn/all/both/icons/city_30x30.png); }\n#empireBoard .governmentIcon {\n    background-image: url(cdn/all/both/government/zepter_20.png); }\n#empireBoard .researchIcon {\n    background-image: url(cdn/all/both/icons/researchbonus_30x30.png); }\n#empireBoard .tavernIcon {\n    background-image: url(cdn/all/both/buildings/tavern_30x30.png); }\n#empireBoard .culturalIcon {\n    background-image: url(cdn/all/both/interface/icon_message_write.png); }\n#empireBoard .museumIcon {\n    background-image: url(cdn/all/both/buildings/museum_30x30.png); }\n#empireBoard .incomeIcon {\n    background-image: url(cdn/all/both/icons/income_positive.png); }\n#empireBoard .crownIcon {\n    background-image: url(cdn/all/both/layout/crown.png); }\n#empireBoard .corruptionIcon {\n    background-image: url(cdn/all/both/icons/corruption_24x24.png); }\n#empireBoard #empireTip {\n    display: none;\n    position: absolute;\n    top: 0;\n    left: 0;\n    z-index: 99999999; }\n#empireBoard #empireTip .icon {\n    background-clip: border-box;\n    background-repeat: no-repeat;\n    background-position: 0;\n    background-color: transparent;\n    background-attachment: scroll;\n    background-size: 16px auto;\n    height: 17px;\n    min-width: 24px;\n    width: 24px; }\n#empireBoard #empireTip .icon2 {\n    background-clip: border-box;\n    background-repeat: no-repeat;\n    background-position: 0;\n    background-color: transparent;\n    background-attachment: scroll;\n    background-size: 24px auto;\n    height: 17px;\n    min-width: 24px;\n    width: 24px; }\n#empireBoard #empireTip .content {\n    background-color: #fae0ae;\n    border: 1px solid #e4b873;\n    position: relative;\n    overflow: hidden;\n    text-align: left;\n    word-wrap: break-word; }\n#empireBoard #empireTip .content table {\n    width: 100%; }\n#empireBoard #empireTip .content table tr.data {\n    background-color:  	#FFFAF0; }\n#empireBoard #empireTip .content table tr.total {\n     background: #E7C680 url(cdn/all/both/input/button.png) repeat-x scroll 0 0; }\n#empireBoard #empireTip .content table td {\n    padding: 2px;\n    height: auto !important;\n    text-align: right; }\n#empireBoard #empireTip .content table th {\n    padding: 2px;\n    height: auto !important;\n    text-align: center;\n    font-weight: bold;  background: #F8E7B3 url(cdn/all/both/input/button.png) repeat-x scroll 0 bottom;}\n#empireBoard #empireTip .content table tbody td {\n background-color: #FFFAF0;}\n#empireBoard #empireTip .content table tbody td:last-child {\n    text-align: left;\n    white-space: nowrap;\n    font-style: italic; }\n#empireBoard #empireTip .content table tfoot {\n  line-height: 12px !important;  border-top: 3px solid #fdf7dd; }\n#empireBoard #empireTip .content table tfoot td:last-child {\n    text-align: left;\n    white-space: nowrap;\n    font-style: italic; }\n#empireBoard #empireTip .content table thead {\n    background: #F8E7B3 url(cdn/all/both/input/button.png) repeat-x scroll 0 bottom;}\n#empireBoard #empireTip .content table thead th.lf {\n    border-left: 2px solid #e4b873; }\n#empireBoard #empireTip .content table tbody td.lf {\n    border-left: 2px solid #e4b873; }\n#empireBoard #empireTip .content table th.nolf, #empireBoard #empireTip .content table td.nolf {\n    border-left: none; }\n#empireBoard #empireTip .content th.lfdash, #empireBoard #empireTip .content td.lfdash {\n    border-left: 1px dashed #e4b873; }\n#empireBoard #empireTip .content table tr.small td {\n    height: auto !important;\n    padding-top: 1px;\n    font-size: 10px !important;\n    line-height: 15px !important; }\n#empireBoard #empire_Tabs table {\n    width: 100% !important;\n    text-align: center;\n    border: 1px solid #ffffff; }\n#empireBoard #empire_Tabs table colgroup {\n    border-left: 1px solid #e4b873; }\n#empireBoard #empire_Tabs table colgroup:first-child {\n    border: none !important; }\n#empireBoard #empire_Tabs table colgroup col {\n    border-left: 1px dashed #e4b873; }\n#empireBoard #empire_Tabs table thead {\n    background: #f8e7b3 url(cdn/all/both/input/button.png) repeat-x scroll 0 bottom; }\n#empireBoard #empire_Tabs table thead tr {\n    height: 30px; }\n#empireBoard #empire_Tabs table thead tr th {\n    text-align: center;\n    font-weight: bold;\n    \n    overflow: hidden;\n    white-space: nowrap; }\n#empireBoard #ArmyTab table thead tr th.empireactions {\n  min-width: 20px; width: 50px;}\n#empireBoard #empire_Tabs table thead tr th.icon {\n    min-width: 35px;\n    background-size: auto 20px; }\n#empireBoard #empire_Tabs table tbody tr {\n    border-top: 1px solid #e4b873;}\n#empireBoard #empire_Tabs table tbody tr:nth-child(even) {\n    background-color: #FDF1D4; }\n#empireBoard #empire_Tabs table tbody tr.selected {\n    background-color: #FAE3B8;\n    box-shadow: 0 0 1em #CB9B6A inset; }\n#empireBoard #empire_Tabs table tbody tr:hover {\n    background-color: #fff;\n    box-shadow: 0 0 1em #CB9B6A; }\n#empireBoard #empire_Tabs table tbody tr td.city_name {\n    width: 135px;\n    max-width: 135px;\n    padding-left: 3px;\n    text-align: left;\n    padding-right: 14px; }\n#empireBoard #empire_Tabs table tbody tr td.city_name span.icon {\n    background-repeat: no-repeat;\n    float: left;\n    width: 20px;\n    background-size: 15px auto;\n    margin: 0 2px 0 -1px;\n    height: 16px;\n    cursor: move; }\n   #empireBoard #empire_Tabs table tbody tr td.action_points {\n  text-align: right;}\n  #empireBoard #empire_Tabs table tbody tr td.population {\n  text-align: right;}\n#empireBoard #empire_Tabs  table tbody tr td.sawmill {\n    border-left: 1.5px solid #e4b873; }\n  #empireBoard #empire_Tabs table tbody tr td.sawmillprog {\n  text-align: right;}\n  #empireBoard #empire_Tabs table tbody tr td.mineprog {\n  text-align: right;}\n  #empireBoard #empire_Tabs table tbody tr td.empireactions div {\n    background-clip: border-box;\n    background: transparent repeat scroll 0 0;\n    background-size: 25px auto;\n    height: 17px;\n    min-width: 20px;\n    width: 25px; }\n  #empireBoard #empire_Tabs table tbody tr td.wonder div {\n    background-clip: border-box;\n    background: transparent repeat scroll 0 0;\n    background-size: auto 40px;\n    height: 30px;\n    min-width: 30px;\n    width: 30px; }\n	#empireBoard #empire_Tabs table thead tr th.empireactions div {\n    background-clip: border-box;\n    background: transparent repeat scroll 0 0;\n    background-size: 25px auto;\n    height: 20px;\n    min-width: 24px;\n    width: 25px; }\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.transport {\n    background-image: url("cdn/all/both/actions/transport.jpg"); float: right;}\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.worldmap {\n    background-image: url("cdn/all/both/layout/icon-world.png"); background-size: 16px 16px; background-repeat: no-repeat; background-position: center center; float: left;}\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.island {\n    background-image: url("cdn/all/both/layout/icon-island.png"); background-size: 23px 18px; background-position: center center; float: right;}\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.islandwood {\n    background-image: url("cdn/all/both/resources/icon_wood.png"); background-size: 17px auto; background-repeat: no-repeat; background-position: center center; float: left;}\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.islandgood {\n   float: left;}\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.city {\n    background-image: url("cdn/all/both/layout/icon-city2.png"); background-size: auto 21px; background-repeat: no-repeat; background-position: center center; float: right;}\n#empireBoard #empire_Tabs table thead tr th.empireactions div.member {\n    background-image: url("cdn/all/both/characters/y100_citizen_faceright.png"); background-size: auto 20px; background-repeat: no-repeat; background-position: center center; float: right;}\n#empireBoard #empire_Tabs table thead tr th.empireactions div.agora {\n    background-image: url("cdn/all/both/layout/icon-message.png"); background-size: 20px auto; background-repeat: no-repeat; background-position: center center; float: right;}\n#empireBoard #empire_Tabs table thead tr th.empireactions div.trading {\n    background-image: url("cdn/all/both/characters/fleet/40x40/ship_transport_r_40x40.png"); background-size: 22px 19px; background-repeat: no-repeat; background-position: center center; float: left;}\n#empireBoard #empire_Tabs table thead tr th.empireactions div.spio {\n    background-image: url("cdn/all/both/characters/military/120x100/spy_120x100.png"); background-size: 25px auto; background-position: center center;\n    float: left; }\n#empireBoard #empire_Tabs table thead tr th.empireactions div.combat {\n    background-image: url("cdn/all/both/layout/medallie32x32_gold.png"); background-size: 19px auto; background-repeat: no-repeat;\n    float: right; }\n#empireBoard #empire_Tabs table thead tr th.empireactions div.contracts {\n    background-image: url("cdn/all/both/museum/icon32_culturalgood.png"); background-size: 22px auto; background-position: center center;  background-repeat: no-repeat;}\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.barracks {\n    background-image: url("cdn/all/both/buildings/y50/y50_barracks.png"); background-size: 30px auto; background-position: center center; float: right; }\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.shipyard {\n    background-image: url("cdn/all/both/buildings/y50/y50_shipyard.png");\n  background-size: 28px auto;   float: right; }\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.deploymentarmy {\n    background-image: url("cdn/all/both/actions/move_army.jpg");\n    float: left; }\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.deploymentfleet {\n    background-image: url("cdn/all/both/actions/move_fleet.jpg");\n    float: right; }\n#empireBoard #empire_WorldmapTab table tbody tr td.worldmap div.worldmap{ width:829px; height:829px; background-image: url("cdn/all/both/actions/move_fleet.jpg");\n    float: right; }\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.transport:hover {\n    background-position: 0 -17px; }\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.deploymentfleet:hover {\n    background-position: 0 -17px; }\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.deploymentarmy:hover {\n    background-position: 0 -17px; }\n#empireBoard #empire_Tabs table tbody tr.selected .empireactions div.transport, #empireBoard #empire_Tabs table tbody tr.selected .empireactions div.deploymentarmy, #empireBoard #empire_Tabs table tbody tr.selected .empireactions div.deploymentfleet{\n    background-position: 0 17px; }\n#empireBoard #empire_Tabs table tbody tr.current .empireactions div.transport {\n    background-position: 0 px; }\n#empireBoard #empire_Tabs table tfoot {\n    background: #fae0ae;\n    background: #e7c680 url(cdn/all/both/input/button.png) repeat-x scroll 0 0;\n    border-top: 2px solid #e4b873; }\n#empireBoard #empire_Tabs table tfoot tr td {\n    text-align: right;\n     font-weight: bold;}\n#empireBoard #empire_Tabs table tfoot tr #t_research.total {\n    text-align: center; }\n#empireBoard #empire_Tabs table tfoot tr #t_growth.total {\n    text-align: center; }\n#empireBoard #empire_Tabs table tfoot tr td.total span {\n    line-height: 1em;\n    height: 1em;\n    font-size: 0.8em;\n    display: block; }\n#empireBoard #empire_Tabs table tfoot tr td#t_sigma, #empireBoard #empire_Tabs table tfoot tr td.sigma {\n    font-weight: 800;\n    text-align: center; }\n#empireBoard #ResTab div.progressbar .normal {\n    background: #73443E; }\n#empireBoard #ResTab div.progressbar .warning {\n    background: #8F1D1A; }\n#empireBoard #ResTab div.progressbar .almostfull {\n    background: #B42521; }\n#empireBoard #ResTab div.progressbar .full {\n    background: #ff0000; }\n#empireBoard #ResTab div.progressbar .fullGold {\n    background: #185A39; }\n#empireBoard #ResTab div.progressbar .capped {\n    background: repeating-linear-gradient(135deg, #c92a1d 0, #c92a1d 4px, #ef8f24 4px, #ef8f24 8px); }\n#empireBoard #ResTab, #empireBoard #BuildTab, #empireBoard #ArmyTab {\n    overflow-y: auto; }\n#empireBoard #ResTab > table > thead, #empireBoard #BuildTab > table > thead, #empireBoard #ArmyTab > table > thead {\n    position: sticky; top: 0; z-index: 2; }\n#empireBoard #ResTab > table > tfoot, #empireBoard #ArmyTab > table > tfoot {\n    position: sticky; bottom: 0; z-index: 2; }\n#empireBoard #ResTab div.progressbarPop .normal {\n    background: #73443E; }\n#empireBoard #ResTab div.progressbarPop .warning {\n    background: #CC3300; }\n#empireBoard #ResTab div.progressbarPop .full {\n    background: #185A39; }\n#empireBoard #ResTab div.progressbarSci .normal {\n    background: #73443E; }\n#empireBoard #ResTab div.progressbarSci .full {\n    background: #185A39; }\n#empireBoard #ResTab table tr td.gold_income, #empireBoard #ResTab table tr td.resource, #empireBoard #ResTab table tr td.army:nth-child(even) {\n    text-align: right; }\n#empireBoard #ResTab table tr td.gold_income span.incoming, #empireBoard #ResTab table tr td.resource span.incoming {\n  color: blue; }\n#empireBoard #ResTab table tr td.gold_unkeep span, #empireBoard #ResTab table tr td.resource span, #empireBoard #ResTab table tr td.army:nth-child(even) span {\n    line-height: 1em;\n    height: 1em;\n    font-size: 0.8em;\n    display: block; }\n#empireBoard #ResTab table tr td.gold_income span.icon, #empireBoard #ResTab table tr td.resource span.icon, #empireBoard #ResTab table tr td.army:nth-child(even) span.icon {\n    background-repeat: no-repeat;\n    float: left;\n    width: 20px;\n    height: 9px;\n    padding: 5px 4px 0 0; }\n#empireBoard #ResTab table tr td.gold_income span.current, #empireBoard #ResTab table tr td.resource span.current, #empireBoard #ResTab table tr td.army:nth-child(even) span.current {\n    font-size: 1em;\n    display: inline; }\n#empireBoard #ResTab table tr td.population {\n    text-align: right; }\n#empireBoard #ResTab table tr td.gold_income span:nth-child(2), #empireBoard #ResTab table tr td.population span:nth-child(2) {\n    line-height: 1em;\n    height: 1em;\n    font-size: 0.8em;\n    display: block; }\n#empireBoard #BuildTab table tbody tr td {\n    background-clip: border-box;\n    background-repeat: no-repeat;\n    background-position: center;\n    background-color: transparent;\n    background-size: auto 20px; }\n#empireBoard #BuildTab table tbody tr td span.maxLevel {\n    color: rgba(84, 44, 15, 0.3); }\n#empireBoard #BuildTab table tbody tr td span.upgradableSoon {\n    color: #4169e1;\n    font-style: italic; }\n#empireBoard #BuildTab table tbody tr td span.upgradableSoon:after {\n    content: "+"; }\n#empireBoard #BuildTab table tbody tr td span.upgradable {\n    color: green;\n    font-style: italic; }\n#empireBoard #BuildTab table tbody tr td span.upgradable:after {\n    content: "+"; }\n#empireBoard #BuildTab table tbody tr td span.upgrading {\n    background: url("/cdn/all/both/icons/arrow_upgrade.png") no-repeat scroll 1px 3px transparent;\n    border-radius: 5px 5px 5px 5px;\n    box-shadow: 0 0 2px rgba(0, 0, 0, 0.8);\n    display: inline-block;\n    padding: 2px 5px 1px 20px;\n    margin: 2px; }\n#empireBoard #ArmyTab table colgroup col:nth-child(even) {\n    border-left: none; }\n#empireBoard #SettingsTab .options, #empireBoard #HelpTab .options {\n    float: left;\n    padding: 10px; }\n#empireBoard #SettingsTab .options span.categories, #empireBoard #HelpTab .options span.categories {\n    margin-left: -3px;\n    font-weight: 500; }\n#empireBoard #SettingsTab .options span.categories:not(:first-child), #empireBoard #HelpTab .options span.categories:not(:first-child) {\n    margin-top: 5px; }\n#empireBoard #SettingsTab .options span:not(.clickable), #empireBoard #HelpTab .options span:not(.clickable) {\n    display: block; }\n#empireBoard #SettingsTab .options span label, #empireBoard #HelpTab .options span label {\n    vertical-align: top;\n    padding-left: 5px; }\n#empireBoard #SettingsTab .buttons, #empireBoard #HelpTab .buttons {\n    clear: left;\n    padding: 3px; }\n#empireBoard #SettingsTab .buttons button, #empireBoard #HelpTab .buttons button {\n    margin-left: 3px; }\n\n.toast, .toastAlert {\n    display: none;\n    position: fixed;\n    z-index: 99999;\n    width: 100%;\n    text-align: center;\n    bottom: 5em; }\n\n.toast .message, .toastAlert .message {\n    display: inline-block;\n    color: #4C3000;\n    padding: 5px;\n    border-radius: 5px;\n    box-shadow: 3px 0px 15px 0 #542C0F;\n    -webkit-box-shadow: 3px 0px 15px 0 #542C0F;\n    font-family: Arial, Helvetica, sans-serif;\n    font-size: 11px;\n    background: #faf3d7;\n    background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0, #faf3d7), color-stop(1, #e1b06d)); }\n\ndiv.prog:after {\n    -webkit-animation: move 2s linear infinite;\n    -moz-animation: move 2s linear infinite; }\n\n.prog {\n    display: block;\n    width: 100%;\n    height: 100%;\n    background: #fcf938 -moz-linear-gradient(center bottom, #fcf938 37%, #fcf938 69%);\n    position: relative;\n    overflow: hidden; }\n.prog:after {\n    content: "";\n    position: absolute;\n    top: 0;\n    left: 0;\n    bottom: 0;\n    right: 0;\n    background: -moz-linear-gradient(-45deg, rgba(10, 10, 10, 0.6) 25%, transparent 25%, transparent 50%, rgba(10, 10, 10, 0.6) 50%, rgba(10, 10, 10, 0.6) 75%, transparent 75%, transparent);\n    z-index: 1;\n    -webkit-background-size: 50px 50px;\n    -moz-background-size: 50px 50px;\n    background-size: 50px 50px;\n    -webkit-animation: move 5s linear infinite;\n    -moz-animation: move 5s linear infinite;\n    overflow: hidden; }\n\n.animate > .prog:after {\n    display: none; }\n\n@-webkit-keyframes move {\n    0% {\n        background-position: 0 0; }\n\n    100% {\n        background-position: 50px 50px; } }\n\n@-moz-keyframes move {\n    0% {\n        background-position: 0 0; }\n\n    100% {\n        background-position: 50px 50px; } }\n',
+      '/* Global board styles */\n #js_GlobalMenu_wood, #js_GlobalMenu_wine, #js_GlobalMenu_marble, #js_GlobalMenu_crystal, #js_GlobalMenu_sulfur {font-size:95%; position:absolute; top:0px; right:5px}\n span.resourceProduction {font-size:85%;position:absolute;right:5px; padding-top: 13px}\n #empireBoard .clickable {\n    color: #542c0f;\n    font-weight: 600; }\n#empireBoard .clickable:hover, #empireBoard .clickbar:hover {\n    cursor: pointer;\n    text-decoration: underline; }\n#empireBoard .Bold, #empireBoard .Red, #empireBoard .Blue, #empireBoard .Green {\n    font-weight: normal; }\n#empireBoard .Green {\n    color: green !important; }\n#empireBoard .Red {\n    color: red !important; }\n#empireBoard .Blue {\n    color: blue !important; }\n#empireBoard .icon {\n    background-clip: border-box;\n    background-repeat: no-repeat;\n    background-position: center;\n    background-color: transparent;\n    background-size: auto 20px; }\n#empireBoard .safeImage {\n    background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAJCAYAAAD+WDajAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAEFJREFUeNpi/P//PwMIhOrzQhhAsPriZ0YQzYQugcxnQhaE6YABxhA9HhRdyICJAQ/AayzxOtFdzYRuFLIVAAEGANwqFwuukYKqAAAAAElFTkSuQmCC");\n    background-size: auto auto !important; }\n#empireBoard .transportImage {\n    background-image: url(cdn/all/both/actions/transport.jpg); }\n#empireBoard .tradeImage {\n    background-image: url(cdn/all/both/actions/trade.jpg); }\n#empireBoard .plunderImage {\n    background-image: url(cdn/all/both/actions/plunder.jpg); }\n#empireBoard .merchantImage {\n    background-image: url(cdn/all/both/minimized/merchantNavy.png);\n    background-position: 0 -5px; }\n#empireBoard .woodImage {\n    background-image: url(cdn/all/both/resources/icon_wood.png);}\n#empireBoard .wineImage {\n    background-image: url(cdn/all/both/resources/icon_wine.png); }\n#empireBoard .marbleImage {\n    background-image: url(cdn/all/both/resources/icon_marble.png); }\n#empireBoard .sulfurImage {\n    background-image: url(cdn/all/both/resources/icon_sulfur.png); }\n#empireBoard .goldImage {\n    background-image: url(cdn/all/both/resources/icon_gold.png); }\n#empireBoard .glassImage {\n    background-image: url(cdn/all/both/resources/icon_glass.png); }\n#empireBoard .sawMillImage {\n    background-image: url(cdn/all/both/characters/y100_worker_wood_faceleft.png); }\n#empireBoard .mineImage {\n    background-image: url(cdn/all/both/characters/y100_worker_tradegood_faceleft.png); }\n#empireBoard .researchImage {\n    background-image: url(cdn/all/both/layout/bulb-on.png); }\n#empireBoard .populationImage {\n    background-image: url(cdn/all/both/resources/icon_population.png); }\n#empireBoard .goldImage {\n    background-image: url(cdn/all/both/resources/icon_gold.png); }\n#empireBoard .expensesImage {\n    background-image: url(cdn/all/both/resources/icon_upkeep.png); }\n#empireBoard .happyImage {\n    background-image: url(cdn/all/both/smilies/happy.png); }\n#empireBoard .actionpointImage {\n    background-image: url(cdn/all/both/resources/icon_actionpoints.png); }\n#empireBoard .growthImage {\n    background-image: url(cdn/all/both/icons/growth_positive.png); }\n#empireBoard .scientistImage {\n    background-image: url(cdn/all/both/characters/40h/scientist_r.png); }\n#empireBoard .priestImage {\n    background-image: url(cdn/all/both/characters/40h/templer_r.png); }\n#empireBoard .citizenImage {\n    background-image: url(cdn/all/both/characters/40h/citizen_r.png); }\n#empireBoard .cityIcon {\n    background-image: url(cdn/all/both/icons/city_30x30.png); }\n#empireBoard .governmentIcon {\n    background-image: url(cdn/all/both/government/zepter_20.png); }\n#empireBoard .researchIcon {\n    background-image: url(cdn/all/both/icons/researchbonus_30x30.png); }\n#empireBoard .tavernIcon {\n    background-image: url(cdn/all/both/buildings/tavern_30x30.png); }\n#empireBoard .culturalIcon {\n    background-image: url(cdn/all/both/interface/icon_message_write.png); }\n#empireBoard .museumIcon {\n    background-image: url(cdn/all/both/buildings/museum_30x30.png); }\n#empireBoard .incomeIcon {\n    background-image: url(cdn/all/both/icons/income_positive.png); }\n#empireBoard .crownIcon {\n    background-image: url(cdn/all/both/layout/crown.png); }\n#empireBoard .corruptionIcon {\n    background-image: url(cdn/all/both/icons/corruption_24x24.png); }\n#empireBoard #empireTip {\n    display: none;\n    position: absolute;\n    top: 0;\n    left: 0;\n    z-index: 99999999; }\n#empireBoard #empireTip .icon {\n    background-clip: border-box;\n    background-repeat: no-repeat;\n    background-position: 0;\n    background-color: transparent;\n    background-attachment: scroll;\n    background-size: 16px auto;\n    height: 17px;\n    min-width: 24px;\n    width: 24px; }\n#empireBoard #empireTip .icon2 {\n    background-clip: border-box;\n    background-repeat: no-repeat;\n    background-position: 0;\n    background-color: transparent;\n    background-attachment: scroll;\n    background-size: 24px auto;\n    height: 17px;\n    min-width: 24px;\n    width: 24px; }\n#empireBoard #empireTip .content {\n    background-color: #fae0ae;\n    border: 1px solid #e4b873;\n    position: relative;\n    overflow: hidden;\n    text-align: left;\n    word-wrap: break-word; }\n#empireBoard #empireTip .content table {\n    width: 100%; }\n#empireBoard #empireTip .content table tr.data {\n    background-color:  	#FFFAF0; }\n#empireBoard #empireTip .content table tr.total {\n     background: #E7C680 url(cdn/all/both/input/button.png) repeat-x scroll 0 0; }\n#empireBoard #empireTip .content table td {\n    padding: 2px;\n    height: auto !important;\n    text-align: right; }\n#empireBoard #empireTip .content table th {\n    padding: 2px;\n    height: auto !important;\n    text-align: center;\n    font-weight: bold;  background: #F8E7B3 url(cdn/all/both/input/button.png) repeat-x scroll 0 bottom;}\n#empireBoard #empireTip .content table tbody td {\n background-color: #FFFAF0;}\n#empireBoard #empireTip .content table tbody td:last-child {\n    text-align: left;\n    white-space: nowrap;\n    font-style: italic; }\n#empireBoard #empireTip .content table tfoot {\n  line-height: 12px !important;  border-top: 3px solid #fdf7dd; }\n#empireBoard #empireTip .content table tfoot td:last-child {\n    text-align: left;\n    white-space: nowrap;\n    font-style: italic; }\n#empireBoard #empireTip .content table thead {\n    background: #F8E7B3 url(cdn/all/both/input/button.png) repeat-x scroll 0 bottom;}\n#empireBoard #empireTip .content table thead th.lf {\n    border-left: 2px solid #e4b873; }\n#empireBoard #empireTip .content table tbody td.lf {\n    border-left: 2px solid #e4b873; }\n#empireBoard #empireTip .content table th.nolf, #empireBoard #empireTip .content table td.nolf {\n    border-left: none; }\n#empireBoard #empireTip .content th.lfdash, #empireBoard #empireTip .content td.lfdash {\n    border-left: 1px dashed #e4b873; }\n#empireBoard #empireTip .content table tr.small td {\n    height: auto !important;\n    padding-top: 1px;\n    font-size: 10px !important;\n    line-height: 15px !important; }\n#empireBoard #empire_Tabs table {\n    width: 100% !important;\n    text-align: center;\n    border: 1px solid #ffffff; }\n#empireBoard #empire_Tabs table colgroup {\n    border-left: 1px solid #e4b873; }\n#empireBoard #empire_Tabs table colgroup:first-child {\n    border: none !important; }\n#empireBoard #empire_Tabs table colgroup col {\n    border-left: 1px dashed #e4b873; }\n#empireBoard #empire_Tabs table thead {\n    background: #f8e7b3 url(cdn/all/both/input/button.png) repeat-x scroll 0 bottom; }\n#empireBoard #empire_Tabs table thead tr {\n    height: 30px; }\n#empireBoard #empire_Tabs table thead tr th {\n    text-align: center;\n    font-weight: bold;\n    \n    overflow: hidden;\n    white-space: nowrap; }\n#empireBoard #ArmyTab table thead tr th.empireactions {\n  min-width: 20px; width: 50px;}\n#empireBoard #empire_Tabs table thead tr th.icon {\n    min-width: 35px;\n    background-size: auto 20px; }\n#empireBoard #empire_Tabs table tbody tr {\n    border-top: 1px solid #e4b873;}\n#empireBoard #empire_Tabs table tbody tr:nth-child(even) {\n    background-color: #FDF1D4; }\n#empireBoard #empire_Tabs table tbody tr.selected {\n    background-color: #FAE3B8;\n    box-shadow: 0 0 1em #CB9B6A inset; }\n#empireBoard #empire_Tabs table tbody tr:hover {\n    background-color: #fff;\n    box-shadow: 0 0 1em #CB9B6A; }\n#empireBoard #empire_Tabs table tbody tr td.city_name {\n    width: 135px;\n    max-width: 135px;\n    padding-left: 3px;\n    text-align: left;\n    padding-right: 14px; }\n#empireBoard #empire_Tabs table tbody tr td.city_name span.icon {\n    background-repeat: no-repeat;\n    float: left;\n    width: 20px;\n    background-size: 15px auto;\n    margin: 0 2px 0 -1px;\n    height: 16px;\n    cursor: move; }\n   #empireBoard #empire_Tabs table tbody tr td.action_points {\n  text-align: right;}\n  #empireBoard #empire_Tabs table tbody tr td.population {\n  text-align: right;}\n#empireBoard #empire_Tabs  table tbody tr td.sawmill {\n    border-left: 1.5px solid #e4b873; }\n  #empireBoard #empire_Tabs table tbody tr td.sawmillprog {\n  text-align: right;}\n  #empireBoard #empire_Tabs table tbody tr td.mineprog {\n  text-align: right;}\n  #empireBoard #empire_Tabs table tbody tr td.empireactions div {\n    background-clip: border-box;\n    background: transparent repeat scroll 0 0;\n    background-size: 25px auto;\n    height: 17px;\n    min-width: 20px;\n    width: 25px; }\n  #empireBoard #empire_Tabs table tbody tr td.wonder div {\n    background-clip: border-box;\n    background: transparent repeat scroll 0 0;\n    background-size: auto 40px;\n    height: 30px;\n    min-width: 30px;\n    width: 30px; }\n	#empireBoard #empire_Tabs table thead tr th.empireactions div {\n    background-clip: border-box;\n    background: transparent repeat scroll 0 0;\n    background-size: 25px auto;\n    height: 20px;\n    min-width: 24px;\n    width: 25px; }\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.transport {\n    background-image: url("cdn/all/both/actions/transport.jpg"); float: right;}\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.worldmap {\n    background-image: url("cdn/all/both/layout/icon-world.png"); background-size: 16px 16px; background-repeat: no-repeat; background-position: center center; float: left;}\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.island {\n    background-image: url("cdn/all/both/layout/icon-island.png"); background-size: 23px 18px; background-position: center center; float: right;}\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.islandwood {\n    background-image: url("cdn/all/both/resources/icon_wood.png"); background-size: 17px auto; background-repeat: no-repeat; background-position: center center; float: left;}\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.islandgood {\n   float: left;}\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.city {\n    background-image: url("cdn/all/both/layout/icon-city2.png"); background-size: auto 21px; background-repeat: no-repeat; background-position: center center; float: right;}\n#empireBoard #empire_Tabs table thead tr th.empireactions div.member {\n    background-image: url("cdn/all/both/characters/y100_citizen_faceright.png"); background-size: auto 20px; background-repeat: no-repeat; background-position: center center; float: right;}\n#empireBoard #empire_Tabs table thead tr th.empireactions div.agora {\n    background-image: url("cdn/all/both/layout/icon-message.png"); background-size: 20px auto; background-repeat: no-repeat; background-position: center center; float: right;}\n#empireBoard #empire_Tabs table thead tr th.empireactions div.trading {\n    background-image: url("cdn/all/both/characters/fleet/40x40/ship_transport_r_40x40.png"); background-size: 22px 19px; background-repeat: no-repeat; background-position: center center; float: left;}\n#empireBoard #empire_Tabs table thead tr th.empireactions div.spio {\n    background-image: url("cdn/all/both/characters/military/120x100/spy_120x100.png"); background-size: 25px auto; background-position: center center;\n    float: left; }\n#empireBoard #empire_Tabs table thead tr th.empireactions div.combat {\n    background-image: url("cdn/all/both/layout/medallie32x32_gold.png"); background-size: 19px auto; background-repeat: no-repeat;\n    float: right; }\n#empireBoard #empire_Tabs table thead tr th.empireactions div.contracts {\n    background-image: url("cdn/all/both/museum/icon32_culturalgood.png"); background-size: 22px auto; background-position: center center;  background-repeat: no-repeat;}\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.barracks {\n    background-image: url("cdn/all/both/buildings/y50/y50_barracks.png"); background-size: 30px auto; background-position: center center; float: right; }\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.shipyard {\n    background-image: url("cdn/all/both/buildings/y50/y50_shipyard.png");\n  background-size: 28px auto;   float: right; }\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.deploymentarmy {\n    background-image: url("cdn/all/both/actions/move_army.jpg");\n    float: left; }\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.deploymentfleet {\n    background-image: url("cdn/all/both/actions/move_fleet.jpg");\n    float: right; }\n#empireBoard #empire_WorldmapTab table tbody tr td.worldmap div.worldmap{ width:829px; height:829px; background-image: url("cdn/all/both/actions/move_fleet.jpg");\n    float: right; }\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.transport:hover {\n    background-position: 0 -17px; }\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.deploymentfleet:hover {\n    background-position: 0 -17px; }\n#empireBoard #empire_Tabs table tbody tr td.empireactions div.deploymentarmy:hover {\n    background-position: 0 -17px; }\n#empireBoard #empire_Tabs table tbody tr.selected .empireactions div.transport, #empireBoard #empire_Tabs table tbody tr.selected .empireactions div.deploymentarmy, #empireBoard #empire_Tabs table tbody tr.selected .empireactions div.deploymentfleet{\n    background-position: 0 17px; }\n#empireBoard #empire_Tabs table tbody tr.current .empireactions div.transport {\n    background-position: 0 px; }\n#empireBoard #empire_Tabs table tfoot {\n    background: #fae0ae;\n    background: #e7c680 url(cdn/all/both/input/button.png) repeat-x scroll 0 0;\n    border-top: 2px solid #e4b873; }\n#empireBoard #empire_Tabs table tfoot tr td {\n    text-align: right;\n     font-weight: bold;}\n#empireBoard #empire_Tabs table tfoot tr #t_research.total {\n    text-align: center; }\n#empireBoard #empire_Tabs table tfoot tr #t_growth.total {\n    text-align: center; }\n#empireBoard #empire_Tabs table tfoot tr td.total span {\n    line-height: 1em;\n    height: 1em;\n    font-size: 0.8em;\n    display: block; }\n#empireBoard #empire_Tabs table tfoot tr td#t_sigma, #empireBoard #empire_Tabs table tfoot tr td.sigma {\n    font-weight: 800;\n    text-align: center; }\n#empireBoard #ResTab div.progressbar .normal {\n    background: #73443E; }\n#empireBoard #ResTab div.progressbar .warning {\n    background: #8F1D1A; }\n#empireBoard #ResTab div.progressbar .almostfull {\n    background: #B42521; }\n#empireBoard #ResTab div.progressbar .full {\n    background: #ff0000; }\n#empireBoard #ResTab div.progressbar .fullGold {\n    background: #185A39; }\n#empireBoard #ResTab div.progressbar .capped {\n    background: repeating-linear-gradient(135deg, #c92a1d 0, #c92a1d 4px, #ef8f24 4px, #ef8f24 8px); }\n#empireBoard #ResTab, #empireBoard #BuildTab, #empireBoard #ArmyTab {\n    overflow-y: auto; }\n#empireBoard #ResTab > table > thead, #empireBoard #BuildTab > table > thead, #empireBoard #ArmyTab > table > thead {\n    position: sticky; top: 0; z-index: 2; }\n#empireBoard #ResTab > table > tfoot, #empireBoard #ArmyTab > table > tfoot {\n    position: sticky; bottom: 0; z-index: 2; }\n#empireBoard .empire_syncIndicator {\n    display: inline-block; margin-right: 3px; opacity: 0.35; }\n#empireBoard.empire_syncing .empire_syncIndicator {\n    opacity: 1; animation: empire_syncSpin 1.5s linear infinite; }\n@keyframes empire_syncSpin {\n    from { transform: rotate(0deg); }\n    to { transform: rotate(360deg); } }\n#empireBoard #ResTab div.progressbarPop .normal {\n    background: #73443E; }\n#empireBoard #ResTab div.progressbarPop .warning {\n    background: #CC3300; }\n#empireBoard #ResTab div.progressbarPop .full {\n    background: #185A39; }\n#empireBoard #ResTab div.progressbarSci .normal {\n    background: #73443E; }\n#empireBoard #ResTab div.progressbarSci .full {\n    background: #185A39; }\n#empireBoard #ResTab table tr td.gold_income, #empireBoard #ResTab table tr td.resource, #empireBoard #ResTab table tr td.army:nth-child(even) {\n    text-align: right; }\n#empireBoard #ResTab table tr td.gold_income span.incoming, #empireBoard #ResTab table tr td.resource span.incoming {\n  color: blue; }\n#empireBoard #ResTab table tr td.gold_unkeep span, #empireBoard #ResTab table tr td.resource span, #empireBoard #ResTab table tr td.army:nth-child(even) span {\n    line-height: 1em;\n    height: 1em;\n    font-size: 0.8em;\n    display: block; }\n#empireBoard #ResTab table tr td.gold_income span.icon, #empireBoard #ResTab table tr td.resource span.icon, #empireBoard #ResTab table tr td.army:nth-child(even) span.icon {\n    background-repeat: no-repeat;\n    float: left;\n    width: 20px;\n    height: 9px;\n    padding: 5px 4px 0 0; }\n#empireBoard #ResTab table tr td.gold_income span.current, #empireBoard #ResTab table tr td.resource span.current, #empireBoard #ResTab table tr td.army:nth-child(even) span.current {\n    font-size: 1em;\n    display: inline; }\n#empireBoard #ResTab table tr td.population {\n    text-align: right; }\n#empireBoard #ResTab table tr td.gold_income span:nth-child(2), #empireBoard #ResTab table tr td.population span:nth-child(2) {\n    line-height: 1em;\n    height: 1em;\n    font-size: 0.8em;\n    display: block; }\n#empireBoard #BuildTab table tbody tr td {\n    background-clip: border-box;\n    background-repeat: no-repeat;\n    background-position: center;\n    background-color: transparent;\n    background-size: auto 20px; }\n#empireBoard #BuildTab table tbody tr td span.maxLevel {\n    color: rgba(84, 44, 15, 0.3); }\n#empireBoard #BuildTab table tbody tr td span.upgradableSoon {\n    color: #4169e1;\n    font-style: italic; }\n#empireBoard #BuildTab table tbody tr td span.upgradableSoon:after {\n    content: "+"; }\n#empireBoard #BuildTab table tbody tr td span.upgradable {\n    color: green;\n    font-style: italic; }\n#empireBoard #BuildTab table tbody tr td span.upgradable:after {\n    content: "+"; }\n#empireBoard #BuildTab table tbody tr td span.upgrading {\n    background: url("/cdn/all/both/icons/arrow_upgrade.png") no-repeat scroll 1px 3px transparent;\n    border-radius: 5px 5px 5px 5px;\n    box-shadow: 0 0 2px rgba(0, 0, 0, 0.8);\n    display: inline-block;\n    padding: 2px 5px 1px 20px;\n    margin: 2px; }\n#empireBoard #BuildTab table tbody tr td button.empire_quickUpgrade {\n    margin-left: 2px; padding: 0 3px; font-size: 9px; line-height: 12px; cursor: pointer;\n    color: green; background: #fdf7dd; border: 1px solid #c9a96b; border-radius: 3px; }\n#empireBoard #BuildTab table tbody tr td button.empire_quickUpgrade:disabled {\n    opacity: 0.4; cursor: wait; }\n#empireBoard #ArmyTab table colgroup col:nth-child(even) {\n    border-left: none; }\n#empireBoard #SettingsTab .options, #empireBoard #HelpTab .options {\n    float: left;\n    padding: 10px; }\n#empireBoard #SettingsTab .options span.categories, #empireBoard #HelpTab .options span.categories {\n    margin-left: -3px;\n    font-weight: 500; }\n#empireBoard #SettingsTab .options span.categories:not(:first-child), #empireBoard #HelpTab .options span.categories:not(:first-child) {\n    margin-top: 5px; }\n#empireBoard #SettingsTab .options span:not(.clickable), #empireBoard #HelpTab .options span:not(.clickable) {\n    display: block; }\n#empireBoard #SettingsTab .options span label, #empireBoard #HelpTab .options span label {\n    vertical-align: top;\n    padding-left: 5px; }\n#empireBoard #SettingsTab .buttons, #empireBoard #HelpTab .buttons {\n    clear: left;\n    padding: 3px; }\n#empireBoard #SettingsTab .buttons button, #empireBoard #HelpTab .buttons button {\n    margin-left: 3px; }\n\n.toast, .toastAlert {\n    display: none;\n    position: fixed;\n    z-index: 99999;\n    width: 100%;\n    text-align: center;\n    bottom: 5em; }\n\n.toast .message, .toastAlert .message {\n    display: inline-block;\n    color: #4C3000;\n    padding: 5px;\n    border-radius: 5px;\n    box-shadow: 3px 0px 15px 0 #542C0F;\n    -webkit-box-shadow: 3px 0px 15px 0 #542C0F;\n    font-family: Arial, Helvetica, sans-serif;\n    font-size: 11px;\n    background: #faf3d7;\n    background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0, #faf3d7), color-stop(1, #e1b06d)); }\n\ndiv.prog:after {\n    -webkit-animation: move 2s linear infinite;\n    -moz-animation: move 2s linear infinite; }\n\n.prog {\n    display: block;\n    width: 100%;\n    height: 100%;\n    background: #fcf938 -moz-linear-gradient(center bottom, #fcf938 37%, #fcf938 69%);\n    position: relative;\n    overflow: hidden; }\n.prog:after {\n    content: "";\n    position: absolute;\n    top: 0;\n    left: 0;\n    bottom: 0;\n    right: 0;\n    background: -moz-linear-gradient(-45deg, rgba(10, 10, 10, 0.6) 25%, transparent 25%, transparent 50%, rgba(10, 10, 10, 0.6) 50%, rgba(10, 10, 10, 0.6) 75%, transparent 75%, transparent);\n    z-index: 1;\n    -webkit-background-size: 50px 50px;\n    -moz-background-size: 50px 50px;\n    background-size: 50px 50px;\n    -webkit-animation: move 5s linear infinite;\n    -moz-animation: move 5s linear infinite;\n    overflow: hidden; }\n\n.animate > .prog:after {\n    display: none; }\n\n@-webkit-keyframes move {\n    0% {\n        background-position: 0 0; }\n\n    100% {\n        background-position: 50px 50px; } }\n\n@-moz-keyframes move {\n    0% {\n        background-position: 0 0; }\n\n    100% {\n        background-position: 50px 50px; } }\n',
     );
     if (database.settings.compressedBuildingList.value)
       GM_addStyle(
@@ -10794,6 +11676,9 @@
   });
   onResponse((entries) => {
     events("ajaxResponse").pub(entries);
+  });
+  onSyncChange((running) => {
+    jq("#empireBoard").toggleClass(SYNCING_CLASS, running);
   });
   function observeGameResponses() {
     const gameJQuery = pageJQuery();
