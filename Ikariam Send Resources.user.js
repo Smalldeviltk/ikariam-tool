@@ -18,6 +18,11 @@
   var TIME_FINISHED = "Finished.";
   var WINDOW_CLOSE_TITLE = "Close";
   var BUGS_NONE_RECORDED = "No bugs recorded.";
+  var NOTIFICATION_PERMISSION = {
+    blocked:
+      "The browser did not allow notifications for this site. Allow them in the site settings (the icon left of the address), then tick the box again.",
+    unsupported: "This browser cannot show notifications.",
+  };
   var IMPORT_ERRORS = {
     notJson: "That is not valid JSON.",
     notOurFormat:
@@ -42,7 +47,7 @@
   var SECONDS_PER_HOUR = 3600;
   var TIME_FACTORS = [
     ["Y", 31536e3],
-    ["M", 252e4],
+    ["M", 2592e3],
     ["D", 86400],
     ["h", 3600],
     ["m", 60],
@@ -65,6 +70,18 @@
       }
     }
     return out;
+  }
+  function parseDurationSeconds(text) {
+    const tokens = (text ?? "").trim().match(/\d+\s*[A-Za-z]+/g);
+    if (!tokens) return null;
+    let seconds = 0;
+    for (const token of tokens) {
+      const [, digits, suffix] = token.match(/(\d+)\s*([A-Za-z]+)/);
+      const factor = TIME_FACTORS.find(([unit]) => unit === suffix)?.[1];
+      if (factor === void 0) return null;
+      seconds += Number(digits) * factor;
+    }
+    return seconds;
   }
   function formatNumToStr(inputNum, outputSign = false, precision) {
     const factor = precision ? Number("10e" + (precision - 1)) : 1;
@@ -178,18 +195,6 @@
       ...options,
     });
   }
-  function waitForElements(selector, min = 1, options = {}) {
-    return waitFor(
-      () => {
-        const list = qsa(selector);
-        return list.length >= min ? list : null;
-      },
-      {
-        label: `waitForElements(${selector})`,
-        ...options,
-      },
-    );
-  }
   function clickIfPresent(selector, root) {
     const el = qs(selector, root);
     if (!el) return false;
@@ -226,6 +231,25 @@
   function escapeHtml(text) {
     return text.replace(/[&<>"']/g, (char) => HTML_ESCAPES[char]);
   }
+  function capVisibleRows(box, rowSelector, count) {
+    const rows = box.querySelectorAll(rowSelector);
+    if (rows.length <= count) {
+      box.style.maxHeight = "";
+      return;
+    }
+    const previousCap = box.style.maxHeight;
+    const scrollTop = box.scrollTop;
+    box.style.overflowY = "auto";
+    box.style.maxHeight = "";
+    const top = box.getBoundingClientRect().top;
+    const bottom = rows[count - 1].getBoundingClientRect().bottom;
+    if (bottom - top <= 0) {
+      box.style.maxHeight = previousCap;
+      return;
+    }
+    box.style.maxHeight = `${Math.ceil(bottom - top)}px`;
+    box.scrollTop = scrollTop;
+  }
   var SEL = {
     accountName: ".avatarName > a.noViewParameters",
     accountBlock: ".avatarName",
@@ -234,6 +258,7 @@
     changeCityForm: "#changeCityForm",
     changeCityInput: "#js_cityIdOnChange",
     loadingIndicator: "#loadingPreview",
+    menuSlots: ".menu_slots",
     cityLink: "#js_cityLink > a",
     backlinkButton: "#js_backlinkButton",
     globalMenu: {
@@ -245,14 +270,17 @@
         `#js_GlobalMenu_${resource === "glass" ? "crystal" : resource}`,
     },
     position: (n) => `#position${n}`,
-    cityPositionLink: (n) => `#js_CityPosition${n}Link`,
     buildings: "div[id^='position'].building:not(.buildingGround)",
     winePress: "div[id^='position'].building.vineyard",
     buildingHover: ".hoverable",
     constructionSite: ".constructionSite",
     safehouse: "div.building.safehouse > a",
     buildingUpgradeButton: "#js_buildingUpgradeButton",
-    dockCities: ".cities.clearfix > li > a",
+    shipmentForm: "#transportForm",
+    shipmentLoadingTime: "#loadingTime",
+    shipmentJourneyTime: "#journeyTime",
+    shipmentDestination: (cityId) =>
+      `#transportForm input[name="destinationCityId"][value="${cityId}"]`,
     resourceField: (resource) => `#textfield_${resource}`,
     wineField: "#textfield_wine",
     submit: "#submit",
@@ -292,6 +320,44 @@
   }
   function getCurrentTownName() {
     return qs(SEL.cityBread)?.textContent?.trim() ?? "";
+  }
+  var LOGGER_STORAGE_KEY = "loggerInfo";
+  var TEXTAREA_ID = "txtLogger";
+  var MAX_CHARS = 1e5;
+  var accountLabel = "";
+  function writeToConsole(level, ...args) {
+    try {
+      const write =
+        typeof console[level] === "function" ? console[level] : console.log;
+      if (typeof write === "function") write.apply(console, args);
+    } catch {}
+  }
+  function initLogger(accountName) {
+    accountLabel = accountName;
+    const box = qs(`#${TEXTAREA_ID}`);
+    if (box) box.innerHTML = localStorage.getItem("loggerInfo") ?? "";
+  }
+  function logInfo(message) {
+    const line = `${new Date().toLocaleString()} ${accountLabel} ${message}\n`;
+    const box = qs(`#${TEXTAREA_ID}`);
+    if (box) {
+      let next = line + box.innerHTML;
+      if (next.length > MAX_CHARS) next = next.slice(0, MAX_CHARS);
+      box.innerHTML = next;
+      localStorage.setItem(LOGGER_STORAGE_KEY, next);
+    }
+    writeToConsole("log", `[ika] ${line.trimEnd()}`);
+  }
+  function recentLogLines(count) {
+    return (localStorage.getItem("loggerInfo") ?? "")
+      .split("\n")
+      .filter((line) => line.trim() !== "")
+      .slice(0, count);
+  }
+  function clearLog() {
+    const box = qs(`#${TEXTAREA_ID}`);
+    if (box) box.innerHTML = "";
+    localStorage.setItem(LOGGER_STORAGE_KEY, "");
   }
   var BUG_REPORT_STORAGE_KEY = "ikaBugReports";
   var MAX_RECORDS = 50;
@@ -390,7 +456,8 @@
       save(records);
       const count = existing ? existing.count : 1;
       if (isLogWorthy(count))
-        console.warn(
+        writeToConsole(
+          "warn",
           `[ika] bug recorded (${kind}): ${message}` +
             (count > 1 ? ` [x${count}]` : ""),
         );
@@ -451,9 +518,6 @@
       bugs,
     };
   }
-  function exportBugReport() {
-    return JSON.stringify(buildBugReport(), null, 2);
-  }
   function summariseBugs() {
     const bugs = load();
     if (bugs.length === 0) return BUGS_NONE_RECORDED;
@@ -466,30 +530,86 @@
       )
       .join("\n");
   }
-  var LOGGER_STORAGE_KEY = "loggerInfo";
-  var TEXTAREA_ID = "txtLogger";
-  var MAX_CHARS = 1e5;
-  var accountLabel = "";
-  function initLogger(accountName) {
-    accountLabel = accountName;
-    const box = qs(`#${TEXTAREA_ID}`);
-    if (box) box.innerHTML = localStorage.getItem("loggerInfo") ?? "";
-  }
-  function logInfo(message) {
-    const line = `${new Date().toLocaleString()} ${accountLabel} ${message}\n`;
-    const box = qs(`#${TEXTAREA_ID}`);
-    if (box) {
-      let next = line + box.innerHTML;
-      if (next.length > MAX_CHARS) next = next.slice(0, MAX_CHARS);
-      box.innerHTML = next;
-      localStorage.setItem(LOGGER_STORAGE_KEY, next);
+  var NOTIFICATION_SETTINGS_KEY = "ikaNotifications";
+  var NOTIFIED_KEY = "ikaNotified";
+  var NOTIFIED_MEMORY_MS = 168 * 36e5;
+  function readJson(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch {
+      return fallback;
     }
-    console.log(`[ika] ${line.trimEnd()}`);
   }
-  function clearLog() {
-    const box = qs(`#${TEXTAREA_ID}`);
-    if (box) box.innerHTML = "";
-    localStorage.setItem(LOGGER_STORAGE_KEY, "");
+  function writeJson(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (e) {
+      writeToConsole("warn", e);
+    }
+  }
+  function notificationApi() {
+    return globalThis.Notification;
+  }
+  function isNotificationEnabled(kind) {
+    return readJson(NOTIFICATION_SETTINGS_KEY, {})[kind] === true;
+  }
+  async function setNotificationEnabled(kind, enabled) {
+    let on = enabled;
+    if (on) {
+      const api = notificationApi();
+      if (!api) on = false;
+      else if (api.permission !== "granted")
+        try {
+          on = (await api.requestPermission()) === "granted";
+        } catch (e) {
+          writeToConsole("warn", e);
+          on = false;
+        }
+    }
+    const settings = readJson(NOTIFICATION_SETTINGS_KEY, {});
+    settings[kind] = on;
+    writeJson(NOTIFICATION_SETTINGS_KEY, settings);
+    return on;
+  }
+  function notificationRefusal() {
+    return notificationApi()
+      ? NOTIFICATION_PERMISSION.blocked
+      : NOTIFICATION_PERMISSION.unsupported;
+  }
+  function notify(notice) {
+    if (!isNotificationEnabled(notice.kind)) return false;
+    const api = notificationApi();
+    if (!api || api.permission !== "granted") return false;
+    const now = Date.now();
+    if (notice.happenedAt !== void 0 && now - notice.happenedAt > 12e4)
+      return false;
+    const shown = readJson(NOTIFIED_KEY, {});
+    if (notice.key in shown) return false;
+    for (const [key, at] of Object.entries(shown))
+      if (now - at > NOTIFIED_MEMORY_MS) delete shown[key];
+    shown[notice.key] = now;
+    writeJson(NOTIFIED_KEY, shown);
+    try {
+      const shownNotice = new api(notice.title, {
+        body: notice.body,
+        tag: notice.key,
+      });
+      shownNotice.onclick = () => {
+        window.focus();
+        shownNotice.close();
+      };
+    } catch (e) {
+      writeToConsole("warn", e);
+      return false;
+    }
+    return true;
+  }
+  function forgetNotification(key) {
+    const shown = readJson(NOTIFIED_KEY, {});
+    if (!(key in shown)) return;
+    delete shown[key];
+    writeJson(NOTIFIED_KEY, shown);
   }
   var idCounter = 0;
   function makeTaskId(type) {
@@ -636,6 +756,7 @@
       this.errorStreaks = new Map();
       this.pausedUntil = 0;
       this.blockedTypes = new Set();
+      this.runningTaskId = null;
     }
     register(type, handler) {
       this.handlers.set(type, handler);
@@ -646,6 +767,15 @@
     }
     get isBusy() {
       return this.busy;
+    }
+    get currentTaskId() {
+      if (this.runningTaskId !== null) return this.runningTaskId;
+      if (this.timer === null) return null;
+      const tasks = this.allowedTasks();
+      return (
+        (tasks.find((task) => !this.blockedTypes.has(task.type)) ?? tasks[0])
+          ?.id ?? null
+      );
     }
     start() {
       if (this.timer !== null) return;
@@ -697,6 +827,7 @@
         return;
       }
       this.busy = true;
+      this.runningTaskId = task.id;
       try {
         const result = await handler(task);
         if (result.status !== "defer") this.deferStreak = 0;
@@ -732,6 +863,7 @@
               taskData: task.data,
             });
             this.queue.removeById(task.id);
+            this.options.onTaskDropped?.(task, result.reason);
             break;
         }
       } catch (e) {
@@ -741,7 +873,7 @@
           taskType: task.type,
           taskData: task.data,
         });
-        console.error(e);
+        writeToConsole("error", e);
         const streak = (this.errorStreaks.get(task.id) ?? 0) + 1;
         if (
           streak >= (this.options.maxConsecutiveErrors ?? DEFAULT_MAX_ERRORS)
@@ -751,9 +883,11 @@
           );
           this.errorStreaks.delete(task.id);
           this.queue.removeById(task.id);
+          this.options.onTaskDropped?.(task, message);
         } else this.errorStreaks.set(task.id, streak);
       } finally {
         this.busy = false;
+        this.runningTaskId = null;
       }
     }
   };
@@ -869,6 +1003,12 @@
     const positionKey = `ikaWindow_${options.id}`;
     const stored = options.store?.getJSON(positionKey, null);
     const position = clampToViewport(stored ?? DEFAULT_POSITION);
+    const openKey = `ikaWindowOpen_${options.id}`;
+    const openStore = options.rememberOpen ? options.store : void 0;
+    const startsOpen =
+      openStore?.getJSON(openKey, options.openByDefault ?? false) ??
+      options.openByDefault ??
+      false;
     const root = document.createElement("div");
     root.id = options.id;
     root.className = "ika-window";
@@ -914,10 +1054,12 @@
         root.style.top = `${next.top}px`;
         applyMaxHeight();
         root.hidden = false;
+        openStore?.setJSON(openKey, true);
       },
       close() {
         if (root.hidden) return;
         root.hidden = true;
+        openStore?.setJSON(openKey, false);
         options.onClose?.();
       },
       toggle() {
@@ -937,6 +1079,7 @@
       .querySelector(".ika-window-close")
       .addEventListener("click", () => api.close());
     document.addEventListener("keydown", closeOnEscape);
+    if (startsOpen) api.open();
     return api;
   }
   function setWindowFooter(win, text) {
@@ -1035,6 +1178,7 @@
     unknown: "—",
     underAnHour: "<1h",
     hours: (hours) => `${hours}h`,
+    hoursToTenths: (hours) => `${hours.toFixed(1)}h`,
     days: (days) => `${days}d`,
     daysAndHours: (days, hours) => `${days}d ${hours}h`,
   };
@@ -1052,6 +1196,7 @@
       queue: "Queue",
       account: "Account",
       data: "Data",
+      notifications: "Notifications",
     },
     calibrateCargo: "Calibrate Cargo",
     scan: "Scan",
@@ -1070,6 +1215,18 @@
       "No wine figures yet — open the Empire Overview board, or visit a town.",
     allComfortable: (towns) => `Wine: ${towns} towns, all comfortable`,
     townLine: (town, left) => `${town} — ${left}`,
+  };
+  var NOTIFICATIONS = {
+    wineLowSwitch: "Wine running low",
+    wineLowSwitchTitle: (hours) =>
+      `When a town has under ${hours}h of wine left. Once per town, until it has more again.`,
+    taskDroppedSwitch: "Task dropped",
+    taskDroppedSwitchTitle:
+      "When the queue gives up on a task: it failed, or kept throwing errors.",
+    wineLowTitle: (town) => `Wine running low in ${town}`,
+    wineLowBody: (left) => `${left} of wine left.`,
+    taskDroppedTitle: "Task dropped from the queue",
+    taskDroppedBody: (task, reason) => `${task}: ${reason}`,
   };
   var QUEUE_VIEW = {
     empty: "The queue is empty.",
@@ -1159,6 +1316,13 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     columns: ["Account", "Time Left", "Total Wood"],
     woodPerHour: "Wood Per h",
     woodPerWeek: "1 Week",
+    buildTimeBuff: "Build time -%",
+    buildTimeBuffHint:
+      "The server's construction-time buff for this account, in percent (36 = 36%). The Empire Overview board takes it off every upgrade time.",
+    editBuildTimeBuff: "Edit the build time buff",
+    saveBuildTimeBuff: "Save the build time buff",
+    invalidBuildTimeBuff:
+      "Build time buff must be a number from 0 to below 100 (e.g. 36 for 36%).",
   };
   var SHIP_CAPACITY = {
     calibrated: (merchant, freighter) =>
@@ -1169,12 +1333,21 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       "Could not read cargo capacity. Open the Trading Port or the Shipyard, then click again.",
   };
   var BUG_REPORT = {
-    nothingToReport: "No bugs recorded. Nothing to report.",
-    copied: (count, summary) =>
-      `Copied a report of ${count} distinct issue(s) to the clipboard.\n\n` +
-      summary,
-    clipboardUnavailable:
-      "Clipboard unavailable — the full report was printed to the console (F12). You can also run ikaBugReport().",
+    saved: (filename, count, summary, captured) =>
+      `Saved the bug report as ${filename}` +
+      (count > 0
+        ? ` (${count} distinct issue(s)), then cleared them.`
+        : " (no bugs recorded).") +
+      (captured.createPopupCaptured
+        ? "\nGame code (createPopup) included."
+        : "\nGame code (createPopup) not readable on this page.") +
+      (captured.shipmentFormCaptured
+        ? "\nShipment form captured."
+        : '\nShipment form not on screen: open the Trading Port, click "Transport goods", then press Bug Report again to capture it.') +
+      (captured.quickUpgradesCaptured > 0
+        ? `\nQuick upgrades from the board: ${captured.quickUpgradesCaptured} included.`
+        : "") +
+      (summary ? `\n\n${summary}` : ""),
     cleared: "Bug reports cleared.",
   };
   var DATA_TRANSFER = {
@@ -1230,7 +1403,8 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
         try {
           return JSON.parse(raw);
         } catch {
-          console.warn(
+          writeToConsole(
+            "warn",
             `[ika] Corrupt JSON at "${fullKey(key)}", using default`,
           );
           return fallback;
@@ -1256,6 +1430,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     listAccount: "listAccount",
     listAutoBuild: "listAutoBuild",
     globalTaskQueue: "ikaGlobalTaskQueue",
+    routeTimes: "ikaRouteTimes",
   };
   var FLAG = {
     isAutoBuildStart: "isAutoBuildStart",
@@ -1301,6 +1476,21 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
   }
   function saveReceivers(list) {
     getState().account.setJSON(KEY.listReceiver, list);
+  }
+  function routeKey(originCityId, destinationCityId) {
+    return `${originCityId}>${destinationCityId}`;
+  }
+  function recordRouteSeconds(originCityId, destinationCityId, seconds) {
+    const store = getState().account;
+    const times = store.getJSON(KEY.routeTimes, {});
+    times[routeKey(originCityId, destinationCityId)] = seconds;
+    store.setJSON(KEY.routeTimes, times);
+  }
+  function routeSeconds(originCityId, destinationCityId) {
+    const seconds = getState().account.getJSON(KEY.routeTimes, {})[
+      routeKey(originCityId, destinationCityId)
+    ];
+    return typeof seconds === "number" && seconds >= 0 ? seconds : null;
   }
   function loadAccounts() {
     return getState().global.getJSON(KEY.listAccount, []);
@@ -1512,9 +1702,11 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       pending?.target === target &&
       Date.now() - pending.sentAt < SWITCH_LANDING_WINDOW_MS
     ) {
-      const secondsAgo = Math.round((Date.now() - pending.sentAt) / 1e3);
+      logInfo(
+        `The switch to "${target}" was sent ${Math.round((Date.now() - pending.sentAt) / 1e3)}s ago`,
+      );
       throw new Error(
-        `The switch to "${target}" sent ${secondsAgo}s ago did not land (now in "${getCurrentTownName()}") - not sending it again`,
+        `The switch to "${target}" did not land (now in "${getCurrentTownName()}") - not sending it again`,
       );
     }
     const sent = {
@@ -1564,26 +1756,31 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     }
     return false;
   }
-  function openPort(includeConstruction = true) {
-    const classes = [
-      "port",
-      ...(includeConstruction ? ["constructionSite"] : []),
-    ];
-    for (const className of classes)
-      for (const position of [1, 2])
-        if (qs(SEL.position(position))?.className.includes(className))
-          return clickIfPresent(SEL.cityPositionLink(position));
-    return false;
+  function townHasPort() {
+    return townHasBuiltPort() || seaSlotHas("constructionSite");
   }
-  async function clickDestinationTown(adjustedIndex) {
-    const link = (await waitForElements(SEL.dockCities, 1))[adjustedIndex];
-    if (!link)
-      throw new Error(`No destination town at port index ${adjustedIndex}`);
-    link.click();
+  function townHasBuiltPort() {
+    return seaSlotHas("port");
   }
-  function adjustDestinationIndex(destination, origin) {
-    const dest = Number(destination);
-    return dest > Number(origin) ? dest - 1 : dest;
+  function seaSlotHas(className) {
+    return [1, 2].some((position) =>
+      qs(SEL.position(position))?.className.includes(className),
+    );
+  }
+  var SHIPMENT_FORM_TIMEOUT_MS = 15e3;
+  async function openShipmentForm(destination) {
+    const cityId = townCityId(destination);
+    if (cityId === null)
+      throw new Error(
+        `No city id for the town at dropdown index ${destination}`,
+      );
+    const ajaxHandlerCall = pageWindow.ajaxHandlerCall;
+    if (typeof ajaxHandlerCall !== "function")
+      throw new Error("The game's ajaxHandlerCall is not on this page");
+    ajaxHandlerCall(`?view=transport&destinationCityId=${cityId}`);
+    await waitForElement(SEL.shipmentDestination(cityId), {
+      timeoutMs: SHIPMENT_FORM_TIMEOUT_MS,
+    });
   }
   function backToCity(reason) {
     if (clickIfPresent(SEL.cityLink))
@@ -1677,7 +1874,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
           freighterCapacity = parseInt(String(config.freighterCapacity), 10);
       }
     } catch (e) {
-      console.warn("Could not read transportConfig:", e);
+      writeToConsole("warn", "Could not read transportConfig:", e);
     }
     try {
       for (const block of qsa(SEL.unitBlocks)) {
@@ -1697,7 +1894,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
             ) ?? freighterCapacity;
       }
     } catch (e) {
-      console.warn("Could not parse the shipyard DOM:", e);
+      writeToConsole("warn", "Could not parse the shipyard DOM:", e);
     }
     if (perShip) setFlag(FLAG.perShipCapacity, perShip);
     if (freighterCapacity) setFlag(FLAG.freighterCapacity, freighterCapacity);
@@ -1710,6 +1907,20 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
   var BACK_TO_TOWN_TIMEOUT_MS = 5e3;
   var POST_SUBMIT_TIMEOUT_MS = 5e3;
   var FORM_SETTLE_MS = 500;
+  function recordRouteTime(origin, destination) {
+    try {
+      const sailing = parseDurationSeconds(
+        qs(SEL.shipmentJourneyTime)?.textContent,
+      );
+      if (sailing === null) return;
+      const loading =
+        parseDurationSeconds(qs(SEL.shipmentLoadingTime)?.textContent) ?? 0;
+      const from = townCityId(origin);
+      const to = townCityId(destination);
+      if (from === null || to === null) return;
+      recordRouteSeconds(from, to, sailing + loading);
+    } catch {}
+  }
   function enqueueSendResource(origin, destination, resource, amount) {
     getState().queue.push({
       type: "sendResource",
@@ -1764,13 +1975,21 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
         timeoutMs: BACK_TO_TOWN_TIMEOUT_MS,
       }).catch(() => null);
     }
-    if (!openPort())
+    if (!townHasPort())
       return {
         status: "defer",
         reason: `${getTownNameFromList(origin)} has no port`,
       };
-    await clickDestinationTown(adjustDestinationIndex(destination, origin));
-    await waitForElement(SEL.wineField);
+    const onlyUnderConstruction = !townHasBuiltPort();
+    try {
+      await openShipmentForm(destination);
+    } catch (error) {
+      if (!onlyUnderConstruction) throw error;
+      return {
+        status: "defer",
+        reason: `${getTownNameFromList(origin)} has no port to ship from (its sea slot is under construction)`,
+      };
+    }
     const { merchants, freighters } = getFreeShips();
     if (merchants <= 0 && freighters <= 0)
       return {
@@ -1796,9 +2015,11 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       };
     setInputValue(field, String(sentAmount));
     await sleep(FORM_SETTLE_MS);
+    recordRouteTime(origin, destination);
     qs(SEL.submit)?.click();
-    await waitForElements(SEL.dockCities, 1, {
+    await waitFor(() => !qs(SEL.shipmentForm), {
       timeoutMs: POST_SUBMIT_TIMEOUT_MS,
+      label: "shipment form to close",
     }).catch(() => null);
     logInfo(
       `Sent ${sentAmount} ${resource} ${useMerchant ? "[Merchant]" : "[Freighter]"}`,
@@ -1817,10 +2038,11 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       },
     };
   }
-  function describeCurrentTransfer() {
-    const head = getState().queue.head();
-    if (!head || head.type !== "sendResource") return TRANSFER_STATUS.idle;
-    const { amount, resource, origin, destination } = head.data;
+  function describeCurrentTransfer(task) {
+    if (!task) return TRANSFER_STATUS.idle;
+    if (task.type === "upgradeBuilding")
+      return QUEUE_VIEW.upgrade(task.data.buildingName, task.data.townName);
+    const { amount, resource, origin, destination } = task.data;
     return `${amount} ${resource} from ${getTownNameFromList(origin)} to ${getTownNameFromList(destination)}`;
   }
   var TOWN_STATS_KEY = "ikaTownStats";
@@ -1873,8 +2095,17 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     if (removed) saveTownStats(store, stats);
     return removed;
   }
-  function distributeWine(towns, supply) {
-    const candidates = towns.filter((t) => t.consume > 0);
+  function stockOnArrival(town) {
+    const drunk = town.consume * Math.max(0, town.transitHours ?? 0);
+    return Math.max(0, town.stock - drunk);
+  }
+  function distributeWine(towns, supply, options = {}) {
+    const candidates = towns
+      .filter((t) => t.consume > 0)
+      .map((t) => ({
+        ...t,
+        stock: stockOnArrival(t),
+      }));
     const budget = Math.floor(Math.max(0, supply));
     if (candidates.length === 0 || budget <= 0)
       return {
@@ -1885,7 +2116,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
           stock: t.stock,
           consume: t.consume,
           add: 0,
-          finalHours: t.consume > 0 ? t.stock / t.consume : Infinity,
+          finalHours: t.consume > 0 ? stockOnArrival(t) / t.consume : Infinity,
           storageFull: false,
         })),
         used: 0,
@@ -1946,6 +2177,15 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
         trimmed.add(town.townNumber);
       }
     }
+    const cargo = options.shipCapacity ?? 0;
+    if (cargo > 0)
+      for (const town of active) {
+        const share = add.get(town.townNumber) ?? 0;
+        if (share < cargo) continue;
+        const whole = Math.floor(share / cargo) * cargo;
+        add.set(town.townNumber, whole);
+        used -= share - whole;
+      }
     const allocations = towns.map((town) => {
       const amount = activeIds.has(town.townNumber)
         ? (add.get(town.townNumber) ?? 0)
@@ -1957,7 +2197,9 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
         consume: town.consume,
         add: amount,
         finalHours:
-          town.consume > 0 ? (town.stock + amount) / town.consume : Infinity,
+          town.consume > 0
+            ? (stockOnArrival(town) + amount) / town.consume
+            : Infinity,
         storageFull: trimmed.has(town.townNumber),
       };
     });
@@ -1996,8 +2238,9 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       board.get(townName.trim()) ?? projectedStats(getState().account, townName)
     );
   }
-  function buildWineTowns(receivers, board = readWineBoard()) {
+  function buildWineTowns(receivers, board = readWineBoard(), fromTown) {
     const store = getState().account;
+    const fromCityId = fromTown === void 0 ? null : townCityId(fromTown);
     return receivers.map((receiver) => {
       const townName = townNameOf(receiver.townNumber);
       const measured = measuredStats(townName, board);
@@ -2009,6 +2252,12 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       };
       const capacity = projectedStats(store, townName)?.capacity;
       if (capacity !== void 0) town.capacity = capacity;
+      const toCityId = townCityId(receiver.townNumber);
+      const seconds =
+        fromCityId === null || toCityId === null
+          ? null
+          : routeSeconds(fromCityId, toCityId);
+      if (seconds !== null) town.transitHours = seconds / SECONDS_PER_HOUR;
       return town;
     });
   }
@@ -2038,7 +2287,9 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       supply,
       reserve,
       boardAvailable: board.size > 0,
-      ...distributeWine(buildWineTowns(receivers, board), supply),
+      ...distributeWine(buildWineTowns(receivers, board, fromTown), supply, {
+        shipCapacity: getPerShipCapacity(),
+      }),
     };
   }
   function enqueueWineRun(fromTown) {
@@ -2224,12 +2475,37 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       options,
     );
   }
+  var QUICK_UPGRADE_TRACE_KEY = "ikaQuickUpgradeTrace";
+  function quickUpgradeTraces() {
+    try {
+      const raw = localStorage.getItem(QUICK_UPGRADE_TRACE_KEY);
+      const list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list : [];
+    } catch {
+      return [];
+    }
+  }
+  var SYNC_STARTED_EVENT = "ika:syncStarted";
+  var SYNC_FINISHED_EVENT = "ika:syncFinished";
+  function announceSync(running) {
+    document.dispatchEvent(
+      new CustomEvent(running ? SYNC_STARTED_EVENT : SYNC_FINISHED_EVENT),
+    );
+  }
   function ownTownIds() {
     return modelOwnCities()
       .map((city) => Number(city.id))
       .filter((id) => Number.isFinite(id));
   }
   async function syncAllTowns() {
+    announceSync(true);
+    try {
+      return await refreshEveryTown();
+    } finally {
+      announceSync(false);
+    }
+  }
+  async function refreshEveryTown() {
     const startedAt = Date.now();
     const ids = ownTownIds();
     const before = modelCurrentCityId();
@@ -2561,15 +2837,29 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     showToast(summary);
     return true;
   }
+  function readBuildingSlot(element) {
+    const title =
+      qs(SEL.buildingHover, element)?.getAttribute("title")?.trim() ?? "";
+    const bracketed = title.match(/^(.*?)\s*\((.*)\)$/);
+    const upgrading = element.classList.contains("constructionSite");
+    if (!bracketed)
+      return {
+        name: title,
+        level: null,
+        upgrading,
+      };
+    const inBrackets = bracketed[2].trim();
+    return {
+      name: bracketed[1],
+      level: /^\d+$/.test(inBrackets) ? Number(inBrackets) : 0,
+      upgrading,
+    };
+  }
   function listBuildingsInCurrentTown() {
     const slots = qsa(SEL.buildings).map((element) => {
-      const title =
-        qs(SEL.buildingHover, element)?.getAttribute("title")?.trim() ?? "";
-      const bracketed = title.match(/^(.*?)\s*\((.*)\)$/);
-      let buildingName = bracketed
-        ? `${bracketed[1]} ${/^\d+$/.test(bracketed[2].trim()) ? bracketed[2].trim() : "0"}`
-        : title;
-      if (element.classList.contains("constructionSite"))
+      const { name, level, upgrading } = readBuildingSlot(element);
+      let buildingName = level === null ? name : `${name} ${level}`;
+      if (upgrading)
         buildingName = withLevel(buildingName, levelOf(buildingName) + 1);
       return {
         buildingName,
@@ -2579,8 +2869,96 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     slots.sort(compareValues("buildingName"));
     return slots;
   }
+  var BUILDING_LEVEL_CLASS = "ika-building-level";
+  function buildingLevelText(reading) {
+    if (reading.level === null) return null;
+    return reading.upgrading
+      ? `${reading.level}→${reading.level + 1}`
+      : String(reading.level);
+  }
+  function showBuildingLevels() {
+    for (const element of qsa(SEL.buildings)) {
+      const text = buildingLevelText(readBuildingSlot(element));
+      let label = qs(`.${BUILDING_LEVEL_CLASS}`, element);
+      if (text === null) {
+        label?.remove();
+        continue;
+      }
+      if (!label) {
+        label = document.createElement("span");
+        label.className = BUILDING_LEVEL_CLASS;
+        element.appendChild(label);
+      }
+      if (label.textContent !== text) label.textContent = text;
+    }
+  }
+  function startBuildingLevelObserver() {
+    showBuildingLevels();
+    const observer = new MutationObserver(() => {
+      showBuildingLevels();
+    });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["class", "title"],
+    });
+    return observer;
+  }
+  var handlers = new Map();
+  function registerActions(map) {
+    for (const [name, handler] of Object.entries(map))
+      handlers.set(name, handler);
+  }
+  function action(name, data) {
+    return `data-ika-action="${name}"${
+      data
+        ? Object.entries(data)
+            .map(
+              ([key, value]) => ` data-${key}="${escapeHtml(String(value))}"`,
+            )
+            .join("")
+        : ""
+    }`;
+  }
+  function moveButtons(names, data, position) {
+    const button = (name, title, label, disabled) =>
+      `<button class="button ika-move" title="${title}"${disabled ? " disabled" : ""} ${action(name, data)}>${label}</button>`;
+    return (
+      button(names.up, MOVE_BUTTON.up, "↑", position.isFirst) +
+      button(names.down, MOVE_BUTTON.down, "↓", position.isLast)
+    );
+  }
+  var installed$1 = false;
+  function installActionDispatcher() {
+    if (installed$1) return;
+    installed$1 = true;
+    document.addEventListener(
+      "click",
+      (event) => {
+        const target = event.target?.closest("[data-ika-action]");
+        if (!target) return;
+        const name = target.dataset.ikaAction;
+        if (!name) return;
+        const handler = handlers.get(name);
+        if (!handler) {
+          writeToConsole(
+            "warn",
+            `[ika] No handler registered for action "${name}"`,
+          );
+          return;
+        }
+        event.preventDefault();
+        handler(target, event);
+      },
+      true,
+    );
+  }
   var LOBBY_ACCOUNT_URL =
     "https://lobby.ikariam.gameforge.com/en_GB/accounts?redirectAccount=";
+  var BUILD_TIME_BUFF_VALUE_CLASS = "js-ika-build-time-buff-value";
+  var BUILD_TIME_BUFF_CLASS = "js-ika-build-time-buff";
+  var BUILD_TIME_BUFF_BUTTON_CLASS = "js-ika-build-time-buff-button";
   var MS_PER_MINUTE = 6e4;
   var HOURS_PER_WEEK = 168;
   var isReloadSafe = () => true;
@@ -2642,6 +3020,18 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       saveAccounts(accounts);
     }
   }
+  function setBuildTimeBuff(account, text) {
+    const trimmed = text.trim();
+    const percent = trimmed === "" ? 0 : Number(trimmed);
+    if (!Number.isFinite(percent) || percent < 0 || percent >= 100)
+      return false;
+    const accounts = loadAccounts();
+    const row = accounts.find((entry) => entry.account === account);
+    if (!row) return false;
+    row.buildTimeBuffPercent = percent;
+    saveAccounts(accounts);
+    return true;
+  }
   function clearAccounts() {
     saveAccounts([]);
     renderSummary();
@@ -2660,9 +3050,44 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       }
     }
     const container = qs("#summaryAccountList");
-    if (container)
+    const editing = !!container?.querySelector(`.${BUILD_TIME_BUFF_CLASS}`);
+    if (container && !editing)
       container.innerHTML = buildSummaryHtml(accounts, accountName);
     keepAliveTick();
+  }
+  function buildTimeBuffCell(account) {
+    return `<td style="white-space: nowrap; text-align: right"><span class="${BUILD_TIME_BUFF_VALUE_CLASS}">${account.buildTimeBuffPercent ?? 0}</span> <button class="button ${BUILD_TIME_BUFF_BUTTON_CLASS}" title="${ACCOUNT_SUMMARY.editBuildTimeBuff}" ${action("account.editBuildTimeBuff", { "ika-account": account.account })}>✎</button></td>`;
+  }
+  function inBuffCell(button, selector) {
+    return button.closest("td")?.querySelector(selector) ?? null;
+  }
+  function editBuildTimeBuff(button) {
+    const value = inBuffCell(button, `.${BUILD_TIME_BUFF_VALUE_CLASS}`);
+    if (!value) return;
+    const field = document.createElement("input");
+    field.type = "text";
+    field.inputMode = "decimal";
+    field.className = BUILD_TIME_BUFF_CLASS;
+    field.style.cssText = "width: 4em; text-align: right";
+    field.value = value.textContent ?? "";
+    value.replaceWith(field);
+    field.focus();
+    field.select();
+    button.textContent = "✓";
+    button.title = ACCOUNT_SUMMARY.saveBuildTimeBuff;
+    button.dataset.ikaAction = "account.saveBuildTimeBuff";
+  }
+  function saveBuildTimeBuff(button) {
+    const field = inBuffCell(button, `.${BUILD_TIME_BUFF_CLASS}`);
+    const account = button.dataset.ikaAccount;
+    if (!field || account === void 0) return;
+    if (!setBuildTimeBuff(account, field.value)) {
+      showToast(ACCOUNT_SUMMARY.invalidBuildTimeBuff);
+      field.focus();
+      return;
+    }
+    field.remove();
+    renderSummary();
   }
   function buildSummaryHtml(accounts, currentAccount) {
     if (accounts.length === 0)
@@ -2689,12 +3114,14 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
         <td style="text-align: right">${formatNumToStr(projectedWood, false, 0)}</td>
         <td style="text-align: right" class="woodWeek">${formatNumToStr(Number(account.woodIncome))}</td>
         <td style="text-align: right" class="woodWeek">${formatNumToStr(Number(account.woodIncome) * HOURS_PER_WEEK)}</td>
+        ${buildTimeBuffCell(account)}
       </tr>`;
       })
       .join("");
     return `<table id="summaryAccountTable" border="1" cellpadding="10px">
     <tr><th></th>${ACCOUNT_SUMMARY.columns.map((label) => `<th>${label}</th>`).join("")}
-        <th class="woodWeek">${ACCOUNT_SUMMARY.woodPerHour}</th><th class="woodWeek">${ACCOUNT_SUMMARY.woodPerWeek}</th></tr>
+        <th class="woodWeek">${ACCOUNT_SUMMARY.woodPerHour}</th><th class="woodWeek">${ACCOUNT_SUMMARY.woodPerWeek}</th>
+        <th title="${ACCOUNT_SUMMARY.buildTimeBuffHint}">${ACCOUNT_SUMMARY.buildTimeBuff}</th></tr>
     ${rows}
   </table>`;
   }
@@ -2719,7 +3146,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       total += parseGameNumber(items[i].textContent) ?? 0;
     const node = document.createElement("li");
     node.className = MARKER_CLASS$1;
-    const ships = Math.round(total / getPerShipCapacity());
+    const ships = Math.ceil(total / getPerShipCapacity());
     node.innerHTML = addOne ? String(ships + 1) : `${ships} (${total})`;
     container.appendChild(node);
   }
@@ -2730,7 +3157,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       for (const mutation of mutations) {
         const previousId = mutation.previousSibling?.id;
         if (previousId === "barbarianVillage_c") {
-          annotate(SEL.barbarianVillageResources, false);
+          annotate(SEL.barbarianVillageResources, true);
           return;
         }
         if (previousId === "barbarianFleet_c") {
@@ -2747,18 +3174,22 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     ika_perShipCapacity: "config",
     ika_freighterCapacity: "config",
     isSendResourceHidden: "config",
+    [NOTIFICATION_SETTINGS_KEY]: "config",
     listAccount: "measurements",
     isAutoBuildStart: "runtime",
     isAutoReload: "runtime",
     reloadedMinute: "runtime",
+    [NOTIFIED_KEY]: "runtime",
     [LOGGER_STORAGE_KEY]: "diagnostics",
     [BUG_REPORT_STORAGE_KEY]: "diagnostics",
     ikaDomReports: "diagnostics",
+    [QUICK_UPGRADE_TRACE_KEY]: "diagnostics",
   };
   var ACCOUNT_SUFFIXES = {
     listSender: "config",
     listReceiver: "config",
     ikaTownStats: "measurements",
+    ikaRouteTimes: "measurements",
     ikaGlobalTaskQueue: "runtime",
     resource: "runtime",
   };
@@ -2899,9 +3330,9 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
   }
   var GROUP_LABELS = DATA_TRANSFER.groupLabels;
   var MAX_NOTES_SHOWN = 5;
-  function timestampedFilename(account) {
+  function timestampedFilename(account, prefix = "ikariam-tool") {
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-    return `ikariam-tool-${account.replace(/[^\w.-]+/g, "_")}-${stamp}.json`;
+    return `${prefix}-${account.replace(/[^\w.-]+/g, "_")}-${stamp}.json`;
   }
   function downloadJson(filename, json) {
     const blob = new Blob([json], { type: "application/json" });
@@ -3086,52 +3517,6 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
   function resourceLabel(resource) {
     return RESOURCE_LABEL[resource] ?? resource;
   }
-  var handlers = new Map();
-  function registerActions(map) {
-    for (const [name, handler] of Object.entries(map))
-      handlers.set(name, handler);
-  }
-  function action(name, data) {
-    return `data-ika-action="${name}"${
-      data
-        ? Object.entries(data)
-            .map(
-              ([key, value]) => ` data-${key}="${escapeHtml(String(value))}"`,
-            )
-            .join("")
-        : ""
-    }`;
-  }
-  function moveButtons(names, data, position) {
-    const button = (name, title, label, disabled) =>
-      `<button class="button ika-move" title="${title}"${disabled ? " disabled" : ""} ${action(name, data)}>${label}</button>`;
-    return (
-      button(names.up, MOVE_BUTTON.up, "↑", position.isFirst) +
-      button(names.down, MOVE_BUTTON.down, "↓", position.isLast)
-    );
-  }
-  var installed$1 = false;
-  function installActionDispatcher() {
-    if (installed$1) return;
-    installed$1 = true;
-    document.addEventListener(
-      "click",
-      (event) => {
-        const target = event.target?.closest("[data-ika-action]");
-        if (!target) return;
-        const name = target.dataset.ikaAction;
-        if (!name) return;
-        const handler = handlers.get(name);
-        if (!handler) {
-          console.warn(`[ika] No handler registered for action "${name}"`);
-          return;
-        }
-        event.preventDefault();
-        handler(target, event);
-      },
-      true,
-    );
-  }
   var MARKER_CLASS = "ika-transport-buttons";
   var TRANSPORT_STYLE_ID = "ika-transport-buttons-style";
   var RESOURCES = RESOURCE_OPTIONS.map((option) => option.value);
@@ -3287,70 +3672,126 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     });
     return observer;
   }
-  var CRITICAL_SELECTORS = {
-    cityBread: SEL.cityBread,
-    townList: SEL.townListContainer,
-    buildTabTownNames: SEL.buildTabTownNames,
-    freeTransporters: SEL.globalMenu.freeTransporters,
-  };
-  function selectorHealth() {
-    const health = {};
-    for (const [name, selector] of Object.entries(CRITICAL_SELECTORS))
-      try {
-        health[name] = qsa(selector).length;
-      } catch {
-        health[name] = -1;
-      }
-    return health;
+  function severityOf(hours) {
+    if (hours === null) return "ok";
+    if (hours < 12) return "critical";
+    if (hours < 48) return "warning";
+    return "ok";
   }
-  function appContext() {
-    const context = {
-      town: getCurrentTownName() || null,
-      modelTown: modelCurrentCityName(),
-      hasModel: hasModel(),
-      selectors: selectorHealth(),
-      dialogOpen: !!qs(`#${DIALOG_ID}`),
-    };
-    try {
-      const { accountName, queue } = getState();
-      const head = queue.head();
-      context.account = accountName;
-      context.queueLength = queue.length;
-      context.queueHead = head
-        ? {
-            type: head.type,
-            id: head.id,
-            data: head.data,
-          }
-        : null;
-    } catch {
-      context.stateInitialised = false;
+  function wineStatus() {
+    return getTownList().map((town) => {
+      const measured = measuredStats(town.townName);
+      const stock = measured?.stock ?? 0;
+      const consume = measured?.consume ?? 0;
+      const hoursLeft = measured && consume > 0 ? stock / consume : null;
+      return {
+        townNumber: town.townNumber.toString(),
+        townName: town.townName,
+        stock,
+        consume,
+        hoursLeft,
+        severity: severityOf(hoursLeft),
+      };
+    });
+  }
+  function townsNeedingWine(towns = wineStatus()) {
+    return towns
+      .filter((town) => town.severity !== "ok")
+      .sort((a, b) => (a.hoursLeft ?? Infinity) - (b.hoursLeft ?? Infinity));
+  }
+  function formatHours(hours) {
+    if (hours === null) return DURATION.unknown;
+    if (hours < 1) return DURATION.underAnHour;
+    if (hours < 24) return DURATION.hours(Math.floor(hours));
+    const days = Math.floor(hours / 24);
+    const rest = Math.floor(hours % 24);
+    return rest > 0 ? DURATION.daysAndHours(days, rest) : DURATION.days(days);
+  }
+  function notifyLowWine(accountName) {
+    if (!isNotificationEnabled("wineLow")) return;
+    for (const town of wineStatus()) {
+      if (town.hoursLeft === null) continue;
+      const key = `wineLow:${accountName}:${town.townName}`;
+      if (town.severity === "critical")
+        notify({
+          kind: "wineLow",
+          key,
+          title: NOTIFICATIONS.wineLowTitle(town.townName),
+          body: NOTIFICATIONS.wineLowBody(formatHours(town.hoursLeft)),
+        });
+      else forgetNotification(key);
     }
-    return context;
   }
-  var installed = false;
-  function installDiagnostics() {
-    if (installed) return;
-    installed = true;
-    registerContextProvider(appContext);
-    const anyWindow = window;
-    anyWindow.ikaBugs = () => {
-      console.log(summariseBugs());
-      return getBugs();
-    };
-    anyWindow.ikaBugReport = () => {
-      const json = exportBugReport();
-      try {
-        const copyToClipboard = anyWindow.copy;
-        copyToClipboard?.(json);
-      } catch {}
-      return json;
-    };
-    anyWindow.ikaClearBugs = () => {
-      clearBugs();
-      console.log("[ika] bug reports cleared");
-    };
+  var QUEUE_LIST_ID = "ikaQueueList";
+  var MAX_ROWS = 50;
+  var QUEUE_SCROLL_CLASS = "ika-queue-scroll";
+  var currentTaskId = () => getState().queue.head()?.id ?? null;
+  function setCurrentTaskSource(source) {
+    currentTaskId = source;
   }
+  function currentTask() {
+    const id = currentTaskId();
+    return id === null
+      ? void 0
+      : getState()
+          .queue.list()
+          .find((task) => task.id === id);
+  }
+  function describeTask(task) {
+    if (task.type === "sendResource") {
+      const { amount, resource, origin, destination, label } = task.data;
+      return `${label ? `[${label}] ` : ""}${formatInteger(amount)} ${resourceLabel(resource)}: ${getTownNameFromList(origin)} → ${getTownNameFromList(destination)}`;
+    }
+    return QUEUE_VIEW.upgrade(task.data.buildingName, task.data.townName);
+  }
+  function row(task, index, isCurrent, isLast) {
+    const marker = isCurrent ? " ▶" : "";
+    return (
+      `<tr data-ika-queue-id="${escapeHtml(task.id)}"${isCurrent ? ' class="active"' : ""}><td>${index + 1}${marker}</td><td>${escapeHtml(describeTask(task))}</td><td>` +
+      moveButtons(
+        {
+          up: "queue.moveUp",
+          down: "queue.moveDown",
+        },
+        { "ika-task": task.id },
+        {
+          isFirst: index === 0,
+          isLast,
+        },
+      ) +
+      `<button class="button" title="${QUEUE_VIEW.remove}" ${action("queue.remove", { "ika-task": task.id })}>✕</button></td></tr>`
+    );
+  }
+  function renderQueue() {
+    const tasks = getState().queue.list();
+    if (tasks.length === 0)
+      return `<p class="ika-queue-empty">${QUEUE_VIEW.empty}</p>`;
+    const current = currentTaskId();
+    const shown = tasks.slice(0, MAX_ROWS);
+    const overflow =
+      tasks.length > MAX_ROWS
+        ? `<p class="ika-queue-empty">${QUEUE_VIEW.more(tasks.length - MAX_ROWS)}</p>`
+        : "";
+    return (
+      `<div class="${QUEUE_SCROLL_CLASS}"><table class="fullTable ika-queue-table"><tr><th>#</th><th>${QUEUE_VIEW.headerTask}</th><th></th></tr>` +
+      shown
+        .map((task, index) =>
+          row(task, index, task.id === current, index === tasks.length - 1),
+        )
+        .join("") +
+      `</table></div>` +
+      overflow +
+      `<button class="button" ${action("queue.clear")}>${QUEUE_VIEW.clearAll}</button>`
+    );
+  }
+  function refreshQueueView() {
+    const host = qs(`#${QUEUE_LIST_ID}`);
+    if (!host) return;
+    host.innerHTML = renderQueue();
+    const scroll = host.querySelector(`.${QUEUE_SCROLL_CLASS}`);
+    if (scroll) capVisibleRows(scroll, "tr[data-ika-queue-id]", 10);
+  }
+  var RESOURCE_TABLE_SCROLL_ID = "resourceTableScroll";
   function openPopup(title, html) {
     const api = getIkariam();
     if (!api?.createPopup) {
@@ -3358,7 +3799,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       showToast(MISC.popupUnavailable);
       return;
     }
-    api.createPopup(DIALOG_ID, title, html, "???", "class");
+    api.createPopup(DIALOG_ID, title, html, null, null);
   }
   function headerCells(labels) {
     return labels.map((label) => `<th>${label}</th>`).join("");
@@ -3381,7 +3822,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
         (task, index) => `<tr>
         <td>${escapeHtml(getTownNameFromList(task.data.origin))}</td>
         <td>${escapeHtml(getTownNameFromList(task.data.destination))}</td>
-        <td>${task.data.resource}</td>
+        <td>${resourceLabel(task.data.resource)}</td>
         <td>${task.data.amount}</td>
         <td>${escapeHtml(task.data.label ?? "")}</td>
         <td>${moveButtons(
@@ -3400,6 +3841,8 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
       .join("");
     const body = qs("#resourceTableBody");
     if (body) body.innerHTML = rows;
+    const scroll = qs(`#${RESOURCE_TABLE_SCROLL_ID}`);
+    if (scroll) capVisibleRows(scroll, "#resourceTableBody > tr", 10);
   }
   function amountFieldId(resource) {
     return `transporterSendAmount_${resource}`;
@@ -3479,10 +3922,12 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
      <button style="margin-right:5px" class="button" ${action("send.removeFirst")}>${SEND_DIALOG.removeFirst}</button>
      <button style="margin-right:5px" class="button" ${action("send.removeLast")}>${SEND_DIALOG.removeLast}</button>
      <button class="button" ${action("dialog.close")}>${BUTTON.close}</button><br/>
+     <div id="${RESOURCE_TABLE_SCROLL_ID}">
      <table id="resourceTable" class="fullTable" border="1" cellpadding="5">
        <thead>${headerCells(SEND_DIALOG.columns)}</thead>
        <tbody id="resourceTableBody"></tbody>
-     </table>`,
+     </table>
+     </div>`,
     );
     renderResourceTable();
   }
@@ -3527,13 +3972,13 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
         const stock = measured ? Math.round(measured.stock) : null;
         const hours =
           measured && measured.consume > 0
-            ? (measured.stock / measured.consume).toFixed(1) + "h"
-            : "—";
+            ? DURATION.hoursToTenths(measured.stock / measured.consume)
+            : DURATION.unknown;
         return `<tr class="txtWine">
         <td><input type="checkbox" ${checked} id="cbSender_${id}" name="${escapeHtml(town.townName)}" value="${id}"/></td>
         <td>${escapeHtml(town.townName)}</td>
         <td><input type="text" id="txtWine_${id}" value="${escapeHtml(perHour)}"/></td>
-        <td style="text-align:right">${stock === null ? "—" : formatInteger(stock)}</td>
+        <td style="text-align:right">${stock === null ? DURATION.unknown : formatInteger(stock)}</td>
         <td style="text-align:right">${hours}</td>
       </tr>`;
       })
@@ -3581,7 +4026,7 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
         <td style="text-align:right">${formatInteger(allocation.stock)}</td>
         <td style="text-align:right">${formatInteger(allocation.consume)}</td>
         <td style="text-align:right"><b>${formatInteger(allocation.add)}</b></td>
-        <td style="text-align:right">${allocation.finalHours.toFixed(1)}h${allocation.storageFull ? WINE_PREVIEW.storageFull : ""}</td>
+        <td style="text-align:right">${DURATION.hoursToTenths(allocation.finalHours)}${allocation.storageFull ? WINE_PREVIEW.storageFull : ""}</td>
       </tr>`,
       )
       .join("");
@@ -3672,95 +4117,6 @@ Sender and receiver are exclusive roles: tick a town to make it a source, or lea
     );
     if (cell) cell.innerHTML = renderTownQueue(townName);
   }
-  function severityOf(hours) {
-    if (hours === null) return "ok";
-    if (hours < 12) return "critical";
-    if (hours < 48) return "warning";
-    return "ok";
-  }
-  function wineStatus() {
-    return getTownList().map((town) => {
-      const measured = measuredStats(town.townName);
-      const stock = measured?.stock ?? 0;
-      const consume = measured?.consume ?? 0;
-      const hoursLeft = measured && consume > 0 ? stock / consume : null;
-      return {
-        townNumber: town.townNumber.toString(),
-        townName: town.townName,
-        stock,
-        consume,
-        hoursLeft,
-        severity: severityOf(hoursLeft),
-      };
-    });
-  }
-  function townsNeedingWine(towns = wineStatus()) {
-    return towns
-      .filter((town) => town.severity !== "ok")
-      .sort((a, b) => (a.hoursLeft ?? Infinity) - (b.hoursLeft ?? Infinity));
-  }
-  function formatHours(hours) {
-    if (hours === null) return DURATION.unknown;
-    if (hours < 1) return DURATION.underAnHour;
-    if (hours < 24) return DURATION.hours(Math.floor(hours));
-    const days = Math.floor(hours / 24);
-    const rest = Math.floor(hours % 24);
-    return rest > 0 ? DURATION.daysAndHours(days, rest) : DURATION.days(days);
-  }
-  var QUEUE_LIST_ID = "ikaQueueList";
-  var MAX_ROWS = 50;
-  function describeTask(task) {
-    if (task.type === "sendResource") {
-      const { amount, resource, origin, destination, label } = task.data;
-      return `${label ? `[${label}] ` : ""}${formatInteger(amount)} ${resourceLabel(resource)}: ${getTownNameFromList(origin)} → ${getTownNameFromList(destination)}`;
-    }
-    return QUEUE_VIEW.upgrade(task.data.buildingName, task.data.townName);
-  }
-  function row(task, index, isHead, isLast) {
-    const marker = isHead ? " ▶" : "";
-    return (
-      `<tr data-ika-queue-id="${escapeHtml(task.id)}"${isHead ? ' class="active"' : ""}><td>${index + 1}${marker}</td><td>${escapeHtml(describeTask(task))}</td><td>` +
-      moveButtons(
-        {
-          up: "queue.moveUp",
-          down: "queue.moveDown",
-        },
-        { "ika-task": task.id },
-        {
-          isFirst: index === 0,
-          isLast,
-        },
-      ) +
-      `<button class="button" title="${QUEUE_VIEW.remove}" ${action("queue.remove", { "ika-task": task.id })}>✕</button></td></tr>`
-    );
-  }
-  function renderQueue() {
-    const queue = getState().queue;
-    const tasks = queue.list();
-    if (tasks.length === 0)
-      return `<p class="ika-queue-empty">${QUEUE_VIEW.empty}</p>`;
-    const head = queue.head();
-    const shown = tasks.slice(0, MAX_ROWS);
-    const overflow =
-      tasks.length > MAX_ROWS
-        ? `<p class="ika-queue-empty">${QUEUE_VIEW.more(tasks.length - MAX_ROWS)}</p>`
-        : "";
-    return (
-      `<table class="fullTable ika-queue-table"><tr><th>#</th><th>${QUEUE_VIEW.headerTask}</th><th></th></tr>` +
-      shown
-        .map((task, index) =>
-          row(task, index, head?.id === task.id, index === tasks.length - 1),
-        )
-        .join("") +
-      `</table>` +
-      overflow +
-      `<button class="button" ${action("queue.clear")}>${QUEUE_VIEW.clearAll}</button>`
-    );
-  }
-  function refreshQueueView() {
-    const host = qs(`#${QUEUE_LIST_ID}`);
-    if (host) host.innerHTML = renderQueue();
-  }
   function buildStyles() {
     return `
 #autoWineTable th, #autoWineTable td { padding: 7px; }
@@ -3799,11 +4155,31 @@ th { font-weight: bold; }
 .ika-move:disabled { opacity: 0.4; cursor: default; }
 .ika-queue-empty { font-style: italic; color: #6b5433; margin: 2px 0 4px; }
 
+/* The two lists capped at ten rows (capVisibleRows): their header row
+   stays in place while the rows scroll. .fullTable hides its overflow,
+   which would make the table itself the scroll container that sticky
+   holds to; inside these boxes it is let through to the box. */
+.${QUEUE_SCROLL_CLASS} > table, #${RESOURCE_TABLE_SCROLL_ID} > table { overflow: visible; }
+.${QUEUE_SCROLL_CLASS} th, #${RESOURCE_TABLE_SCROLL_ID} thead th {
+  position: sticky; top: 0; z-index: 1; background: #f8e7b3;
+}
+
 .needingShip {
   background: url("cdn/all/both/characters/fleet/40x40/ship_transport_r_40x40.png") no-repeat 0 0;
   background-size: 22px 19px;
 }
 #logger textarea:hover { z-index: 99999; }
+
+.ika-notification-switch { display: inline-block; margin: 2px 10px 2px 0; cursor: pointer; }
+
+/* A building's level on the city view. Clicks pass through to the building. */
+.${BUILDING_LEVEL_CLASS} {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  z-index: 1; pointer-events: none;
+  padding: 0 4px; border: 1px solid #7e4a21; border-radius: 8px;
+  background: rgba(253, 247, 221, 0.9); color: #542c0f;
+  font: bold 11px/14px Arial, sans-serif; white-space: nowrap;
+}
 
 /* Popup styles — declared but never attached in the original. */
 #${DIALOG_ID} .popupContent,
@@ -3823,6 +4199,8 @@ th { font-weight: bold; }
   var WINDOW_ID = "ikaSendResourcesWindow";
   var LAUNCHER_CLASS = "ika-send-menu";
   var WINE_WARNING_ID = "ikaWineWarning";
+  var NOTIFICATION_SWITCH_ATTR = "data-ika-notification";
+  var MENU_ENTRY_ICON = "cdn/all/both/minimized/transport.png";
   var panelWindow = null;
   function group(title, body) {
     return `<div class="ika-group"><div class="ika-group-title">${title}</div>${body}</div>`;
@@ -3850,10 +4228,57 @@ th { font-weight: bold; }
         PANEL.groups.data,
         `<button class="button" id="btnExportData" ${action("data.export")}>${PANEL.exportData}</button><button class="button" id="btnImportData" ${action("data.import")}>${PANEL.importData}</button><button class="button" id="btnBugReport" ${action("bug.report")}>${PANEL.bugReport}</button><button class="button" ${action("log.clear")}>${PANEL.clearLog}</button><button class="button" ${action("buildingHelp.save")}>${PANEL.crawlBuildingHelp}</button>`,
       ) +
+      group(
+        PANEL.groups.notifications,
+        notificationSwitch(
+          "wineLow",
+          NOTIFICATIONS.wineLowSwitch,
+          NOTIFICATIONS.wineLowSwitchTitle(12),
+        ) +
+          notificationSwitch(
+            "taskDropped",
+            NOTIFICATIONS.taskDroppedSwitch,
+            NOTIFICATIONS.taskDroppedSwitchTitle,
+          ),
+      ) +
       `<div id="logger"><textarea rows="4" cols="60" id="txtLogger" style="font-size:9px; display:none"></textarea></div>`
     );
   }
+  function notificationSwitch(kind, label, title) {
+    const checked = isNotificationEnabled(kind) ? " checked" : "";
+    return `<label class="ika-notification-switch" title="${escapeHtml(title)}"><input type="checkbox" ${NOTIFICATION_SWITCH_ATTR}="${kind}"${checked}> ${escapeHtml(label)}</label>`;
+  }
+  function watchNotificationSwitches(root) {
+    root.addEventListener("change", (event) => {
+      const box = event.target;
+      const kind = box.getAttribute(NOTIFICATION_SWITCH_ATTR);
+      if (!kind) return;
+      const wanted = box.checked;
+      setNotificationEnabled(kind, wanted).then((on) => {
+        box.checked = on;
+        if (wanted && !on) showToast(notificationRefusal());
+      });
+    });
+  }
+  function menuEntryStyles() {
+    const entry = `#container #leftMenu .slot_menu li.${LAUNCHER_CLASS}`;
+    return `
+${entry} { width: 199px; transform: translateX(-146px); transition: 0.25s all linear; cursor: pointer; }
+${entry}:hover { transform: translateX(0) !important; z-index: 120000 !important; }
+.direction_rtl ${entry} { transform: translateX(146px); }
+.direction_rtl ${entry}:hover { transform: translateX(0) !important; }
+`;
+  }
   function buildLauncher(onClick) {
+    const menu = qs(SEL.menuSlots);
+    if (menu) {
+      const entry = document.createElement("li");
+      entry.className = `slot${menu.children.length} ${LAUNCHER_CLASS}`;
+      entry.innerHTML = `<div class="image" style="background-image:url(${MENU_ENTRY_ICON});background-position:0 0;background-size:33px auto"></div><div class="name"><span class="namebox">${escapeHtml(PANEL.launcher)}</span></div>`;
+      entry.addEventListener("click", onClick);
+      menu.appendChild(entry);
+      return;
+    }
     const launcher = document.createElement("button");
     launcher.className = `button ${LAUNCHER_CLASS}`;
     launcher.textContent = PANEL.launcher;
@@ -3865,14 +4290,18 @@ th { font-weight: bold; }
   function buildPanel() {
     if (qs(`#ikaSendResourcesWindow`)) return;
     addStyle(buildStyles());
+    addStyle(menuEntryStyles());
     panelWindow = createWindow({
       id: WINDOW_ID,
       title: PANEL.title,
       store: getState().account,
+      rememberOpen: true,
+      openByDefault: true,
     });
     panelWindow.content.innerHTML = windowContent();
+    watchNotificationSwitches(panelWindow.content);
     refreshQueueView();
-    buildLauncher(() => panelWindow?.toggle());
+    buildLauncher(togglePanel);
     const footer = qs("#footer");
     if (footer) footer.style.zIndex = "2";
   }
@@ -3924,19 +4353,161 @@ th { font-weight: bold; }
   }
   function togglePanel() {
     panelWindow?.toggle();
+    if (panelWindow?.isOpen()) refreshQueueView();
   }
   function toggleZoom() {
     panelWindow?.root.classList.toggle("zoom");
+  }
+  var CRITICAL_SELECTORS = {
+    cityBread: SEL.cityBread,
+    townList: SEL.townListContainer,
+    buildTabTownNames: SEL.buildTabTownNames,
+    freeTransporters: SEL.globalMenu.freeTransporters,
+  };
+  function selectorHealth() {
+    const health = {};
+    for (const [name, selector] of Object.entries(CRITICAL_SELECTORS))
+      try {
+        health[name] = qsa(selector).length;
+      } catch {
+        health[name] = -1;
+      }
+    return health;
+  }
+  function appContext() {
+    const context = {
+      town: getCurrentTownName() || null,
+      modelTown: modelCurrentCityName(),
+      hasModel: hasModel(),
+      selectors: selectorHealth(),
+      dialogOpen: !!qs(`#${DIALOG_ID}`),
+    };
+    try {
+      const { accountName, queue } = getState();
+      const head = queue.head();
+      context.account = accountName;
+      context.queueLength = queue.length;
+      context.queueHead = head
+        ? {
+            type: head.type,
+            id: head.id,
+            data: head.data,
+          }
+        : null;
+    } catch {
+      context.stateInitialised = false;
+    }
+    return context;
+  }
+  var MAX_CAPTURE_CHARS = 2e4;
+  var MAX_REPORT_LOG_LINES = 200;
+  var MAX_CAPTURED_CONTROLS = 200;
+  var MAX_CONTROL_TEXT = 40;
+  var SHIPMENT_CONTROLS =
+    "form, input, select, button, a.button, [id^=slider], [id*=submit]";
+  var OWN_CONTROLS = `#${WINDOW_ID}, .${LAUNCHER_CLASS}, #${DIALOG_ID}`;
+  function captureShipmentForm() {
+    const wineField = qs(SEL.wineField);
+    const controls = qsa(SHIPMENT_CONTROLS)
+      .filter(
+        (element) =>
+          element.offsetParent !== null && !element.closest(OWN_CONTROLS),
+      )
+      .slice(0, MAX_CAPTURED_CONTROLS)
+      .map((element) => {
+        const field = element;
+        return {
+          tag: element.tagName,
+          id: element.id,
+          name: element.getAttribute("name"),
+          cls: String(element.className).slice(0, 80),
+          type: field.type,
+          value: field.value,
+          text: (element.textContent ?? "").trim().slice(0, MAX_CONTROL_TEXT),
+          form: field.form?.id,
+        };
+      });
+    return {
+      present: !!wineField,
+      url: location.search,
+      wineFieldForm:
+        wineField?.form?.outerHTML.slice(0, MAX_CAPTURE_CHARS) ?? null,
+      visibleControls: controls,
+    };
+  }
+  function captureCreatePopupSource() {
+    const popup = pageWindow.ikariam?.createPopup;
+    return typeof popup === "function"
+      ? String(popup).slice(0, MAX_CAPTURE_CHARS)
+      : null;
+  }
+  function captureGameData() {
+    const capture = (read) => {
+      try {
+        return read();
+      } catch (e) {
+        return { error: String(e?.message ?? e) };
+      }
+    };
+    return {
+      shipmentForm: capture(captureShipmentForm),
+      createPopupSource: capture(captureCreatePopupSource),
+      quickUpgrades: capture(quickUpgradeTraces),
+    };
+  }
+  function exportFullBugReport() {
+    const gameData = captureGameData();
+    const shipmentForm = gameData.shipmentForm;
+    const log = recentLogLines(MAX_REPORT_LOG_LINES);
+    return {
+      text: JSON.stringify(
+        {
+          ...buildBugReport(),
+          gameData,
+          log,
+        },
+        null,
+        2,
+      ),
+      shipmentFormCaptured: shipmentForm?.present === true,
+      createPopupCaptured: typeof gameData.createPopupSource === "string",
+      quickUpgradesCaptured: Array.isArray(gameData.quickUpgrades)
+        ? gameData.quickUpgrades.length
+        : 0,
+    };
+  }
+  var installed = false;
+  function installDiagnostics() {
+    if (installed) return;
+    installed = true;
+    registerContextProvider(appContext);
+    const anyWindow = window;
+    anyWindow.ikaBugs = () => {
+      console.log(summariseBugs());
+      return getBugs();
+    };
+    anyWindow.ikaBugReport = () => {
+      const json = exportFullBugReport().text;
+      try {
+        const copyToClipboard = anyWindow.copy;
+        copyToClipboard?.(json);
+      } catch {}
+      return json;
+    };
+    anyWindow.ikaClearBugs = () => {
+      clearBugs();
+      console.log("[ika] bug reports cleared");
+    };
   }
   var QUEUE_INTERVAL_MS = 1e3;
   var SUMMARY_INTERVAL_MS = 1e4;
   var STATUS_INTERVAL_MS = 1e3;
   var TOWN_SNAPSHOT_INTERVAL_MS = 5e3;
-  var KEY_TOGGLE_PANEL = "Space";
   var KEY_SEND_ALL_ARMY = "KeyA";
   var KEY_AUTO_BUILD = "KeyB";
   var KEY_SAFEHOUSE = "KeyS";
   var BUG_SUMMARY_PREVIEW_CHARS = 800;
+  var BUG_REPORT_FILE_PREFIX = "ikariam-bug-report";
   var runner;
   var tabLock;
   var waitingForTabLogged = false;
@@ -4163,29 +4734,24 @@ th { font-weight: bold; }
       },
       "account.update": updateCurrentAccount,
       "account.clear": clearAccounts,
+      "account.editBuildTimeBuff": editBuildTimeBuff,
+      "account.saveBuildTimeBuff": saveBuildTimeBuff,
       "data.export": exportDataToFile,
       "data.import": importDataFromFile,
       "bug.report": () => {
         const bugs = getBugs();
-        if (bugs.length === 0) {
-          showToast(BUG_REPORT.nothingToReport);
-          return;
-        }
-        const report = exportBugReport();
-        navigator.clipboard
-          ?.writeText(report)
-          .then(() =>
-            showToast(
-              BUG_REPORT.copied(
-                bugs.length,
-                summariseBugs().slice(0, BUG_SUMMARY_PREVIEW_CHARS),
-              ),
-            ),
-          )
-          .catch(() => {
-            console.log(report);
-            showToast(BUG_REPORT.clipboardUnavailable);
-          });
+        const report = exportFullBugReport();
+        const filename = timestampedFilename(
+          getState().accountName,
+          BUG_REPORT_FILE_PREFIX,
+        );
+        downloadJson(filename, report.text);
+        const summary =
+          bugs.length > 0
+            ? summariseBugs().slice(0, BUG_SUMMARY_PREVIEW_CHARS)
+            : "";
+        clearBugs();
+        showToast(BUG_REPORT.saved(filename, bugs.length, summary, report));
       },
       "bug.clear": () => {
         clearBugs();
@@ -4208,9 +4774,6 @@ th { font-weight: bold; }
       const tag = event.target?.nodeName.toLowerCase();
       if (tag === "input" || tag === "textarea" || tag === "select") return;
       switch (event.code) {
-        case KEY_TOGGLE_PANEL:
-          togglePanel();
-          break;
         case KEY_SEND_ALL_ARMY:
           sendAllArmy();
           break;
@@ -4245,6 +4808,7 @@ th { font-weight: bold; }
     registerHotkeys();
     startBarbarianObserver();
     startTransportButtonObserver();
+    startBuildingLevelObserver();
     const moved = migrateLegacyQueues();
     if (moved > 0)
       logInfo(`Migrated ${moved} shipment orders into the unified queue`);
@@ -4272,20 +4836,32 @@ th { font-weight: bold; }
         setFlag(FLAG.isAutoReload, true);
         backToCity("the queue ran dry");
       },
+      onTaskDropped: (task, reason) => {
+        notify({
+          kind: "taskDropped",
+          key: `taskDropped:${task.id}`,
+          title: NOTIFICATIONS.taskDroppedTitle,
+          body: NOTIFICATIONS.taskDroppedBody(
+            describeCurrentTransfer(task),
+            reason,
+          ),
+        });
+      },
     })
       .register("sendResource", handleSendResource)
       .register("upgradeBuilding", handleUpgradeBuilding);
     setReloadGuard(() => !runner.isBusy);
+    setCurrentTaskSource(() => runner.currentTaskId);
     updateCurrentAccount();
     pruneTownStats(getState().account);
     recordCurrentTown(getState().account);
-    window.setInterval(
-      () => recordCurrentTown(getState().account),
-      TOWN_SNAPSHOT_INTERVAL_MS,
-    );
+    window.setInterval(() => {
+      recordCurrentTown(getState().account);
+      notifyLowWine(getState().accountName);
+    }, TOWN_SNAPSHOT_INTERVAL_MS);
     window.setInterval(renderSummary, SUMMARY_INTERVAL_MS);
     window.setInterval(
-      () => setTransferInfo(describeCurrentTransfer()),
+      () => setTransferInfo(describeCurrentTransfer(currentTask())),
       STATUS_INTERVAL_MS,
     );
     const autoStart = isAutoStart();
