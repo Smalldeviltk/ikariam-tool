@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getState, initState, saveAutoBuild } from "../state";
 import {
+  BUILDING_LEVEL_CLASS,
   enqueueAutoBuild,
   getTownQueue,
   handleUpgradeBuilding,
   listBuildingsInCurrentTown,
   moveBuildingInQueue,
   scanBuildings,
+  showBuildingLevels,
+  startBuildingLevelObserver,
 } from "./auto-build";
 import { resetHttpState } from "@core/ikariam/http";
 import type { Task } from "@core/task-queue";
@@ -362,6 +365,79 @@ describe("listBuildingsInCurrentTown", () => {
       expect(
         listBuildingsInCurrentTown().map((entry) => entry.buildingName),
       ).toEqual(["Academy 6", "Museum 1", "Tavern 1", "Warehouse 12"]);
+    },
+  );
+});
+
+describe("building levels on the city view", () => {
+  function slot(position: number, title: string, building = false): string {
+    return (
+      `<div id="position${position}" class="building${building ? " constructionSite" : ""}">` +
+      `<a class="hoverable" id="js_CityPosition${position}Link" title="${title}"></a></div>`
+    );
+  }
+
+  function labels(): (string | null)[] {
+    return [...document.querySelectorAll("div[id^='position']")].map(
+      (element) =>
+        element.querySelector(`.${BUILDING_LEVEL_CLASS}`)?.textContent ?? null,
+    );
+  }
+
+  // The file-level beforeEach installs fake timers; these tests wait on real
+  // ones for the observer's batches.
+  beforeEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("labels each building with its level, and an upgrade with the level being built", () => {
+    document.body.innerHTML =
+      slot(1, "Warehouse (12)") +
+      slot(2, "Academy (5)", true) +
+      slot(3, "Tavern (Under construction)", true) +
+      slot(4, "No brackets here");
+
+    showBuildingLevels();
+    expect(labels()).toEqual(["12", "5→6", "0→1", null]);
+  });
+
+  it("does not add a second label when it runs again", () => {
+    document.body.innerHTML = slot(1, "Warehouse (12)");
+    showBuildingLevels();
+    showBuildingLevels();
+    expect(document.querySelectorAll(`.${BUILDING_LEVEL_CLASS}`)).toHaveLength(
+      1,
+    );
+  });
+
+  it(
+    "follows the game when an upgrade starts, and settles instead of " +
+      "reacting to its own label forever",
+    async () => {
+      document.body.innerHTML = slot(1, "Warehouse (12)");
+      const observer = startBuildingLevelObserver();
+      let changes = 0;
+      const watcher = new MutationObserver((records) => {
+        changes += records.length;
+      });
+      try {
+        expect(labels()).toEqual(["12"]);
+
+        document.querySelector("#position1")!.classList.add("constructionSite");
+        await vi.waitFor(() => expect(labels()).toEqual(["12→13"]));
+
+        // Its own writes wake it once more; that pass finds nothing to change.
+        watcher.observe(document.body, {
+          childList: true,
+          subtree: true,
+          characterData: true,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        expect(changes).toBe(0);
+      } finally {
+        observer.disconnect();
+        watcher.disconnect();
+      }
     },
   );
 });

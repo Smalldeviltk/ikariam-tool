@@ -4,6 +4,7 @@ import { saveTownStats } from "../town-cache";
 import {
   CRITICAL_HOURS,
   formatHours,
+  notifyLowWine,
   townsNeedingWine,
   wineStatus,
   WARNING_HOURS,
@@ -16,6 +17,22 @@ vi.mock("@core/logger", async (importOriginal) => ({
   logInfo: () => {},
   clearLog: () => {},
   initLogger: () => {},
+}));
+
+// The desktop notification itself is tested in core; here only what is
+// said about which town.
+const { notify, forgetNotification, isNotificationEnabled } = vi.hoisted(
+  () => ({
+    notify: vi.fn(() => true),
+    forgetNotification: vi.fn(),
+    isNotificationEnabled: vi.fn(() => true),
+  }),
+);
+vi.mock("@core/notifications", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@core/notifications")>()),
+  notify,
+  forgetNotification,
+  isNotificationEnabled,
 }));
 
 const TOWNS = ["W-Athens", "M-Corinth", "M-Aegina"];
@@ -148,5 +165,48 @@ describe("formatHours", () => {
     expect(formatHours(7.9)).toBe("7h");
     expect(formatHours(24)).toBe("1d");
     expect(formatHours(54)).toBe("2d 6h");
+  });
+});
+
+describe("notifyLowWine", () => {
+  beforeEach(() => {
+    notify.mockClear();
+    forgetNotification.mockClear();
+    isNotificationEnabled.mockReturnValue(true);
+    document.body.innerHTML =
+      dropdown() +
+      board([
+        boardRow("W-Athens", "1,000", "-300"),
+        boardRow("M-Corinth", "30,000", "-300"),
+      ]);
+  });
+
+  it(
+    "notifies for a town under the critical line, and lets a town above it " +
+      "be said again the next time it drops",
+    () => {
+      notifyLowWine("tester");
+
+      expect(notify).toHaveBeenCalledTimes(1);
+      expect(notify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "wineLow",
+          key: "wineLow:tester:W-Athens",
+          title: "Wine running low in W-Athens",
+        }),
+      );
+      expect(forgetNotification).toHaveBeenCalledWith(
+        "wineLow:tester:M-Corinth",
+      );
+      // M-Aegina has no figures: neither said nor forgotten.
+      expect(forgetNotification).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("does not measure anything while the notification is off", () => {
+    isNotificationEnabled.mockReturnValue(false);
+    notifyLowWine("tester");
+    expect(notify).not.toHaveBeenCalled();
+    expect(forgetNotification).not.toHaveBeenCalled();
   });
 });

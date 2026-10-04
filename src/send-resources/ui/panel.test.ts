@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { isNotificationEnabled } from "@core/notifications";
 import { getState, initState } from "../state";
 import {
   buildPanel,
   LAUNCHER_CLASS,
+  NOTIFICATION_SWITCH_ATTR,
   setAutoBuildButtonLabel,
   setQueueButtonLabel,
   setTransferInfo,
@@ -157,6 +159,7 @@ describe("buildPanel", () => {
       "Queue",
       "Account",
       "Data",
+      "Notifications",
     ]);
 
     // Every action the old flat panel offered is still reachable.
@@ -442,5 +445,56 @@ describe("the wine warning", () => {
   it("does nothing when the panel has not been built", () => {
     document.body.innerHTML = dropdown("W-Athens");
     expect(() => refreshWineWarning()).not.toThrow();
+  });
+});
+
+describe("the notification switches", () => {
+  function tick(kind: string, permission: NotificationPermission) {
+    vi.stubGlobal("Notification", {
+      permission: "default",
+      requestPermission: async () => permission,
+    });
+    buildPanel();
+    const box = document.querySelector<HTMLInputElement>(
+      `[${NOTIFICATION_SWITCH_ATTR}="${kind}"]`,
+    )!;
+    box.checked = true;
+    box.dispatchEvent(new Event("change", { bubbles: true }));
+    return box;
+  }
+
+  it("offers the two Send Resources kinds, both off at first", () => {
+    buildPanel();
+    const boxes = [
+      ...document.querySelectorAll<HTMLInputElement>(
+        `[${NOTIFICATION_SWITCH_ATTR}]`,
+      ),
+    ];
+    expect(
+      boxes.map((box) => box.getAttribute(NOTIFICATION_SWITCH_ATTR)),
+    ).toEqual(["wineLow", "taskDropped"]);
+    expect(boxes.every((box) => !box.checked)).toBe(true);
+  });
+
+  it("switches the kind on once the browser allows it", async () => {
+    try {
+      const box = tick("taskDropped", "granted");
+      await vi.waitFor(() =>
+        expect(isNotificationEnabled("taskDropped")).toBe(true),
+      );
+      expect(box.checked).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("unticks the box when the browser refuses", async () => {
+    try {
+      const box = tick("wineLow", "denied");
+      await vi.waitFor(() => expect(box.checked).toBe(false));
+      expect(isNotificationEnabled("wineLow")).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

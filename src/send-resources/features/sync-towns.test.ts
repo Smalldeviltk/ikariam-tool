@@ -158,3 +158,45 @@ describe("syncAllTowns", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe("the sync announcement (plan item 2.6)", () => {
+  function listen(): string[] {
+    const heard: string[] = [];
+    document.addEventListener("ika:syncStarted", () => heard.push("started"));
+    document.addEventListener("ika:syncFinished", () => heard.push("finished"));
+    return heard;
+  }
+
+  it("tells the page when a refresh of every town starts and ends", async () => {
+    (globalThis as any).fetch = mockFetch();
+    const heard = listen();
+    const syncing = syncAllTowns();
+    expect(heard).toEqual(["started"]);
+    await syncing;
+    expect(heard).toEqual(["started", "finished"]);
+  });
+
+  it(
+    "says it ended even when the refresh throws — the board's sync mark " +
+      "would otherwise spin until the page reloads",
+    async () => {
+      const heard = listen();
+      Object.defineProperty(window, "ikariam", {
+        configurable: true,
+        get() {
+          throw new Error("model gone");
+        },
+      });
+      try {
+        await expect(syncAllTowns()).rejects.toThrow("model gone");
+      } finally {
+        Object.defineProperty(window, "ikariam", {
+          configurable: true,
+          writable: true,
+          value: undefined,
+        });
+      }
+      expect(heard).toEqual(["started", "finished"]);
+    },
+  );
+});

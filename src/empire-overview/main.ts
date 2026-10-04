@@ -24,7 +24,10 @@ import $, { pageJQuery } from "./jquery";
 // `database.Init()` calls `$.mergeValues` while loading settings.
 import "./jquery-ext";
 import { reportBug } from "@core/bug-report";
-import { onResponse as onIkariamResponse } from "@core/ikariam/http";
+import {
+  onResponse as onIkariamResponse,
+  onSyncChange,
+} from "@core/ikariam/http";
 import { installEmpireDiagnostics } from "./diagnostics";
 import { Constant } from "./constants";
 import { Utils } from "./utils";
@@ -33,7 +36,7 @@ import { debug } from "./debug";
 import { empire } from "./empire";
 import { events } from "./events";
 import { ikariam } from "./game-api";
-import { render } from "./render";
+import { render, SYNCING_CLASS } from "./render";
 import "./helpers";
 import "./resource-production";
 
@@ -73,6 +76,15 @@ if (debug) {
  */
 onIkariamResponse((entries) => {
   events("ajaxResponse").pub(entries);
+});
+
+/**
+ * Added (not in the original, plan item 2.6): spin the Town headers' sync
+ * mark while Send Resources refreshes every town. The class goes on the
+ * board, not on the marks, so the tables can be redrawn meanwhile.
+ */
+onSyncChange((running) => {
+  $("#empireBoard").toggleClass(SYNCING_CLASS, running);
 });
 
 /**

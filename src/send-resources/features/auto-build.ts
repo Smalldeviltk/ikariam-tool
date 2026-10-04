@@ -594,23 +594,43 @@ export interface BuildingSlot {
   positionId: string;
 }
 
+/** What a building slot on the city view says about itself. */
+interface SlotReading {
+  /** "Warehouse", or the whole title when it has no level in brackets. */
+  name: string;
+  /** The level built so far; null when the title carries no brackets. */
+  level: number | null;
+  /** A level is being built right now. */
+  upgrading: boolean;
+}
+
+function readBuildingSlot(element: Element): SlotReading {
+  const title =
+    qs(SEL.buildingHover, element)?.getAttribute("title")?.trim() ?? "";
+  // "Warehouse (12)"; a building whose first level is being built reads
+  // "Warehouse (Under construction)" instead, in the game's language. So
+  // anything in the brackets that is not a number is level 0, without
+  // reading the words; the `constructionSite` class says a level is being
+  // built.
+  const bracketed = title.match(/^(.*?)\s*\((.*)\)$/);
+  const upgrading = element.classList.contains("constructionSite");
+  if (!bracketed) return { name: title, level: null, upgrading };
+  const inBrackets = bracketed[2].trim();
+  return {
+    name: bracketed[1],
+    level: /^\d+$/.test(inBrackets) ? Number(inBrackets) : 0,
+    upgrading,
+  };
+}
+
 /** Buildings in the currently open town, for the settings dialog. */
 export function listBuildingsInCurrentTown(): BuildingSlot[] {
   const slots: BuildingSlot[] = qsa(SEL.buildings).map((element) => {
-    const title =
-      qs(SEL.buildingHover, element)?.getAttribute("title")?.trim() ?? "";
-    // "Warehouse (12)"; a building whose first level is being built reads
-    // "Warehouse (Under construction)" instead, in the game's language. So
-    // anything in the brackets that is not a number is level 0, without
-    // reading the words; the `constructionSite` class below adds the level
-    // being built.
-    const bracketed = title.match(/^(.*?)\s*\((.*)\)$/);
-    let buildingName = bracketed
-      ? `${bracketed[1]} ${/^\d+$/.test(bracketed[2].trim()) ? bracketed[2].trim() : "0"}`
-      : title;
+    const { name, level, upgrading } = readBuildingSlot(element);
+    let buildingName = level === null ? name : `${name} ${level}`;
 
     // While upgrading, the title still shows the old level — add one.
-    if (element.classList.contains("constructionSite")) {
+    if (upgrading) {
       buildingName = withLevel(buildingName, levelOf(buildingName) + 1);
     }
     return {
@@ -621,4 +641,62 @@ export function listBuildingsInCurrentTown(): BuildingSlot[] {
 
   slots.sort(compareValues<BuildingSlot>("buildingName"));
   return slots;
+}
+
+/* ─────────────────── Building levels on the city view ──────────────────── */
+
+/** The label each building on the city view carries. */
+export const BUILDING_LEVEL_CLASS = "ika-building-level";
+
+/** "12", or "12→13" while level 13 is being built. */
+function buildingLevelText(reading: SlotReading): string | null {
+  if (reading.level === null) return null;
+  return reading.upgrading
+    ? `${reading.level}→${reading.level + 1}`
+    : String(reading.level);
+}
+
+/**
+ * Write each building's level on the city view (plan §4.2, item K).
+ *
+ * The level comes from the same title the settings dialog reads. A label is
+ * only written when its text changed, so the observer below, which sees the
+ * label's own insertion, settles after one pass instead of looping.
+ */
+export function showBuildingLevels(): void {
+  for (const element of qsa(SEL.buildings)) {
+    const text = buildingLevelText(readBuildingSlot(element));
+    let label = qs(`.${BUILDING_LEVEL_CLASS}`, element);
+    if (text === null) {
+      label?.remove();
+      continue;
+    }
+    if (!label) {
+      label = document.createElement("span");
+      label.className = BUILDING_LEVEL_CLASS;
+      element.appendChild(label);
+    }
+    if (label.textContent !== text) label.textContent = text;
+  }
+}
+
+/**
+ * Keep the levels current. The game redraws the town with its own ajax and
+ * changes a slot's title and class when an upgrade starts or ends, so the
+ * whole page is watched. The observer already hands over a burst of changes
+ * as one batch, so each batch is one pass, with no timer of its own.
+ */
+export function startBuildingLevelObserver(): MutationObserver {
+  showBuildingLevels();
+
+  const observer = new MutationObserver(() => {
+    showBuildingLevels();
+  });
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["class", "title"],
+  });
+  return observer;
 }

@@ -22,6 +22,7 @@ import {
 } from "@core/bug-report";
 import { qs, qsa } from "@core/dom";
 import { getCurrentTownName, pageWindow } from "@core/ikariam/globals";
+import { quickUpgradeTraces } from "@core/ikariam/http";
 import { recentLogLines } from "@core/logger";
 import { hasModel, modelCurrentCityName } from "@core/ikariam/model";
 import { DIALOG_ID, SEL } from "@core/ikariam/selectors";
@@ -170,6 +171,8 @@ export function captureGameData(): Record<string, unknown> {
   return {
     shipmentForm: capture(captureShipmentForm),
     createPopupSource: capture(captureCreatePopupSource),
+    // What the game answered the board's quick upgrades (plan §4.2, E).
+    quickUpgrades: capture(quickUpgradeTraces),
   };
 }
 
@@ -180,6 +183,8 @@ export interface FullBugReport {
   shipmentFormCaptured: boolean;
   /** Whether the game's `createPopup` source is in `text`. */
   createPopupCaptured: boolean;
+  /** How many quick upgrades, with the game's answers, are in `text`. */
+  quickUpgradesCaptured: number;
 }
 
 /**
@@ -200,6 +205,9 @@ export function exportFullBugReport(): FullBugReport {
     text: JSON.stringify({ ...buildBugReport(), gameData, log }, null, 2),
     shipmentFormCaptured: shipmentForm?.present === true,
     createPopupCaptured: typeof gameData.createPopupSource === "string",
+    quickUpgradesCaptured: Array.isArray(gameData.quickUpgrades)
+      ? gameData.quickUpgrades.length
+      : 0,
   };
 }
 

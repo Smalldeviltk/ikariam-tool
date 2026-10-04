@@ -59,6 +59,7 @@ export const PANEL = {
     queue: "Queue",
     account: "Account",
     data: "Data",
+    notifications: "Notifications",
   },
   calibrateCargo: "Calibrate Cargo",
   scan: "Scan",
@@ -85,6 +86,20 @@ export const WINE_WARNING = {
     "No wine figures yet — open the Empire Overview board, or visit a town.",
   allComfortable: (towns: number) => `Wine: ${towns} towns, all comfortable`,
   townLine: (town: string, left: string) => `${town} — ${left}`,
+} as const;
+
+/** Desktop notifications: the panel switches and the notices themselves. */
+export const NOTIFICATIONS = {
+  wineLowSwitch: "Wine running low",
+  wineLowSwitchTitle: (hours: number) =>
+    `When a town has under ${hours}h of wine left. Once per town, until it has more again.`,
+  taskDroppedSwitch: "Task dropped",
+  taskDroppedSwitchTitle:
+    "When the queue gives up on a task: it failed, or kept throwing errors.",
+  wineLowTitle: (town: string) => `Wine running low in ${town}`,
+  wineLowBody: (left: string) => `${left} of wine left.`,
+  taskDroppedTitle: "Task dropped from the queue",
+  taskDroppedBody: (task: string, reason: string) => `${task}: ${reason}`,
 } as const;
 
 export const QUEUE_VIEW = {
@@ -239,7 +254,11 @@ export const BUG_REPORT = {
     filename: string,
     count: number,
     summary: string,
-    captured: { shipmentFormCaptured: boolean; createPopupCaptured: boolean },
+    captured: {
+      shipmentFormCaptured: boolean;
+      createPopupCaptured: boolean;
+      quickUpgradesCaptured: number;
+    },
   ) =>
     `Saved the bug report as ${filename}` +
     (count > 0
@@ -252,6 +271,9 @@ export const BUG_REPORT = {
       ? "\nShipment form captured."
       : "\nShipment form not on screen: open the Trading Port, click " +
         '"Transport goods", then press Bug Report again to capture it.') +
+    (captured.quickUpgradesCaptured > 0
+      ? `\nQuick upgrades from the board: ${captured.quickUpgradesCaptured} included.`
+      : "") +
     (summary ? `\n\n${summary}` : ""),
   cleared: "Bug reports cleared.",
 } as const;

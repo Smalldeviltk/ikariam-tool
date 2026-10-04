@@ -1051,6 +1051,41 @@ describe("Bug Report", () => {
     expect(showToast.mock.lastCall![0]).toContain("Shipment form captured.");
   });
 
+  it(
+    "carries the board's quick upgrades with what the game answered, and " +
+      "says how many (plan §4.2 item E)",
+    async () => {
+      await startWith({});
+      const trace = {
+        at: "2026-10-04T10:00:00.000Z",
+        cityId: "297034",
+        buildingView: "academy",
+        position: "5",
+        viewResponse: '[["changeView",["academy","..."]]]',
+        upgradeButton: '<a id="js_buildingUpgradeButton" href="?x">Up</a>',
+        upgradeLink: "?x",
+        upgradeResponse: '[["provideFeedback",[{"type":10}]]]',
+        outcome: { started: true, reason: null },
+        error: null,
+      };
+      localStorage.setItem("ikaQuickUpgradeTrace", JSON.stringify([trace]));
+
+      const report = await pressBugReport();
+
+      expect(report.gameData.quickUpgrades).toEqual([trace]);
+      expect(showToast.mock.lastCall![0]).toContain(
+        "Quick upgrades from the board: 1 included.",
+      );
+    },
+  );
+
+  it("says nothing of quick upgrades when there were none", async () => {
+    await startWith({});
+    const report = await pressBugReport();
+    expect(report.gameData.quickUpgrades).toEqual([]);
+    expect(showToast.mock.lastCall![0]).not.toContain("Quick upgrades");
+  });
+
   it("says so when the game's createPopup cannot be read", async () => {
     await startWith({});
     delete (window as unknown as { ikariam?: unknown }).ikariam;

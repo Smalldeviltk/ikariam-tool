@@ -200,3 +200,65 @@ describe("Building.getUpgradeCost time", () => {
     expect(upgradeTime("port", 1)).toBe(181_000);
   });
 });
+
+describe("the desktop notification when a building finishes", () => {
+  const shown: { title: string; body?: string }[] = [];
+
+  beforeEach(() => {
+    shown.length = 0;
+    localStorage.clear();
+    localStorage.setItem(
+      "ikaNotifications",
+      JSON.stringify({ buildFinished: true }),
+    );
+    vi.stubGlobal(
+      "Notification",
+      class {
+        static permission = "granted";
+        constructor(title: string, options: { body?: string }) {
+          shown.push({ title, body: options.body });
+        }
+      },
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  beforeEach(() => {
+    // Importing the model alone leaves the global data without its methods;
+    // the notice only needs the building's display name.
+    database.getGlobalData.getLocalisedString ??= (name: string) => name;
+  });
+
+  function upgradingAcademy(completionTime: number): any {
+    const building = new Building(
+      {
+        getId: 297042,
+        getName: "W-Athens",
+        getResource: () => ({ getCurrent: 1e9, increment: () => {} }),
+        getBuildingFromName: () => null,
+      },
+      5,
+    );
+    building._name = "academy";
+    building._level = 15;
+    building._completionTime = completionTime;
+    return building;
+  }
+
+  it("names the town, the building and the level it reached", () => {
+    upgradingAcademy(Date.now() + 3_000).completeUpgrade();
+    expect(shown).toHaveLength(1);
+    expect(shown[0].title).toBe(
+      Constant.LanguageData.en.notice_buildFinished + "W-Athens",
+    );
+    expect(shown[0].body).toMatch(/ level 16$/);
+  });
+
+  it("stays quiet for an upgrade that ended while the game was closed", () => {
+    upgradingAcademy(Date.now() - 3 * 3_600_000).completeUpgrade();
+    expect(shown).toHaveLength(0);
+  });
+});

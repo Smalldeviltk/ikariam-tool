@@ -33,7 +33,9 @@
 
 import { BUG_REPORT_STORAGE_KEY } from "./bug-report";
 import { errorMessage } from "./format";
+import { QUICK_UPGRADE_TRACE_KEY } from "./ikariam/http";
 import { LOGGER_STORAGE_KEY } from "./logger";
+import { NOTIFICATION_SETTINGS_KEY, NOTIFIED_KEY } from "./notifications";
 import { IMPORT_ERRORS, IMPORT_NOTES, IMPORT_SUMMARY } from "./messages";
 import { EMPIRE_KEY_PATTERN, empireKeyPrefix } from "./storage";
 
@@ -61,16 +63,19 @@ const GLOBAL_KEYS: Record<string, DataGroup> = {
   ika_perShipCapacity: "config",
   ika_freighterCapacity: "config",
   isSendResourceHidden: "config",
+  [NOTIFICATION_SETTINGS_KEY]: "config",
 
   listAccount: "measurements",
 
   isAutoBuildStart: "runtime",
   isAutoReload: "runtime",
   reloadedMinute: "runtime",
+  [NOTIFIED_KEY]: "runtime",
 
   [LOGGER_STORAGE_KEY]: "diagnostics",
   [BUG_REPORT_STORAGE_KEY]: "diagnostics",
   ikaDomReports: "diagnostics",
+  [QUICK_UPGRADE_TRACE_KEY]: "diagnostics",
 };
 
 /**

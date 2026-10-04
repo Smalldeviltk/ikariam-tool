@@ -10,8 +10,13 @@
  * tooltip on a screen you have to go looking for.
  */
 
+import {
+  forgetNotification,
+  isNotificationEnabled,
+  notify,
+} from "@core/notifications";
 import { measuredStats } from "./auto-wine";
-import { DURATION } from "../messages";
+import { DURATION, NOTIFICATIONS } from "../messages";
 import { getTownList } from "../navigation";
 
 /** Below this, a town is worth acting on now. */
@@ -85,4 +90,28 @@ export function formatHours(hours: number | null): string {
   const days = Math.floor(hours / 24);
   const rest = Math.floor(hours % 24);
   return rest > 0 ? DURATION.daysAndHours(days, rest) : DURATION.days(days);
+}
+
+/**
+ * A desktop notification for each town under `CRITICAL_HOURS` (plan §4.2,
+ * item J). Once per town: the town is said again only after it has been back
+ * above the line, like the board's own wine warning. A town nothing is known
+ * about is left as it was.
+ */
+export function notifyLowWine(accountName: string): void {
+  if (!isNotificationEnabled("wineLow")) return;
+  for (const town of wineStatus()) {
+    if (town.hoursLeft === null) continue;
+    const key = `wineLow:${accountName}:${town.townName}`;
+    if (town.severity === "critical") {
+      notify({
+        kind: "wineLow",
+        key,
+        title: NOTIFICATIONS.wineLowTitle(town.townName),
+        body: NOTIFICATIONS.wineLowBody(formatHours(town.hoursLeft)),
+      });
+    } else {
+      forgetNotification(key);
+    }
+  }
 }

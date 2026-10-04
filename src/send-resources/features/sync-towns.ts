@@ -27,7 +27,7 @@
 
 import { errorMessage } from "@core/format";
 import { logInfo } from "@core/logger";
-import { fetchTown } from "@core/ikariam/http";
+import { announceSync, fetchTown } from "@core/ikariam/http";
 import { modelCurrentCityId, modelOwnCities } from "@core/ikariam/model";
 
 export interface SyncResult {
@@ -53,8 +53,21 @@ export function ownTownIds(): number[] {
  * Failures are per-town: one unreachable town does not abandon the rest. That
  * is the same lesson as the walking version, where a single `gotoTown` throw
  * used to abort the whole scan into an unhandled promise.
+ *
+ * The page is told when it starts and ends (`announceSync`), so the Empire
+ * Overview board can show it is refreshing — the end even when something in
+ * between throws.
  */
 export async function syncAllTowns(): Promise<SyncResult> {
+  announceSync(true);
+  try {
+    return await refreshEveryTown();
+  } finally {
+    announceSync(false);
+  }
+}
+
+async function refreshEveryTown(): Promise<SyncResult> {
   const startedAt = Date.now();
   const ids = ownTownIds();
   const before = modelCurrentCityId();

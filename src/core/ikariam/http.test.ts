@@ -3,9 +3,14 @@ import {
   actionRequestToken,
   clearResponseHandlers,
   fetchTown,
+  findUpgradeLink,
   ikariamRequest,
   onResponse,
+  quickUpgradeTraces,
   resetHttpState,
+  responseFeedback,
+  SUCCESS_FEEDBACK_TYPE,
+  upgradeBuildingNow,
 } from "./http";
 
 /**
@@ -305,5 +310,185 @@ describe("the bridge between the two scripts", () => {
 
     offBad();
     offGood();
+  });
+});
+
+describe("the sync announcement (plan item 2.6)", () => {
+  it(
+    "reaches the other script's copy of this module — the board hears when " +
+      "Send Resources starts and ends a refresh of every town",
+    async () => {
+      vi.resetModules();
+      const board = await import("./http");
+      vi.resetModules();
+      const sender = await import("./http");
+
+      const heard: boolean[] = [];
+      const off = board.onSyncChange((running) => heard.push(running));
+
+      sender.announceSync(true);
+      sender.announceSync(false);
+      off();
+      sender.announceSync(true);
+
+      expect(heard).toEqual([true, false]);
+    },
+  );
+});
+
+describe("quick upgrade (plan §4.2 item E)", () => {
+  /** A building view as the game sends it, with its upgrade button. */
+  function buildingView(href: string): unknown[] {
+    return [
+      ["updateGlobalData", { actionRequest: "token-after-view" }],
+      [
+        "changeView",
+        [
+          "academy",
+          `<div id="buildingUpgrade"><a id="js_buildingUpgradeButton" class="button" href="${href}">Upgrade</a></div>`,
+        ],
+      ],
+    ];
+  }
+
+  const UPGRADE_LINK =
+    "?action=CityScreen&function=upgradeBuilding&cityId=297042&position=5&level=15&actionRequest=token-in-link";
+
+  function feedback(type: number, text = ""): unknown[] {
+    return [["provideFeedback", [{ location: 1, type, text }]]];
+  }
+
+  /** Answer each request with the next body, in order. */
+  function mockFetchSequence(bodies: unknown[]) {
+    const fn = vi.fn(async (_url: string, _init?: RequestInit) => {
+      const body = bodies.shift();
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => "text/html" },
+        text: async () => JSON.stringify(body),
+      };
+    });
+    (globalThis as any).fetch = fn;
+    return fn;
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("finds the button's link wherever it sits in the response", () => {
+    expect(findUpgradeLink(buildingView(UPGRADE_LINK))).toBe(UPGRADE_LINK);
+    expect(findUpgradeLink(TOWN_RESPONSE)).toBeNull();
+  });
+
+  it("treats a button that leads nowhere as no button", () => {
+    expect(findUpgradeLink(buildingView("#"))).toBeNull();
+  });
+
+  it("reads the game's verdict, as plain text", () => {
+    expect(
+      responseFeedback(feedback(11, "<b>Not enough</b>   resources")),
+    ).toEqual({ type: 11, text: "Not enough resources" });
+    expect(responseFeedback(feedback(10))).toEqual({ type: 10, text: null });
+    expect(responseFeedback(TOWN_RESPONSE)).toBeNull();
+  });
+
+  it(
+    "opens the building, then sends the button's own link with a fresh " +
+      "token — not a link put together here",
+    async () => {
+      const fetchMock = mockFetchSequence([
+        buildingView(UPGRADE_LINK),
+        feedback(SUCCESS_FEEDBACK_TYPE),
+      ]);
+
+      await expect(
+        upgradeBuildingNow(297042, "academy", 5, { minGapMs: 0 }),
+      ).resolves.toEqual({ started: true, reason: null });
+
+      const viewUrl = String(fetchMock.mock.calls[0][0]);
+      expect(viewUrl).toContain("view=academy");
+      expect(viewUrl).toContain("position=5");
+      expect(viewUrl).toContain("currentCityId=297042");
+
+      const upgradeUrl = new URLSearchParams(
+        String(fetchMock.mock.calls[1][0]).split("?")[1],
+      );
+      expect(upgradeUrl.get("function")).toBe("upgradeBuilding");
+      expect(upgradeUrl.get("level")).toBe("15");
+      expect(upgradeUrl.get("actionRequest")).toBe("token-after-view");
+      expect(upgradeUrl.getAll("actionRequest")).toHaveLength(1);
+    },
+  );
+
+  it("passes on the game's reason when it does not start", async () => {
+    mockFetchSequence([
+      buildingView(UPGRADE_LINK),
+      feedback(11, "Another building is under construction"),
+    ]);
+    await expect(
+      upgradeBuildingNow(297042, "academy", 5, { minGapMs: 0 }),
+    ).resolves.toEqual({
+      started: false,
+      reason: "Another building is under construction",
+    });
+  });
+
+  it("sends nothing more when the view has no live button", async () => {
+    const fetchMock = mockFetchSequence([buildingView("#")]);
+    await expect(
+      upgradeBuildingNow(297042, "academy", 5, { minGapMs: 0 }),
+    ).resolves.toEqual({ started: false, reason: null });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it(
+    "keeps what the game answered for Bug Report — these answers had never " +
+      "been captured, so the first runs on the game are the check",
+    async () => {
+      mockFetchSequence([
+        buildingView(UPGRADE_LINK),
+        feedback(SUCCESS_FEEDBACK_TYPE),
+      ]);
+      await upgradeBuildingNow(297042, "academy", 5, { minGapMs: 0 });
+
+      const [trace] = quickUpgradeTraces();
+      expect(trace).toMatchObject({
+        cityId: "297042",
+        buildingView: "academy",
+        position: "5",
+        upgradeLink: UPGRADE_LINK,
+        outcome: { started: true, reason: null },
+        error: null,
+      });
+      expect(trace.upgradeButton).toContain("js_buildingUpgradeButton");
+      expect(trace.viewResponse).toContain("changeView");
+      expect(trace.upgradeResponse).toContain("provideFeedback");
+    },
+  );
+
+  it("keeps a run that failed too, with its error, and still fails it", async () => {
+    mockFetchSequence(["<html>login</html>"]);
+    await expect(
+      upgradeBuildingNow(297042, "academy", 5, { minGapMs: 0 }),
+    ).rejects.toThrow(/not a response array|not JSON/);
+    expect(quickUpgradeTraces()[0].error).toMatch(
+      /not a response array|not JSON/,
+    );
+  });
+
+  it("keeps only the last five runs", async () => {
+    for (let run = 0; run < 7; run++) {
+      mockFetchSequence([buildingView("#")]);
+      await upgradeBuildingNow(297042, "academy", run, { minGapMs: 0 });
+    }
+    expect(quickUpgradeTraces().map((trace) => trace.position)).toEqual([
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+    ]);
   });
 });

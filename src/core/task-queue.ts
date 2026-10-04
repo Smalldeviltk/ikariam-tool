@@ -365,6 +365,12 @@ export interface TaskRunnerOptions {
   /** Called when the queue empties. The original used this to stop the timer. */
   onDrain?: () => void;
   /**
+   * Called when a task is dropped without being done: it returned `failed`,
+   * or threw `maxConsecutiveErrors` times in a row. The player's order is
+   * gone at that point, which is worth telling them.
+   */
+  onTaskDropped?: (task: Task, reason: string) => void;
+  /**
    * How many times one task may throw in a row before it is given up on.
    *
    * A throw keeps the task (see the catch in `tick`), which is right for a DOM
@@ -575,6 +581,7 @@ export class TaskRunner {
             taskData: task.data,
           });
           this.queue.removeById(task.id);
+          this.options.onTaskDropped?.(task, result.reason);
           break;
       }
     } catch (e) {
@@ -601,6 +608,7 @@ export class TaskRunner {
         );
         this.errorStreaks.delete(task.id);
         this.queue.removeById(task.id);
+        this.options.onTaskDropped?.(task, message);
       } else {
         this.errorStreaks.set(task.id, streak);
       }

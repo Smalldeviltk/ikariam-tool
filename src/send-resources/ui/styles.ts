@@ -15,6 +15,7 @@
  */
 
 import { DIALOG_ID } from "@core/ikariam/selectors";
+import { BUILDING_LEVEL_CLASS } from "../features/auto-build";
 import { FLAG, isFlagTrue } from "../state";
 import { RESOURCE_TABLE_SCROLL_ID } from "./dialogs";
 import { QUEUE_SCROLL_CLASS } from "./queue-view";
@@ -73,6 +74,17 @@ th { font-weight: bold; }
   background-size: 22px 19px;
 }
 #logger textarea:hover { z-index: 99999; }
+
+.ika-notification-switch { display: inline-block; margin: 2px 10px 2px 0; cursor: pointer; }
+
+/* A building's level on the city view. Clicks pass through to the building. */
+.${BUILDING_LEVEL_CLASS} {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  z-index: 1; pointer-events: none;
+  padding: 0 4px; border: 1px solid #7e4a21; border-radius: 8px;
+  background: rgba(253, 247, 221, 0.9); color: #542c0f;
+  font: bold 11px/14px Arial, sans-serif; white-space: nowrap;
+}
 
 /* Popup styles — declared but never attached in the original. */
 #${DIALOG_ID} .popupContent,

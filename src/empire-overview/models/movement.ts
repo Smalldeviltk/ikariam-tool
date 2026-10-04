@@ -9,6 +9,28 @@ import { Constant } from "../constants";
 import { MilitaryUnits } from "../models/military";
 import { database } from "../database";
 import { events } from "../events";
+import { notify } from "@core/notifications";
+
+/**
+ * Added (not in the original, plan §4.2 item J): the desktop notification
+ * for an arrival, whoever owns the town it reached. A movement that arrived
+ * while the game was closed is dropped by `notify` as stale.
+ */
+function notifyArrival(movement) {
+  // English when the settings are not loaded yet (the table falls back).
+  var text = Constant.LanguageData[database.settings?.languageChange?.value];
+  var townName = function (cityId) {
+    var city = database.getCityFromId(cityId);
+    return city ? city.getName : text.notice_otherTown;
+  };
+  notify({
+    kind: "arrival",
+    key: "arrival:" + movement._id + ":" + movement._arrivalTime,
+    title: text.notice_arrival + townName(movement._targetCityId),
+    body: text.notice_from + townName(movement._originCityId),
+    happenedAt: movement._arrivalTime,
+  });
+}
 
 /**
  * Two call shapes, as in the original: either a single object to copy from, or
@@ -125,6 +147,7 @@ export function Movement(
   },
   updateTransportComplete: function () {
     if (this.isCompleted && !this._updatedCity) {
+      notifyArrival(this);
       var city = database.getCityFromId(this._targetCityId);
       var changes = [];
       if (city) {

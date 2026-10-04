@@ -19,10 +19,17 @@ import { getAccountName, getCurrentTownName } from "@core/ikariam/globals";
 import { DIALOG_ID, SEL } from "@core/ikariam/selectors";
 import { installErrorHandlers } from "@core/bug-report";
 import { clearLog, initLogger, logInfo } from "@core/logger";
+import { notify } from "@core/notifications";
 import { TabLock, TaskRunner, type TaskType } from "@core/task-queue";
 import { showToast } from "@core/ui/window";
 
-import { BUG_REPORT, QUEUE_VIEW, SEND_DIALOG, WINE_DIALOG } from "./messages";
+import {
+  BUG_REPORT,
+  NOTIFICATIONS,
+  QUEUE_VIEW,
+  SEND_DIALOG,
+  WINE_DIALOG,
+} from "./messages";
 import {
   FLAG,
   getFlag,
@@ -60,6 +67,7 @@ import {
   moveBuildingInQueue,
   removeBuildingFromQueue,
   scanBuildings,
+  startBuildingLevelObserver,
 } from "./features/auto-build";
 import {
   clearAccounts,
@@ -83,6 +91,7 @@ import {
   installDiagnostics,
   summariseBugs,
 } from "./diagnostics";
+import { notifyLowWine } from "./features/wine-warning";
 import { pruneTownStats, recordCurrentTown } from "./town-cache";
 import { calibrateShipCapacity } from "./ship-capacity";
 
@@ -593,6 +602,7 @@ export function start(): void {
   registerHotkeys();
   startBarbarianObserver();
   startTransportButtonObserver();
+  startBuildingLevelObserver();
 
   const moved = migrateLegacyQueues();
   if (moved > 0) {
@@ -631,6 +641,17 @@ export function start(): void {
       setFlag(FLAG.isAutoReload, true);
       backToCity("the queue ran dry");
     },
+    onTaskDropped: (task, reason) => {
+      notify({
+        kind: "taskDropped",
+        key: `taskDropped:${task.id}`,
+        title: NOTIFICATIONS.taskDroppedTitle,
+        body: NOTIFICATIONS.taskDroppedBody(
+          describeCurrentTransfer(task),
+          reason,
+        ),
+      });
+    },
   })
     .register("sendResource", handleSendResource)
     .register("upgradeBuilding", handleUpgradeBuilding);
@@ -646,10 +667,12 @@ export function start(): void {
   // This is what lets Auto Wine work without the Empire Overview board.
   pruneTownStats(getState().account);
   recordCurrentTown(getState().account);
-  window.setInterval(
-    () => recordCurrentTown(getState().account),
-    TOWN_SNAPSHOT_INTERVAL_MS,
-  );
+  // The same beat checks for towns running out of wine, for the desktop
+  // notification; it does nothing while that is switched off.
+  window.setInterval(() => {
+    recordCurrentTown(getState().account);
+    notifyLowWine(getState().accountName);
+  }, TOWN_SNAPSHOT_INTERVAL_MS);
 
   window.setInterval(renderSummary, SUMMARY_INTERVAL_MS);
   window.setInterval(

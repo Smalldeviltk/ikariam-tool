@@ -215,6 +215,39 @@ describe("Empire Overview startup", () => {
     expect(bar("wood")?.classList.contains("capped")).toBe(false);
   });
 
+  it(
+    "REGRESSION: offers no update check — it read the ORIGINAL Empire " +
+      "Overview's version on greasyfork and offered to install that over " +
+      "this fork",
+    async () => {
+      await boot();
+      // The Settings tab is drawn: its other buttons are there.
+      expect(document.querySelector("#empire_Reset_Button")).not.toBeNull();
+      expect(document.querySelector("#empire_Update_Button")).toBeNull();
+      expect(document.querySelector("#empire_autoUpdates")).toBeNull();
+    },
+  );
+
+  it(
+    "puts a sync mark in the Town header of all three town tables, and " +
+      "spins it while Send Resources refreshes every town (plan item 2.6)",
+    async () => {
+      await boot();
+      const marks = document.querySelectorAll(
+        "#ResTab th.city_name .empire_syncIndicator, " +
+          "#BuildTab th.city_name .empire_syncIndicator, " +
+          "#ArmyTab th.city_name .empire_syncIndicator",
+      );
+      expect(marks).toHaveLength(3);
+
+      const board = document.querySelector("#empireBoard")!;
+      document.dispatchEvent(new CustomEvent("ika:syncStarted"));
+      expect(board.classList.contains("empire_syncing")).toBe(true);
+      document.dispatchEvent(new CustomEvent("ika:syncFinished"));
+      expect(board.classList.contains("empire_syncing")).toBe(false);
+    },
+  );
+
   describe("the town tables' height", () => {
     const HEADER = 30;
     const ROW = 20;
@@ -521,6 +554,121 @@ describe("Empire Overview startup", () => {
       expect(sessionStorage.getItem("ika_pendingBoardView")).toBeNull();
     },
   );
+
+  it(
+    "summarises a resource on its stock figure, which showed no tooltip " +
+      "(plan item 2.8)",
+    async () => {
+      await boot();
+      const { render } = await import("./render");
+      const { database } = await import("./database");
+      const wine = database.getCityFromId(297034).getResource("wine");
+      wine._current = 1200;
+      wine._consumption = 100;
+
+      const stock = document.querySelector(
+        "#ResTab td.resource.wine span.current",
+      )!;
+      expect(stock.getAttribute("data-tooltip")).toBe("dynamic");
+
+      const tip: string = render.toolTip.dynamicTip(297034, stock);
+      expect(tip).toContain("icon_wine.png");
+      expect(tip).toContain("« In stock");
+      expect(tip).toContain("« Capacity");
+      expect(tip).toContain("« Safe");
+      expect(tip).toContain("« Consumption / 1h");
+      expect(tip).toContain("« Empty in");
+
+      // Gold has its own tooltips and no store.
+      const gold = document.querySelector(
+        "#ResTab td.resource.gold span.current",
+      );
+      expect(gold).toBeTruthy();
+      expect(render.toolTip.dynamicTip(297034, gold)).toBe("");
+    },
+  );
+
+  describe("the quick upgrade button (plan §4.2 item E)", () => {
+    /**
+     * W-Athens with an Academy at position 5, and a Build tab row holding
+     * its cell. `upgradable` stands in for the board's own cost check,
+     * which needs the full building tables and resources.
+     */
+    async function academyCell(state: { upgradable: boolean }) {
+      const { render } = await import("./render");
+      const { database } = await import("./database");
+      const $ = (globalThis as any).jQuery;
+      const city = database.getCityFromId(297034);
+      const building = city.getBuildingFromPosition(5);
+      building.update({ building: "academy", level: "5", name: "Academy" });
+      Object.defineProperty(building, "isUpgradable", {
+        get: () => state.upgradable,
+      });
+      const row = $(
+        '<tr id="building_297034"><td class="building academy0"></td></tr>',
+      ).appendTo($("#BuildTab table.buildings tbody"));
+      const draw = () => render.updateCityBuildingPosition(city, 5, row);
+      draw();
+      return { city, row, draw };
+    }
+
+    const button = (row: any): HTMLButtonElement | undefined =>
+      row.find("button.empire_quickUpgrade").get(0);
+
+    it("shows only on a level the board shows as upgradable", async () => {
+      await boot();
+      const state = { upgradable: true };
+      const { city, row, draw } = await academyCell(state);
+      expect(button(row)).toBeTruthy();
+
+      state.upgradable = false;
+      draw();
+      expect(button(row)).toBeUndefined();
+
+      // Enough resources, but the town is building something else.
+      state.upgradable = true;
+      city.getBuildingFromPosition(6)._completionTime = Date.now() + 60_000;
+      draw();
+      expect(button(row)).toBeUndefined();
+    });
+
+    it(
+      "upgrades that building in that town, locked until the game answers, " +
+        "and says what came of it",
+      async () => {
+        let answer!: (outcome: unknown) => void;
+        const upgradeBuildingNow = vi.fn(
+          () => new Promise((resolve) => (answer = resolve)),
+        );
+        vi.doMock("@core/ikariam/http", async (importOriginal) => ({
+          ...(await importOriginal<typeof import("@core/ikariam/http")>()),
+          upgradeBuildingNow,
+        }));
+        try {
+          await boot();
+          const { row } = await academyCell({ upgradable: true });
+
+          button(row)!.click();
+          expect(upgradeBuildingNow).toHaveBeenCalledWith(297034, "academy", 5);
+          expect(button(row)!.disabled).toBe(true);
+          // A second click while waiting sends nothing.
+          button(row)!.click();
+          expect(upgradeBuildingNow).toHaveBeenCalledTimes(1);
+
+          answer({ started: false, reason: "Not enough resources" });
+          await vi.waitFor(() =>
+            expect(document.body.textContent).toContain(
+              "The game did not start the upgrade",
+            ),
+          );
+          expect(document.body.textContent).toContain("Not enough resources");
+          expect(button(row)!.disabled).toBe(false);
+        } finally {
+          vi.doUnmock("@core/ikariam/http");
+        }
+      },
+    );
+  });
 
   it("records nothing in the bug reporter", async () => {
     await boot();

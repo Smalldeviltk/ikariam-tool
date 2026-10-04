@@ -29,8 +29,6 @@ export const accountName = readAccountName();
 export const EMPIRE_STORAGE_PREFIX = empireKeyPrefix(accountName);
 export const empire: any = {
   version: 1.1831,
-  scriptId: 764,
-  scriptName: "Empire Overview",
   logger: null,
   loaded: false,
   setVar: function (varname, varvalue) {
@@ -92,72 +90,12 @@ export const empire: any = {
     database.Init(ikariam.Host());
   },
 
-  CheckForUpdates: function (forced) {
-    var lang = database.settings.languageChange.value;
-    if (
-      forced ||
-      (database.getGlobalData.LastUpdateCheck + 86400000 <= $.now() &&
-        database.settings.autoUpdates.value)
-    ) {
-      try {
-        GM_xmlhttpRequest({
-          method: "GET",
-          url:
-            "https://greasyfork.org/scripts/" +
-            empire.scriptId +
-            "-empire-overview/code/Empire_Overview.meta.js", // + $.now(),
-          headers: { "Cache-Control": "no-cache" },
-          onload: function (resp) {
-            var remote_version, rt;
-            rt = resp.responseText;
-            database.getGlobalData.LastUpdateCheck = $.now();
-            // `.exec` returns null when the fetched metadata has no
-            // @version line. The original indexed straight into it and
-            // threw — and the surrounding try/catch does NOT help, since it
-            // only wraps the GM_xmlhttpRequest call, not this async callback.
-            var versionMatch = /@version\s*(.*?)\s*$/m.exec(rt);
-            if (!versionMatch) {
-              if (forced)
-                render.toast(
-                  Constant.LanguageData[database.settings.languageChange.value]
-                    .toast_remoteVersionUnreadable,
-                );
-              return;
-            }
-            remote_version = parseFloat(versionMatch[1]);
-            if (empire.version != -1) {
-              if (remote_version > empire.version) {
-                if (
-                  confirm(
-                    Constant.LanguageData[lang].alert_update +
-                      empire.scriptName +
-                      '". \n' +
-                      Constant.LanguageData[lang].alert_update1,
-                  )
-                ) {
-                  GM_openInTab(
-                    "https://greasyfork.org/scripts/" +
-                      empire.scriptId +
-                      "-empire-overview",
-                  );
-                }
-              } else if (forced)
-                render.toast(
-                  Constant.LanguageData[lang].alert_noUpdate +
-                    empire.scriptName +
-                    '".',
-                );
-            }
-            database.getGlobalData.latestVersion = remote_version;
-          },
-        });
-      } catch (err) {
-        if (forced)
-          render.toast(Constant.LanguageData[lang].alert_error + "\n" + err);
-      }
-    }
-  },
-
+  // REMOVED (not in the original): `CheckForUpdates`, with its Settings
+  // checkbox and its "check" button. It read the version of the ORIGINAL
+  // Empire Overview on greasyfork (script 764) and offered to
+  // install that over this fork. Nothing called it automatically, so the
+  // checkbox did nothing either. This fork has no update source of its own
+  // yet (improvement-plan.md §4.2, item R).
   HardReset: function () {
     var lang = database.settings.languageChange.value;
     // The original assigned `database = {}`, which worked because `database`

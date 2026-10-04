@@ -269,3 +269,235 @@ export function fetchTown(
     options,
   );
 }
+
+/** `provideFeedback` type the game sends when an action succeeded. */
+export const SUCCESS_FEEDBACK_TYPE = 10;
+
+/** The game's verdict on an action: its `provideFeedback` entry. */
+export interface ResponseFeedback {
+  type: number;
+  /** The game's own words, as plain text; null when it gave none. */
+  text: string | null;
+}
+
+/** Plain text of a fragment of the game's HTML. */
+function htmlToText(html: string): string {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  return (doc.body.textContent ?? "").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * The `provideFeedback` entry of a response, or null when it has none:
+ * `["provideFeedback", [{ type, text, ... }]]`, the shape the board already
+ * reads after a shipment and after the game's own upgrade button.
+ */
+export function responseFeedback(
+  entries: readonly unknown[],
+): ResponseFeedback | null {
+  for (const entry of entries) {
+    if (!Array.isArray(entry) || entry[0] !== "provideFeedback") continue;
+    const first = Array.isArray(entry[1]) ? entry[1][0] : null;
+    if (!first || typeof first !== "object") continue;
+    const { type, text } = first as { type?: unknown; text?: unknown };
+    return {
+      type: Number(type),
+      text: typeof text === "string" && text.trim() ? htmlToText(text) : null,
+    };
+  }
+  return null;
+}
+
+/**
+ * The upgrade button in a building view's response, or null. Searched for
+ * anywhere in the response, as IkaEasy V4's `buildingUpgrade.js` does,
+ * rather than at one fixed place in it.
+ */
+function findUpgradeButton(value: unknown): Element | null {
+  if (typeof value === "string") {
+    if (!value.includes("js_buildingUpgradeButton")) return null;
+    const doc = new DOMParser().parseFromString(value, "text/html");
+    return doc.querySelector("#js_buildingUpgradeButton");
+  }
+  if (!value || typeof value !== "object") return null;
+  for (const child of Object.values(value)) {
+    const button = findUpgradeButton(child);
+    if (button) return button;
+  }
+  return null;
+}
+
+/**
+ * The link of the upgrade button in a building view's response, or null
+ * when the view has no live button (`href="#"` when the game will not
+ * upgrade now).
+ */
+export function findUpgradeLink(value: unknown): string | null {
+  const href = findUpgradeButton(value)?.getAttribute("href");
+  return href && href !== "#" ? href : null;
+}
+
+/** What a quick upgrade came to. */
+export interface UpgradeOutcome {
+  started: boolean;
+  /** Why not, in the game's words, when it said. */
+  reason: string | null;
+}
+
+/**
+ * The last few quick upgrades, newest last, with what the game answered.
+ * Bug Report saves them: the answers to these two requests were never
+ * captured on the live game before this was written, so the first runs are
+ * how the parsing above gets checked.
+ */
+export const QUICK_UPGRADE_TRACE_KEY = "ikaQuickUpgradeTrace";
+const QUICK_UPGRADE_TRACE_LIMIT = 5;
+/** Per response; a building view is mostly its HTML. */
+const TRACE_RESPONSE_CHARS = 20_000;
+
+export interface QuickUpgradeTrace {
+  at: string;
+  cityId: string;
+  buildingView: string;
+  position: string;
+  /** The first response, as JSON, cut at `TRACE_RESPONSE_CHARS`. */
+  viewResponse: string | null;
+  /** The upgrade button as the game sent it, whatever its link. */
+  upgradeButton: string | null;
+  upgradeLink: string | null;
+  /** The second response, as JSON, cut at `TRACE_RESPONSE_CHARS`. */
+  upgradeResponse: string | null;
+  outcome: UpgradeOutcome | null;
+  error: string | null;
+}
+
+export function quickUpgradeTraces(): QuickUpgradeTrace[] {
+  try {
+    const raw = localStorage.getItem(QUICK_UPGRADE_TRACE_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+function recordQuickUpgrade(trace: QuickUpgradeTrace): void {
+  try {
+    const list = [...quickUpgradeTraces(), trace].slice(
+      -QUICK_UPGRADE_TRACE_LIMIT,
+    );
+    localStorage.setItem(QUICK_UPGRADE_TRACE_KEY, JSON.stringify(list));
+  } catch {
+    // A full storage must not fail the upgrade itself.
+  }
+}
+
+function traceResponse(entries: unknown[]): string {
+  return JSON.stringify(entries).slice(0, TRACE_RESPONSE_CHARS);
+}
+
+/**
+ * Start the next level of one building, without leaving the page (plan
+ * §4.2, item E).
+ *
+ * Two requests: the building's own view, then the link of the upgrade
+ * button in it. The link is the game's, not one put together here: the
+ * button now carries `function=upgradeBuilding`, where IkaEasy's older code
+ * built `action=UpgradeExistingBuilding` by hand. Both responses reach the
+ * board like any other (`onResponse`), so it redraws the town. Each run is
+ * recorded for Bug Report, whatever it came to.
+ */
+export async function upgradeBuildingNow(
+  cityId: number | string,
+  buildingView: string,
+  position: number | string,
+  options?: RequestOptions,
+): Promise<UpgradeOutcome> {
+  const trace: QuickUpgradeTrace = {
+    at: new Date().toISOString(),
+    cityId: String(cityId),
+    buildingView,
+    position: String(position),
+    viewResponse: null,
+    upgradeButton: null,
+    upgradeLink: null,
+    upgradeResponse: null,
+    outcome: null,
+    error: null,
+  };
+  try {
+    const view = await ikariamRequest(
+      {
+        view: buildingView,
+        cityId,
+        position,
+        backgroundView: "city",
+        currentCityId: cityId,
+      },
+      options,
+    );
+    trace.viewResponse = traceResponse(view);
+    trace.upgradeButton = findUpgradeButton(view)?.outerHTML ?? null;
+    const link = findUpgradeLink(view);
+    trace.upgradeLink = link;
+    if (!link) {
+      trace.outcome = {
+        started: false,
+        reason: responseFeedback(view)?.text ?? null,
+      };
+      return trace.outcome;
+    }
+
+    const params: Record<string, string> = {};
+    new URLSearchParams(link.slice(link.indexOf("?") + 1)).forEach(
+      (value, key) => {
+        params[key] = value;
+      },
+    );
+    // The link's own actionRequest and ajax are replaced by the request.
+    const answer = await ikariamRequest(params, options);
+    trace.upgradeResponse = traceResponse(answer);
+    const feedback = responseFeedback(answer);
+    const started = feedback?.type === SUCCESS_FEEDBACK_TYPE;
+    trace.outcome = {
+      started,
+      reason: started ? null : (feedback?.text ?? null),
+    };
+    return trace.outcome;
+  } catch (e) {
+    trace.error = String((e as Error)?.message ?? e);
+    throw e;
+  } finally {
+    recordQuickUpgrade(trace);
+  }
+}
+
+/**
+ * Sent on `document` when a refresh of every town starts and when it ends,
+ * for the Empire Overview board's sync indicator (plan item 2.6). The same
+ * channel as the responses above, for the same reason: the two scripts
+ * share no module, only the page.
+ */
+export const SYNC_STARTED_EVENT = "ika:syncStarted";
+export const SYNC_FINISHED_EVENT = "ika:syncFinished";
+
+/** Tell the page a refresh of every town has started, or ended. */
+export function announceSync(running: boolean): void {
+  document.dispatchEvent(
+    new CustomEvent(running ? SYNC_STARTED_EVENT : SYNC_FINISHED_EVENT),
+  );
+}
+
+/**
+ * Be told when a refresh of every town starts (`true`) and ends (`false`),
+ * whichever script runs it. Returns a function that unregisters.
+ */
+export function onSyncChange(handler: (running: boolean) => void): () => void {
+  const started = () => handler(true);
+  const finished = () => handler(false);
+  document.addEventListener(SYNC_STARTED_EVENT, started);
+  document.addEventListener(SYNC_FINISHED_EVENT, finished);
+  return () => {
+    document.removeEventListener(SYNC_STARTED_EVENT, started);
+    document.removeEventListener(SYNC_FINISHED_EVENT, finished);
+  };
+}

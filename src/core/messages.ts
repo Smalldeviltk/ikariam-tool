@@ -21,6 +21,13 @@ export const WINDOW_CLOSE_TITLE = "Close";
 
 export const BUGS_NONE_RECORDED = "No bugs recorded.";
 
+/** Why a notification switch stayed off (`notifications.ts`). */
+export const NOTIFICATION_PERMISSION = {
+  blocked:
+    "The browser did not allow notifications for this site. Allow them in the site settings (the icon left of the address), then tick the box again.",
+  unsupported: "This browser cannot show notifications.",
+} as const;
+
 /** Reasons an import file is rejected. */
 export const IMPORT_ERRORS = {
   notJson: "That is not valid JSON.",

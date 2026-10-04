@@ -11,6 +11,7 @@ import { Utils } from "../utils";
 import { database } from "../database";
 import { events } from "../events";
 import { REDUCTION_BUILDING_MAX_PERCENT } from "@core/ikariam/model";
+import { notify } from "@core/notifications";
 import { accountBuildTimeBuff } from "@core/storage";
 import { accountName } from "../empire";
 
@@ -20,6 +21,31 @@ import { accountName } from "../empire";
  * which is exactly 1 - 0.8^level.
  */
 const CHRONOS_FORGE_TIME_FACTOR_PER_LEVEL = 0.8;
+
+/**
+ * Added (not in the original, plan §4.2 item J): the desktop notification
+ * for a finished building. `completeUpgrade` runs up to 4s before the end,
+ * and on a load for an upgrade that ended while the game was closed;
+ * `notify` drops the second as stale, so a load does not announce it.
+ */
+function notifyBuildFinished(building, completionTime) {
+  if (!completionTime) return;
+  // English when the settings are not loaded yet (the table falls back).
+  var text = Constant.LanguageData[database.settings?.languageChange?.value];
+  var city = building.city();
+  notify({
+    kind: "buildFinished",
+    key: ["buildFinished", city.getId, building._position, completionTime].join(
+      ":",
+    ),
+    title: text.notice_buildFinished + city.getName,
+    body:
+      database.getGlobalData.getLocalisedString(building.getName) +
+      text.notice_level +
+      (building._level + 1),
+    happenedAt: completionTime,
+  });
+}
 
 export function Building(city, pos) {
   this._position = pos;
@@ -256,6 +282,7 @@ export function Building(city, pos) {
     return this._position;
   },
   completeUpgrade: function () {
+    notifyBuildFinished(this, this._completionTime);
     this._level++;
     delete this._completionTime;
     delete this._updateTimer;

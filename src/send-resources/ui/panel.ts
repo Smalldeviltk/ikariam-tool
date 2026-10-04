@@ -19,18 +19,26 @@
 import { addStyle, escapeHtml, qs } from "@core/dom";
 import { SEL } from "@core/ikariam/selectors";
 import {
+  isNotificationEnabled,
+  notificationRefusal,
+  setNotificationEnabled,
+  type NotificationKind,
+} from "@core/notifications";
+import {
   createWindow,
   setWindowFooter,
+  showToast,
   type GameWindow,
 } from "@core/ui/window";
 import {
+  CRITICAL_HOURS,
   formatHours,
   townsNeedingWine,
   wineStatus,
   type TownWineStatus,
 } from "../features/wine-warning";
 import { getActionPoints, getFreeShips } from "../game-state";
-import { BUTTON, PANEL, WINE_WARNING } from "../messages";
+import { BUTTON, NOTIFICATIONS, PANEL, WINE_WARNING } from "../messages";
 import { getState } from "../state";
 import { action } from "./actions";
 import { QUEUE_LIST_ID, refreshQueueView } from "./queue-view";
@@ -39,6 +47,9 @@ import { buildStyles } from "./styles";
 export const WINDOW_ID = "ikaSendResourcesWindow";
 export const LAUNCHER_CLASS = "ika-send-menu";
 export const WINE_WARNING_ID = "ikaWineWarning";
+
+/** Marks a notification checkbox; its value is the kind it switches. */
+export const NOTIFICATION_SWITCH_ATTR = "data-ika-notification";
 
 /** The menu entry's icon: the game's own transport picture. */
 const MENU_ENTRY_ICON = "cdn/all/both/minimized/transport.png";
@@ -86,8 +97,54 @@ function windowContent(): string {
         // Temporary: saves the building shown in the game's help dialog.
         `<button class="button" ${action("buildingHelp.save")}>${PANEL.crawlBuildingHelp}</button>`,
     ) +
+    group(
+      PANEL.groups.notifications,
+      notificationSwitch(
+        "wineLow",
+        NOTIFICATIONS.wineLowSwitch,
+        NOTIFICATIONS.wineLowSwitchTitle(CRITICAL_HOURS),
+      ) +
+        notificationSwitch(
+          "taskDropped",
+          NOTIFICATIONS.taskDroppedSwitch,
+          NOTIFICATIONS.taskDroppedSwitchTitle,
+        ),
+    ) +
     `<div id="logger"><textarea rows="4" cols="60" id="txtLogger" style="font-size:9px; display:none"></textarea></div>`
   );
+}
+
+/** A checkbox switching one kind of desktop notification (plan §4.2, J). */
+function notificationSwitch(
+  kind: NotificationKind,
+  label: string,
+  title: string,
+): string {
+  const checked = isNotificationEnabled(kind) ? " checked" : "";
+  return (
+    `<label class="ika-notification-switch" title="${escapeHtml(title)}">` +
+    `<input type="checkbox" ${NOTIFICATION_SWITCH_ATTR}="${kind}"${checked}> ` +
+    `${escapeHtml(label)}</label>`
+  );
+}
+
+/**
+ * Ticking a box switches its kind on, which first asks the browser for
+ * permission; a refusal unticks it again and says why. Heard on `change`,
+ * not through the click dispatcher: that one cancels the click, and a
+ * cancelled click puts the tick back.
+ */
+function watchNotificationSwitches(root: HTMLElement): void {
+  root.addEventListener("change", (event) => {
+    const box = event.target as HTMLInputElement;
+    const kind = box.getAttribute(NOTIFICATION_SWITCH_ATTR);
+    if (!kind) return;
+    const wanted = box.checked;
+    void setNotificationEnabled(kind as NotificationKind, wanted).then((on) => {
+      box.checked = on;
+      if (wanted && !on) showToast(notificationRefusal());
+    });
+  });
 }
 
 /**
@@ -160,6 +217,7 @@ export function buildPanel(): void {
     openByDefault: true,
   });
   panelWindow.content.innerHTML = windowContent();
+  watchNotificationSwitches(panelWindow.content);
 
   refreshQueueView();
   buildLauncher(togglePanel);

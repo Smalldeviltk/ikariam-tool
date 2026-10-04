@@ -11,6 +11,15 @@ import { database } from "./database";
 import { empire } from "./empire";
 import { events } from "./events";
 import { ikariam } from "./game-api";
+import {
+  isNotificationEnabled,
+  notificationRefusal,
+  setNotificationEnabled,
+  type NotificationKind,
+} from "@core/notifications";
+import { reportBug } from "@core/bug-report";
+import { errorMessage } from "@core/format";
+import { upgradeBuildingNow } from "@core/ikariam/http";
 
 /**
  * Added (not in the original): the town tables grew by one row per town with
@@ -21,8 +30,94 @@ import { ikariam } from "./game-api";
  */
 export const VISIBLE_TOWN_ROWS = 5;
 
+/**
+ * Added (not in the original, plan §4.2 item J): a notification checkbox.
+ * Ticking it first asks the browser for permission; a refusal unticks it
+ * again and says why.
+ */
+function switchNotification(kind: NotificationKind, box: HTMLInputElement) {
+  var wanted = box.checked;
+  void setNotificationEnabled(kind, wanted).then(function (on) {
+    box.checked = on;
+    if (wanted && !on) render.toastAlert(notificationRefusal());
+  });
+}
+
+/** The class of the quick upgrade button in a Build tab cell. */
+export const QUICK_UPGRADE_CLASS = "empire_quickUpgrade";
+
+/** The city and building a Build tab cell stands for. */
+function cityBuildingOfCell(target) {
+  var city = database.getCityFromId(
+    target.parents("tr").attr("id").split("_").pop(),
+  );
+  var className = target.parents("td").attr("class").split(" ").pop();
+  var building = city.getBuildingsFromName(className.slice(0, -1))[
+    className.charAt(className.length - 1)
+  ];
+  return { city: city, building: building };
+}
+
+/**
+ * Added (not in the original, plan §4.2 item E): start the next level from
+ * the Build tab, without leaving the page. The button stays disabled until
+ * the game has answered, so a second click cannot send a second order.
+ * Each run is kept for Bug Report (`upgradeBuildingNow`).
+ */
+function quickUpgrade(city, building, button) {
+  var text = Constant.LanguageData[database.settings.languageChange.value];
+  var label =
+    database.getGlobalData.getLocalisedString(building.getName) +
+    " (" +
+    city.getName +
+    ")";
+  button.prop("disabled", true);
+  upgradeBuildingNow(city.getId, building.getName, building.getPosition)
+    .then(function (outcome) {
+      if (outcome.started) {
+        render.toastAlert(text.quickUpgrade_started + label);
+        render.updateChangesForCityBuilding(city.getId, []);
+      } else {
+        render.toastAlert(
+          text.quickUpgrade_refused +
+            label +
+            (outcome.reason ? ": " + outcome.reason : ""),
+        );
+      }
+    })
+    .catch(function (e) {
+      reportBug("manual", e, {
+        where: "quick upgrade",
+        cityId: city.getId,
+        building: building.getName,
+        position: building.getPosition,
+      });
+      render.toastAlert(text.quickUpgrade_failed + errorMessage(e));
+    })
+    .finally(function () {
+      button.prop("disabled", false);
+    });
+}
+
 /** The tabs that hold one row per town. */
 const TOWN_TAB_IDS = ["ResTab", "BuildTab", "ArmyTab"];
+
+/**
+ * Added (not in the original, plan item 2.6): a small sync mark in the Town
+ * header of every town table, spinning while Send Resources refreshes every
+ * town. `main.ts` puts `SYNCING_CLASS` on the board for the length of the
+ * refresh (`onSyncChange`); the state lives on the board rather than on the
+ * mark, so the tables can be redrawn freely meanwhile.
+ */
+export const SYNCING_CLASS = "empire_syncing";
+
+function syncIndicatorHtml(lang: string): string {
+  return (
+    '<span class="empire_syncIndicator" title="' +
+    Constant.LanguageData[lang].syncIndicator +
+    '">&#8635;</span>'
+  );
+}
 
 /**
  * Added (not in the original): towns already warned that their wine runs out
@@ -221,7 +316,7 @@ export const render: any = {
           return getIncomingTip();
           break;
         case "current":
-          return "";
+          return getStockTip();
           break;
         case "progressbar":
           if (resourceName !== Constant.Resources.GOLD) return getProgressTip();
@@ -989,6 +1084,104 @@ export const render: any = {
           );
         }
       }
+      /**
+       * Added (not in the original, plan item 2.8): one summary of a
+       * resource on its stock figure, which showed no tooltip. The figures
+       * the bar and the production line show, in one place.
+       */
+      function getStockTip() {
+        if (
+          !city ||
+          !resourceName ||
+          resourceName === Constant.Resources.GOLD
+        ) {
+          return "";
+        }
+        var text = Constant.LanguageData[lang];
+        var resource = city.getResource(resourceName);
+        var storage = city.maxResourceCapacities;
+        var current = resource.getCurrent;
+        var perHour = resource.getProduction * 3600;
+        var drunkPerHour = resource.getConsumption;
+        var row = function (value, label, cls?) {
+          return (
+            '<tr class="data"><td' +
+            (cls ? ' class="' + cls + '"' : "") +
+            ">" +
+            value +
+            "</td><td>« " +
+            label +
+            "</td></tr>"
+          );
+        };
+        var rows =
+          row(Utils.FormatNumToStr(current, false, 0), text.stockTip_stock) +
+          row(
+            Utils.FormatNumToStr(storage.capacity, false, 0) +
+              (storage.capacity > 0
+                ? " (" +
+                  Utils.FormatNumToStr(
+                    (current / storage.capacity) * 100,
+                    false,
+                    0,
+                  ) +
+                  "%)"
+                : ""),
+            text.capacity,
+          ) +
+          row(Utils.FormatNumToStr(storage.safe, false, 0), text.safe);
+        if (perHour) {
+          rows +=
+            row(
+              Utils.FormatNumToStr(perHour, true, 0),
+              text.stockTip_production + " / 1" + text.hour,
+            ) +
+            row(
+              Utils.FormatNumToStr(perHour * 24, true, 0),
+              text.stockTip_production + " / 1" + text.day,
+            );
+        }
+        if (drunkPerHour) {
+          rows +=
+            row(
+              Utils.FormatNumToStr(-drunkPerHour, true, 0),
+              text.stockTip_consumption + " / 1" + text.hour,
+              "Red",
+            ) +
+            row(
+              Utils.FormatNumToStr(-drunkPerHour * 24, true, 0),
+              text.stockTip_consumption + " / 1" + text.day,
+              "Red",
+            ) +
+            row(
+              Utils.FormatNumToStr(-drunkPerHour * 24 * 7, true, 0),
+              text.stockTip_consumption + " / 1" + text.week,
+              "Red",
+            );
+        }
+        var emptyIn = resource.getEmptyTime;
+        if (isFinite(emptyIn) && emptyIn > 0) {
+          rows += row(
+            Utils.FormatTimeLengthToStr(emptyIn * 3600000, 2),
+            text.stockTip_emptyIn,
+            "Red",
+          );
+        }
+        var fullIn = resource.getFullTime;
+        if (fullIn > 0) {
+          rows += row(
+            Utils.FormatTimeLengthToStr(fullIn * 3600000, 2),
+            text.stockTip_fullIn,
+          );
+        }
+        return (
+          '<table><thead><tr><th colspan="2"><img src="cdn/all/both/resources/icon_' +
+          resourceName +
+          '.png" style="height: 14px;"></th></tr></thead><tbody>' +
+          rows +
+          "</tbody></table>"
+        );
+      }
       function getProgressTip() {
         if (resourceName == "population" || resourceName == "ui-corner-all") {
           return "";
@@ -1547,16 +1740,26 @@ export const render: any = {
       '"> ' +
       Constant.LanguageData[lang].onIkaLogs +
       "</nobr></span>" +
+      // Added (not in the original, plan §4.2 item J). Stored by
+      // core/notifications, which Send Resources reads too, not in
+      // database.settings.
       " <hr>" +
       ' <span class="categories">' +
-      Constant.LanguageData[lang].global_category +
+      Constant.LanguageData[lang].notifications_category +
       "</span>" +
-      ' <span><input type="checkbox" id="empire_autoUpdates" ' +
-      (database.settings.autoUpdates.value ? 'checked="checked"' : "") +
+      ' <span><input type="checkbox" id="empire_notifyBuildFinished" ' +
+      (isNotificationEnabled("buildFinished") ? 'checked="checked"' : "") +
       '/><nobr data-tooltip="' +
-      Constant.LanguageData[lang].autoUpdates_description +
+      Constant.LanguageData[lang].notifyBuildFinished_description +
       '"> ' +
-      Constant.LanguageData[lang].autoUpdates +
+      Constant.LanguageData[lang].notifyBuildFinished +
+      "</nobr></span>" +
+      ' <span><input type="checkbox" id="empire_notifyArrival" ' +
+      (isNotificationEnabled("arrival") ? 'checked="checked"' : "") +
+      '/><nobr data-tooltip="' +
+      Constant.LanguageData[lang].notifyArrival_description +
+      '"> ' +
+      Constant.LanguageData[lang].notifyArrival +
       "</nobr></span>" +
       "</div>";
     var display =
@@ -1675,11 +1878,6 @@ export const render: any = {
       Constant.LanguageData[lang].website +
       "</button>" +
       '<button data-tooltip="' +
-      Constant.LanguageData[lang].Check_for_updates +
-      '" id="empire_Update_Button">' +
-      Constant.LanguageData[lang].check +
-      "</button>" +
-      '<button data-tooltip="' +
       Constant.LanguageData[lang].Report_bug +
       '" id="empire_Bug_Button">' +
       Constant.LanguageData[lang].report +
@@ -1790,9 +1988,6 @@ export const render: any = {
       .on("change", "#empire_hideOnCityView", function () {
         database.settings.hideOnCityView.value = this.checked;
       })
-      .on("change", "#empire_autoUpdates", function () {
-        database.settings.autoUpdates.value = this.checked;
-      })
       .on("change", "#empire_smallFont", function () {
         database.settings.smallFont.value = this.checked;
         if (this.checked) {
@@ -1824,6 +2019,12 @@ export const render: any = {
       })
       .on("change", "#empire_wineWarning", function () {
         database.settings.wineWarning.value = this.checked;
+      })
+      .on("change", "#empire_notifyBuildFinished", function () {
+        switchNotification("buildFinished", this);
+      })
+      .on("change", "#empire_notifyArrival", function () {
+        switchNotification("arrival", this);
       })
       .on("change", "#empire_wineOut", function () {
         database.settings.wineOut.value = this.checked;
@@ -1902,9 +2103,6 @@ export const render: any = {
       .on("click", "#empire_Check_Button", function () {
         empire.Check();
       })
-      .on("click", "#empire_Update_Button", function () {
-        empire.CheckForUpdates.call(empire, true);
-      })
       .on("click", "#empire_Bug_Button", function () {})
       .on("change", "input[type='checkbox']", function () {
         this.blur();
@@ -1933,10 +2131,6 @@ export const render: any = {
     });
     $("#empire_Website_Button").button({
       icons: { primary: "ui-icon-home" },
-      text: true,
-    });
-    $("#empire_Update_Button").button({
-      icons: { primary: "ui-icon-info" },
       text: true,
     });
     $("#empire_Bug_Button").button({
@@ -2282,7 +2476,9 @@ export const render: any = {
   getResourceTable: function () {
     var lang = database.settings.languageChange.value;
     var header =
-      '<colgroup span="2"/>\n      <colgroup span="1"/>\n    <colgroup span="1"/>\n    <colgroup span="2"/>\n    <colgroup span="2"/>\n    <colgroup span="2"/>\n    <colgroup span="2"/>\n    <colgroup span="2"/>\n   <colgroup span="2"/>\n    <colgroup span="2"/>\n<thead>\n<tr class="header_row">\n    <th class="city_name" data-tooltip="{10}" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=ikipedia&helpId=18\')">{0}</th>\n    <th class="action_points icon actionpointImage" data-tooltip="{1}"></th>\n    \n    <th class="empireactions">\n       <div class="trading" data-tooltip="' +
+      '<colgroup span="2"/>\n      <colgroup span="1"/>\n    <colgroup span="1"/>\n    <colgroup span="2"/>\n    <colgroup span="2"/>\n    <colgroup span="2"/>\n    <colgroup span="2"/>\n    <colgroup span="2"/>\n   <colgroup span="2"/>\n    <colgroup span="2"/>\n<thead>\n<tr class="header_row">\n    <th class="city_name" data-tooltip="{10}" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=ikipedia&helpId=18\')">' +
+      syncIndicatorHtml(lang) +
+      '{0}</th>\n    <th class="action_points icon actionpointImage" data-tooltip="{1}"></th>\n    \n    <th class="empireactions">\n       <div class="trading" data-tooltip="' +
       Constant.LanguageData[lang].transport +
       '" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=militaryAdvisor\')"></div>\n<div class="agora" data-tooltip="' +
       Constant.LanguageData[lang].agora +
@@ -2308,7 +2504,7 @@ export const render: any = {
       Constant.LanguageData[lang].transporting +
       ' {2}" style="cursor:pointer;"></div>\n        </td>\n    <td class="population" data-tooltip="dynamic">\n        <span class= "pop" data-tooltip="dynamic"></span>\n        <span></span>\n        <div class="progressbarPop ui-progressbar ui-widget ui-widget-content ui-corner-all" data-tooltip="dynamic">\n            <div class="ui-progressbar-value ui-widget-header ui-corner-left" style="width: 95%"></div>\n        </div>\n    </td>\n    \n    <td class="population_happiness">   <span class="happy"  data-tooltip="dynamic"><img align=right height="18" hspace="8" vspace="2"></span><br><span class="growth clickbar"></span>\n </td>\n    <td class="research" data-tooltip="dynamic">\n        <span class="scientists" data-tooltip="dynamic"></span>\n        <span></span>\n    {4}   \n   </div>\n    </td>\n    {1}\n    </tr>\n';
     var resourceCell =
-      '<td class="resource {0}">\n    <span class="icon safeImage"></span>\n    <span class="current"></span>\n   <span class="incoming" data-tooltip="dynamic"></span>\n    <div class="progressbar ui-progressbar ui-widget ui-widget-content ui-corner-all" data-tooltip="dynamic">\n    <div class="ui-progressbar-value ui-widget-header ui-corner-left" style="width: 95%"></div>\n    </div>\n  </td>\n<td class="resource {0}">\n    <span class="prodconssubsum production Green" data-tooltip="dynamic"></span>\n    <span class="prodconssubsum consumption Red" data-tooltip="dynamic"></span>\n    <span class="emptytime Red"></span>\n</td>';
+      '<td class="resource {0}">\n    <span class="icon safeImage"></span>\n    <span class="current" data-tooltip="dynamic"></span>\n   <span class="incoming" data-tooltip="dynamic"></span>\n    <div class="progressbar ui-progressbar ui-widget ui-widget-content ui-corner-all" data-tooltip="dynamic">\n    <div class="ui-progressbar-value ui-widget-header ui-corner-left" style="width: 95%"></div>\n    </div>\n  </td>\n<td class="resource {0}">\n    <span class="prodconssubsum production Green" data-tooltip="dynamic"></span>\n    <span class="prodconssubsum consumption Red" data-tooltip="dynamic"></span>\n    <span class="emptytime Red"></span>\n</td>';
     var footer =
       '<tr>\n    <td colspan="2"></td>\n   <td id="t_sigma" class="total" data-tooltip="dynamic">Σ</td>\n    <td id="t_population" class="total"></td><td id="t_growth" class="total"></td>\n    <td id="t_research" class="total" data-tooltip="dynamic"></td>\n        <td id="t_currentgold" class="total"></td>\n    <td id="t_goldincome" class="total" data-tooltip="dynamic">\n        <span class="Green"></span>\n      <span class="Red"></span>\n         <td id="t_currentwood" class="total"></td>\n    <td id="t_woodincome" class="total" data-tooltip="dynamic">\n        <span class="Green"></span>\n        <span class="Red"></span>\n    </td>\n    <td id="t_currentwine" class="total"></td>\n    <td id="t_wineincome" class="total" data-tooltip="dynamic">\n        <span class="Green"></span>\n        <span class="Red"></span>\n    </td>\n    <td id="t_currentmarble" class="total"></td>\n    <td id="t_marbleincome" class="total"data-tooltip="dynamic">\n        <span class="Green"></span>\n        <span class="Red"></span>\n    </td>\n    <td id="t_currentglass" class="total"></td>\n    <td id="t_glassincome" class="total" data-tooltip="dynamic">\n        <span class="Green"></span>\n        <span class="Red"></span>\n    </td>\n    <td id="t_currentsulfur" class="total"></td>\n    <td id="t_sulfurincome" class="total" data-tooltip="dynamic">\n        <span class="Green"></span>\n        <span class="Red"></span>\n    </td>\n</tr>';
 
@@ -2367,7 +2563,9 @@ export const render: any = {
     var table =
       '<table class="army">\n    {0}\n    <tbody>{1}</tbody>\n    <tfoot>{2}</tfoot>\n</table>';
     var headerRow =
-      '<thead><tr class="header_row">\n    <th class="city_name">{0}</th>\n    <th data-tooltip="{1}" class="icon actionpointImage action_points" >\n <th class="empireactions" colspan="2">\n       <div class="spio" data-tooltip="' +
+      '<thead><tr class="header_row">\n    <th class="city_name">' +
+      syncIndicatorHtml(lang) +
+      '{0}</th>\n    <th data-tooltip="{1}" class="icon actionpointImage action_points" >\n <th class="empireactions" colspan="2">\n       <div class="spio" data-tooltip="' +
       Constant.LanguageData[lang].espionage +
       '" style="cursor:pointer;"></div>\n<div class="combat"data-tooltip="' +
       Constant.LanguageData[lang].combat +
@@ -2499,7 +2697,9 @@ export const render: any = {
     var headerCell =
       '<th data-tooltip="{0}" style="background-color: transparent; background-image: url(\'{1}\'); \n background-repeat: no-repeat; background-attachment: scroll; background-position: center center; background-clip: \n border-box; background-origin: padding-box; background-size: 50px auto; cursor: pointer;" colspan="{2}" class="icon" onclick="ajaxHandlerCall(\'?view=buildingDetail&helpId=1&buildingId={3}\');return false;">&nbsp;</th>';
     var headerRow =
-      '<thead><tr class="header_row">\n    <th class="city_name">{0}</th>\n    <th data-tooltip="{1}" class="action_points icon actionpointImage"></th>\n  <th class="empireactions">\n  <div class="contracts" data-tooltip="' +
+      '<thead><tr class="header_row">\n    <th class="city_name">' +
+      syncIndicatorHtml(lang) +
+      '{0}</th>\n    <th data-tooltip="{1}" class="action_points icon actionpointImage"></th>\n  <th class="empireactions">\n  <div class="contracts" data-tooltip="' +
       Constant.LanguageData[lang].contracts +
       '" style="cursor:pointer;" onclick="ajaxHandlerCall(\'?view=diplomacyTreaty\')"></div></th>\n    {2}\n</tr></thead>';
     var buildingCell = '<td class="building {0}" data-tooltip="dynamic"></td>';
@@ -2895,6 +3095,18 @@ export const render: any = {
                   : " upgradable"
                 : ""),
           );
+        // Added (not in the original, plan §4.2 item E). Only where the
+        // level shows as upgradable: enough resources, nothing being built.
+        if (building.isUpgradable && !city.isUpgrading) {
+          cell.append(
+            '<button class="' +
+              QUICK_UPGRADE_CLASS +
+              '" title="' +
+              Constant.LanguageData[database.settings.languageChange.value]
+                .quickUpgrade +
+              '">&#9650;</button>',
+          );
+        }
       } else {
         return false;
       }
@@ -2986,10 +3198,6 @@ export const render: any = {
     });
     $("#empire_Website_Button").button({
       icons: { primary: "ui-icon-home" },
-      text: true,
-    });
-    $("#empire_Update_Button").button({
-      icons: { primary: "ui-icon-info" },
       text: true,
     });
     $("#empire_Bug_Button").button({
@@ -3394,18 +3602,21 @@ export const render: any = {
       "click",
       "td.building span.clickable",
       function (event) {
-        var target = $(event.target);
-        var city = database.getCityFromId(
-          target.parents("tr").attr("id").split("_").pop(),
-        );
-        var className = target.parents("td").attr("class").split(" ").pop();
-        var building = city.getBuildingsFromName(className.slice(0, -1))[
-          className.charAt(className.length - 1)
-        ];
+        var building = cityBuildingOfCell($(event.target)).building;
         var params = building.getUrlParams;
         if (unsafeWindow.ikariam.templateView)
           unsafeWindow.ikariam.templateView.id = null;
         ikariam.loadUrl(true, "city", params);
+        return false;
+      },
+    );
+    $("#empire_Tabs").on(
+      "click",
+      "td.building button." + QUICK_UPGRADE_CLASS,
+      function (event) {
+        // A disabled button (an order on its way) fires no click.
+        var found = cityBuildingOfCell($(event.target));
+        quickUpgrade(found.city, found.building, $(this));
         return false;
       },
     );

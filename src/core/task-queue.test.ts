@@ -618,6 +618,52 @@ describe("TaskRunner", () => {
     },
   );
 
+  it("says when it drops a task, and why — for the desktop notification", async () => {
+    const dropped: [string, string][] = [];
+    const onTaskDropped = (task: Task, reason: string) =>
+      dropped.push([task.id, reason]);
+
+    queue.push(ship("1"));
+    const failedId = queue.head()!.id;
+    const { runner } = runnerWith(
+      { status: "failed", reason: "boom" },
+      { onTaskDropped },
+    );
+    runner.start();
+    await tick();
+    runner.stop();
+    expect(dropped).toEqual([[failedId, "boom"]]);
+
+    queue.push(ship("2"));
+    const throwingId = queue.head()!.id;
+    const throwing = new TaskRunner(queue, {
+      intervalMs: 1000,
+      maxConsecutiveErrors: 2,
+      onTaskDropped,
+    }).register("sendResource", async () => {
+      throw new Error("selector gone");
+    });
+    throwing.start();
+    await tick();
+    // One throw is not a drop.
+    expect(dropped).toHaveLength(1);
+    await tick();
+    expect(dropped).toEqual([
+      [failedId, "boom"],
+      [throwingId, "selector gone"],
+    ]);
+  });
+
+  it("does not report a task that was done as dropped", async () => {
+    const onTaskDropped = vi.fn();
+    queue.push(ship("1"));
+    const { runner } = runnerWith({ status: "done" }, { onTaskDropped });
+    runner.start();
+    await tick();
+    expect(queue.length).toBe(0);
+    expect(onTaskDropped).not.toHaveBeenCalled();
+  });
+
   it("a throw followed by a normal result clears the error streak", async () => {
     queue.push(ship("1"));
     let attempts = 0;

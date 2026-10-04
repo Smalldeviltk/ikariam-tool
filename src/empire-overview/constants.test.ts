@@ -13,6 +13,28 @@ beforeAll(async () => {
   Constant = (await import("./constants")).Constant;
 });
 
+describe("Constant.BuildingData", () => {
+  it(
+    "stores the levels taken from s303 as original figures: twice the time " +
+      "it shows, and the cost before its 14% research discount",
+    () => {
+      // s303's help page, Academy level 51: 668,834,826 wood,
+      // 2,905,875,866 crystal, 2M 29D, 734 scientists.
+      const academy = Constant.BuildingData.academy;
+      expect(academy.wood[50]).toBe(Math.round(668_834_826 / 0.86));
+      expect(academy.glass[50]).toBe(Math.round(2_905_875_866 / 0.86));
+      expect(academy.time[50]).toBe(2 * 89 * 86_400);
+      expect(academy.maxScientists[51]).toBe(734);
+    },
+  );
+
+  it("keeps the s800 figures for levels 1-50", () => {
+    // s800's help page, Academy level 50.
+    expect(Constant.BuildingData.academy.wood[49]).toBe(568_954_467);
+    expect(Constant.BuildingData.academy.time[49]).toBe(12_873_600);
+  });
+});
+
 describe("Constant.LanguageData", () => {
   it("serves the English table for its own key", () => {
     expect(Constant.LanguageData.en.economy).toBe("Economy");
