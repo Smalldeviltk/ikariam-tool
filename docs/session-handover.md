@@ -10,17 +10,19 @@ It deliberately does **not** repeat the feature status. That lives in
 second. [project-summary.md](../project-summary.md) covers what the TypeScript
 port changed and what is still unverified.
 
-Last updated: 03/10/2026.
+Last updated: 04/10/2026.
 
 ---
 
 ## 0. Read this before touching anything
 
-**Automated shipping is broken and the cause is known.** The game replaced the
-trading port's destination list; `SEL.dockCities` (`.cities.clearfix > li > a`)
-matches nothing, so every `sendResource` task waits 15 s and throws. Auto Wine
-and the Transport timer are affected; a shipment sent by hand in the game goes
-through. See §2 for the markup and `improvement-plan.md` §2.A for the fix.
+**Automated shipping: fixed on 04/10 (§16, plan §2.O part 4), and the user
+tried it on the game the same day: "roughly ok"** (§17). The game had
+replaced the trading port's destination list, so `SEL.dockCities`
+(`.cities.clearfix > li > a`) matched nothing and every `sendResource` task
+waited 15 s and threw. The form is now opened directly with
+`?view=transport&destinationCityId=<id>`. The paragraphs below about the
+broken port are kept as history.
 
 **Two rounds on 25/09.** The first — two user-reported bugs and part of Auto
 Wine — is committed as six commits (pushed since); the write-up is
@@ -32,14 +34,16 @@ fixes for nearly all of it, committed as `1983f45` (§8). What was left, and why
 `improvement-plan.md` §2.D — read that before starting another review, so
 the same ground is not covered twice.
 
-**Do not press either Start Timer until that is fixed.** The runner now gives
+*Superseded 04/10 by the port fix — kept as history:* **Do not press either
+Start Timer until that is fixed.** The runner now gives
 up on a task after five consecutive throws, so instead of looping forever the
 queue quietly empties — roughly 80 s per task. Queued shipments are recoverable
 (Save in Auto Wine Settings queues the run again; since 02/10 Auto Wine's
 Start also switches Transport's timer on, so do not use it for this); the
 Auto Build config is not touched.
 
-The capture that unblocks it: one paste of the crawler with `#js_transportPanel`
+*(Captured 03/10 through Bug Report — §2, "Added 03–04/10".)* The capture
+that unblocks it: one paste of the crawler with `#js_transportPanel`
 open, a second after clicking `a.action_transport` so the shipment form is on
 screen. `portForm.present` is `false` in all five existing captures, so
 `#textfield_*`, `#submit` and `#slider_freighters_max` have never been checked
@@ -123,7 +127,8 @@ queueing the run too. Not in `dist/`, not tried on the game.
 
 Not in `dist/`, not tried on the game.
 
-**03/10: three things the user asked for, NOT committed** — see §14, and
+**03/10: three things the user asked for, committed as `7ed3a85` (docs in
+`b45f792`), not pushed** — see §14, and
 `improvement-plan.md` §2.M:
 
 - **Send Resources has a left-menu entry again, like Empire Overview's —
@@ -140,11 +145,71 @@ Not in `dist/`, not tried on the game.
   table (shown as text; ✎ opens a field, ✓ saves), and the town's Chronos'
   Forge (×0.8 per level). Rounded to whole seconds.
 
-Not in `dist/`, not tried on the game.
+In `dist/` (built 03/10 22:54), not tried on the game.
 
-**Next in the plan is still §2.A, the trading port.** The destination list's
-markup is now in hand (§2); the shipment form is the one capture missing, and
-the command for it is in `improvement-plan.md` §2.A.
+**03/10, later: Bug Report reworked, and what its first file settled, NOT
+committed** — see §15, and `improvement-plan.md` §2.N:
+
+- **Bug Report always saves a JSON file** (`ikariam-bug-report-<account>-<UTC
+  time>.json`) instead of copying to the clipboard — two pasted reports were
+  cut at 50,000 characters and lost their end. It carries `gameData`: the
+  game's `createPopup` source, and the shipment form if it is on screen.
+  Once saved, the recorded bugs are cleared.
+- **§2.D's last finding is closed**: `createPopup`'s parameters are named
+  from the game's source (`popupType`, `className`), and the dialogs pass
+  `null, null` instead of `"???", "class"`.
+- **Empire Overview no longer reports `[name, null]`** as a malformed ajax
+  entry — it is the game's normal shape after a town switch.
+- **Open: an Auto Build town switch to M-Eretria that did not land**, with
+  the runner throwing every second instead of dropping the task after five
+  (§6). Needs the log, which a bug report does not carry yet.
+
+In `dist/` (built 03/10 22:54, grepped), not tried on the game.
+
+**03–04/10: two more Bug Report files, and two rounds of fixes, NOT
+committed** — see §16, and `improvement-plan.md` §2.O and §2.P:
+
+- **Why the runner never dropped the failing task: `console.error` is not a
+  function on the game's page.** The runner's catch called it, threw, and
+  never reached the streak count. Every console call of Send Resources and
+  core now goes through `writeToConsole` (`core/logger.ts`).
+- **The trading port is fixed in code** (§2.A): the second file caught the
+  shipment form, every old form selector still holds, and the destination
+  is set by opening `?view=transport&destinationCityId=<id>`.
+- **Bug Report carries the last 200 log lines**, and the "did not land"
+  message no longer carries the seconds (they defeated deduplication).
+- **Seven small items**: resource labels, the redundant Close button,
+  `needingShip` rounds up, a month is 30 days in both formatters, the
+  queue's ▶ follows the task the runner is on, "Warning wine" once per town,
+  Space belongs to Empire Overview alone.
+- **Still open: why the switch to M-Eretria did not land** (§6) — needs a
+  report with the log, now that it carries one.
+- **The installed userscripts are older than `dist/`** (§2): rebuild, then
+  reinstall both.
+
+In `dist/` since the 04/10 09:09 build.
+
+**04/10: the user tried it all on the game, then asked for two more
+things — §17**, and `improvement-plan.md` §2.Q and §2.R:
+
+- **On the game, with the 09:09 build: "roughly ok"** ("cả 2 tạm ok") for
+  both the list of things to try (the port, the runner, the menu entry,
+  build times, §16's small items, and every older "try on the game" list
+  back to the 26–28/09 round, and U/V) and the M-Eretria switch, which did
+  not come back. A general verdict — no file, no log, no per-item report —
+  so nothing in it counts as measured (§17).
+- **The panel's queue and Transport Settings' shipment table show at most
+  ten rows and scroll the rest**, measured per row (`capVisibleRows` in
+  `core/dom.ts`).
+- **Auto Build Settings has its Close button back** — §16 had removed it;
+  the user asked for it again.
+
+§17 is in `dist/` (04/10 09:44, grepped), not tried on the game.
+
+**Next:** nothing is blocked on the game any more. What is left is the
+user's answers (plan §6 questions 2 and 3, items U and V) and the small
+things in §7. If something fails on the game, press Bug Report at once and
+put the file in `tools/output/` — it holds the log.
 
 **If a page is stuck reloading**, the way out from the console (it keeps
 working between loads) is
@@ -158,12 +223,13 @@ working between loads) is
 |             |                                                                  |
 | ----------- | ---------------------------------------------------------------- |
 | Branch      | `refactor`, tracking `origin/refactor`                            |
-| Pushed      | `origin/refactor` is at `066eb44` (the plan's §2.I–2.J docs), pushed by the user; §10's `1f7c0e7` and `4841fb9` are before it, so pushed too (checked with `git log origin/refactor..HEAD` on 02/10). **Five local commits since, not pushed:** §11 is `6ed66c6` + `c38dca4`, its docs `b9f1d7a`; §12 and §13 are one code commit, `4f9436c` (25 files in `src/`), and one docs commit, `3209964` |
+| Pushed      | `origin/refactor` is at `066eb44` (the plan's §2.I–2.J docs), pushed by the user; §10's `1f7c0e7` and `4841fb9` are before it, so pushed too (checked with `git log origin/refactor..HEAD` on 02/10). **Seven local commits since, not pushed:** §11 is `6ed66c6` + `c38dca4`, its docs `b9f1d7a`; §12 and §13 are one code commit, `4f9436c` (25 files in `src/`), and one docs commit, `3209964`; §14 is `7ed3a85` (15 files), its docs `b45f792` |
 | Committed 02/10 | At the user's request, in two commits as before: code and tests, then the two documents. The commit message went through a file (`git commit -F`): PowerShell 5.1 splits a here-string passed to a native command at its double quotes, and the first attempt failed with "pathspec did not match" — nothing was committed by it |
-| Uncommitted | §14 (03/10): 15 files in `src/` — `core/storage.ts`, `core/ui/window.ts`, `core/ikariam/selectors.ts`, `empire-overview/models/building.ts`, `send-resources/{app,messages,state,types}.ts`, `send-resources/features/summary-account.ts`, `send-resources/ui/panel.ts`, and the tests `core/storage.test.ts`, `core/ui/window.test.ts`, `empire-overview/models/building.test.ts`, `send-resources/app.test.ts`, `send-resources/ui/panel.test.ts`. This document's and the plan's updates since `3209964`. **`send-resources/features/barbarian.ts` is also modified, and not by §14** (`annotate(SEL.barbarianVillageResources, false)` → `true`) — it appeared during the 03/10 session; left alone, ask the user before committing it. `.gitignore` and `docs/So_sanh_2_script_Ikariam.md` are the user's, as before, left out of every commit |
-| Tests       | 34 files, 560 tests, all passing (500 before §12, 515 after it, 537 after §13). §11 added no test (see §11) |
+| Committed 03/10 | §14, at the user's request, the same way: `7ed3a85` (code and tests), `b45f792` (the two documents), messages through `git commit -F`. `barbarian.ts` was left out (below) |
+| Uncommitted | §15, §16, §17 (03–04/10): 31 files in `src/` — core: `bug-report`, `dom`, `format` (+ test), `ikariam/globals`, `ikariam/selectors`, `logger`, `storage`, `task-queue` (+ test); Empire Overview: `game-api`, `render`, `utils`, `startup.test`; Send Resources: `app` (+ test), `diagnostics`, `messages`, `navigation` (+ test), `ship-capacity`, `features/send-resources` (+ test), `features/barbarian`, `ui/actions`, `ui/data-transfer-ui`, `ui/dialogs`, `ui/panel` (+ test), `ui/queue-view` (+ test). This document's and the plan's updates since `b45f792`. **`send-resources/features/barbarian.ts` holds two changes**: §16's `Math.ceil`, and `annotate(SEL.barbarianVillageResources, false)` → `true`, which no round here made — it appeared during the 03/10 session and was left out of `7ed3a85`; split the two when committing, and ask the user about the second. `.gitignore` and `docs/So_sanh_2_script_Ikariam.md` are the user's, as before, left out of every commit |
+| Tests       | 34 files, 583 tests, all passing (500 before §12, 515 after it, 537 after §13, 560 after §14, 567 after §15, 569 after §16's first round, 578 after §16). §11 added no test (see §11). Prettier: `core/ikariam/http.test.ts`, `send-resources/features/transport-buttons.test.ts` and `send-resources/town-cache.test.ts` are off its format at `HEAD` already — not touched |
 | Typecheck   | Clean (`tsc --noEmit` and the strict config)                      |
-| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 01/10 at 02:23 and contains §11 (grepped: `Crawl Building` and `building-help-` in Send Resources; the new Academy figure `568954467` present and the old `582271779` gone, `winePressSavingPercent` and the time `12873600` in Empire Overview; `Math.min(50, …)` in Send Resources' `modelWineConsumption`). Earlier markers were checked in earlier builds: §2.I–2.J (`ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows`) and §10 (`ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save`, `capped`). **§12, §13 and §14 are not in `dist/` yet.** After the next build, grep Send Resources for `wine.autoRun`, `ika-move`, `ika_pendingTownSwitch`, `to spare, less than one`, `ikaWindowOpen_`, `js-ika-build-time-buff` and `translateX(-146px)` (the menu entry's slide-out), and Empire Overview for `listAccount` (strings in `src/`, so they survive bundling) |
+| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 01/10 at 02:23 and contains §11 (grepped: `Crawl Building` and `building-help-` in Send Resources; the new Academy figure `568954467` present and the old `582271779` gone, `winePressSavingPercent` and the time `12873600` in Empire Overview; `Math.min(50, …)` in Send Resources' `modelWineConsumption`). Earlier markers were checked in earlier builds: §2.I–2.J (`ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows`) and §10 (`ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save`, `capped`). **`dist/` was rebuilt by the user on 03/10 at 22:54 from the working tree and holds §12 to §15** (grepped in Send Resources: `wine.autoRun`, `ika-move`, `ika_pendingTownSwitch`, `to spare, less than one`, `ikaWindowOpen_`, `js-ika-build-time-buff`, `translateX(-146px)`, `ikariam-bug-report`, `then cleared them`, `createPopupSource`, and no `"???"` left; in Empire Overview: `listAccount` and `entry.length === 2 && typeof entry[0] === "string" && entry[1] === null`). It was built before §15 was committed, so it matches the working tree, not a commit. **The userscripts installed in the browser were older than that 22:54 `dist/`** (§2). **Rebuilt 04/10 at 09:09 with §16** (grepped: `?view=transport&destinationCityId=`, `shipment form to close`, `was sent `, `Move up`; Empire Overview writes the month as `month = 2592e3` — the minifier's form of 2592000) — the build the user tried on the game (§17). **Rebuilt again at 09:44 with §17** (grepped: `ika-queue-scroll`, `resourceTableScroll`, and the `dialog.close` button after `build.save`). That is the current `dist/`; it matches the working tree, not a commit |
 
 What landed: the AJAX transport layer, the shared window widget, the rewritten
 panel, four features (sync-towns, transport-buttons, queue-view, wine-warning),
@@ -427,6 +493,76 @@ Added 03/10 (§14):
   `@run-at` in either header (checked in `dist/`). Empire Overview inserts
   its menu entry at module evaluation (`debug.ts`), Send Resources inside
   `start()`.
+
+Added 03/10, later, from the first saved bug report
+(`tools/output/ikariam-bug-report-Smalldevil-2026-10-03-14-10-08.json`) and
+two pasted ones (§15):
+
+- **The game's `createPopup` is `r(e, t, o, a, n)`.** `e` the popup's id,
+  `t` its title, `o` HTML or `[message, links, firstButton, secondButton]`,
+  `a` the popup type — compared with `ikariam.PopupController.TYPE_BUBBLE`
+  (a feedback bubble tip) and `TYPE_HEAVY` (a modal background); anything
+  else is a plain popup — and `n` a class added to the root after
+  `popupMessage` (`null` adds none). The numeric values of `TYPE_*` were not
+  captured; IkaEasy passes `1`. Neither script wraps the function, so it can
+  be read with both scripts on.
+- **`[name, null]` is a normal response entry**, not a malformed one: the
+  report held `["ingameCounterData", null]` (index 5 of 7) from a town
+  switch, matching the 02/10 measurement of `updateBacklink`, `popupData`,
+  `removeIngameCounterData` and `ingameCounterData` arriving `null`.
+- **A pasted report is cut at 50,000 characters.** Both pastes of 03/10 lost
+  their end — the part `gameData` sits in. That is why Bug Report saves a
+  file now.
+- **An Auto Build switch to M-Eretria (city id 297042) did not land, more
+  than once**, and the runner threw every second instead of dropping the
+  task after five. The facts and what is not known are in §6; the town did
+  land later (the 14:10 report's URL is `?view=city&cityId=297042&…`, and
+  `#changeCityForm` read "M-Eretria").
+
+Added 03–04/10, from two more saved reports
+(`tools/output/ikariam-bug-report-Smalldevil-2026-10-03-16-04-51.json` and
+`…-16-06-58.json`; §16):
+
+- **On the game's page `console.error` is not a function.** The 16:06 file
+  holds `TypeError: console.error is not a function` x84 at
+  `TaskRunner.tick` of Send Resources, one per second, in step with the
+  switch errors. `console.log` works (the game's own `createPopup` calls
+  it). Send Resources runs `@grant none` and so uses the page's console. Any
+  bare `console.error`/`console.warn` there can throw.
+- **The shipment form, as `?view=transport&destinationCityId=<id>` draws
+  it** (the 16:04 file, opened for M-Corinth): `<form
+  onsubmit="checkTransporterForm();return false;" id="transportForm"
+  method="POST">`, hidden `action=transportOperations`,
+  `function=loadTransportersWithFreight`, **`destinationCityId=297035`**,
+  `islandId`, `oldView`, `position`, `avatar2Name`, `city2Name`, `type`,
+  `activeTab`, `transportDisplayPrice`, `usedFreightersShips`
+  (`#use_freighter_ships`), `capacity` (`#textfield_capacity`),
+  `max_capacity`, `jetPropulsion` (`#textfield_jet`). Cargo fields
+  `#textfield_wood` (`cargo_resource`), `#textfield_wine`
+  (`cargo_tradegood1`), `_marble` (`…2`), `_glass` (`…3`), `_sulfur`
+  (`…4`), each with `a.setMin`/`a.setMax` (`#slider_<name>_min/max`). Ships:
+  `#textfield_premium`, `#selectedTransportersInput`
+  (`normalTransportersMax`), `#selectedFreightersInput`,
+  `#slider_freighters_max`, `#transporterCount`, `#freightersCount`. Submit:
+  `input#submit.button.action_bubble`, value "Transport goods". A trade
+  route form follows (`#tradeRouteTime`, `#js_tradeRouteButton`). **Every
+  selector the old code used for the form still matches**; only the
+  destination list was gone.
+- **The userscripts installed in the browser were older than the 03/10
+  22:54 `dist/`**: the 16:04 file still listed the panel's own buttons
+  (`OWN_CONTROLS` absent) and Empire Overview still reported
+  `Malformed … [name, null]` (x255), both fixed in that `dist/`. Check
+  which build is installed before reading a report as evidence of a fix.
+- **Another M-Eretria switch that did not land**, timed: 23:05:34 the form
+  was sent; at 23:05:36 the page was in **W-Athens**, and the task threw
+  every second for 30 s; at 23:06:04 it was sent again and **no reload came
+  within 15 s** (`gotoTown(M-Eretria): timed out after 15000ms`). The last
+  URL had **no `cityId`** (`?view=city&oldBackgroundView=city&…`). Empire
+  Overview's wrapper around `ajaxHandlerCallFromForm` was ruled out: its
+  only `formSubmit` subscriber returns at once, as there is no
+  `ikariam["changeCityFormSubmitted"]`. The cause is still unknown.
+- Two `Script error.` (uncaught, one per script) are cross-origin errors
+  with no detail; nothing to act on.
 
 ---
 
@@ -899,14 +1035,83 @@ Added 03/10, each chosen by the user unless marked (§14):
 - **The `s201`/`s202` divide-by-3 in the tooltip is untouched** — the user
   did not mention it.
 
+Added 03/10, later, each chosen by the user unless marked (§15):
+
+- **Bug Report always saves a JSON file, never the clipboard**, even with
+  no bug recorded, through the existing `downloadJson`. File name
+  `ikariam-bug-report-<account>-<UTC time>.json` (`timestampedFilename` with
+  a prefix). `ikaBugReport()` in the console returns the same full report.
+- **The report carries `gameData`** — the data the plan waits on, read from
+  the page at the press: `createPopupSource` and `shipmentForm` (the §2.A
+  console command's fields). Each piece is read in its own `try`.
+- **Saved, then cleared.** The user was asked "clear first, then save" (the
+  file would never hold a bug) against "save, then clear", and chose the
+  second.
+- **`visibleControls` leaves out this script's own controls** (its window,
+  launcher and settings dialogs — `OWN_CONTROLS` in `diagnostics.ts`).
+- **`createPopup(…, null, null)`**: a plain popup, no extra class — the
+  original's `"???"` matched no type and `"class"` styled nothing.
+- **Empire Overview skips `[string, null]` without a bug record**; any other
+  bad shape is still recorded.
+- **Offered and not taken (yet):** dropping the seconds from the "did not
+  land" message so repeats aggregate; attaching the last ~200 log lines to
+  Bug Report; a Clear Bugs button (made moot by save-then-clear). *The
+  first two were taken on 03–04/10 (§16).*
+
+Added 03–04/10, each chosen by the user unless marked (§16):
+
+- **No bare `console.error`/`console.warn` in core or Send Resources.**
+  `writeToConsole(level, …args)` in `core/logger.ts` calls the level if it
+  is a function, else `console.log`, else nothing, and never throws;
+  `logInfo` uses it too. Empire Overview (sandboxed) and the extension's
+  content script keep theirs — chosen here.
+- **Varying figures go to the log, not into an error message**: the "did
+  not land" message is fixed text, the seconds are logged just before.
+- **Bug Report carries the newest 200 log lines**, newest first, read from
+  storage so they span page loads.
+- **The shipment form is opened with `ajaxHandlerCall("?view=transport&destinationCityId=<id>")`**
+  and filled only once its hidden `destinationCityId` holds that id (15 s).
+  The city id is the dropdown entry's `selectvalue`. Calling it directly
+  rather than clicking the transport panel's `a.action_transport` was
+  chosen here (the same call, without depending on the panel listing the
+  town); the user approved the route. `townHasPort` checks the sea slots
+  without clicking; the old list code is deleted with no fallback.
+- **The queue's ▶ and the status line follow `TaskRunner.currentTaskId`**
+  (the running task, or the one the next tick would pick); none while the
+  runner is stopped — chosen here.
+- **"Warning wine" once per town until it clears** (the user's choice of
+  three): `wineWarnedCityIds`, in memory, so a page load warns once again.
+- **Space belongs to Empire Overview alone** (the user's choice). The Send
+  Resources window opens from its menu entry and closes with × or Escape.
+- **Small ones, approved as a list:** resource labels and `DURATION` in the
+  dialogs, no Close button in Auto Build Settings, `needingShip` rounds up,
+  a month is 30 days in both formatters. The Crawl Building button stays:
+  the user still has buildings to crawl. *The Close button came back the
+  same day (§17).*
+
+Added 04/10, each chosen by the user unless marked (§17):
+
+- **The panel's queue and Transport Settings' shipment table show at most
+  ten rows (`VISIBLE_ROWS`) and scroll the rest.** Measured, not a fixed
+  height (chosen here): `capVisibleRows` sets the box's `max-height` to the
+  bottom of row ten, because a row's height differs between this script's
+  window and the game's popup. A box that is not laid out keeps its cap;
+  the queue sets it on the next redraw with the panel open. The header row
+  scrolls with the rows — the user did not ask for it to stay. It lives in
+  `core/dom.ts`, not reused from Empire Overview's `fitTownRows`: Send
+  Resources must not depend on the board.
+- **Auto Build Settings has Save and Close again**, both closing the dialog
+  — this reverses §16's removal.
+
 ---
 
 ## 6. What is blocked, and on what
 
-**Blocked on a capture, and ahead of everything else: the trading port (§0).**
-Two crawler pastes are needed — one with `#js_transportPanel` open, one with the
-shipment form on screen. Until then no shipment can run, so nothing downstream
-can be tested by hand either.
+~~**Blocked on a capture, and ahead of everything else: the trading port
+(§0).**~~ **Resolved in code 04/10 (§16):** the 03/10 23:04 Bug Report caught
+the shipment form. What now comes first is **trying it on the game** with a
+small shipment — Auto Wine and every shipment test depend on it. **Tried
+04/10: "roughly ok"** (§17).
 
 **Resolved 26/09: Auto Build "losing its queue".** On `SClone1` it was every
 task failing with `Town "S-Clone1" not found` (the coordinates, §2) and being
@@ -944,8 +1149,9 @@ task only comes back on the next load or Start. That design is unchanged.
   breadcrumb by more than 1200 ms, wait for the game to go idle like
   `switchTownWithGameForm` does.
 
-**Also waiting on the retest:** everything in §12 and §13 (needs a rebuild
-first),
+*Retested 04/10 by the user: "roughly ok" (§17) — the paragraph below is
+kept for its specific risks.* **Also waiting on the retest:** everything in §12 to §15 (all in the
+03/10 22:54 `dist/`),
 everything in §10 (each round's "try on the
 game" list is in the plan, §2.F–2.H), everything in the plan's §2.I–2.J
 (same, at the end of each part), the board dialog for another town (§9
@@ -968,11 +1174,52 @@ flashes and vanishes, wait for the game to go idle first, as
 `expandable` class is the cause, and the entry is built without it (§2,
 §14). The `cityMenu` probe in the plan was never run and is not needed.
 
-**Blocked on the user: the names of `createPopup`'s last two parameters**
-(`arg4`, `arg5` in `core/ikariam/globals.ts`), the one review finding left
-open against the naming rule. Every source, including the original, passes
-`"???", "class"`. Needed: `copy(ikariam.createPopup.toString())` from the
-console with both scripts off.
+~~**Blocked on the user: the names of `createPopup`'s last two
+parameters.**~~ **Resolved 03/10** from the source in the first saved bug
+report: `popupType` and `className` (§2, §15).
+
+**Blocked on a log: the Auto Build town switch to M-Eretria (§15).** Two
+pasted bug reports (03/10, 901 then 928 occurrences, both cut at 50,000
+characters) were nearly all one error from `gotoTown`, task "Academy 12" in
+M-Eretria (city id 297042): `The switch to "M-Eretria" sent Ns ago did not
+land (now in "W-Athens")` — an earlier group said `"M-Syracuse"`. What is
+known:
+
+- The guard in `gotoTown` worked as written: a switch noted in
+  `sessionStorage` (`ika_pendingTownSwitch`) and not landed is not sent
+  again within 30 s; the task throws instead.
+- **The same task id threw every second, 7–12 times or more in a row**,
+  although `TaskRunner` drops a task after 5 consecutive throws
+  (`maxConsecutiveErrors`). The streak lives in memory, so this means either
+  the page reloaded about every second, or two runners were counting.
+  Nothing in the report tells which.
+- The first report's URL was `?view=city&oldBackgroundView=island&…` with
+  **no `cityId`** — not the `?view=city&cityId=<target>` reload a switch
+  produces (§2, "Added 02/10"); it looks like a return from the island view.
+  Whether the player was clicking around is not known.
+- Later the town did land: the 14:10 report's URL is
+  `?view=city&cityId=297042&…` and `#changeCityForm` read "M-Eretria".
+- **The message carries the seconds**, so each second made a new fingerprint
+  and the 50-record buffer filled with them — older bugs were evicted and
+  the reports grew past what a paste keeps.
+
+Needed: the log around it (`Going to town …`, `Back to the town view: …`,
+`This tab now runs…`, reload lines). A bug report does not carry the log
+yet; both fixes (log in the report, no seconds in the message) were offered
+and are waiting on the user.
+
+**Update 03–04/10 (§16):** the runner's half is found and fixed — its own
+`console.error(e)` threw on the game's page, so the streak was never
+counted; it now drops the task after five throws. The message no longer
+carries the seconds, and Bug Report now carries the last 200 log lines.
+A second timeline is in §2 ("Added 03–04/10"): one switch landed in
+W-Athens, the next produced no reload at all within 15 s. **Why the switch
+does not land is still unknown**; the next report from the current build
+should hold the log that tells.
+
+**Update 04/10 (§17):** it did not come back in the user's test on the
+game ("roughly ok"). The cause was never found; if it returns, the Bug
+Report file now carries the log.
 
 **Item U (29/09, the user's idea) — mostly done 01/10, §11.** It began as
 "a formula instead of the tables"; the user then switched to the game's own
@@ -1071,6 +1318,29 @@ unscheduled things in §7, each waiting for the user to say yes.
   table** by a test in `core/data-transfer.test.ts`. Adding a key without
   classifying it in `core/data-transfer.ts` now fails the suite rather than
   silently dropping out of exports.
+- **Done 04/10 from the lists below (§16):** the Close button in Auto
+  Build Settings is gone (*back again in §17, at the user's request*); `needingShip` rounds up; the queue's ▶ and the
+  status line follow the task the runner is on; "Warning wine" toasts once
+  per town until it clears; a month is 30 days in both formatters; the
+  Transport Settings table shows labels and the Auto Wine dialog takes `"—"`
+  and the hours from `DURATION`; Space no longer toggles both boards. What
+  remains of those lists is marked inline as still open.
+- **Small things left from 03–04/10** (§16): the status line still reads
+  "idle" when the runner's task is an upgrade (`describeCurrentTransfer`
+  describes shipments only). With the runner stopped there is no ▶ at all —
+  chosen, but it reads differently from before. `townHasPort` accepts a
+  `constructionSite` in slot 1 or 2, as the original did, though those
+  slots can hold a shipyard too; a town whose only sea building is a
+  shipyard under construction would open the form and time out. After the
+  submit the handler waits for `#transportForm` to go away; whether the
+  game removes it was not measured (the wait is bounded and never throws).
+  The form capture keeps 20,000 characters of HTML, which cut the 03/10
+  form short — the visible controls cover the rest.
+- **Small things left from 04/10** (§17): the queue's ten-row cap is set
+  on a redraw with the panel open, so a panel opened onto a long queue
+  shows it uncapped for up to one status tick. The header rows of both
+  tables scroll away with the rows. `core/dom.ts` has no test file of its
+  own; `capVisibleRows` is tested through its two callers.
 - **Small things left from 28–29/09, not scheduled:** the panel's status
   line still reads "idle" while the queue head is an Auto Build task
   (`describeCurrentTransfer` only describes `sendResource`); Auto Build
@@ -1114,6 +1384,15 @@ unscheduled things in §7, each waiting for the user to say yes.
   (`cdn/all/both/minimized/transport.png`) and its slide-out CSS (which
   relies on `#container #leftMenu .slot_menu`, like IkaEasy's; `#leftMenu`
   itself has never been captured) have not been seen live.
+- **Small things left from 03/10, later** (§15): the first Bug Report press
+  after this build saves the old records and clears them, so only the
+  second press shows fresh ones. Pressing it clears the bugs whether or not
+  the player keeps the file. The shipment form capture keys on
+  `#textfield_wine`; if the game renamed that field, `present` stays false
+  with the form on screen — `visibleControls` would still list the new
+  fields, so read those before concluding the form is absent. The Bug
+  Report toast reports on both captures every time, even on pages where
+  the form cannot exist.
 - **Two tabs of one account take turns holding the runner lock.** The
   keep-alive reloads the holder, the waiting tab is granted the lock, and
   the reloaded page waits. Only one drives at any moment, which is the
@@ -1422,8 +1701,9 @@ through the form, one reload per town, without looping.
 
 ## 14. The 03/10 round: the menu entry, the window's open state, build times
 
-**Not committed**; not in `dist/`; not tried on the game as built code
-(part 1's cause was measured with console one-liners). The plan's
+Committed as `7ed3a85` (docs in `b45f792`); not pushed; in `dist/` since the
+03/10 22:54 build; not tried on the game as built code (part 1's cause was
+measured with console one-liners). The plan's
 write-up, in Vietnamese, is §2.M (three parts); the measured facts are in §2
 ("Added 03/10"), the decisions in §5 ("Added 03/10"). 537 → 560 tests,
 typecheck (both configs) and prettier clean.
@@ -1496,3 +1776,187 @@ table, then the board's Build-tab time tooltip against the game's own
 upgrade time in a town with a Chronos' Forge and one without; upgrading the
 Forge itself (no reduction); reload with the Send Resources window open,
 then closed.
+
+---
+
+## 15. The later 03/10 round: Bug Report saves a file, `createPopup`, `[name, null]`
+
+**Not committed**; in `dist/` (03/10 22:54, grepped — §1); not tried on
+the game in its final form (the 14:10 report came from an in-between
+build that already saved a file and carried `gameData`). The plan's
+write-up, in Vietnamese, is §2.N (four parts); the facts are in §2 ("Added
+03/10, later"), the decisions in §5 ("Added 03/10, later"), the open
+M-Eretria problem in §6. 560 → 567 tests, typecheck (both configs) and
+prettier clean.
+
+| What | Where |
+| ---- | ----- |
+| `bug.report` always saves `ikariam-bug-report-<account>-<UTC time>.json` through `downloadJson`, then `clearBugs()`; the toast names the file, the count, and whether each capture was there (`BUG_REPORT.saved`) | `send-resources/app.ts` (`BUG_REPORT_FILE_PREFIX`), `ui/data-transfer-ui.ts` (`timestampedFilename(account, prefix)`), `messages.ts` |
+| `captureGameData` (`shipmentForm`, `createPopupSource`, each in its own `try`), `exportFullBugReport` → `{ text, shipmentFormCaptured, createPopupCaptured }`; `OWN_CONTROLS` keeps the script's own window, launcher and dialogs out of `visibleControls`; `ikaBugReport()` returns the full text | `send-resources/diagnostics.ts` |
+| `IkariamPageApi.createPopup(id, title, content, popupType?, className?)`, documented from the game's source; `openPopup` passes `null, null` | `core/ikariam/globals.ts`, `send-resources/ui/dialogs.ts` |
+| `[string, null]` response entries skipped without `reportBug` | `empire-overview/game-api.ts` |
+
+**How it went.** The user asked for the Bug Report button to collect the
+data the plan waits on instead of typing console commands. Two pasted
+reports then arrived cut at 50,000 characters — the end, where `gameData`
+sits, lost — and full of one repeating error (§6), so the button moved to
+saving a file, then to clearing the recorded bugs after saving. The first
+saved file held exactly one bug (the `[name, null]` false positive) and the
+`createPopup` source, which closed §2.D. The shipment form was not in it:
+the button was pressed on the city view.
+
+**Tests, and which were seen red.**
+
+- `app.test.ts`, "Bug Report" (6): file name and toast; saves with no bug,
+  `createPopupSource` present, form reported missing; form captured with
+  exactly the game's three controls (a hidden control and the panel's
+  buttons left out); `createPopup` unreadable; `ikaBugReport()`; cleared
+  after saving and empty the next time. `downloadJson` is captured by a
+  partial mock of `./ui/data-transfer-ui` (hoisted, like `showToast`).
+  happy-dom gives ordinary elements a non-null `offsetParent`, so the
+  hidden control states `offsetParent: null` itself. Red against `HEAD`'s
+  `app.ts` (4), without `clearBugs()` (1), without `OWN_CONTROLS` (1).
+- `app.test.ts`, "Start asks which source…": `createPopup`'s fourth and
+  fifth arguments are `null, null`; red with `"???", "class"`.
+- `startup.test.ts` (1): `popupData` and `ingameCounterData` as `null` make
+  no "Malformed" record and the good entry still runs; red with the new
+  branch disabled. The older REGRESSION test (`["updateBackgroundData"]` is
+  still recorded) stays green.
+
+**One trap from this round:** a message that embeds a changing number
+(`sent ${secondsAgo}s ago`) defeats the bug reporter's deduplication, which
+keys on the message. One fault became dozens of records, pushed everything
+else out of the 50-record buffer, and made the report too long to paste.
+Put variable figures in the context object, not in the message — the
+"did not land" message still does this (offered, not taken yet).
+
+**What to try on the game:** press Bug Report on the Trading Port's
+shipment form ("Transport goods", not sent) and put the file in
+`tools/output/` — that is §2.A's missing capture; open a settings dialog
+(it should look as before); switch town and check the next report has no
+"Malformed ajaxResponse entry".
+
+---
+
+## 16. The 03–04/10 rounds: the runner's console, the trading port, seven small items
+
+**Not committed**; in `dist/` since the 04/10 09:09 build; tried on the game
+by the user the same day — "roughly ok" (§17). The plan's
+write-ups, in Vietnamese, are §2.O (four parts) and §2.P (seven items); the
+facts are in §2 ("Added 03–04/10"), the decisions in §5 ("Added 03–04/10"),
+the still-open M-Eretria switch in §6. 567 → 578 tests, typecheck (both
+configs) clean, prettier clean on every file touched.
+
+| What | Where |
+| ---- | ----- |
+| `writeToConsole`; the runner, `logInfo`, and the `console.warn`s of `bug-report`, `storage`, `ship-capacity`, `ui/actions` use it | `core/logger.ts`, `core/task-queue.ts`, the four files |
+| "did not land" without the seconds; the seconds logged before the throw | `send-resources/navigation.ts` |
+| `log` in the saved report: `recentLogLines(200)` | `core/logger.ts`, `send-resources/diagnostics.ts` |
+| `openShipmentForm`, `townHasPort`; `handleSendResource` uses them and waits for the form to close after the submit; `SEL.shipmentForm`, `SEL.shipmentDestination`; `dockCities`, `cityPositionLink`, `openPort`, `clickDestinationTown`, `adjustDestinationIndex` deleted | `send-resources/navigation.ts`, `features/send-resources.ts`, `core/ikariam/selectors.ts` |
+| Labels and `DURATION.hoursToTenths` in the dialogs; Close button removed | `send-resources/ui/dialogs.ts`, `messages.ts` |
+| `needingShip` with `Math.ceil` | `send-resources/features/barbarian.ts` |
+| Month = 2,592,000 s | `core/format.ts`, `empire-overview/utils.ts` |
+| `TaskRunner.currentTaskId`; `setCurrentTaskSource`, `currentTask` in the queue view; `describeCurrentTransfer(task)` | `core/task-queue.ts`, `send-resources/ui/queue-view.ts`, `app.ts`, `features/send-resources.ts` |
+| `wineWarnedCityIds` | `empire-overview/render.ts` |
+| Space removed from `registerHotkeys`; the launcher calls `togglePanel` | `send-resources/app.ts`, `ui/panel.ts` |
+
+**How it went.** Two Bug Report files (03/10 23:04 and 23:06) arrived. The
+second held `console.error is not a function` at `TaskRunner.tick` — the
+reason a failing task never reached the five-throw limit; the first held
+the shipment form, which unblocked §2.A. The user chose all four follow-ups
+(safe console, no seconds in the message, log in the report, the port),
+then the list of small items, with two questions settled first: "Warning
+wine" once per town until it clears, and Space for Empire Overview only.
+
+**Tests, and which were seen red** (each fix broken on purpose, the matching
+test run, the file restored — §4's round trip):
+
+- `task-queue.test.ts`: the runner still drops a task with
+  `console.error` undefined — red with `console.error(e)` back. Four tests
+  for `currentTaskId` (stopped, running, past a `retry`, past a type
+  `allowsType` refuses).
+- `navigation.test.ts`: the same message at 2 s and 17 s — red with the
+  seconds back. `townHasPort` (3) and `openShipmentForm` (4) replace 9 old
+  tests of the deleted functions.
+- `send-resources.test.ts`: the fake game now opens the form through
+  `ajaxHandlerCall`, with the hidden `destinationCityId`; one new test (no
+  port → `defer`). Against `HEAD`'s `send-resources.ts`, `navigation.ts`
+  and `selectors.ts`, 8 of 13 red — every test that reaches the form.
+- `app.test.ts`: the report's `log` (200 newest of 250 — new, no old
+  version); "Crystal" in the Transport Settings table — red with the raw id;
+  Space leaves the window alone — red with a Space case added back.
+- `format.test.ts`: 30 days is "1M", 29 days 5 hours is "29D 5h" — red with
+  2,520,000. Compared after `trim()`: the formatter pads trailing zero units,
+  as the original did.
+- `queue-view.test.ts`: ▶ follows the source, none for `null` — red with
+  `queue.head()` back.
+- `startup.test.ts`: one toast across refreshes, a second after the town
+  went above the threshold and back — red with the guard disabled. The
+  `renderWine` helper now clears toasts before the response and counts all
+  of them: the old helper cleared them between two draws, so it depended on
+  the toast repeating.
+- No test for the Close button or `needingShip` (`barbarian.ts` has no test
+  file; creating one was not asked for).
+
+**Two traps from this round:**
+
+- **A console call can be the bug.** On the game's page `console.error` is
+  undefined, and a call to it inside a `catch` silently disabled everything
+  after it. Never call `console.*` directly from code that runs in the
+  page; use `writeToConsole`.
+- **Read the installed build, not the `dist/` build.** A report from the
+  browser reflected an older install than the latest `dist/`; two "still
+  broken" findings were already fixed in `dist/`.
+
+**What to try on the game** (after building and reinstalling both
+userscripts): a small shipment through Transport Settings and Transport's
+Start Timer — it should reach the right town and log `Sent N …`; Auto Build
+with a failing switch should give up after five throws instead of every
+second for ever; a Bug Report file should carry `log`; the Barbarian
+Village ship count; "1M" in long upgrade times; the ▶ while a shipment
+waits for ships; "Warning wine" once; Space toggling the Empire board only.
+
+---
+
+## 17. 04/10: the user's test on the game, ten-row lists, Close is back
+
+The plan's write-ups, in Vietnamese, are §2.Q (the test) and §2.R (the
+changes); the decisions are in §5 ("Added 04/10").
+
+**The test.** The user was sent the "try on the game" list, grouped: the
+port (§16), the runner dropping a failing task, the menu entry and the
+build times (§14), §16's small items, every older list — the 26–28/09
+round's bugs 3–6, the 28–29/09 rounds, the 29/09 evening round, both 02/10
+rounds — and the building figures (U/V). Built at 04/10 09:09, which holds
+everything up to §16. The verdict, for that list and for the M-Eretria
+switch: **"cả 2 tạm ok" — both roughly ok.** No Bug Report file, no log
+and no per-item results came with it, so nothing here counts as measured:
+the specific risks written down item by item (the board's scrolling tabs,
+`townHasPort` and a shipyard under construction, …) keep their open
+status. The M-Eretria switch did not come back; its cause was never found.
+
+**The changes** — not committed; in `dist/` (04/10 09:44, grepped); not
+tried on the game. 578 → 583 tests, typecheck (both configs) and prettier
+clean.
+
+| What | Where |
+| ---- | ----- |
+| `capVisibleRows(box, rowSelector, count)`: `max-height` to the bottom of row `count`, `overflow-y: auto`; no cap at or under `count` rows; a box with no layout keeps its cap; `scrollTop` kept | `core/dom.ts` |
+| Queue: the table inside `div.ika-queue-scroll`, capped after every redraw (`tr[data-ika-queue-id]`, `VISIBLE_ROWS` = 10, exported) | `send-resources/ui/queue-view.ts` |
+| Transport Settings: the table inside `div#resourceTableScroll`, capped in `renderResourceTable` (`#resourceTableBody > tr`) | `send-resources/ui/dialogs.ts` |
+| Auto Build Settings: Close (`dialog.close`) back after Save | `send-resources/ui/dialogs.ts` |
+
+**Tests, and which were seen red.** happy-dom has no layout, so the tests
+give every row 20 px by stubbing `getBoundingClientRect` (and restore it).
+`queue-view.test.ts` (3): twelve tasks → `220px` (header plus ten),
+`overflow-y: auto`; ten → no cap; no layout → no meaningless height.
+`app.test.ts` (2): Transport Settings with twelve shipments → `220px` (the
+test imports `renderResourceTable` from the app's own module copy after
+`startWith`); the Auto Build dialog's HTML has both `build.save` and
+`dialog.close`. Red with the queue's cap call removed, with the table's
+removed, and with the Close button removed — one test each.
+
+**What to try on the game:** a queue of more than ten tasks — ten rows, then
+a scroll bar; open the panel after the queue grew — capped within a few
+seconds; Transport Settings with more than ten shipments — scrolls; Auto
+Build Settings — Save and Close.
