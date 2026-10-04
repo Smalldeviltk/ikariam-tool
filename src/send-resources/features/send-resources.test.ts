@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { initState } from "../state";
-import { handleSendResource } from "./send-resources";
+import { initState, routeSeconds } from "../state";
+import { describeCurrentTransfer, handleSendResource } from "./send-resources";
 import type { Task } from "@core/task-queue";
 
 // Silence the logger, but keep its other exports (its storage key is read by
@@ -56,6 +56,12 @@ function installGame(options: {
   shipsAtForm?: { merchants: number; freighters: number };
   /** Draw a town view without a port. */
   noPort?: boolean;
+  /** Draw the only sea slot as a building site (port or shipyard?). */
+  seaSlotUnderConstruction?: boolean;
+  /** The game does not draw the form when asked. */
+  formDoesNotOpen?: boolean;
+  /** Loading and sailing times the form shows, as the game prints them. */
+  times?: { loading: string; journey: string };
 }) {
   const state = {
     view: "",
@@ -78,14 +84,20 @@ function installGame(options: {
     if (view === "town") {
       body += options.noPort
         ? `<div id="position1" class="position1 building shipyard"></div>`
-        : `<div id="position1" class="position1 building port">` +
-          `<a class="hoverable" id="js_CityPosition1Link"></a></div>`;
+        : options.seaSlotUnderConstruction
+          ? `<div id="position1" class="position1 building constructionSite"></div>`
+          : `<div id="position1" class="position1 building port">` +
+            `<a class="hoverable" id="js_CityPosition1Link"></a></div>`;
     } else if (view === "form") {
       body +=
         `<form id="transportForm">` +
         `<input type="hidden" name="destinationCityId" value="${destination}">` +
         `<input type="text" id="textfield_wine" value="0"/>` +
-        `<div id="submit"></div></form>`;
+        `<div id="submit"></div></form>` +
+        (options.times
+          ? `<span id="loadingTime">${options.times.loading}</span>` +
+            `<span id="journeyTime">${options.times.journey}</span>`
+          : "");
     }
     document.body.innerHTML = body;
     wire();
@@ -110,7 +122,7 @@ function installGame(options: {
       state.ajaxCalls.push(url);
       destination =
         new URLSearchParams(url.split("?")[1]).get("destinationCityId") ?? "";
-      render("form");
+      if (!options.formDoesNotOpen) render("form");
     },
   });
 
@@ -313,5 +325,85 @@ describe("handleSendResource", () => {
       status: "retry",
     });
     expect(game.state.submitted).toBe(0);
+  });
+
+  it(
+    "records the route's loading and sailing time for Auto Wine (plan item " +
+      "T), by city ids",
+    async () => {
+      const game = installGame({
+        afterSubmit: "town",
+        times: { loading: "3m 20s", journey: "1h 2m" },
+      });
+      game.render("town");
+
+      await run(shipment(1000));
+
+      // W-Athens (297034) to M-Corinth (297035): 200 s + 3,720 s.
+      expect(routeSeconds("297034", "297035")).toBe(3_920);
+    },
+  );
+
+  it("records nothing when the form shows no time it can read", async () => {
+    const game = installGame({ afterSubmit: "town" });
+    game.render("town");
+
+    await run(shipment(1000));
+
+    expect(game.state.submitted).toBe(1);
+    expect(routeSeconds("297034", "297035")).toBeNull();
+  });
+
+  it(
+    "defers rather than throw when the only sea slot is a building site and " +
+      "no form comes — a shipyard under construction looks the same as a " +
+      "port being upgraded",
+    async () => {
+      const game = installGame({
+        afterSubmit: "town",
+        seaSlotUnderConstruction: true,
+        formDoesNotOpen: true,
+      });
+      game.render("town");
+
+      await expect(run(shipment(1000))).resolves.toMatchObject({
+        status: "defer",
+      });
+      expect(game.state.submitted).toBe(0);
+    },
+  );
+
+  it("still throws when a built port's form does not come", async () => {
+    const game = installGame({ afterSubmit: "town", formDoesNotOpen: true });
+    game.render("town");
+
+    const sending = handleSendResource(shipment(1000));
+    const failed = expect(sending).rejects.toThrow(/timed out/);
+    await vi.advanceTimersByTimeAsync(60_000);
+    await failed;
+  });
+});
+
+describe("describeCurrentTransfer", () => {
+  it(
+    "names an upgrade the runner is on, as the queue does — it read " +
+      "'Nothing is transferring'",
+    () => {
+      expect(
+        describeCurrentTransfer({
+          id: "u1",
+          type: "upgradeBuilding",
+          data: {
+            townName: "W-Athens",
+            positionId: "js_CityPosition4Link",
+            buildingName: "Warehouse 3",
+          },
+        }),
+      ).toBe("Upgrade Warehouse 3 in W-Athens");
+    },
+  );
+
+  it("says nothing is transferring when the runner is on nothing", () => {
+    expect(describeCurrentTransfer(undefined)).toBe("Nothing is transferring");
   });
 });

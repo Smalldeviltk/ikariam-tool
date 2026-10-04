@@ -43,7 +43,7 @@ import { action, moveButtons } from "./actions";
 import { VISIBLE_ROWS } from "./queue-view";
 
 /** The box around the Transport Settings table that scrolls past `VISIBLE_ROWS`. */
-const RESOURCE_TABLE_SCROLL_ID = "resourceTableScroll";
+export const RESOURCE_TABLE_SCROLL_ID = "resourceTableScroll";
 
 function openPopup(title: string, html: string): void {
   const api = getIkariam();

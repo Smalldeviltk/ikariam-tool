@@ -51,7 +51,7 @@ function townAnchor(townNumber: number | string): HTMLElement | null {
  * Measured: `<li selectvalue="297034">` is the town whose model entry is
  * `city_297034`, so this is the bridge from a dropdown index to the model.
  */
-function townCityId(townNumber: number | string): string | null {
+export function townCityId(townNumber: number | string): string | null {
   const node = townNodes()[Number(townNumber)];
   if (!(node instanceof HTMLElement)) return null;
   const cityId = node.getAttribute("selectvalue");
@@ -303,14 +303,23 @@ function clickDropdownTown(townNumber: number | string): boolean {
  * shipment form is opened directly now (`openShipmentForm`).
  */
 export function townHasPort(): boolean {
-  for (const className of ["port", "constructionSite"]) {
-    for (const position of [1, 2]) {
-      if (qs(SEL.position(position))?.className.includes(className)) {
-        return true;
-      }
-    }
-  }
-  return false;
+  return townHasBuiltPort() || seaSlotHas("constructionSite");
+}
+
+/**
+ * Whether a sea slot holds a port that is not under construction. A slot
+ * under construction cannot be told apart: it reads `building
+ * constructionSite` whatever is being built there (measured 26/09), and the
+ * other sea building is the shipyard.
+ */
+export function townHasBuiltPort(): boolean {
+  return seaSlotHas("port");
+}
+
+function seaSlotHas(className: string): boolean {
+  return [1, 2].some((position) =>
+    qs(SEL.position(position))?.className.includes(className),
+  );
 }
 
 /** How long the shipment form has to appear after asking for it. */

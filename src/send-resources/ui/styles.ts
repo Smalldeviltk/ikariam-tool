@@ -16,6 +16,8 @@
 
 import { DIALOG_ID } from "@core/ikariam/selectors";
 import { FLAG, isFlagTrue } from "../state";
+import { RESOURCE_TABLE_SCROLL_ID } from "./dialogs";
+import { QUEUE_SCROLL_CLASS } from "./queue-view";
 
 export function buildStyles(): string {
   const panelDisplay = isFlagTrue(FLAG.isSendResourceHidden) ? "none" : "block";
@@ -56,6 +58,15 @@ th { font-weight: bold; }
 .ika-queue-table button { padding: 0 4px; margin-left: 2px; height: 18px; line-height: 1; }
 .ika-move:disabled { opacity: 0.4; cursor: default; }
 .ika-queue-empty { font-style: italic; color: #6b5433; margin: 2px 0 4px; }
+
+/* The two lists capped at ten rows (capVisibleRows): their header row
+   stays in place while the rows scroll. .fullTable hides its overflow,
+   which would make the table itself the scroll container that sticky
+   holds to; inside these boxes it is let through to the box. */
+.${QUEUE_SCROLL_CLASS} > table, #${RESOURCE_TABLE_SCROLL_ID} > table { overflow: visible; }
+.${QUEUE_SCROLL_CLASS} th, #${RESOURCE_TABLE_SCROLL_ID} thead th {
+  position: sticky; top: 0; z-index: 1; background: #f8e7b3;
+}
 
 .needingShip {
   background: url("cdn/all/both/characters/fleet/40x40/ship_transport_r_40x40.png") no-repeat 0 0;

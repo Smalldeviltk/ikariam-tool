@@ -4,6 +4,7 @@ import {
   getState,
   initState,
   loadReceivers,
+  recordRouteSeconds,
   saveReceivers,
   saveSenders,
 } from "../state";
@@ -143,6 +144,35 @@ describe("buildWineTowns", () => {
     const [town] = buildWineTowns([{ townNumber: "1", winePerHour: "0" }]);
     expect(town).not.toHaveProperty("capacity");
   });
+
+  it(
+    "carries the recorded time of the route from the source, so the plan " +
+      "counts the wine drunk on the way (plan item T)",
+    () => {
+      // City ids are what routes are recorded by.
+      document.body.innerHTML =
+        `<div id="dropDown_js_citySelectContainer"><div class="bg"><ul>` +
+        TOWNS.map(
+          (n, i) => `<li selectvalue="${100 + i}"><a>${n}</a></li>`,
+        ).join("") +
+        `</ul></div></div>` +
+        renderBoard([boardRow("Sparta", "21,657", "-350")]);
+      recordRouteSeconds("100", "101", 2 * 3600);
+
+      const [fromAthens, toCorinth] = buildWineTowns(
+        [
+          { townNumber: "1", winePerHour: "0" },
+          { townNumber: "2", winePerHour: "244" },
+        ],
+        undefined,
+        "0",
+      );
+
+      expect(fromAthens.transitHours).toBe(2);
+      // Never shipped to: no time, and nothing counted.
+      expect(toCorinth).not.toHaveProperty("transitHours");
+    },
+  );
 });
 
 describe("getSourceReserve", () => {
@@ -298,7 +328,9 @@ describe("enqueueWineRun", () => {
     enqueueWineRun("0");
 
     const [queued] = getState().queue.listOfType("sendResource");
-    expect(queued.data).toMatchObject({ reserve: 525, amount: 32_495 - 525 });
+    // The 31,970 spare (32,495 less the 525 reserve) goes in whole ships of
+    // 500 (uncalibrated): 63 of them, 31,500.
+    expect(queued.data).toMatchObject({ reserve: 525, amount: 31_500 });
   });
 
   it(

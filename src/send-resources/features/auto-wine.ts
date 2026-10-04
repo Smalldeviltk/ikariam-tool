@@ -12,18 +12,21 @@
  */
 
 import { qs, qsa } from "@core/dom";
+import { SECONDS_PER_HOUR } from "@core/format";
 import { logInfo } from "@core/logger";
 import { getCurrentTownName } from "@core/ikariam/globals";
 import { SEL } from "@core/ikariam/selectors";
 import { showToast } from "@core/ui/window";
 import { parseAmount, readCurrentWine } from "../game-state";
 import { AUTO_WINE } from "../messages";
-import { getTownList, getTownNameFromList } from "../navigation";
+import { getTownList, getTownNameFromList, townCityId } from "../navigation";
+import { getPerShipCapacity } from "../ship-capacity";
 import {
   AUTO_WINE_LABEL,
   getState,
   loadReceivers,
   loadSenders,
+  routeSeconds,
   saveReceivers,
 } from "../state";
 import type { WineReceiver } from "../types";
@@ -132,12 +135,19 @@ export function measuredStats(
  *
  * Storage capacity only ever comes from the town cache: the board does not
  * carry it. A town whose capacity is unknown is not capped.
+ *
+ * With `fromTown`, each town also carries the hours a shipment from there
+ * takes to reach it, as the last shipment on that route showed them
+ * (`recordRouteSeconds`), so the plan counts the wine drunk on the way. A
+ * route never shipped yet has no time, and nothing is counted for it.
  */
 export function buildWineTowns(
   receivers: readonly WineReceiver[],
   board = readWineBoard(),
+  fromTown?: string,
 ): WineTown[] {
   const store = getState().account;
+  const fromCityId = fromTown === undefined ? null : townCityId(fromTown);
   return receivers.map((receiver) => {
     const townName = townNameOf(receiver.townNumber);
     const measured = measuredStats(townName, board);
@@ -149,6 +159,12 @@ export function buildWineTowns(
     };
     const capacity = projectedStats(store, townName)?.capacity;
     if (capacity !== undefined) town.capacity = capacity;
+    const toCityId = townCityId(receiver.townNumber);
+    const seconds =
+      fromCityId === null || toCityId === null
+        ? null
+        : routeSeconds(fromCityId, toCityId);
+    if (seconds !== null) town.transitHours = seconds / SECONDS_PER_HOUR;
     return town;
   });
 }
@@ -223,7 +239,11 @@ export function planWineRun(fromTown: string): WineRunPlan {
     supply,
     reserve,
     boardAvailable: board.size > 0,
-    ...distributeWine(buildWineTowns(receivers, board), supply),
+    // Whole merchant ships (plan item S), and the wine drunk on the way to
+    // each town (plan item T).
+    ...distributeWine(buildWineTowns(receivers, board, fromTown), supply, {
+      shipCapacity: getPerShipCapacity(),
+    }),
   };
 }
 

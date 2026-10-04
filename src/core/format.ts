@@ -57,6 +57,28 @@ export function formatTimeLengthToStr(
 }
 
 /**
+ * Read a duration as the game prints it — `"1h 22m 5s"`, `"2D 3h"`, `"45m"` —
+ * into seconds, with the same units as `formatTimeLengthToStr` (`M` is a
+ * month, `m` a minute). `null` when the text holds no duration or a unit
+ * this does not know (another language's units, say): a wrong figure is
+ * worse than none.
+ */
+export function parseDurationSeconds(
+  text: string | null | undefined,
+): number | null {
+  const tokens = (text ?? "").trim().match(/\d+\s*[A-Za-z]+/g);
+  if (!tokens) return null;
+  let seconds = 0;
+  for (const token of tokens) {
+    const [, digits, suffix] = token.match(/(\d+)\s*([A-Za-z]+)/)!;
+    const factor = TIME_FACTORS.find(([unit]) => unit === suffix)?.[1];
+    if (factor === undefined) return null;
+    seconds += Number(digits) * factor;
+  }
+  return seconds;
+}
+
+/**
  * Format a number with thousand separators: `1234567` -> `"1,234,567"`.
  *
  * Keeps one quirk of the original: for input `0` it returns the NUMBER `0`,

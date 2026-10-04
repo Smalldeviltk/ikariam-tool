@@ -16,6 +16,7 @@
 
 import { qs, setInputValue, waitForElement } from "@core/dom";
 import { sleep, waitFor } from "@core/async";
+import { parseDurationSeconds } from "@core/format";
 import { logInfo } from "@core/logger";
 import { SEL } from "@core/ikariam/selectors";
 import type { Task, TaskResult } from "@core/task-queue";
@@ -24,12 +25,14 @@ import {
   getTownNameFromList,
   gotoTown,
   openShipmentForm,
+  townCityId,
+  townHasBuiltPort,
   townHasPort,
 } from "../navigation";
 import { getActionPoints, getFreeShips, readCurrentStock } from "../game-state";
 import { getFreighterCapacity, getPerShipCapacity } from "../ship-capacity";
-import { getState } from "../state";
-import { TRANSFER_STATUS } from "../messages";
+import { getState, recordRouteSeconds } from "../state";
+import { QUEUE_VIEW, TRANSFER_STATUS } from "../messages";
 import type { ResourceId } from "../types";
 
 /**
@@ -47,6 +50,29 @@ const POST_SUBMIT_TIMEOUT_MS = 5_000;
  * recalculates ship counts and the mission summary from the field's events.
  */
 const FORM_SETTLE_MS = 500;
+
+/**
+ * Note how long this route takes — loading plus sailing, as the open form
+ * shows them — for Auto Wine, which counts the wine drunk on the way
+ * (`buildWineTowns`). Nothing is recorded when the form shows no time this
+ * can read. Never throws: it runs with the cargo entered.
+ */
+function recordRouteTime(origin: string, destination: string): void {
+  try {
+    const sailing = parseDurationSeconds(
+      qs(SEL.shipmentJourneyTime)?.textContent,
+    );
+    if (sailing === null) return;
+    const loading =
+      parseDurationSeconds(qs(SEL.shipmentLoadingTime)?.textContent) ?? 0;
+    const from = townCityId(origin);
+    const to = townCityId(destination);
+    if (from === null || to === null) return;
+    recordRouteSeconds(from, to, sailing + loading);
+  } catch {
+    // A courtesy for the next plan; the shipment matters more.
+  }
+}
 
 /** Queue one shipment. */
 export function enqueueSendResource(
@@ -156,7 +182,23 @@ export async function handleSendResource(
   // Straight to the form for this destination, the way the game's transport
   // panel opens it. It replaces clicking the port and then the destination in
   // a town list the game no longer draws (improvement-plan.md §2.A).
-  await openShipmentForm(destination);
+  //
+  // A sea slot under construction may be the port being upgraded, or the
+  // shipyard — the slot does not say. When that is all the town has and no
+  // form comes, this town cannot ship now: defer, so other shipments run and
+  // this one is tried again later, rather than throw and be dropped.
+  const onlyUnderConstruction = !townHasBuiltPort();
+  try {
+    await openShipmentForm(destination);
+  } catch (error) {
+    if (!onlyUnderConstruction) throw error;
+    return {
+      status: "defer",
+      reason:
+        `${getTownNameFromList(origin)} has no port to ship from ` +
+        `(its sea slot is under construction)`,
+    };
+  }
 
   // Ship counts are re-read HERE, not before navigating. The original read them
   // inside `enterValue`, i.e. once the port form was up, and several seconds of
@@ -193,6 +235,8 @@ export async function handleSendResource(
   setInputValue(field, String(sentAmount));
 
   await sleep(FORM_SETTLE_MS);
+  // Before the submit, while the form still shows this convoy's times.
+  recordRouteTime(origin, destination);
   qs<HTMLElement>(SEL.submit)?.click();
 
   // PAST THIS POINT THE GOODS HAVE LEFT. Nothing below may throw: the runner
@@ -225,7 +269,12 @@ export async function handleSendResource(
  * the upgrades behind it run.
  */
 export function describeCurrentTransfer(task: Task | undefined): string {
-  if (!task || task.type !== "sendResource") return TRANSFER_STATUS.idle;
+  if (!task) return TRANSFER_STATUS.idle;
+  // An upgrade is named the way the queue names it; the line read "Nothing
+  // is transferring" while the runner was on one.
+  if (task.type === "upgradeBuilding") {
+    return QUEUE_VIEW.upgrade(task.data.buildingName, task.data.townName);
+  }
   const { amount, resource, origin, destination } = task.data;
   return (
     `${amount} ${resource} from ${getTownNameFromList(origin)} ` +

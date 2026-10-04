@@ -36,7 +36,7 @@ const MAX_ROWS = 50;
 export const VISIBLE_ROWS = 10;
 
 /** The box around the table that scrolls past `VISIBLE_ROWS`. */
-const QUEUE_SCROLL_CLASS = "ika-queue-scroll";
+export const QUEUE_SCROLL_CLASS = "ika-queue-scroll";
 
 /**
  * Id of the task the runner is on, or `null` when it runs nothing. The app

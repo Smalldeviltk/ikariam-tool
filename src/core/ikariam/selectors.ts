@@ -68,6 +68,12 @@ export const SEL = {
    * gone from the game; the destination is no longer picked from a list.
    */
   shipmentForm: "#transportForm",
+  /**
+   * The shipment's loading and sailing times, as the form shows them. Read
+   * by IkaEasy V4 (`js/page/tpl/transport.js`); not yet in a capture here.
+   */
+  shipmentLoadingTime: "#loadingTime",
+  shipmentJourneyTime: "#journeyTime",
   shipmentDestination: (cityId: string) =>
     `#transportForm input[name="destinationCityId"][value="${cityId}"]`,
 

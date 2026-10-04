@@ -84,6 +84,7 @@ const ACCOUNT_SUFFIXES: Record<string, DataGroup> = {
   listSender: "config",
   listReceiver: "config",
   ikaTownStats: "measurements",
+  ikaRouteTimes: "measurements",
   ikaGlobalTaskQueue: "runtime",
   resource: "runtime",
 };

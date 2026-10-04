@@ -37,6 +37,19 @@
  * town cannot take is NOT handed on to the others: it stays at the source and
  * is reported in `unused`, to be split on the next run. So `targetHours` is
  * the level the uncapped towns reach, and a capped town may end below it.
+ *
+ * ── Wine drunk on the way (plan item T) ─────────────────────────────────────
+ * A town keeps drinking while its wine is at sea. With `transitHours` known,
+ * everything here works on the stock it will have when the ships arrive,
+ * `stock − consume × transitHours` (never below 0), so it is topped up to the
+ * same hours at arrival rather than at departure. `stock` in the result stays
+ * the stock now; `finalHours` is counted from arrival.
+ *
+ * ── Whole ships (plan item S) ───────────────────────────────────────────────
+ * With `shipCapacity`, a share of one ship or more is rounded DOWN to whole
+ * ships — 621 wine went as two merchant ships, one of them carrying 1 — and
+ * the part rounded off stays at the source, in `unused`. A share under one
+ * ship is sent as it is: the user chose not to leave such a town without.
  */
 
 export interface WineTown {
@@ -49,6 +62,22 @@ export interface WineTown {
   consume: number;
   /** Most wine the town can hold. Absent when unknown, and then not enforced. */
   capacity?: number;
+  /**
+   * Hours from now until a shipment reaches this town (loading and sailing).
+   * Absent when not known, and then nothing is drunk on the way.
+   */
+  transitHours?: number;
+}
+
+export interface WineDistributionOptions {
+  /** One ship's cargo. Shares of one ship or more go in whole ships. */
+  shipCapacity?: number;
+}
+
+/** The wine a town will hold when a shipment leaving now arrives. */
+function stockOnArrival(town: WineTown): number {
+  const drunk = town.consume * Math.max(0, town.transitHours ?? 0);
+  return Math.max(0, town.stock - drunk);
 }
 
 export interface WineAllocation {
@@ -58,7 +87,7 @@ export interface WineAllocation {
   consume: number;
   /** Wine to ship to this town — a non-negative integer. */
   add: number;
-  /** Hours it can hold out after receiving. */
+  /** Hours it can hold out after receiving, counted from the arrival. */
   finalHours: number;
   /**
    * The town's storage could not take its full share, so `add` was trimmed
@@ -92,8 +121,13 @@ export interface WineDistributionResult {
 export function distributeWine(
   towns: readonly WineTown[],
   supply: number,
+  options: WineDistributionOptions = {},
 ): WineDistributionResult {
-  const candidates = towns.filter((t) => t.consume > 0);
+  const candidates = towns
+    .filter((t) => t.consume > 0)
+    // From here on `stock` means the stock on arrival; the real one is
+    // restored in the result.
+    .map((t) => ({ ...t, stock: stockOnArrival(t) }));
   const budget = Math.floor(Math.max(0, supply));
 
   if (candidates.length === 0 || budget <= 0) {
@@ -105,7 +139,7 @@ export function distributeWine(
         stock: t.stock,
         consume: t.consume,
         add: 0,
-        finalHours: t.consume > 0 ? t.stock / t.consume : Infinity,
+        finalHours: t.consume > 0 ? stockOnArrival(t) / t.consume : Infinity,
         storageFull: false,
       })),
       used: 0,
@@ -188,6 +222,19 @@ export function distributeWine(
     }
   }
 
+  // Whole ships: round a share of one ship or more down to a multiple of
+  // the cargo. What is rounded off stays at the source.
+  const cargo = options.shipCapacity ?? 0;
+  if (cargo > 0) {
+    for (const town of active) {
+      const share = add.get(town.townNumber) ?? 0;
+      if (share < cargo) continue;
+      const whole = Math.floor(share / cargo) * cargo;
+      add.set(town.townNumber, whole);
+      used -= share - whole;
+    }
+  }
+
   const allocations: WineAllocation[] = towns.map((town) => {
     const amount = activeIds.has(town.townNumber)
       ? (add.get(town.townNumber) ?? 0)
@@ -199,7 +246,9 @@ export function distributeWine(
       consume: town.consume,
       add: amount,
       finalHours:
-        town.consume > 0 ? (town.stock + amount) / town.consume : Infinity,
+        town.consume > 0
+          ? (stockOnArrival(town) + amount) / town.consume
+          : Infinity,
       storageFull: trimmed.has(town.townNumber),
     };
   });

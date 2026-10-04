@@ -278,6 +278,36 @@ describe("the queue group", () => {
     buildPanel();
   });
 
+  it(
+    "is redrawn the moment the window opens — its ten-row cap can only be " +
+      "measured on screen, and it waited for the next status tick",
+    () => {
+      togglePanel(); // closed
+      getState().queue.push({
+        type: "sendResource",
+        data: { origin: "0", destination: "1", resource: "wine", amount: 7 },
+      });
+      expect(document.querySelector("#ikaQueueList")!.textContent).toContain(
+        "queue is empty",
+      );
+
+      togglePanel(); // open again
+
+      expect(
+        document.querySelector("#ikaQueueList")!.textContent,
+      ).not.toContain("queue is empty");
+    },
+  );
+
+  it("keeps the header rows of the capped lists in place while they scroll", () => {
+    const css = [...document.querySelectorAll("style")]
+      .map((style) => style.textContent)
+      .join("\n");
+    expect(css).toMatch(
+      /\.ika-queue-scroll th, #resourceTableScroll thead th \{\s*position: sticky;/,
+    );
+  });
+
   it("is drawn as soon as the window is built", () => {
     expect(document.querySelector("#ikaQueueList")).toBeTruthy();
     expect(document.querySelector("#ikaQueueList")!.textContent).toContain(

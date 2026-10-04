@@ -198,3 +198,66 @@ describe("distributeWine with storage limits", () => {
     expect(result.allocations.every((a) => a.add <= 1_000)).toBe(true);
   });
 });
+
+describe("whole ships (plan item S)", () => {
+  it(
+    "rounds a share of one ship or more down to whole ships, and keeps the " +
+      "rest at the source — 621 wine went as two ships, one carrying 1",
+    () => {
+      const plain = distributeWine([town("A", 0, 100)], 621);
+      expect(plain.allocations[0].add).toBe(621);
+
+      const result = distributeWine([town("A", 0, 100)], 621, {
+        shipCapacity: 620,
+      });
+      expect(result.allocations[0].add).toBe(620);
+      expect(result.used).toBe(620);
+      expect(result.unused).toBe(1);
+    },
+  );
+
+  it("sends a share under one ship as it is", () => {
+    const result = distributeWine([town("A", 0, 100)], 300, {
+      shipCapacity: 620,
+    });
+    expect(result.allocations[0].add).toBe(300);
+    expect(result.unused).toBe(0);
+  });
+
+  it("never ships more than the supply, whatever the rounding", () => {
+    const result = distributeWine(SAMPLE_TOWNS, SAMPLE_SUPPLY, {
+      shipCapacity: 620,
+    });
+    for (const allocation of result.allocations) {
+      if (allocation.add >= 620) expect(allocation.add % 620).toBe(0);
+    }
+    expect(result.used + result.unused).toBe(SAMPLE_SUPPLY);
+  });
+});
+
+describe("wine drunk on the way (plan item T)", () => {
+  it(
+    "tops a town up to the same hours at the arrival — a town four hours " +
+      "away has drunk four hours more by then",
+    () => {
+      const near = town("Near", 1_000, 100);
+      const far = { ...town("Far", 1_000, 100), transitHours: 4 };
+
+      const result = distributeWine([near, far], 2_000);
+      const [toNear, toFar] = result.allocations;
+
+      // On arrival Near holds 1,000 and Far 600; both end at 13 hours.
+      expect(toFar.add - toNear.add).toBe(400);
+      expect(toNear.finalHours).toBeCloseTo(toFar.finalHours);
+      // The stock reported is the stock now, not on arrival.
+      expect(toFar.stock).toBe(1_000);
+    },
+  );
+
+  it("drinks no further than empty", () => {
+    const dry = { ...town("Dry", 100, 100), transitHours: 10 };
+    const result = distributeWine([dry], 500);
+    expect(result.allocations[0].add).toBe(500);
+    expect(result.allocations[0].finalHours).toBe(5);
+  });
+});

@@ -4,6 +4,7 @@ import {
   formatNumToStr,
   formatTimeLengthToStr,
   minBy,
+  parseDurationSeconds,
 } from "./format";
 
 describe("formatTimeLengthToStr", () => {
@@ -97,5 +98,26 @@ describe("minBy", () => {
   it("returns null when nothing matches", () => {
     expect(minBy([], "t" as never)).toBeNull();
     expect(minBy([{ t: 1 }], "t", () => false)).toBeNull();
+  });
+});
+
+describe("parseDurationSeconds", () => {
+  it("reads the game's durations, with its units", () => {
+    expect(parseDurationSeconds("1h 22m 5s")).toBe(3600 + 22 * 60 + 5);
+    expect(parseDurationSeconds("45m")).toBe(45 * 60);
+    expect(parseDurationSeconds(" 2D 3h ")).toBe(2 * 86_400 + 3 * 3600);
+  });
+
+  it("tells a month (M) from a minute (m)", () => {
+    expect(parseDurationSeconds("1M")).toBe(30 * 86_400);
+    expect(parseDurationSeconds("1m")).toBe(60);
+  });
+
+  it("gives null rather than a wrong figure", () => {
+    expect(parseDurationSeconds("")).toBeNull();
+    expect(parseDurationSeconds(null)).toBeNull();
+    expect(parseDurationSeconds("soon")).toBeNull();
+    // Another language's unit: no figure at all, not a partial one.
+    expect(parseDurationSeconds("1h 5Min")).toBeNull();
   });
 });

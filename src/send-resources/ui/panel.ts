@@ -251,9 +251,14 @@ export function setTransferInfo(text: string): void {
 /**
  * Show or hide the window — what the menu entry (or the fallback button)
  * does. No hotkey: Space belongs to the Empire Overview board.
+ *
+ * Opening redraws the queue at once: its ten-row cap can only be measured
+ * on screen, and a queue that grew while the window was closed otherwise
+ * showed uncapped until the next status tick.
  */
 export function togglePanel(): void {
   panelWindow?.toggle();
+  if (panelWindow?.isOpen()) refreshQueueView();
 }
 
 export function toggleZoom(): void {

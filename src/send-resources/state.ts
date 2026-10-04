@@ -31,6 +31,8 @@ export const KEY = {
   listAutoBuild: "listAutoBuild",
   /** Unified queue — NEW key, see `migrateLegacyQueues`. */
   globalTaskQueue: "ikaGlobalTaskQueue",
+  /** Seconds a shipment takes, per route — see `recordRouteSeconds`. */
+  routeTimes: "ikaRouteTimes",
 } as const;
 
 /** Flat keys with no account prefix — the old code read/wrote `localStorage.x`. */
@@ -106,6 +108,43 @@ export function loadReceivers(): WineReceiver[] {
 
 export function saveReceivers(list: WineReceiver[]): void {
   getState().account.setJSON(KEY.listReceiver, list);
+}
+
+/* ─────────────────────────── Shipment route times ──────────────────────── */
+
+/** One route's key: source and destination city ids, which never shift. */
+function routeKey(originCityId: string, destinationCityId: string): string {
+  return `${originCityId}>${destinationCityId}`;
+}
+
+/**
+ * Remember how long a shipment from one town to another takes, loading and
+ * sailing together, as the shipment form showed it. The latest reading
+ * wins. Keyed by city ids, not dropdown indexes: an index shifts when a town
+ * is founded.
+ */
+export function recordRouteSeconds(
+  originCityId: string,
+  destinationCityId: string,
+  seconds: number,
+): void {
+  const store = getState().account;
+  const times = store.getJSON<Record<string, number>>(KEY.routeTimes, {});
+  times[routeKey(originCityId, destinationCityId)] = seconds;
+  store.setJSON(KEY.routeTimes, times);
+}
+
+/** The recorded time of a route, or `null` when none was seen yet. */
+export function routeSeconds(
+  originCityId: string,
+  destinationCityId: string,
+): number | null {
+  const times = getState().account.getJSON<Record<string, number>>(
+    KEY.routeTimes,
+    {},
+  );
+  const seconds = times[routeKey(originCityId, destinationCityId)];
+  return typeof seconds === "number" && seconds >= 0 ? seconds : null;
 }
 
 /* ───────────────────────── Multi-account summary ───────────────────────── */
