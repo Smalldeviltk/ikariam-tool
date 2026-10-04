@@ -45,7 +45,7 @@ export function startBarbarianObserver(): void {
     for (const mutation of mutations) {
       const previousId = (mutation.previousSibling as HTMLElement | null)?.id;
       if (previousId === "barbarianVillage_c") {
-        annotate(SEL.barbarianVillageResources, false);
+        annotate(SEL.barbarianVillageResources, true);
         return;
       }
       if (previousId === "barbarianFleet_c") {
