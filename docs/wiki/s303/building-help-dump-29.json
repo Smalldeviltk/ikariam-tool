@@ -1,0 +1,268 @@
+{
+  "capturedAt": "2026-10-04T05:43:37.073Z",
+  "host": "s303-en.ikariam.gameforge.com",
+  "buildingId": 29,
+  "buildingClass": "dump",
+  "name": "Depot",
+  "description": [
+    "A depot enables you to store large amounts of goods. However, the depot is not protected from pillagers.",
+    "Requirement(s): Depot"
+  ],
+  "columns": [
+    {
+      "className": "",
+      "text": "Level",
+      "iconSrc": null,
+      "key": null
+    },
+    {
+      "className": "costs",
+      "text": "",
+      "iconSrc": "//gf2.geo.gfsrv.net/cdn19/c3527b2f694fb882563c04df6d8972.png",
+      "key": "wood"
+    },
+    {
+      "className": "costs",
+      "text": "",
+      "iconSrc": "//gf3.geo.gfsrv.net/cdnbf/fc258b990c1a2a36c5aeb9872fc08a.png",
+      "key": "marble"
+    },
+    {
+      "className": "costs",
+      "text": "",
+      "iconSrc": "//gf2.geo.gfsrv.net/cdn1e/417b4059940b2ae2680c070a197d8c.png",
+      "key": "crystal"
+    },
+    {
+      "className": "costs",
+      "text": "",
+      "iconSrc": "//gf1.geo.gfsrv.net/cdn9b/5578a7dfa3e98124439cca4a387a61.png",
+      "key": "sulfur"
+    },
+    {
+      "className": "costs",
+      "text": "",
+      "iconSrc": "//gf2.geo.gfsrv.net/cdna2/465f0358d2cb09c07cd0f5a53e38eb.png",
+      "key": "time"
+    },
+    {
+      "className": "warehouseCapacity",
+      "text": "Capacity",
+      "iconSrc": "//gf2.geo.gfsrv.net/cdn19/c3527b2f694fb882563c04df6d8972.png",
+      "key": "wood"
+    }
+  ],
+  "rows": [
+    ["7", "2,474", "1,952", "1,868", "1,653", "22m 19s", "277,128"],
+    ["8", "3,228", "2,506", "2,325", "2,174", "28m 11s", "331,990"],
+    ["9", "4,182", "3,193", "2,890", "2,836", "35m 22s", "392,267"],
+    ["10", "5,383", "4,042", "3,583", "3,675", "44m 11s", "458,564"],
+    ["11", "6,887", "5,088", "4,431", "4,729", "54m 55s", "531,535"],
+    ["12", "8,766", "6,371", "5,464", "6,053", "1h 7m", "611,896"],
+    ["13", "11,105", "7,940", "6,722", "7,708", "1h 23m", "700,427"],
+    ["14", "14,009", "9,855", "8,245", "9,772", "1h 42m", "797,982"],
+    ["15", "17,602", "12,186", "10,089", "12,338", "2h 5m", "905,498"],
+    ["16", "22,042", "15,016", "12,313", "15,523", "2h 33m", "1,024,000"],
+    ["17", "27,512", "18,447", "14,994", "19,464", "3h 6m", "1,154,614"],
+    ["18", "34,242", "22,597", "18,217", "24,335", "3h 46m", "1,298,577"],
+    ["19", "42,505", "27,610", "22,086", "30,340", "4h 34m", "1,457,248"],
+    ["20", "52,633", "33,654", "26,724", "37,734", "5h 31m", "1,632,119"],
+    ["21", "65,029", "40,931", "32,274", "46,823", "6h 39m", "1,824,830"],
+    ["22", "80,180", "49,681", "38,910", "57,980", "8h 38s", "2,037,184"],
+    ["23", "98,673", "60,191", "46,832", "71,657", "9h 37m", "2,271,165"],
+    ["24", "121,218", "72,796", "56,278", "88,404", "11h 31m", "2,528,951"],
+    ["25", "148,673", "87,900", "67,532", "108,883", "13h 48m", "2,812,938"],
+    ["26", "182,068", "105,979", "80,924", "133,902", "16h 29m", "3,125,764"],
+    ["27", "222,651", "127,598", "96,845", "164,435", "19h 41m", "3,470,326"],
+    ["28", "271,922", "153,428", "115,759", "201,664", "23h 28m", "3,849,813"],
+    ["29", "331,687", "184,263", "138,205", "247,014", "1D 3h", "4,267,731"],
+    ["30", "404,120", "221,042", "164,824", "302,212", "1D 9h", "4,727,938"],
+    ["31", "491,840", "264,877", "196,369", "369,342", "1D 15h", "5,234,678"],
+    ["32", "597,992", "317,085", "233,723", "450,922", "1D 22h", "5,792,618"],
+    ["33", "726,357", "379,224", "277,928", "549,992", "2D 7h", "6,406,895"],
+    ["34", "881,481", "453,133", "330,206", "670,221", "2D 17h", "7,083,160"],
+    ["35", "1,068,823", "540,988", "391,991", "816,035", "3D 5h", "7,827,629"],
+    ["36", "1,294,936", "645,359", "464,975", "992,769", "3D 20h", "8,647,142"],
+    [
+      "37",
+      "1,567,688",
+      "769,281",
+      "551,137",
+      "1,206,855",
+      "4D 12h",
+      "9,549,229"
+    ],
+    [
+      "38",
+      "1,896,516",
+      "916,339",
+      "652,802",
+      "1,466,045",
+      "5D 8h",
+      "10,542,171"
+    ],
+    [
+      "39",
+      "2,292,741",
+      "1,090,761",
+      "772,701",
+      "1,779,675",
+      "6D 7h",
+      "11,635,085"
+    ],
+    [
+      "40",
+      "2,769,938",
+      "1,297,540",
+      "914,034",
+      "2,158,985",
+      "7D 11h",
+      "12,838,002"
+    ],
+    [
+      "41",
+      "3,344,376",
+      "1,542,565",
+      "1,080,556",
+      "2,617,511",
+      "8D 19h",
+      "14,161,964"
+    ],
+    [
+      "42",
+      "4,035,553",
+      "1,832,777",
+      "1,276,673",
+      "3,171,540",
+      "10D 8h",
+      "15,619,121"
+    ],
+    [
+      "43",
+      "4,866,829",
+      "2,176,362",
+      "1,507,541",
+      "3,840,665",
+      "12D 4h",
+      "17,222,851"
+    ],
+    [
+      "44",
+      "5,866,174",
+      "2,582,970",
+      "1,779,211",
+      "4,648,452",
+      "14D 8h",
+      "18,987,875"
+    ],
+    [
+      "45",
+      "7,067,084",
+      "3,063,970",
+      "2,098,767",
+      "5,623,238",
+      "16D 21h",
+      "20,930,400"
+    ],
+    [
+      "46",
+      "8,509,650",
+      "3,632,756",
+      "2,474,509",
+      "6,799,088",
+      "19D 20h",
+      "23,068,268"
+    ],
+    [
+      "47",
+      "10,241,848",
+      "4,305,102",
+      "2,916,155",
+      "8,216,935",
+      "23D 8h",
+      "25,421,121"
+    ],
+    [
+      "48",
+      "12,321,081",
+      "5,099,585",
+      "3,435,083",
+      "9,925,965",
+      "27D 9h",
+      "28,010,582"
+    ],
+    [
+      "49",
+      "14,816,003",
+      "6,038,073",
+      "4,044,612",
+      "11,985,258",
+      "1M 2D",
+      "30,860,462"
+    ],
+    [
+      "50",
+      "17,808,721",
+      "7,146,302",
+      "4,760,327",
+      "14,465,763",
+      "1M 7D",
+      "33,996,976"
+    ],
+    [
+      "51",
+      "21,397,393",
+      "8,454,563",
+      "5,600,464",
+      "17,452,664",
+      "1M 14D",
+      "37,448,992"
+    ],
+    [
+      "52",
+      "25,699,355",
+      "9,998,486",
+      "6,586,356",
+      "21,048,214",
+      "1M 21D",
+      "41,248,298"
+    ],
+    [
+      "53",
+      "30,854,826",
+      "11,819,988",
+      "7,742,949",
+      "25,375,129",
+      "2M 21h",
+      "45,429,902"
+    ],
+    [
+      "54",
+      "37,031,345",
+      "13,968,361",
+      "9,099,418",
+      "30,580,652",
+      "2M 11D",
+      "50,032,358"
+    ],
+    [
+      "55",
+      "44,429,049",
+      "16,501,565",
+      "10,689,871",
+      "36,841,419",
+      "2M 23D",
+      "55,098,129"
+    ],
+    [
+      "56",
+      "53,286,974",
+      "19,487,737",
+      "12,554,174",
+      "44,369,284",
+      "3M 7D",
+      "60,673,986"
+    ]
+  ],
+  "contentHtml": "<div class=\"content\">\n    <table>\n        <tbody><tr>\n            <td class=\"dump\">\n\n                <div alt=\"Depot\" class=\"buildingimg\">\n                </div>\n            </td>\n            <td><p>A depot enables you to store large amounts of goods. However, the depot is not protected from pillagers.</p>\n                <p><b>Requirement(s):</b> <a onclick=\"ajaxHandlerCall(this.href);return false;\" href=\"?view=researchDetail&amp;researchId=2160&amp;helpId=17&amp;subHelpId=2\">Depot</a></p>\n            </td>\n        </tr>\n    </tbody></table>\n        <table class=\"table01 center\">\n        <tbody><tr>\n            <th>Level</th>\n                            <th class=\"costs\"><img src=\"//gf2.geo.gfsrv.net/cdn19/c3527b2f694fb882563c04df6d8972.png\"></th>\n                            <th class=\"costs\"><img src=\"//gf3.geo.gfsrv.net/cdnbf/fc258b990c1a2a36c5aeb9872fc08a.png\"></th>\n                            <th class=\"costs\"><img src=\"//gf2.geo.gfsrv.net/cdn1e/417b4059940b2ae2680c070a197d8c.png\"></th>\n                            <th class=\"costs\"><img src=\"//gf1.geo.gfsrv.net/cdn9b/5578a7dfa3e98124439cca4a387a61.png\"></th>\n                            <th class=\"costs\"><img src=\"//gf2.geo.gfsrv.net/cdna2/465f0358d2cb09c07cd0f5a53e38eb.png\"></th>\n                            <th class=\"warehouseCapacity\"><div>Capacity</div>\n                    <img src=\"//gf2.geo.gfsrv.net/cdn19/c3527b2f694fb882563c04df6d8972.png\" alt=\"Building material\">\n                    <img src=\"//gf1.geo.gfsrv.net/cdnc6/94ddfda045a8f5ced3397d791fd064.png\" alt=\"Wine\">\n                    <img src=\"//gf3.geo.gfsrv.net/cdnbf/fc258b990c1a2a36c5aeb9872fc08a.png\" alt=\"Marble\">\n                    <img src=\"//gf2.geo.gfsrv.net/cdn1e/417b4059940b2ae2680c070a197d8c.png\" alt=\"Crystal glass\">\n                    <img src=\"//gf1.geo.gfsrv.net/cdn9b/5578a7dfa3e98124439cca4a387a61.png\" alt=\"Sulphur\">\n                </th>        </tr>\n        \n        <tr>\n            <td class=\"level\">7</td>\n                            <td class=\"costs\"><div>2,474<div class=\"tooltip\" updated=\"true\">2,474</div></div></td>\n                            <td class=\"costs\"><div>1,952<div class=\"tooltip\" updated=\"true\">1,952</div></div></td>\n                            <td class=\"costs\"><div>1,868<div class=\"tooltip\" updated=\"true\">1,868</div></div></td>\n                            <td class=\"costs\"><div>1,653<div class=\"tooltip\" updated=\"true\">1,653</div></div></td>\n                            <td class=\"costs\">22m 19s</td>\n                            <td class=\"allow\" title=\"277,128\">277,128</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">8</td>\n                            <td class=\"costs\"><div>3,228<div class=\"tooltip\" updated=\"true\">3,228</div></div></td>\n                            <td class=\"costs\"><div>2,506<div class=\"tooltip\" updated=\"true\">2,506</div></div></td>\n                            <td class=\"costs\"><div>2,325<div class=\"tooltip\" updated=\"true\">2,325</div></div></td>\n                            <td class=\"costs\"><div>2,174<div class=\"tooltip\" updated=\"true\">2,174</div></div></td>\n                            <td class=\"costs\">28m 11s</td>\n                            <td class=\"allow\" title=\"331,990\">331,990</td>\n                        </tr>\n        \n        <tr>\n            <td class=\"level\">9</td>\n                            <td class=\"costs\"><div>4,182<div class=\"tooltip\" updated=\"true\">4,182</div></div></td>\n                            <td class=\"costs\"><div>3,193<div class=\"tooltip\" updated=\"true\">3,193</div></div></td>\n                            <td class=\"costs\"><div>2,890<div class=\"tooltip\" updated=\"true\">2,890</div></div></td>\n                            <td class=\"costs\"><div>2,836<div class=\"tooltip\" updated=\"true\">2,836</div></div></td>\n                            <td class=\"costs\">35m 22s</td>\n                            <td class=\"allow\" title=\"392,267\">392,267</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">10</td>\n                            <td class=\"costs\"><div>5,383<div class=\"tooltip\" updated=\"true\">5,383</div></div></td>\n                            <td class=\"costs\"><div>4,042<div class=\"tooltip\" updated=\"true\">4,042</div></div></td>\n                            <td class=\"costs\"><div>3,583<div class=\"tooltip\" updated=\"true\">3,583</div></div></td>\n                            <td class=\"costs\"><div>3,675<div class=\"tooltip\" updated=\"true\">3,675</div></div></td>\n                            <td class=\"costs\">44m 11s</td>\n                            <td class=\"allow\" title=\"458,564\">458,564</td>\n                        </tr>\n        \n        <tr>\n            <td class=\"level\">11</td>\n                            <td class=\"costs\"><div>6,887<div class=\"tooltip\" updated=\"true\">6,887</div></div></td>\n                            <td class=\"costs\"><div>5,088<div class=\"tooltip\" updated=\"true\">5,088</div></div></td>\n                            <td class=\"costs\"><div>4,431<div class=\"tooltip\" updated=\"true\">4,431</div></div></td>\n                            <td class=\"costs\"><div>4,729<div class=\"tooltip\" updated=\"true\">4,729</div></div></td>\n                            <td class=\"costs\">54m 55s</td>\n                            <td class=\"allow\" title=\"531,535\">531,535</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">12</td>\n                            <td class=\"costs\"><div>8,766<div class=\"tooltip\" updated=\"true\">8,766</div></div></td>\n                            <td class=\"costs\"><div>6,371<div class=\"tooltip\" updated=\"true\">6,371</div></div></td>\n                            <td class=\"costs\"><div>5,464<div class=\"tooltip\" updated=\"true\">5,464</div></div></td>\n                            <td class=\"costs\"><div>6,053<div class=\"tooltip\" updated=\"true\">6,053</div></div></td>\n                            <td class=\"costs\">1h 7m</td>\n                            <td class=\"allow\" title=\"611,896\">611,896</td>\n                        </tr>\n        \n        <tr>\n            <td class=\"level\">13</td>\n                            <td class=\"costs\"><div>11,105<div class=\"tooltip\" updated=\"true\">11,105</div></div></td>\n                            <td class=\"costs\"><div>7,940<div class=\"tooltip\" updated=\"true\">7,940</div></div></td>\n                            <td class=\"costs\"><div>6,722<div class=\"tooltip\" updated=\"true\">6,722</div></div></td>\n                            <td class=\"costs\"><div>7,708<div class=\"tooltip\" updated=\"true\">7,708</div></div></td>\n                            <td class=\"costs\">1h 23m</td>\n                            <td class=\"allow\" title=\"700,427\">700,427</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">14</td>\n                            <td class=\"costs\"><div>14,009<div class=\"tooltip\" updated=\"true\">14,009</div></div></td>\n                            <td class=\"costs\"><div>9,855<div class=\"tooltip\" updated=\"true\">9,855</div></div></td>\n                            <td class=\"costs\"><div>8,245<div class=\"tooltip\" updated=\"true\">8,245</div></div></td>\n                            <td class=\"costs\"><div>9,772<div class=\"tooltip\" updated=\"true\">9,772</div></div></td>\n                            <td class=\"costs\">1h 42m</td>\n                            <td class=\"allow\" title=\"797,982\">797,982</td>\n                        </tr>\n        \n        <tr>\n            <td class=\"level\">15</td>\n                            <td class=\"costs\"><div>17,602<div class=\"tooltip\" updated=\"true\">17,602</div></div></td>\n                            <td class=\"costs\"><div>12,186<div class=\"tooltip\" updated=\"true\">12,186</div></div></td>\n                            <td class=\"costs\"><div>10,089<div class=\"tooltip\" updated=\"true\">10,089</div></div></td>\n                            <td class=\"costs\"><div>12,338<div class=\"tooltip\" updated=\"true\">12,338</div></div></td>\n                            <td class=\"costs\">2h 5m</td>\n                            <td class=\"allow\" title=\"905,498\">905,498</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">16</td>\n                            <td class=\"costs\"><div>22,042<div class=\"tooltip\" updated=\"true\">22,042</div></div></td>\n                            <td class=\"costs\"><div>15,016<div class=\"tooltip\" updated=\"true\">15,016</div></div></td>\n                            <td class=\"costs\"><div>12,313<div class=\"tooltip\" updated=\"true\">12,313</div></div></td>\n                            <td class=\"costs\"><div>15,523<div class=\"tooltip\" updated=\"true\">15,523</div></div></td>\n                            <td class=\"costs\">2h 33m</td>\n                            <td class=\"allow\" title=\"1,024,000\">1.02M</td>\n                        </tr>\n        \n        <tr>\n            <td class=\"level\">17</td>\n                            <td class=\"costs\"><div>27,512<div class=\"tooltip\" updated=\"true\">27,512</div></div></td>\n                            <td class=\"costs\"><div>18,447<div class=\"tooltip\" updated=\"true\">18,447</div></div></td>\n                            <td class=\"costs\"><div>14,994<div class=\"tooltip\" updated=\"true\">14,994</div></div></td>\n                            <td class=\"costs\"><div>19,464<div class=\"tooltip\" updated=\"true\">19,464</div></div></td>\n                            <td class=\"costs\">3h 6m</td>\n                            <td class=\"allow\" title=\"1,154,614\">1.15M</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">18</td>\n                            <td class=\"costs\"><div>34,242<div class=\"tooltip\" updated=\"true\">34,242</div></div></td>\n                            <td class=\"costs\"><div>22,597<div class=\"tooltip\" updated=\"true\">22,597</div></div></td>\n                            <td class=\"costs\"><div>18,217<div class=\"tooltip\" updated=\"true\">18,217</div></div></td>\n                            <td class=\"costs\"><div>24,335<div class=\"tooltip\" updated=\"true\">24,335</div></div></td>\n                            <td class=\"costs\">3h 46m</td>\n                            <td class=\"allow\" title=\"1,298,577\">1.30M</td>\n                        </tr>\n        \n        <tr>\n            <td class=\"level\">19</td>\n                            <td class=\"costs\"><div>42,505<div class=\"tooltip\" updated=\"true\">42,505</div></div></td>\n                            <td class=\"costs\"><div>27,610<div class=\"tooltip\" updated=\"true\">27,610</div></div></td>\n                            <td class=\"costs\"><div>22,086<div class=\"tooltip\" updated=\"true\">22,086</div></div></td>\n                            <td class=\"costs\"><div>30,340<div class=\"tooltip\" updated=\"true\">30,340</div></div></td>\n                            <td class=\"costs\">4h 34m</td>\n                            <td class=\"allow\" title=\"1,457,248\">1.46M</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">20</td>\n                            <td class=\"costs\"><div>52,633<div class=\"tooltip\" updated=\"true\">52,633</div></div></td>\n                            <td class=\"costs\"><div>33,654<div class=\"tooltip\" updated=\"true\">33,654</div></div></td>\n                            <td class=\"costs\"><div>26,724<div class=\"tooltip\" updated=\"true\">26,724</div></div></td>\n                            <td class=\"costs\"><div>37,734<div class=\"tooltip\" updated=\"true\">37,734</div></div></td>\n                            <td class=\"costs\">5h 31m</td>\n                            <td class=\"allow\" title=\"1,632,119\">1.63M</td>\n                        </tr>\n        \n        <tr>\n            <td class=\"level\">21</td>\n                            <td class=\"costs\"><div>65,029<div class=\"tooltip\" updated=\"true\">65,029</div></div></td>\n                            <td class=\"costs\"><div>40,931<div class=\"tooltip\" updated=\"true\">40,931</div></div></td>\n                            <td class=\"costs\"><div>32,274<div class=\"tooltip\" updated=\"true\">32,274</div></div></td>\n                            <td class=\"costs\"><div>46,823<div class=\"tooltip\" updated=\"true\">46,823</div></div></td>\n                            <td class=\"costs\">6h 39m</td>\n                            <td class=\"allow\" title=\"1,824,830\">1.82M</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">22</td>\n                            <td class=\"costs\"><div>80,180<div class=\"tooltip\" updated=\"true\">80,180</div></div></td>\n                            <td class=\"costs\"><div>49,681<div class=\"tooltip\" updated=\"true\">49,681</div></div></td>\n                            <td class=\"costs\"><div>38,910<div class=\"tooltip\" updated=\"true\">38,910</div></div></td>\n                            <td class=\"costs\"><div>57,980<div class=\"tooltip\" updated=\"true\">57,980</div></div></td>\n                            <td class=\"costs\">8h 38s</td>\n                            <td class=\"allow\" title=\"2,037,184\">2.04M</td>\n                        </tr>\n        \n        <tr>\n            <td class=\"level\">23</td>\n                            <td class=\"costs\"><div>98,673<div class=\"tooltip\" updated=\"true\">98,673</div></div></td>\n                            <td class=\"costs\"><div>60,191<div class=\"tooltip\" updated=\"true\">60,191</div></div></td>\n                            <td class=\"costs\"><div>46,832<div class=\"tooltip\" updated=\"true\">46,832</div></div></td>\n                            <td class=\"costs\"><div>71,657<div class=\"tooltip\" updated=\"true\">71,657</div></div></td>\n                            <td class=\"costs\">9h 37m</td>\n                            <td class=\"allow\" title=\"2,271,165\">2.27M</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">24</td>\n                            <td class=\"costs\"><div>121,218<div class=\"tooltip\" updated=\"true\">121,218</div></div></td>\n                            <td class=\"costs\"><div>72,796<div class=\"tooltip\" updated=\"true\">72,796</div></div></td>\n                            <td class=\"costs\"><div>56,278<div class=\"tooltip\" updated=\"true\">56,278</div></div></td>\n                            <td class=\"costs\"><div>88,404<div class=\"tooltip\" updated=\"true\">88,404</div></div></td>\n                            <td class=\"costs\">11h 31m</td>\n                            <td class=\"allow\" title=\"2,528,951\">2.53M</td>\n                        </tr>\n        \n        <tr>\n            <td class=\"level\">25</td>\n                            <td class=\"costs\"><div>148,673<div class=\"tooltip\" updated=\"true\">148,673</div></div></td>\n                            <td class=\"costs\"><div>87,900<div class=\"tooltip\" updated=\"true\">87,900</div></div></td>\n                            <td class=\"costs\"><div>67,532<div class=\"tooltip\" updated=\"true\">67,532</div></div></td>\n                            <td class=\"costs\"><div>108,883<div class=\"tooltip\" updated=\"true\">108,883</div></div></td>\n                            <td class=\"costs\">13h 48m</td>\n                            <td class=\"allow\" title=\"2,812,938\">2.81M</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">26</td>\n                            <td class=\"costs\"><div>182,068<div class=\"tooltip\" updated=\"true\">182,068</div></div></td>\n                            <td class=\"costs\"><div>105,979<div class=\"tooltip\" updated=\"true\">105,979</div></div></td>\n                            <td class=\"costs\"><div>80,924<div class=\"tooltip\" updated=\"true\">80,924</div></div></td>\n                            <td class=\"costs\"><div>133,902<div class=\"tooltip\" updated=\"true\">133,902</div></div></td>\n                            <td class=\"costs\">16h 29m</td>\n                            <td class=\"allow\" title=\"3,125,764\">3.13M</td>\n                        </tr>\n        \n        <tr>\n            <td class=\"level\">27</td>\n                            <td class=\"costs\"><div>222,651<div class=\"tooltip\" updated=\"true\">222,651</div></div></td>\n                            <td class=\"costs\"><div>127,598<div class=\"tooltip\" updated=\"true\">127,598</div></div></td>\n                            <td class=\"costs\"><div>96,845<div class=\"tooltip\" updated=\"true\">96,845</div></div></td>\n                            <td class=\"costs\"><div>164,435<div class=\"tooltip\" updated=\"true\">164,435</div></div></td>\n                            <td class=\"costs\">19h 41m</td>\n                            <td class=\"allow\" title=\"3,470,326\">3.47M</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">28</td>\n                            <td class=\"costs\"><div>271,922<div class=\"tooltip\" updated=\"true\">271,922</div></div></td>\n                            <td class=\"costs\"><div>153,428<div class=\"tooltip\" updated=\"true\">153,428</div></div></td>\n                            <td class=\"costs\"><div>115,759<div class=\"tooltip\" updated=\"true\">115,759</div></div></td>\n                            <td class=\"costs\"><div>201,664<div class=\"tooltip\" updated=\"true\">201,664</div></div></td>\n                            <td class=\"costs\">23h 28m</td>\n                            <td class=\"allow\" title=\"3,849,813\">3.85M</td>\n                        </tr>\n        \n        <tr>\n            <td class=\"level\">29</td>\n                            <td class=\"costs\"><div>331,687<div class=\"tooltip\" updated=\"true\">331,687</div></div></td>\n                            <td class=\"costs\"><div>184,263<div class=\"tooltip\" updated=\"true\">184,263</div></div></td>\n                            <td class=\"costs\"><div>138,205<div class=\"tooltip\" updated=\"true\">138,205</div></div></td>\n                            <td class=\"costs\"><div>247,014<div class=\"tooltip\" updated=\"true\">247,014</div></div></td>\n                            <td class=\"costs\">1D 3h</td>\n                            <td class=\"allow\" title=\"4,267,731\">4.27M</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">30</td>\n                            <td class=\"costs\"><div>404,120<div class=\"tooltip\" updated=\"true\">404,120</div></div></td>\n                            <td class=\"costs\"><div>221,042<div class=\"tooltip\" updated=\"true\">221,042</div></div></td>\n                            <td class=\"costs\"><div>164,824<div class=\"tooltip\" updated=\"true\">164,824</div></div></td>\n                            <td class=\"costs\"><div>302,212<div class=\"tooltip\" updated=\"true\">302,212</div></div></td>\n                            <td class=\"costs\">1D 9h</td>\n                            <td class=\"allow\" title=\"4,727,938\">4.73M</td>\n                        </tr>\n        \n        <tr>\n            <td class=\"level\">31</td>\n                            <td class=\"costs\"><div>491,840<div class=\"tooltip\" updated=\"true\">491,840</div></div></td>\n                            <td class=\"costs\"><div>264,877<div class=\"tooltip\" updated=\"true\">264,877</div></div></td>\n                            <td class=\"costs\"><div>196,369<div class=\"tooltip\" updated=\"true\">196,369</div></div></td>\n                            <td class=\"costs\"><div>369,342<div class=\"tooltip\" updated=\"true\">369,342</div></div></td>\n                            <td class=\"costs\">1D 15h</td>\n                            <td class=\"allow\" title=\"5,234,678\">5.23M</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">32</td>\n                            <td class=\"costs\"><div>597,992<div class=\"tooltip\" updated=\"true\">597,992</div></div></td>\n                            <td class=\"costs\"><div>317,085<div class=\"tooltip\" updated=\"true\">317,085</div></div></td>\n                            <td class=\"costs\"><div>233,723<div class=\"tooltip\" updated=\"true\">233,723</div></div></td>\n                            <td class=\"costs\"><div>450,922<div class=\"tooltip\" updated=\"true\">450,922</div></div></td>\n                            <td class=\"costs\">1D 22h</td>\n                            <td class=\"allow\" title=\"5,792,618\">5.79M</td>\n                        </tr>\n        \n        <tr>\n            <td class=\"level\">33</td>\n                            <td class=\"costs\"><div>726,357<div class=\"tooltip\" updated=\"true\">726,357</div></div></td>\n                            <td class=\"costs\"><div>379,224<div class=\"tooltip\" updated=\"true\">379,224</div></div></td>\n                            <td class=\"costs\"><div>277,928<div class=\"tooltip\" updated=\"true\">277,928</div></div></td>\n                            <td class=\"costs\"><div>549,992<div class=\"tooltip\" updated=\"true\">549,992</div></div></td>\n                            <td class=\"costs\">2D 7h</td>\n                            <td class=\"allow\" title=\"6,406,895\">6.41M</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">34</td>\n                            <td class=\"costs\"><div>881,481<div class=\"tooltip\" updated=\"true\">881,481</div></div></td>\n                            <td class=\"costs\"><div>453,133<div class=\"tooltip\" updated=\"true\">453,133</div></div></td>\n                            <td class=\"costs\"><div>330,206<div class=\"tooltip\" updated=\"true\">330,206</div></div></td>\n                            <td class=\"costs\"><div>670,221<div class=\"tooltip\" updated=\"true\">670,221</div></div></td>\n                            <td class=\"costs\">2D 17h</td>\n                            <td class=\"allow\" title=\"7,083,160\">7.08M</td>\n                        </tr>\n        \n        <tr>\n            <td class=\"level\">35</td>\n                            <td class=\"costs\"><div>1.07M<div class=\"tooltip\" updated=\"true\">1,068,823</div></div></td>\n                            <td class=\"costs\"><div>540,988<div class=\"tooltip\" updated=\"true\">540,988</div></div></td>\n                            <td class=\"costs\"><div>391,991<div class=\"tooltip\" updated=\"true\">391,991</div></div></td>\n                            <td class=\"costs\"><div>816,035<div class=\"tooltip\" updated=\"true\">816,035</div></div></td>\n                            <td class=\"costs\">3D 5h</td>\n                            <td class=\"allow\" title=\"7,827,629\">7.83M</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">36</td>\n                            <td class=\"costs\"><div>1.29M<div class=\"tooltip\" updated=\"true\">1,294,936</div></div></td>\n                            <td class=\"costs\"><div>645,359<div class=\"tooltip\" updated=\"true\">645,359</div></div></td>\n                            <td class=\"costs\"><div>464,975<div class=\"tooltip\" updated=\"true\">464,975</div></div></td>\n                            <td class=\"costs\"><div>992,769<div class=\"tooltip\" updated=\"true\">992,769</div></div></td>\n                            <td class=\"costs\">3D 20h</td>\n                            <td class=\"allow\" title=\"8,647,142\">8.65M</td>\n                        </tr>\n        \n        <tr>\n            <td class=\"level\">37</td>\n                            <td class=\"costs\"><div>1.57M<div class=\"tooltip\" updated=\"true\">1,567,688</div></div></td>\n                            <td class=\"costs\"><div>769,281<div class=\"tooltip\" updated=\"true\">769,281</div></div></td>\n                            <td class=\"costs\"><div>551,137<div class=\"tooltip\" updated=\"true\">551,137</div></div></td>\n                            <td class=\"costs\"><div>1.21M<div class=\"tooltip\" updated=\"true\">1,206,855</div></div></td>\n                            <td class=\"costs\">4D 12h</td>\n                            <td class=\"allow\" title=\"9,549,229\">9.55M</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">38</td>\n                            <td class=\"costs\"><div>1.90M<div class=\"tooltip\" updated=\"true\">1,896,516</div></div></td>\n                            <td class=\"costs\"><div>916,339<div class=\"tooltip\" updated=\"true\">916,339</div></div></td>\n                            <td class=\"costs\"><div>652,802<div class=\"tooltip\" updated=\"true\">652,802</div></div></td>\n                            <td class=\"costs\"><div>1.47M<div class=\"tooltip\" updated=\"true\">1,466,045</div></div></td>\n                            <td class=\"costs\">5D 8h</td>\n                            <td class=\"allow\" title=\"10,542,171\">10.54M</td>\n                        </tr>\n        \n        <tr>\n            <td class=\"level\">39</td>\n                            <td class=\"costs\"><div>2.29M<div class=\"tooltip\" updated=\"true\">2,292,741</div></div></td>\n                            <td class=\"costs\"><div>1.09M<div class=\"tooltip\" updated=\"true\">1,090,761</div></div></td>\n                            <td class=\"costs\"><div>772,701<div class=\"tooltip\" updated=\"true\">772,701</div></div></td>\n                            <td class=\"costs\"><div>1.78M<div class=\"tooltip\" updated=\"true\">1,779,675</div></div></td>\n                            <td class=\"costs\">6D 7h</td>\n                            <td class=\"allow\" title=\"11,635,085\">11.64M</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">40</td>\n                            <td class=\"costs\"><div>2.77M<div class=\"tooltip\" updated=\"true\">2,769,938</div></div></td>\n                            <td class=\"costs\"><div>1.30M<div class=\"tooltip\" updated=\"true\">1,297,540</div></div></td>\n                            <td class=\"costs\"><div>914,034<div class=\"tooltip\" updated=\"true\">914,034</div></div></td>\n                            <td class=\"costs\"><div>2.16M<div class=\"tooltip\" updated=\"true\">2,158,985</div></div></td>\n                            <td class=\"costs\">7D 11h</td>\n                            <td class=\"allow\" title=\"12,838,002\">12.84M</td>\n                        </tr>\n        \n        <tr>\n            <td class=\"level\">41</td>\n                            <td class=\"costs\"><div>3.34M<div class=\"tooltip\" updated=\"true\">3,344,376</div></div></td>\n                            <td class=\"costs\"><div>1.54M<div class=\"tooltip\" updated=\"true\">1,542,565</div></div></td>\n                            <td class=\"costs\"><div>1.08M<div class=\"tooltip\" updated=\"true\">1,080,556</div></div></td>\n                            <td class=\"costs\"><div>2.62M<div class=\"tooltip\" updated=\"true\">2,617,511</div></div></td>\n                            <td class=\"costs\">8D 19h</td>\n                            <td class=\"allow\" title=\"14,161,964\">14.16M</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">42</td>\n                            <td class=\"costs\"><div>4.04M<div class=\"tooltip\" updated=\"true\">4,035,553</div></div></td>\n                            <td class=\"costs\"><div>1.83M<div class=\"tooltip\" updated=\"true\">1,832,777</div></div></td>\n                            <td class=\"costs\"><div>1.28M<div class=\"tooltip\" updated=\"true\">1,276,673</div></div></td>\n                            <td class=\"costs\"><div>3.17M<div class=\"tooltip\" updated=\"true\">3,171,540</div></div></td>\n                            <td class=\"costs\">10D 8h</td>\n                            <td class=\"allow\" title=\"15,619,121\">15.62M</td>\n                        </tr>\n        \n        <tr>\n            <td class=\"level\">43</td>\n                            <td class=\"costs\"><div>4.87M<div class=\"tooltip\" updated=\"true\">4,866,829</div></div></td>\n                            <td class=\"costs\"><div>2.18M<div class=\"tooltip\" updated=\"true\">2,176,362</div></div></td>\n                            <td class=\"costs\"><div>1.51M<div class=\"tooltip\" updated=\"true\">1,507,541</div></div></td>\n                            <td class=\"costs\"><div>3.84M<div class=\"tooltip\" updated=\"true\">3,840,665</div></div></td>\n                            <td class=\"costs\">12D 4h</td>\n                            <td class=\"allow\" title=\"17,222,851\">17.22M</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">44</td>\n                            <td class=\"costs\"><div>5.87M<div class=\"tooltip\" updated=\"true\">5,866,174</div></div></td>\n                            <td class=\"costs\"><div>2.58M<div class=\"tooltip\" updated=\"true\">2,582,970</div></div></td>\n                            <td class=\"costs\"><div>1.78M<div class=\"tooltip\" updated=\"true\">1,779,211</div></div></td>\n                            <td class=\"costs\"><div>4.65M<div class=\"tooltip\" updated=\"true\">4,648,452</div></div></td>\n                            <td class=\"costs\">14D 8h</td>\n                            <td class=\"allow\" title=\"18,987,875\">18.99M</td>\n                        </tr>\n        \n        <tr>\n            <td class=\"level\">45</td>\n                            <td class=\"costs\"><div>7.07M<div class=\"tooltip\" updated=\"true\">7,067,084</div></div></td>\n                            <td class=\"costs\"><div>3.06M<div class=\"tooltip\" updated=\"true\">3,063,970</div></div></td>\n                            <td class=\"costs\"><div>2.10M<div class=\"tooltip\" updated=\"true\">2,098,767</div></div></td>\n                            <td class=\"costs\"><div>5.62M<div class=\"tooltip\" updated=\"true\">5,623,238</div></div></td>\n                            <td class=\"costs\">16D 21h</td>\n                            <td class=\"allow\" title=\"20,930,400\">20.93M</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">46</td>\n                            <td class=\"costs\"><div>8.51M<div class=\"tooltip\" updated=\"true\">8,509,650</div></div></td>\n                            <td class=\"costs\"><div>3.63M<div class=\"tooltip\" updated=\"true\">3,632,756</div></div></td>\n                            <td class=\"costs\"><div>2.47M<div class=\"tooltip\" updated=\"true\">2,474,509</div></div></td>\n                            <td class=\"costs\"><div>6.80M<div class=\"tooltip\" updated=\"true\">6,799,088</div></div></td>\n                            <td class=\"costs\">19D 20h</td>\n                            <td class=\"allow\" title=\"23,068,268\">23.07M</td>\n                        </tr>\n        \n        <tr>\n            <td class=\"level\">47</td>\n                            <td class=\"costs\"><div>10.24M<div class=\"tooltip\" updated=\"true\">10,241,848</div></div></td>\n                            <td class=\"costs\"><div>4.31M<div class=\"tooltip\" updated=\"true\">4,305,102</div></div></td>\n                            <td class=\"costs\"><div>2.92M<div class=\"tooltip\" updated=\"true\">2,916,155</div></div></td>\n                            <td class=\"costs\"><div>8.22M<div class=\"tooltip\" updated=\"true\">8,216,935</div></div></td>\n                            <td class=\"costs\">23D 8h</td>\n                            <td class=\"allow\" title=\"25,421,121\">25.42M</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">48</td>\n                            <td class=\"costs\"><div>12.32M<div class=\"tooltip\" updated=\"true\">12,321,081</div></div></td>\n                            <td class=\"costs\"><div>5.10M<div class=\"tooltip\" updated=\"true\">5,099,585</div></div></td>\n                            <td class=\"costs\"><div>3.44M<div class=\"tooltip\" updated=\"true\">3,435,083</div></div></td>\n                            <td class=\"costs\"><div>9.93M<div class=\"tooltip\" updated=\"true\">9,925,965</div></div></td>\n                            <td class=\"costs\">27D 9h</td>\n                            <td class=\"allow\" title=\"28,010,582\">28.01M</td>\n                        </tr>\n        \n        <tr>\n            <td class=\"level\">49</td>\n                            <td class=\"costs\"><div>14.82M<div class=\"tooltip\" updated=\"true\">14,816,003</div></div></td>\n                            <td class=\"costs\"><div>6.04M<div class=\"tooltip\" updated=\"true\">6,038,073</div></div></td>\n                            <td class=\"costs\"><div>4.04M<div class=\"tooltip\" updated=\"true\">4,044,612</div></div></td>\n                            <td class=\"costs\"><div>11.99M<div class=\"tooltip\" updated=\"true\">11,985,258</div></div></td>\n                            <td class=\"costs\">1M 2D</td>\n                            <td class=\"allow\" title=\"30,860,462\">30.86M</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">50</td>\n                            <td class=\"costs\"><div>17.81M<div class=\"tooltip\" updated=\"true\">17,808,721</div></div></td>\n                            <td class=\"costs\"><div>7.15M<div class=\"tooltip\" updated=\"true\">7,146,302</div></div></td>\n                            <td class=\"costs\"><div>4.76M<div class=\"tooltip\" updated=\"true\">4,760,327</div></div></td>\n                            <td class=\"costs\"><div>14.47M<div class=\"tooltip\" updated=\"true\">14,465,763</div></div></td>\n                            <td class=\"costs\">1M 7D</td>\n                            <td class=\"allow\" title=\"33,996,976\">34.00M</td>\n                        </tr>\n        \n        <tr>\n            <td class=\"level\">51</td>\n                            <td class=\"costs\"><div>21.40M<div class=\"tooltip\" updated=\"true\">21,397,393</div></div></td>\n                            <td class=\"costs\"><div>8.45M<div class=\"tooltip\" updated=\"true\">8,454,563</div></div></td>\n                            <td class=\"costs\"><div>5.60M<div class=\"tooltip\" updated=\"true\">5,600,464</div></div></td>\n                            <td class=\"costs\"><div>17.45M<div class=\"tooltip\" updated=\"true\">17,452,664</div></div></td>\n                            <td class=\"costs\">1M 14D</td>\n                            <td class=\"allow\" title=\"37,448,992\">37.45M</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">52</td>\n                            <td class=\"costs\"><div>25.70M<div class=\"tooltip\" updated=\"true\">25,699,355</div></div></td>\n                            <td class=\"costs\"><div>10.00M<div class=\"tooltip\" updated=\"true\">9,998,486</div></div></td>\n                            <td class=\"costs\"><div>6.59M<div class=\"tooltip\" updated=\"true\">6,586,356</div></div></td>\n                            <td class=\"costs\"><div>21.05M<div class=\"tooltip\" updated=\"true\">21,048,214</div></div></td>\n                            <td class=\"costs\">1M 21D</td>\n                            <td class=\"allow\" title=\"41,248,298\">41.25M</td>\n                        </tr>\n        \n        <tr>\n            <td class=\"level\">53</td>\n                            <td class=\"costs\"><div>30.85M<div class=\"tooltip\" updated=\"true\">30,854,826</div></div></td>\n                            <td class=\"costs\"><div>11.82M<div class=\"tooltip\" updated=\"true\">11,819,988</div></div></td>\n                            <td class=\"costs\"><div>7.74M<div class=\"tooltip\" updated=\"true\">7,742,949</div></div></td>\n                            <td class=\"costs\"><div>25.38M<div class=\"tooltip\" updated=\"true\">25,375,129</div></div></td>\n                            <td class=\"costs\">2M 21h</td>\n                            <td class=\"allow\" title=\"45,429,902\">45.43M</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">54</td>\n                            <td class=\"costs\"><div>37.03M<div class=\"tooltip\" updated=\"true\">37,031,345</div></div></td>\n                            <td class=\"costs\"><div>13.97M<div class=\"tooltip\" updated=\"true\">13,968,361</div></div></td>\n                            <td class=\"costs\"><div>9.10M<div class=\"tooltip\" updated=\"true\">9,099,418</div></div></td>\n                            <td class=\"costs\"><div>30.58M<div class=\"tooltip\" updated=\"true\">30,580,652</div></div></td>\n                            <td class=\"costs\">2M 11D</td>\n                            <td class=\"allow\" title=\"50,032,358\">50.03M</td>\n                        </tr>\n        \n        <tr>\n            <td class=\"level\">55</td>\n                            <td class=\"costs\"><div>44.43M<div class=\"tooltip\" updated=\"true\">44,429,049</div></div></td>\n                            <td class=\"costs\"><div>16.50M<div class=\"tooltip\" updated=\"true\">16,501,565</div></div></td>\n                            <td class=\"costs\"><div>10.69M<div class=\"tooltip\" updated=\"true\">10,689,871</div></div></td>\n                            <td class=\"costs\"><div>36.84M<div class=\"tooltip\" updated=\"true\">36,841,419</div></div></td>\n                            <td class=\"costs\">2M 23D</td>\n                            <td class=\"allow\" title=\"55,098,129\">55.10M</td>\n                        </tr>\n        \n        <tr class=\"alt\">\n            <td class=\"level\">56</td>\n                            <td class=\"costs\"><div>53.29M<div class=\"tooltip\" updated=\"true\">53,286,974</div></div></td>\n                            <td class=\"costs\"><div>19.49M<div class=\"tooltip\" updated=\"true\">19,487,737</div></div></td>\n                            <td class=\"costs\"><div>12.55M<div class=\"tooltip\" updated=\"true\">12,554,174</div></div></td>\n                            <td class=\"costs\"><div>44.37M<div class=\"tooltip\" updated=\"true\">44,369,284</div></div></td>\n                            <td class=\"costs\">3M 7D</td>\n                            <td class=\"allow\" title=\"60,673,986\">60.67M</td>\n                        </tr>\n            </tbody></table>\n</div>"
+}
