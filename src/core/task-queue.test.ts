@@ -588,6 +588,36 @@ describe("TaskRunner", () => {
     },
   );
 
+  it(
+    "REGRESSION: still gives up when the page's console.error is not a " +
+      "function — on the game's page it is not, and the runner's own " +
+      "console.error(e) threw before the streak was counted, so a failing " +
+      "town switch was retried every second for ever",
+    async () => {
+      const original = console.error;
+      (console as unknown as { error: unknown }).error = undefined;
+      try {
+        queue.push(ship("1"));
+        let attempts = 0;
+        const runner = new TaskRunner(queue, {
+          intervalMs: 1000,
+          maxConsecutiveErrors: 3,
+        }).register("sendResource", async () => {
+          attempts++;
+          throw new Error("switch did not land");
+        });
+
+        runner.start();
+        await tick(5);
+
+        expect(queue.length).toBe(0);
+        expect(attempts).toBe(3);
+      } finally {
+        console.error = original;
+      }
+    },
+  );
+
   it("a throw followed by a normal result clears the error streak", async () => {
     queue.push(ship("1"));
     let attempts = 0;
@@ -732,5 +762,80 @@ describe("TaskRunner", () => {
     await tick(3);
     expect(calls).toHaveLength(0);
     expect(runner.isBusy).toBe(false);
+  });
+});
+
+describe("TaskRunner.currentTaskId", () => {
+  let queue: TaskQueue;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    queue = new TaskQueue(memoryStore(), "q");
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function tick() {
+    await vi.advanceTimersByTimeAsync(1000);
+    await Promise.resolve();
+  }
+
+  it("is null while the runner is stopped", () => {
+    queue.push(ship("1"));
+    const runner = new TaskRunner(queue, { intervalMs: 1000 });
+    expect(runner.currentTaskId).toBeNull();
+  });
+
+  it("names the task whose handler is running", async () => {
+    queue.push(ship("1"));
+    let finish = () => {};
+    const runner = new TaskRunner(queue, { intervalMs: 1000 }).register(
+      "sendResource",
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve({ status: "done" });
+        }),
+    );
+    const [shipment] = queue.list();
+
+    runner.start();
+    await tick();
+    expect(runner.currentTaskId).toBe(shipment.id);
+
+    finish();
+    await Promise.resolve();
+    expect(runner.currentTaskId).toBeNull();
+  });
+
+  it(
+    "REGRESSION: points past a shipment waiting for ships to the upgrade " +
+      "that will run — the queue view marked the head, the shipment, while " +
+      "the upgrades behind it were the ones running",
+    async () => {
+      queue.push(ship("1"));
+      queue.push(build("W-Athens"));
+      const [, upgrade] = queue.list();
+      const runner = new TaskRunner(queue, { intervalMs: 1000 })
+        .register("sendResource", async () => ({ status: "retry" }))
+        .register("upgradeBuilding", () => new Promise(() => {}));
+
+      runner.start();
+      await tick(); // the shipment: no ships, retry
+      expect(runner.currentTaskId).toBe(upgrade.id);
+    },
+  );
+
+  it("leaves out a type the runner may not run", () => {
+    queue.push(ship("1"));
+    queue.push(build("W-Athens"));
+    const [, upgrade] = queue.list();
+    const runner = new TaskRunner(queue, {
+      intervalMs: 1000,
+      allowsType: (type) => type === "upgradeBuilding",
+    });
+
+    runner.start();
+    expect(runner.currentTaskId).toBe(upgrade.id);
+    runner.stop();
   });
 });

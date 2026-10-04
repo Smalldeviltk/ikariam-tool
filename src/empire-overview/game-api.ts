@@ -514,6 +514,19 @@ export const ikariam: any = {
         while (len) {
           len--;
           var entry = response[len];
+          // `[name, null]` is the game's own way of sending nothing for that
+          // name, not a malformed entry: a town switch's response carries
+          // `updateBacklink`, `popupData`, `removeIngameCounterData` and
+          // `ingameCounterData` like this (measured 02/10). Skipped without a
+          // bug record — reporting it put noise in every report.
+          if (
+            Array.isArray(entry) &&
+            entry.length === 2 &&
+            typeof entry[0] === "string" &&
+            entry[1] === null
+          ) {
+            continue;
+          }
           if (!Array.isArray(entry) || entry.length < 2 || entry[1] == null) {
             // Recorded rather than ignored: the shape is worth knowing, and
             // the reporter aggregates repeats rather than flooding.

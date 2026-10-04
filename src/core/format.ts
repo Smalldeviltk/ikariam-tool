@@ -16,8 +16,10 @@ export const SECONDS_PER_HOUR = 3600;
 
 const TIME_FACTORS: ReadonlyArray<readonly [suffix: string, seconds: number]> =
   [
+    // The game's year is 365 days and its month 30 (measured 01/10 against
+    // the building help pages); the month was 2520000 s, about 29.17 days.
     ["Y", 31536000],
-    ["M", 2520000],
+    ["M", 2592000],
     ["D", 86400],
     ["h", 3600],
     ["m", 60],

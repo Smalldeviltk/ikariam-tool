@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initState } from "../state";
 import { handleSendResource } from "./send-resources";
 import type { Task } from "@core/task-queue";
@@ -42,17 +42,29 @@ const HEADER =
   `</ul></div></div>`;
 
 /**
- * A miniature Ikariam that moves between the four views the handler drives.
+ * A miniature Ikariam that moves between the views the handler drives: the
+ * town view (with a port in slot 1), the shipment form, and anything else.
  *
- * `afterSubmit` is the interesting knob: the game may or may not have the
- * port's town list back by the time the handler looks.
+ * The shipment form is opened the way the game's transport panel opens it:
+ * `ajaxHandlerCall("?view=transport&destinationCityId=<id>")` draws
+ * `form#transportForm` with that id in a hidden field (captured 03/10).
+ * `afterSubmit` is where the game leaves the page once the goods are sent.
  */
 function installGame(options: {
-  afterSubmit: "port-list" | "elsewhere";
+  afterSubmit: "town" | "form" | "elsewhere";
   /** Idle ships once the form is up, when they changed on the way there. */
   shipsAtForm?: { merchants: number; freighters: number };
+  /** Draw a town view without a port. */
+  noPort?: boolean;
 }) {
-  const state = { view: "", submitted: 0, sentWine: "" };
+  const state = {
+    view: "",
+    submitted: 0,
+    sentWine: "",
+    sentTo: "",
+    ajaxCalls: [] as string[],
+  };
+  let destination = "";
 
   function render(view: string) {
     state.view = view;
@@ -64,33 +76,25 @@ function installGame(options: {
         .replace(`freeFreighters">0<`, `freeFreighters">${freighters}<`);
     }
     if (view === "town") {
-      body +=
-        `<div id="position1" class="position1 building port">` +
-        `<a class="hoverable" id="js_CityPosition1Link"></a></div>`;
-    } else if (view === "port-list") {
-      body += `<ul class="cities clearfix"><li><a>${TOWNS[1]}</a></li></ul>`;
+      body += options.noPort
+        ? `<div id="position1" class="position1 building shipyard"></div>`
+        : `<div id="position1" class="position1 building port">` +
+          `<a class="hoverable" id="js_CityPosition1Link"></a></div>`;
     } else if (view === "form") {
       body +=
-        `<ul class="cities clearfix"><li><a>${TOWNS[1]}</a></li></ul>` +
+        `<form id="transportForm">` +
+        `<input type="hidden" name="destinationCityId" value="${destination}">` +
         `<input type="text" id="textfield_wine" value="0"/>` +
-        `<div id="submit"></div>`;
+        `<div id="submit"></div></form>`;
     }
-    // "elsewhere" is the transport confirmation: no `.cities.clearfix` at all.
     document.body.innerHTML = body;
     wire();
   }
 
   function wire() {
-    document
-      .querySelector("#js_CityPosition1Link")
-      ?.addEventListener("click", () => render("port-list"));
-    document
-      .querySelector(".cities.clearfix > li > a")
-      ?.addEventListener("click", () => {
-        if (state.view === "port-list") render("form");
-      });
     document.querySelector("#submit")?.addEventListener("click", () => {
       state.submitted++;
+      state.sentTo = destination;
       state.sentWine =
         (document.querySelector("#textfield_wine") as HTMLInputElement)
           ?.value ?? "";
@@ -100,6 +104,15 @@ function installGame(options: {
       .querySelector("#js_cityLink > a")
       ?.addEventListener("click", () => render("town"));
   }
+
+  Object.assign(window, {
+    ajaxHandlerCall: (url: string) => {
+      state.ajaxCalls.push(url);
+      destination =
+        new URLSearchParams(url.split("?")[1]).get("destinationCityId") ?? "";
+      render("form");
+    },
+  });
 
   return { state, render };
 }
@@ -117,25 +130,48 @@ beforeEach(() => {
   vi.useFakeTimers();
 });
 
+afterEach(() => {
+  delete (window as { ajaxHandlerCall?: unknown }).ajaxHandlerCall;
+});
+
 describe("handleSendResource", () => {
-  it("sends from the town view and reports done", async () => {
-    const game = installGame({ afterSubmit: "port-list" });
+  it(
+    "opens the shipment form for the destination's city id, fills it and " +
+      "reports done — the port's town list is gone from the game (§2.A)",
+    async () => {
+      const game = installGame({ afterSubmit: "town" });
+      game.render("town");
+
+      await expect(run(shipment(1000))).resolves.toEqual({ status: "done" });
+      // Destination "1" is M-Corinth, whose dropdown entry is 297035.
+      expect(game.state.ajaxCalls).toEqual([
+        "?view=transport&destinationCityId=297035",
+      ]);
+      expect(game.state.submitted).toBe(1);
+      expect(game.state.sentTo).toBe("297035");
+      expect(game.state.sentWine).toBe("1000");
+    },
+  );
+
+  it("defers, opening nothing, when the source town has no port", async () => {
+    const game = installGame({ afterSubmit: "town", noPort: true });
     game.render("town");
 
-    await expect(run(shipment(1000))).resolves.toEqual({ status: "done" });
-    expect(game.state.submitted).toBe(1);
-    expect(game.state.sentWine).toBe("1000");
+    await expect(run(shipment(1000))).resolves.toMatchObject({
+      status: "defer",
+    });
+    expect(game.state.ajaxCalls).toEqual([]);
   });
 
   it(
-    "REGRESSION: starts from the port list too — `openPort` needs " +
+    "REGRESSION: starts from another view too — the port check needs " +
       "`#position1`, which only exists on the town view, and the previous " +
-      "shipment leaves the page on the port list. `gotoTown` returns early " +
-      "when the town is already selected, so nothing navigated back and the " +
-      "queue deferred every tick until a town was opened by hand",
+      "shipment leaves the page elsewhere. `gotoTown` returns early when " +
+      "the town is already selected, so nothing navigated back and the queue " +
+      "deferred every tick until a town was opened by hand",
     async () => {
-      const game = installGame({ afterSubmit: "port-list" });
-      game.render("port-list");
+      const game = installGame({ afterSubmit: "town" });
+      game.render("elsewhere");
 
       await expect(run(shipment(1000))).resolves.toEqual({ status: "done" });
       expect(game.state.submitted).toBe(1);
@@ -143,11 +179,11 @@ describe("handleSendResource", () => {
   );
 
   it(
-    "REGRESSION: does not throw when the port list is not back after the " +
-      "submit — the cargo is already gone, and the runner keeps a thrown " +
-      "task queued, so throwing here would ship it twice",
+    "REGRESSION: does not throw when the form is still up after the submit " +
+      "— the cargo is already gone, and the runner keeps a thrown task " +
+      "queued, so throwing here would ship it twice",
     async () => {
-      const game = installGame({ afterSubmit: "elsewhere" });
+      const game = installGame({ afterSubmit: "form" });
       game.render("town");
 
       await expect(run(shipment(1000))).resolves.toEqual({ status: "done" });
@@ -156,7 +192,7 @@ describe("handleSendResource", () => {
   );
 
   it("carries the remainder forward when one convoy cannot hold it all", async () => {
-    const game = installGame({ afterSubmit: "port-list" });
+    const game = installGame({ afterSubmit: "town" });
     game.render("town");
 
     // 10 merchants at the 500 uncalibrated base = 5000 per convoy.
@@ -171,7 +207,7 @@ describe("handleSendResource", () => {
       "less than the order and less than one ship's cargo — every convoy " +
       "used to send whatever had come in since the last, a ship at a time",
     async () => {
-      const game = installGame({ afterSubmit: "port-list" });
+      const game = installGame({ afterSubmit: "town" });
       game.render("town");
       // One merchant ship carries 500 until calibrated.
       document.querySelector("#js_GlobalMenu_wine")!.innerHTML = "499";
@@ -184,7 +220,7 @@ describe("handleSendResource", () => {
   );
 
   it("ships what the source holds once that fills at least one ship", async () => {
-    const game = installGame({ afterSubmit: "port-list" });
+    const game = installGame({ afterSubmit: "town" });
     game.render("town");
     document.querySelector("#js_GlobalMenu_wine")!.innerHTML = "700";
 
@@ -196,7 +232,7 @@ describe("handleSendResource", () => {
   });
 
   it("ships an order smaller than one ship when the stock covers it", async () => {
-    const game = installGame({ afterSubmit: "port-list" });
+    const game = installGame({ afterSubmit: "town" });
     game.render("town");
     document.querySelector("#js_GlobalMenu_wine")!.innerHTML = "400";
 
@@ -205,7 +241,7 @@ describe("handleSendResource", () => {
   });
 
   it("keeps Auto Wine's reserve out of what counts as the stock", async () => {
-    const game = installGame({ afterSubmit: "port-list" });
+    const game = installGame({ afterSubmit: "town" });
     game.render("town");
     document.querySelector("#js_GlobalMenu_wine")!.innerHTML = "1,000";
 
@@ -223,7 +259,7 @@ describe("handleSendResource", () => {
   }
 
   it("with only freighters idle, waits for one freighter's cargo", async () => {
-    const game = installGame({ afterSubmit: "port-list" });
+    const game = installGame({ afterSubmit: "town" });
     game.render("town");
     onlyFreighters("2");
     // Twenty merchant ships' worth, but under one freighter's 50,000.
@@ -237,7 +273,7 @@ describe("handleSendResource", () => {
 
   it("with only freighters idle, ships once the stock fills one", async () => {
     const game = installGame({
-      afterSubmit: "port-list",
+      afterSubmit: "town",
       shipsAtForm: { merchants: 0, freighters: 2 },
     });
     game.render("town");
@@ -254,7 +290,7 @@ describe("handleSendResource", () => {
       "the freighters left are the bar then",
     async () => {
       const game = installGame({
-        afterSubmit: "port-list",
+        afterSubmit: "town",
         shipsAtForm: { merchants: 0, freighters: 2 },
       });
       game.render("town");
@@ -269,7 +305,7 @@ describe("handleSendResource", () => {
   );
 
   it("retries rather than consuming the order when no ship is idle", async () => {
-    const game = installGame({ afterSubmit: "port-list" });
+    const game = installGame({ afterSubmit: "town" });
     game.render("town");
     document.querySelector("#js_GlobalMenu_freeTransporters")!.innerHTML = "0";
 

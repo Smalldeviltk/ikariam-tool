@@ -162,7 +162,7 @@ export function buildPanel(): void {
   panelWindow.content.innerHTML = windowContent();
 
   refreshQueueView();
-  buildLauncher(() => panelWindow?.toggle());
+  buildLauncher(togglePanel);
 
   // The original raised the footer's z-index so the panel is not covered.
   const footer = qs("#footer");
@@ -248,7 +248,10 @@ export function setTransferInfo(text: string): void {
   );
 }
 
-/** Show or hide the window. The Space hotkey calls this. */
+/**
+ * Show or hide the window — what the menu entry (or the fallback button)
+ * does. No hotkey: Space belongs to the Empire Overview board.
+ */
 export function togglePanel(): void {
   panelWindow?.toggle();
 }

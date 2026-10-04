@@ -78,7 +78,7 @@ import {
 } from "./features/transport-buttons";
 import {
   clearBugs,
-  exportBugReport,
+  exportFullBugReport,
   getBugs,
   installDiagnostics,
   summariseBugs,
@@ -87,7 +87,12 @@ import { pruneTownStats, recordCurrentTown } from "./town-cache";
 import { calibrateShipCapacity } from "./ship-capacity";
 
 import { installActionDispatcher, registerActions } from "./ui/actions";
-import { exportDataToFile, importDataFromFile } from "./ui/data-transfer-ui";
+import {
+  downloadJson,
+  exportDataToFile,
+  importDataFromFile,
+  timestampedFilename,
+} from "./ui/data-transfer-ui";
 import {
   closeDialog,
   openAutoBuildDialog,
@@ -104,10 +109,13 @@ import {
   setAutoBuildButtonLabel,
   setQueueButtonLabel,
   setTransferInfo,
-  togglePanel,
   toggleZoom,
 } from "./ui/panel";
-import { refreshQueueView } from "./ui/queue-view";
+import {
+  currentTask,
+  refreshQueueView,
+  setCurrentTaskSource,
+} from "./ui/queue-view";
 
 /** Queue poll interval in ms. The original used 1000 for the shipping loop. */
 const QUEUE_INTERVAL_MS = 1000;
@@ -127,13 +135,14 @@ const TOWN_SNAPSHOT_INTERVAL_MS = 5_000;
  * keyboard layout — which is also what the deprecated `keyCode` numbers the
  * original used amounted to on a Latin layout.
  */
-const KEY_TOGGLE_PANEL = "Space";
 const KEY_SEND_ALL_ARMY = "KeyA";
 const KEY_AUTO_BUILD = "KeyB";
 const KEY_SAFEHOUSE = "KeyS";
 
 /** How much of the bug summary fits in the confirmation toast. */
 const BUG_SUMMARY_PREVIEW_CHARS = 800;
+/** Bug Report's file name starts with this, then the account and the time. */
+const BUG_REPORT_FILE_PREFIX = "ikariam-bug-report";
 
 let runner: TaskRunner;
 /** Keeps a second tab of the same account from driving the same queue. */
@@ -486,29 +495,27 @@ function registerUiActions(): void {
     "data.import": importDataFromFile,
 
     /* ── Diagnostics ── */
+    // Saved even with no bug recorded: the report also carries the game data
+    // the plan is waiting on (`captureGameData`). A file rather than the
+    // clipboard: a report full of repeats ran past what a chat paste keeps,
+    // and the end — where the game data is — was cut off.
     "bug.report": () => {
       const bugs = getBugs();
-      if (bugs.length === 0) {
-        showToast(BUG_REPORT.nothingToReport);
-        return;
-      }
-      const report = exportBugReport();
-      // `navigator.clipboard` needs a user gesture, which a button click is.
-      void navigator.clipboard
-        ?.writeText(report)
-        .then(() =>
-          showToast(
-            BUG_REPORT.copied(
-              bugs.length,
-              summariseBugs().slice(0, BUG_SUMMARY_PREVIEW_CHARS),
-            ),
-          ),
-        )
-        .catch(() => {
-          // Clipboard blocked: fall back to the console, which always works.
-          console.log(report);
-          showToast(BUG_REPORT.clipboardUnavailable);
-        });
+      const report = exportFullBugReport();
+      const filename = timestampedFilename(
+        getState().accountName,
+        BUG_REPORT_FILE_PREFIX,
+      );
+      downloadJson(filename, report.text);
+      // Cleared once they are in the file, so the next report holds only what
+      // went wrong since. A repeating fault had filled the 50 slots with old
+      // records, and the new ones never showed.
+      const summary =
+        bugs.length > 0
+          ? summariseBugs().slice(0, BUG_SUMMARY_PREVIEW_CHARS)
+          : "";
+      clearBugs();
+      showToast(BUG_REPORT.saved(filename, bugs.length, summary, report));
     },
     "bug.clear": () => {
       clearBugs();
@@ -535,16 +542,18 @@ function registerUiActions(): void {
   });
 }
 
-/** Hotkeys — same bindings as the original. */
+/**
+ * Hotkeys — the original's bindings, less Space. The original also toggled
+ * this window on Space, and so does Empire Overview its board, so one press
+ * toggled both; Space is Empire Overview's alone now (the user's choice).
+ * This window opens from its menu entry, and closes with × or Escape.
+ */
 function registerHotkeys(): void {
   document.addEventListener("keydown", (event) => {
     const tag = (event.target as HTMLElement | null)?.nodeName.toLowerCase();
     if (tag === "input" || tag === "textarea" || tag === "select") return;
 
     switch (event.code) {
-      case KEY_TOGGLE_PANEL:
-        togglePanel();
-        break;
       case KEY_SEND_ALL_ARMY:
         sendAllArmy();
         break;
@@ -628,6 +637,8 @@ export function start(): void {
 
   // Never let the keep-alive reload interrupt a task in flight.
   setReloadGuard(() => !runner.isBusy);
+  // The queue's ▶ and the status line follow the task the runner is on.
+  setCurrentTaskSource(() => runner.currentTaskId);
 
   updateCurrentAccount();
 
@@ -642,7 +653,7 @@ export function start(): void {
 
   window.setInterval(renderSummary, SUMMARY_INTERVAL_MS);
   window.setInterval(
-    () => setTransferInfo(describeCurrentTransfer()),
+    () => setTransferInfo(describeCurrentTransfer(currentTask())),
     STATUS_INTERVAL_MS,
   );
 

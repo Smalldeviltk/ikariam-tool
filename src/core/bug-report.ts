@@ -23,6 +23,7 @@
  */
 
 import { pageWindow } from "./ikariam/globals";
+import { writeToConsole } from "./logger";
 import { BUGS_NONE_RECORDED } from "./messages";
 
 /** Where recorded bugs are kept. */
@@ -258,7 +259,8 @@ export function reportBug(
     // exactly how this limit came to be written.
     const count = existing ? existing.count : 1;
     if (isLogWorthy(count)) {
-      console.warn(
+      writeToConsole(
+        "warn",
         `[ika] bug recorded (${kind}): ${message}` +
           (count > 1 ? ` [x${count}]` : ""),
       );

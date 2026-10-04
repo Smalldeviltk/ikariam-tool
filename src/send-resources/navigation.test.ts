@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  adjustDestinationIndex,
   backToCity,
   closeGamePopup,
   getTownCount,
@@ -8,7 +7,8 @@ import {
   getTownNameFromList,
   getTownNumberByName,
   gotoTown,
-  openPort,
+  openShipmentForm,
+  townHasPort,
 } from "./navigation";
 
 /**
@@ -142,62 +142,96 @@ describe("town list", () => {
   });
 });
 
-describe("adjustDestinationIndex", () => {
-  // The port's town list omits the town you are standing in, so every index
-  // above the source shifts down by one.
-  it("shifts destinations above the source down by one", () => {
-    expect(adjustDestinationIndex(5, 2)).toBe(4);
-  });
-
-  it("leaves destinations below the source untouched", () => {
-    expect(adjustDestinationIndex(1, 3)).toBe(1);
-  });
-
-  it("leaves an equal index untouched", () => {
-    expect(adjustDestinationIndex(2, 2)).toBe(2);
-  });
-
-  it("accepts string indices, as the stored queue supplies them", () => {
-    expect(adjustDestinationIndex("5", "2")).toBe(4);
-  });
-});
-
-describe("openPort", () => {
+describe("townHasPort", () => {
   const slots = (c1: string, c2: string) =>
     `<div id="position1" class="${c1}"></div><a id="js_CityPosition1Link"></a>
      <div id="position2" class="${c2}"></div><a id="js_CityPosition2Link"></a>`;
 
-  it("prefers a finished port in slot 1", () => {
-    document.body.innerHTML = slots("building port", "building port");
-    let clicked = "";
-    document.getElementById("js_CityPosition1Link")!.onclick = () =>
-      void (clicked = "1");
-    expect(openPort()).toBe(true);
-    expect(clicked).toBe("1");
+  it("finds a port in either sea slot, without clicking it", () => {
+    let clicked = false;
+    for (const [c1, c2] of [
+      ["building port", "building x"],
+      ["building barracks", "building port"],
+    ]) {
+      document.body.innerHTML = slots(c1, c2);
+      for (const link of document.querySelectorAll("a")) {
+        (link as HTMLElement).onclick = () => void (clicked = true);
+      }
+      expect(townHasPort()).toBe(true);
+    }
+    expect(clicked).toBe(false);
   });
 
-  it("falls through to slot 2", () => {
-    document.body.innerHTML = slots("building barracks", "building port");
-    let clicked = "";
-    document.getElementById("js_CityPosition2Link")!.onclick = () =>
-      void (clicked = "2");
-    expect(openPort()).toBe(true);
-    expect(clicked).toBe("2");
-  });
-
-  it("accepts a port under construction by default", () => {
+  it("accepts a port under construction, as the original did", () => {
     document.body.innerHTML = slots("building constructionSite", "building x");
-    expect(openPort()).toBe(true);
+    expect(townHasPort()).toBe(true);
   });
 
-  it("rejects a port under construction when asked to (Auto Wine)", () => {
-    document.body.innerHTML = slots("building constructionSite", "building x");
-    expect(openPort(false)).toBe(false);
-  });
-
-  it("returns false when the town has no port at all", () => {
+  it("is false when the town has no port at all", () => {
     document.body.innerHTML = slots("building barracks", "building academy");
-    expect(openPort()).toBe(false);
+    expect(townHasPort()).toBe(false);
+  });
+});
+
+describe("openShipmentForm", () => {
+  /**
+   * The game's `ajaxHandlerCall`: records the URL, and draws the shipment
+   * form for `formFor` — the town the URL asks for, unless told otherwise.
+   */
+  function installAjax(formFor?: (requested: string) => string) {
+    const calls: string[] = [];
+    Object.assign(window, {
+      ajaxHandlerCall: (url: string) => {
+        calls.push(url);
+        const requested =
+          new URLSearchParams(url.split("?")[1]).get("destinationCityId") ?? "";
+        const shown = formFor ? formFor(requested) : requested;
+        document.body.insertAdjacentHTML(
+          "beforeend",
+          `<form id="transportForm"><input type="hidden" name="destinationCityId" value="${shown}"></form>`,
+        );
+      },
+    });
+    return calls;
+  }
+
+  afterEach(() => {
+    delete (window as { ajaxHandlerCall?: unknown }).ajaxHandlerCall;
+    vi.useRealTimers();
+  });
+
+  it(
+    "asks the game for the transport view of the destination's city id — " +
+      'the call behind the transport panel\'s "Transport goods" link',
+    async () => {
+      const calls = installAjax();
+
+      await openShipmentForm(2);
+
+      expect(calls).toEqual(["?view=transport&destinationCityId=78040"]);
+    },
+  );
+
+  it("does not settle for a form opened for another town", async () => {
+    vi.useFakeTimers();
+    installAjax(() => "78038");
+
+    const opening = openShipmentForm(2);
+    const failed = expect(opening).rejects.toThrow(/timed out/);
+    await vi.advanceTimersByTimeAsync(16_000);
+    await failed;
+  });
+
+  it("throws, sending nothing, when the page has no ajaxHandlerCall", async () => {
+    await expect(openShipmentForm(2)).rejects.toThrow(/ajaxHandlerCall/);
+  });
+
+  it("throws when the dropdown entry has no city id", async () => {
+    const calls = installAjax();
+    document.querySelectorAll("li")[2].removeAttribute("selectvalue");
+
+    await expect(openShipmentForm(2)).rejects.toThrow(/No city id/);
+    expect(calls).toEqual([]);
   });
 });
 
@@ -405,6 +439,28 @@ describe("a dropdown that shows coordinates", () => {
 
       await expect(gotoTown(2)).rejects.toThrow(/did not land/);
       expect(page.submitted).toEqual([]);
+    },
+  );
+
+  it(
+    "REGRESSION: says the same thing however long ago the switch was sent — " +
+      "the seconds were in the message, so the bug reporter, which groups " +
+      "repeats by message, filed a new record every second",
+    async () => {
+      installFormAndBoard();
+      const messageAfter = async (ago: number) => {
+        switchSentBeforeTheReload("S-Clone1", ago);
+        return gotoTown(2).then(
+          () => "",
+          (e: Error) => e.message,
+        );
+      };
+
+      const early = await messageAfter(2_000);
+      const later = await messageAfter(17_000);
+
+      expect(early).toMatch(/did not land/);
+      expect(later).toBe(early);
     },
   );
 

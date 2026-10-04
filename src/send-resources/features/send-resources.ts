@@ -14,18 +14,17 @@
  *    rather than being consumed for free.
  */
 
-import { qs, setInputValue, waitForElement, waitForElements } from "@core/dom";
-import { sleep } from "@core/async";
+import { qs, setInputValue, waitForElement } from "@core/dom";
+import { sleep, waitFor } from "@core/async";
 import { logInfo } from "@core/logger";
 import { SEL } from "@core/ikariam/selectors";
 import type { Task, TaskResult } from "@core/task-queue";
 import {
-  adjustDestinationIndex,
   backToCity,
-  clickDestinationTown,
   getTownNameFromList,
   gotoTown,
-  openPort,
+  openShipmentForm,
+  townHasPort,
 } from "../navigation";
 import { getActionPoints, getFreeShips, readCurrentStock } from "../game-state";
 import { getFreighterCapacity, getPerShipCapacity } from "../ship-capacity";
@@ -35,8 +34,8 @@ import type { ResourceId } from "../types";
 
 /**
  * How long to wait for the town view after asking to go back to it.
- * Short: if it does not arrive, `openPort` fails and the task defers, which
- * is the correct outcome anyway.
+ * Short: if it does not arrive, `townHasPort` fails and the task defers,
+ * which is the correct outcome anyway.
  */
 const BACK_TO_TOWN_TIMEOUT_MS = 5_000;
 
@@ -133,13 +132,12 @@ export async function handleSendResource(
 
   // Get back to the TOWN view before looking for the port.
   //
-  // `openPort` finds its target through `#position1` / `#position2`, which
-  // exist only there — and nothing guaranteed we were there. The previous
-  // shipment leaves the page on the port's town list, and `gotoTown` returns
-  // early when the town is already selected, so it does not navigate back
-  // either. The queue therefore ran exactly one shipment and then deferred
-  // every tick after it, until the player opened a town by hand — which is
-  // precisely what the port had to be clicked for, over and over.
+  // `townHasPort` reads `#position1` / `#position2`, which exist only there —
+  // and nothing guaranteed we were there. The previous shipment leaves the
+  // page elsewhere, and `gotoTown` returns early when the town is already
+  // selected, so it does not navigate back either. The queue therefore ran
+  // exactly one shipment and then deferred every tick after it, until the
+  // player opened a town by hand.
   if (!qs(SEL.position(1)) && !qs(SEL.position(2))) {
     backToCity("shipment needs the town view to find the port");
     await waitForElement(SEL.position(1), {
@@ -147,7 +145,7 @@ export async function handleSendResource(
     }).catch(() => null);
   }
 
-  if (!openPort()) {
+  if (!townHasPort()) {
     // Specific to this town — other shipments may still be possible.
     return {
       status: "defer",
@@ -155,12 +153,10 @@ export async function handleSendResource(
     };
   }
 
-  await clickDestinationTown(adjustDestinationIndex(destination, origin));
-
-  // The shipment form is only ready once the wine input exists — the original
-  // used that same element to tell the resource form apart from the troop
-  // transport form, which has no wine field.
-  await waitForElement(SEL.wineField);
+  // Straight to the form for this destination, the way the game's transport
+  // panel opens it. It replaces clicking the port and then the destination in
+  // a town list the game no longer draws (improvement-plan.md §2.A).
+  await openShipmentForm(destination);
 
   // Ship counts are re-read HERE, not before navigating. The original read them
   // inside `enterValue`, i.e. once the port form was up, and several seconds of
@@ -202,9 +198,10 @@ export async function handleSendResource(
   // PAST THIS POINT THE GOODS HAVE LEFT. Nothing below may throw: the runner
   // deliberately keeps a thrown task queued, so a throw here would send the
   // same cargo a second time. The wait is a courtesy — it lets the game
-  // settle before we navigate — not a condition.
-  await waitForElements(SEL.dockCities, 1, {
+  // take the form down before we navigate — not a condition.
+  await waitFor(() => !qs(SEL.shipmentForm), {
     timeoutMs: POST_SUBMIT_TIMEOUT_MS,
+    label: "shipment form to close",
   }).catch(() => null);
 
   logInfo(
@@ -222,11 +219,14 @@ export async function handleSendResource(
   };
 }
 
-/** Status line for the panel. */
-export function describeCurrentTransfer(): string {
-  const head = getState().queue.head();
-  if (!head || head.type !== "sendResource") return TRANSFER_STATUS.idle;
-  const { amount, resource, origin, destination } = head.data;
+/**
+ * Status line for the panel, for the task the runner is on (`task`) — not
+ * the head of the queue, which a shipment waiting for ships can hold while
+ * the upgrades behind it run.
+ */
+export function describeCurrentTransfer(task: Task | undefined): string {
+  if (!task || task.type !== "sendResource") return TRANSFER_STATUS.idle;
+  const { amount, resource, origin, destination } = task.data;
   return (
     `${amount} ${resource} from ${getTownNameFromList(origin)} ` +
     `to ${getTownNameFromList(destination)}`

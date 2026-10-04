@@ -28,10 +28,14 @@ const GROUP_LABELS: Readonly<Record<DataGroup, string>> =
 /** Import notes shown after an import; the rest are in the log. */
 const MAX_NOTES_SHOWN = 5;
 
-function timestampedFilename(account: string): string {
+/** `<prefix>-<account>-<UTC date and time>.json`, safe as a file name. */
+export function timestampedFilename(
+  account: string,
+  prefix = "ikariam-tool",
+): string {
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
   const safeAccount = account.replace(/[^\w.-]+/g, "_");
-  return `ikariam-tool-${safeAccount}-${stamp}.json`;
+  return `${prefix}-${safeAccount}-${stamp}.json`;
 }
 
 export function downloadJson(filename: string, json: string): void {

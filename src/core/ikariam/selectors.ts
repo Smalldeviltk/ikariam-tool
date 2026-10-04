@@ -46,7 +46,6 @@ export const SEL = {
 
   /** Building slots around the town. */
   position: (n: number) => `#position${n}`,
-  cityPositionLink: (n: number) => `#js_CityPosition${n}Link`,
   buildings: "div[id^='position'].building:not(.buildingGround)",
   /**
    * The Wine Press. Ikariam's internal name for it is "vineyard".
@@ -61,10 +60,18 @@ export const SEL = {
   safehouse: "div.building.safehouse > a",
   buildingUpgradeButton: "#js_buildingUpgradeButton",
 
-  /** Destination town list inside the trading port view. */
-  dockCities: ".cities.clearfix > li > a",
+  /**
+   * The shipment form, as `?view=transport&destinationCityId=<id>` draws it
+   * (captured through Bug Report, 03/10): `form#transportForm`, submitted by
+   * the game's `checkTransporterForm()`, with the destination in a hidden
+   * `destinationCityId` field. The old port town list (`.cities.clearfix`) is
+   * gone from the game; the destination is no longer picked from a list.
+   */
+  shipmentForm: "#transportForm",
+  shipmentDestination: (cityId: string) =>
+    `#transportForm input[name="destinationCityId"][value="${cityId}"]`,
 
-  /** Shipment form in the trading port. */
+  /** Fields of the shipment form — unchanged by the game, checked 03/10. */
   resourceField: (resource: string) => `#textfield_${resource}`,
   wineField: "#textfield_wine",
   submit: "#submit",

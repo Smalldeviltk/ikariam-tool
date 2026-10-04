@@ -25,6 +25,16 @@ vi.mock("@core/ui/window", async (importOriginal) => ({
   showToast,
 }));
 
+// Files the app saves (Bug Report). Captured instead of downloaded; the other
+// exports of the module stay real.
+const { downloadJson } = vi.hoisted(() => ({
+  downloadJson: vi.fn<(filename: string, json: string) => void>(),
+}));
+vi.mock("./ui/data-transfer-ui", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./ui/data-transfer-ui")>()),
+  downloadJson,
+}));
+
 // The scan is tested in `auto-build.test.ts`; here Auto Wine's Start only
 // needs to know whether one ran, and what it brought back.
 const { scanBuildings } = vi.hoisted(() => ({ scanBuildings: vi.fn() }));
@@ -237,6 +247,59 @@ describe("the Transport settings dialog", () => {
 
   beforeEach(() => {
     showToast.mockClear();
+  });
+
+  it("shows ten shipments in its table and scrolls the rest", async () => {
+    await startWith({});
+    const { getState: appGetState } = await appState();
+    for (let i = 0; i < 12; i++) {
+      appGetState().queue.push({
+        type: "sendResource",
+        data: { origin: "0", destination: "1", resource: "wine", amount: i },
+      });
+    }
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="resourceTableScroll"><table><thead><tr><th></th></tr></thead>` +
+        `<tbody id="resourceTableBody"></tbody></table></div>`,
+    );
+    // happy-dom has no layout: 20px per row, the header row first.
+    const spy = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(function (this: HTMLElement) {
+        if (!this.matches("tbody > tr")) {
+          return { top: 0, bottom: 0, height: 0 } as DOMRect;
+        }
+        const index = [...this.parentElement!.children].indexOf(this) + 1;
+        return { top: index * 20, bottom: (index + 1) * 20 } as DOMRect;
+      });
+    try {
+      const { renderResourceTable } = await import("./ui/dialogs");
+      renderResourceTable();
+    } finally {
+      spy.mockRestore();
+    }
+
+    // Header (20px) + ten shipments of 20px: the tenth ends at 220px.
+    expect(
+      document.querySelector<HTMLElement>("#resourceTableScroll")!.style
+        .maxHeight,
+    ).toBe("220px");
+  });
+
+  it("names the resources in its table as the game does, not by DOM id", async () => {
+    await startWith({});
+    installSendForm({ glass: "500" });
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<table><tbody id="resourceTableBody"></tbody></table>`,
+    );
+
+    await actions["send.add"](document.body);
+
+    const table = document.querySelector("#resourceTableBody")!.textContent;
+    expect(table).toContain("Crystal");
+    expect(table).not.toContain("glass");
   });
 
   it(
@@ -467,6 +530,9 @@ describe("Auto Wine", () => {
     expect(String(createPopup.mock.lastCall?.[2])).toContain(
       'data-ika-action="wine.autoRunFrom"',
     );
+    // A plain popup with no extra class: the game's source reads the fourth
+    // argument as a TYPE_* constant and the fifth as a class name.
+    expect(createPopup.mock.lastCall?.slice(3)).toEqual([null, null]);
   });
 
   it(
@@ -531,6 +597,21 @@ describe("the Auto Build settings dialog", () => {
       expect(timers()).toBe(IDLE);
     },
   );
+
+  it("has a Close button next to Save", async () => {
+    const createPopup = vi.fn();
+    await startWith({});
+    Object.assign(window, { ikariam: { createPopup } });
+    try {
+      await actions["build.settings"](document.body);
+    } finally {
+      delete window.ikariam;
+    }
+
+    const html = String(createPopup.mock.lastCall?.[2]);
+    expect(html).toContain('data-ika-action="build.save"');
+    expect(html).toContain('data-ika-action="dialog.close"');
+  });
 });
 
 describe("Auto Build after the queue runs dry", () => {
@@ -844,4 +925,168 @@ describe("the account table's build time buff", () => {
 
     expect(field()!.value).toBe("12");
   });
+});
+
+describe("Bug Report", () => {
+  beforeEach(() => {
+    downloadJson.mockClear();
+    showToast.mockClear();
+    (window as unknown as { ikariam?: unknown }).ikariam = {
+      createPopup: function createPopup(id: string, title: string) {
+        return `${id}:${title}`;
+      },
+    };
+  });
+
+  /** Press it, and read back the file it saved. */
+  async function pressBugReport(): Promise<Record<string, any>> {
+    await actions["bug.report"](document.body);
+    expect(downloadJson).toHaveBeenCalledTimes(1);
+    return JSON.parse(downloadJson.mock.calls[0][1]);
+  }
+
+  it("saves the report as a JSON file named for the account and the time", async () => {
+    await startWith({});
+    await pressBugReport();
+
+    const filename = downloadJson.mock.calls[0][0];
+    expect(filename).toMatch(
+      /^ikariam-bug-report-tester-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}\.json$/,
+    );
+    expect(showToast.mock.lastCall![0]).toContain(
+      `Saved the bug report as ${filename}`,
+    );
+  });
+
+  it(
+    "carries the newest log lines, newest first — the order of events " +
+      "across reloads that a bug record cannot show",
+    async () => {
+      await startWith({});
+      const lines = Array.from({ length: 250 }, (_, i) => `line ${250 - i}`);
+      localStorage.setItem("loggerInfo", lines.join("\n") + "\n");
+
+      const report = await pressBugReport();
+
+      expect(report.log).toHaveLength(200);
+      expect(report.log[0]).toBe("line 250");
+      expect(report.log[199]).toBe("line 51");
+    },
+  );
+
+  it(
+    "clears the recorded bugs once they are in the file, so the next " +
+      "report holds only new ones",
+    async () => {
+      await startWith({});
+      const { getBugs, reportBug } = await import("@core/bug-report");
+      reportBug("manual", new Error("Town switch did not land"));
+
+      const first = await pressBugReport();
+      expect(first.bugs.map((bug: { message: string }) => bug.message)).toEqual(
+        ["Town switch did not land"],
+      );
+      expect(getBugs()).toEqual([]);
+      expect(showToast.mock.lastCall![0]).toContain("then cleared them");
+
+      downloadJson.mockClear();
+      const second = await pressBugReport();
+      expect(second.bugs).toEqual([]);
+    },
+  );
+
+  /**
+   * The game's shipment screen: a form around the wine field, and one
+   * control that is not showing. happy-dom has no layout, so which one is
+   * hidden is stated with `offsetParent`.
+   */
+  function showShipmentForm(): void {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<form id="transportForm"><input id="textfield_wine" name="cargo_tradegood1" value="0">` +
+        `<input id="submit" type="submit" value="Transport!"></form>` +
+        `<input id="hiddenControl" name="notShown">`,
+    );
+    Object.defineProperty(
+      document.getElementById("hiddenControl")!,
+      "offsetParent",
+      { value: null },
+    );
+  }
+
+  it(
+    "saves even with no bug recorded, with the game's createPopup source, " +
+      "and says the shipment form was not on screen",
+    async () => {
+      await startWith({});
+      const report = await pressBugReport();
+
+      expect(report.bugs).toEqual([]);
+      expect(report.gameData.createPopupSource).toContain(
+        "function createPopup",
+      );
+      expect(report.gameData.shipmentForm.present).toBe(false);
+
+      const toast = showToast.mock.lastCall![0] as string;
+      expect(toast).toContain("no bugs recorded");
+      expect(toast).toContain("createPopup) included");
+      expect(toast).toContain("Shipment form not on screen");
+    },
+  );
+
+  it("captures the shipment form and its visible controls when it is on screen", async () => {
+    await startWith({});
+    showShipmentForm();
+    const report = await pressBugReport();
+
+    const form = report.gameData.shipmentForm;
+    expect(form.present).toBe(true);
+    expect(form.wineFieldForm).toContain('id="transportForm"');
+    expect(form.wineFieldForm).toContain("cargo_tradegood1");
+    // Only the game's controls: the hidden one is left out, and so is every
+    // button of this script's own window (Bug Report among them), which used
+    // to be most of the list.
+    const ids = form.visibleControls.map((c: { id: string }) => c.id);
+    expect(ids).toEqual(["transportForm", "textfield_wine", "submit"]);
+    expect(showToast.mock.lastCall![0]).toContain("Shipment form captured.");
+  });
+
+  it("says so when the game's createPopup cannot be read", async () => {
+    await startWith({});
+    delete (window as unknown as { ikariam?: unknown }).ikariam;
+    const report = await pressBugReport();
+
+    expect(report.gameData.createPopupSource).toBeNull();
+    expect(showToast.mock.lastCall![0]).toContain("not readable");
+  });
+
+  it("gives the same full report from the console's ikaBugReport()", async () => {
+    await startWith({});
+    const fromConsole = JSON.parse(
+      (window as unknown as { ikaBugReport: () => string }).ikaBugReport(),
+    );
+    expect(fromConsole.gameData.createPopupSource).toContain(
+      "function createPopup",
+    );
+  });
+});
+
+describe("hotkeys", () => {
+  it(
+    "leaves Space to Empire Overview — both scripts toggled their window on " +
+      "it, so one press opened or closed both",
+    async () => {
+      await startWith({});
+      const win = document.querySelector<HTMLElement>(
+        "#ikaSendResourcesWindow",
+      )!;
+      const before = win.hidden;
+
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", { code: "Space", bubbles: true }),
+      );
+
+      expect(win.hidden).toBe(before);
+    },
+  );
 });

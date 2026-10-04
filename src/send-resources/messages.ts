@@ -37,6 +37,8 @@ export const DURATION = {
   unknown: "—",
   underAnHour: "<1h",
   hours: (hours: number) => `${hours}h`,
+  /** Hours to one decimal, as the Auto Wine dialog and its preview show them. */
+  hoursToTenths: (hours: number) => `${hours.toFixed(1)}h`,
   days: (days: number) => `${days}d`,
   daysAndHours: (days: number, hours: number) => `${days}d ${hours}h`,
 } as const;
@@ -233,13 +235,24 @@ export const SHIP_CAPACITY = {
 } as const;
 
 export const BUG_REPORT = {
-  nothingToReport: "No bugs recorded. Nothing to report.",
-  copied: (count: number, summary: string) =>
-    `Copied a report of ${count} distinct issue(s) to the clipboard.\n\n` +
-    summary,
-  clipboardUnavailable:
-    "Clipboard unavailable — the full report was printed to the console " +
-    "(F12). You can also run ikaBugReport().",
+  saved: (
+    filename: string,
+    count: number,
+    summary: string,
+    captured: { shipmentFormCaptured: boolean; createPopupCaptured: boolean },
+  ) =>
+    `Saved the bug report as ${filename}` +
+    (count > 0
+      ? ` (${count} distinct issue(s)), then cleared them.`
+      : " (no bugs recorded).") +
+    (captured.createPopupCaptured
+      ? "\nGame code (createPopup) included."
+      : "\nGame code (createPopup) not readable on this page.") +
+    (captured.shipmentFormCaptured
+      ? "\nShipment form captured."
+      : "\nShipment form not on screen: open the Trading Port, click " +
+        '"Transport goods", then press Bug Report again to capture it.') +
+    (summary ? `\n\n${summary}` : ""),
   cleared: "Bug reports cleared.",
 } as const;
 

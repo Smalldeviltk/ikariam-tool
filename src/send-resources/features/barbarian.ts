@@ -30,7 +30,9 @@ function annotate(containerSelector: string, addOne: boolean): void {
   node.className = MARKER_CLASS;
   // One merchant ship's cargo: the calibrated figure, 500 until calibrated.
   // The original hard-coded 520, which is right for one research level only.
-  const ships = Math.round(total / getPerShipCapacity());
+  // Rounded up: a part-filled ship is still a ship (1,200 at 500 is 3 ships;
+  // the original's Math.round said 2).
+  const ships = Math.ceil(total / getPerShipCapacity());
   node.innerHTML = addOne ? String(ships + 1) : `${ships} (${total})`;
   container.appendChild(node);
 }

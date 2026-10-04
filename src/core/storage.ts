@@ -12,6 +12,8 @@
  * schemes together with a migration.
  */
 
+import { writeToConsole } from "./logger";
+
 export interface Store {
   get(key: string): string | null;
   get(key: string, fallback: string): string;
@@ -49,7 +51,10 @@ function makeStore(prefix: string): Store {
         // The old code let a malformed payload throw; the outer try/catch
         // swallowed it and reloaded the page. Returning the fallback is far
         // easier to diagnose.
-        console.warn(`[ika] Corrupt JSON at "${fullKey(key)}", using default`);
+        writeToConsole(
+          "warn",
+          `[ika] Corrupt JSON at "${fullKey(key)}", using default`,
+        );
         return fallback;
       }
     },

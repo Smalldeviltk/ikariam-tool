@@ -18,7 +18,7 @@
  * cannot drift out of step with the queue.
  */
 
-import { escapeHtml, qs } from "@core/dom";
+import { capVisibleRows, escapeHtml, qs } from "@core/dom";
 import { formatInteger } from "@core/format";
 import type { Task } from "@core/task-queue";
 import { QUEUE_VIEW } from "../messages";
@@ -31,6 +31,34 @@ export const QUEUE_LIST_ID = "ikaQueueList";
 
 /** How many entries to draw. A queue longer than this is already a problem. */
 const MAX_ROWS = 50;
+
+/** Tasks shown before the list scrolls (the user's choice). */
+export const VISIBLE_ROWS = 10;
+
+/** The box around the table that scrolls past `VISIBLE_ROWS`. */
+const QUEUE_SCROLL_CLASS = "ika-queue-scroll";
+
+/**
+ * Id of the task the runner is on, or `null` when it runs nothing. The app
+ * sets this to the runner's `currentTaskId`; until then it is the head of
+ * the queue, as it always was.
+ */
+let currentTaskId: () => string | null = () =>
+  getState().queue.head()?.id ?? null;
+
+export function setCurrentTaskSource(source: () => string | null): void {
+  currentTaskId = source;
+}
+
+/** The task the runner is on, if it is still queued. */
+export function currentTask(): Task | undefined {
+  const id = currentTaskId();
+  return id === null
+    ? undefined
+    : getState()
+        .queue.list()
+        .find((task) => task.id === id);
+}
 
 /** Plain-language description of one task. */
 export function describeTask(task: Task): string {
@@ -48,14 +76,14 @@ export function describeTask(task: Task): string {
 function row(
   task: Task,
   index: number,
-  isHead: boolean,
+  isCurrent: boolean,
   isLast: boolean,
 ): string {
-  // The head is the one the runner is working on; marking it is the difference
-  // between "stalled" and "empty", which is what this view exists to show.
-  const marker = isHead ? " ▶" : "";
+  // The task the runner is on; marking it is the difference between
+  // "stalled" and "empty", which is what this view exists to show.
+  const marker = isCurrent ? " ▶" : "";
   return (
-    `<tr data-ika-queue-id="${escapeHtml(task.id)}"${isHead ? ' class="active"' : ""}>` +
+    `<tr data-ika-queue-id="${escapeHtml(task.id)}"${isCurrent ? ' class="active"' : ""}>` +
     `<td>${index + 1}${marker}</td>` +
     `<td>${escapeHtml(describeTask(task))}</td>` +
     `<td>` +
@@ -79,7 +107,7 @@ export function renderQueue(): string {
     return `<p class="ika-queue-empty">${QUEUE_VIEW.empty}</p>`;
   }
 
-  const head = queue.head();
+  const current = currentTaskId();
   const shown = tasks.slice(0, MAX_ROWS);
   const overflow =
     tasks.length > MAX_ROWS
@@ -87,21 +115,30 @@ export function renderQueue(): string {
       : "";
 
   return (
+    `<div class="${QUEUE_SCROLL_CLASS}">` +
     `<table class="fullTable ika-queue-table">` +
     `<tr><th>#</th><th>${QUEUE_VIEW.headerTask}</th><th></th></tr>` +
     shown
       .map((task, index) =>
-        row(task, index, head?.id === task.id, index === tasks.length - 1),
+        row(task, index, task.id === current, index === tasks.length - 1),
       )
       .join("") +
-    `</table>` +
+    `</table></div>` +
     overflow +
     `<button class="button" ${action("queue.clear")}>${QUEUE_VIEW.clearAll}</button>`
   );
 }
 
-/** Redraw the list in place. Safe to call when the panel is not built yet. */
+/**
+ * Redraw the list in place, showing at most `VISIBLE_ROWS` tasks and
+ * scrolling the rest. Safe to call when the panel is not built yet; while it
+ * is hidden the cap cannot be measured, and the next redraw with it open
+ * sets it (the status tick redraws an open panel every few seconds).
+ */
 export function refreshQueueView(): void {
   const host = qs(`#${QUEUE_LIST_ID}`);
-  if (host) host.innerHTML = renderQueue();
+  if (!host) return;
+  host.innerHTML = renderQueue();
+  const scroll = host.querySelector<HTMLElement>(`.${QUEUE_SCROLL_CLASS}`);
+  if (scroll) capVisibleRows(scroll, "tr[data-ika-queue-id]", VISIBLE_ROWS);
 }

@@ -13,14 +13,23 @@
 import { qs } from "../dom";
 import { SEL } from "./selectors";
 
-/** The game's built-in popup API, reused by Send Resources for its dialogs. */
+/**
+ * The game's built-in popup API, reused by Send Resources for its dialogs.
+ *
+ * Parameters as the game's own source uses them (captured 03/10 through Bug
+ * Report): `content` is HTML, or `[message, links, firstButton, secondButton]`;
+ * `popupType` is compared with `ikariam.PopupController.TYPE_BUBBLE` (a
+ * feedback bubble) and `TYPE_HEAVY` (adds a modal background), anything else
+ * is a plain popup; `className` is added to the popup's root after
+ * `popupMessage`, and `null` adds nothing.
+ */
 export interface IkariamPageApi {
   createPopup(
     id: string,
     title: string,
-    html: string,
-    arg4?: string,
-    arg5?: string,
+    content: string,
+    popupType?: unknown,
+    className?: string | null,
   ): void;
   templateView?: { id: string | null } | null;
   [key: string]: unknown;

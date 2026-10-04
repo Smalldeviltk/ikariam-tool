@@ -5,6 +5,7 @@ import {
   QUEUE_LIST_ID,
   refreshQueueView,
   renderQueue,
+  setCurrentTaskSource,
 } from "./queue-view";
 import type { Task } from "@core/task-queue";
 
@@ -137,6 +138,34 @@ describe("renderQueue", () => {
     },
   );
 
+  it(
+    "marks the task the runner is on, not the head — a shipment waiting for " +
+      "ships stayed marked while the upgrades behind it ran — and none when " +
+      "the runner runs nothing",
+    () => {
+      getState().queue.push(shipment(100));
+      const second = getState().queue.push(shipment(200));
+      const active = () =>
+        [
+          ...document.querySelectorAll(
+            `#${QUEUE_LIST_ID} tr[data-ika-queue-id]`,
+          ),
+        ].map((row) => row.classList.contains("active"));
+
+      try {
+        setCurrentTaskSource(() => second.id);
+        refreshQueueView();
+        expect(active()).toEqual([false, true]);
+
+        setCurrentTaskSource(() => null);
+        refreshQueueView();
+        expect(active()).toEqual([false, false]);
+      } finally {
+        setCurrentTaskSource(() => getState().queue.head()?.id ?? null);
+      }
+    },
+  );
+
   it("carries each task's id, so editing is by identity and not position", () => {
     const first = getState().queue.push(shipment(100));
     getState().queue.push(shipment(200));
@@ -194,5 +223,70 @@ describe("refreshQueueView", () => {
     expect(document.querySelector(`#${QUEUE_LIST_ID}`)!.textContent).toContain(
       "queue is empty",
     );
+  });
+});
+
+describe("the list's height", () => {
+  /**
+   * happy-dom has no layout: give every row 20px, stacked from the top of
+   * the scroll box (the header row is the first), or none at all.
+   */
+  function layOut(laidOut = true) {
+    return vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(function (this: HTMLElement) {
+        if (!laidOut || !this.matches("tr")) {
+          return { top: 0, bottom: 0, height: 0 } as DOMRect;
+        }
+        const index = [...this.parentElement!.children].indexOf(this);
+        return {
+          top: index * 20,
+          bottom: (index + 1) * 20,
+          height: 20,
+        } as DOMRect;
+      });
+  }
+
+  const scrollBox = () =>
+    document.querySelector<HTMLElement>(`#${QUEUE_LIST_ID} .ika-queue-scroll`)!;
+
+  it("shows ten tasks and scrolls the rest", () => {
+    for (let i = 0; i < 12; i++) getState().queue.push(shipment(100 + i));
+    const spy = layOut();
+    try {
+      refreshQueueView();
+    } finally {
+      spy.mockRestore();
+    }
+
+    // The header row, then ten tasks of 20px: the tenth ends at 220px.
+    expect(scrollBox().style.maxHeight).toBe("220px");
+    expect(scrollBox().style.overflowY).toBe("auto");
+  });
+
+  it("puts no cap on ten tasks or fewer", () => {
+    for (let i = 0; i < 10; i++) getState().queue.push(shipment(100 + i));
+    const spy = layOut();
+    try {
+      refreshQueueView();
+    } finally {
+      spy.mockRestore();
+    }
+
+    expect(scrollBox().style.maxHeight).toBe("");
+  });
+
+  it("leaves the cap alone while the panel is hidden and nothing measures", () => {
+    for (let i = 0; i < 12; i++) getState().queue.push(shipment(100 + i));
+    const spy = layOut(false);
+    try {
+      refreshQueueView();
+    } finally {
+      spy.mockRestore();
+    }
+
+    // Drawn fresh, so there is no earlier cap to keep: still none, and no
+    // nonsense height from a zero measurement.
+    expect(scrollBox().style.maxHeight).toBe("");
   });
 });

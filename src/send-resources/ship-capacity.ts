@@ -9,6 +9,7 @@
 import { qs, qsa } from "@core/dom";
 import { getTransportConfig } from "@core/ikariam/globals";
 import { SEL } from "@core/ikariam/selectors";
+import { writeToConsole } from "@core/logger";
 import { showToast } from "@core/ui/window";
 import { SHIP_CAPACITY } from "./messages";
 import { FLAG, getFlag, setFlag } from "./state";
@@ -108,7 +109,7 @@ export function calibrateShipCapacity(): void {
       }
     }
   } catch (e) {
-    console.warn("Could not read transportConfig:", e);
+    writeToConsole("warn", "Could not read transportConfig:", e);
   }
 
   // Source 2: Shipyard
@@ -133,7 +134,7 @@ export function calibrateShipCapacity(): void {
       }
     }
   } catch (e) {
-    console.warn("Could not parse the shipyard DOM:", e);
+    writeToConsole("warn", "Could not parse the shipyard DOM:", e);
   }
 
   if (perShip) setFlag(FLAG.perShipCapacity, perShip);

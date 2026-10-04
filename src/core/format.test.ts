@@ -22,6 +22,20 @@ describe("formatTimeLengthToStr", () => {
     expect(formatTimeLengthToStr(ms, 2)).toBe("2D 3h");
   });
 
+  it(
+    "counts a month as 30 days, as the game does — it was 2520000 s, so " +
+      "29 days and 4 hours already read as a month",
+    () => {
+      const day = 86_400_000;
+      // Trimmed: the formatter pads the zero units after the first, as the
+      // original did.
+      expect(formatTimeLengthToStr(30 * day, 2).trim()).toBe("1M");
+      expect(formatTimeLengthToStr(29 * day + 5 * 3_600_000, 2).trim()).toBe(
+        "29D 5h",
+      );
+    },
+  );
+
   it("treats undefined as zero", () => {
     expect(formatTimeLengthToStr(undefined)).toBe("");
   });

@@ -116,7 +116,9 @@ export const Utils: any = {
     var factors: any = [];
     var locStr: any = [];
     factors.year = 31536000;
-    factors.month = 2520000;
+    // FIX (not in the original): 30 days, as the game counts a month
+    // (measured 01/10); the original's 2520000 s is about 29.17 days.
+    factors.month = 2592000;
     factors.day = 86400;
     factors.hour = 3600;
     factors.minute = 60;

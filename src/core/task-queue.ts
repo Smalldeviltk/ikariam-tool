@@ -22,7 +22,7 @@
  */
 
 import { reportBug } from "./bug-report";
-import { logInfo } from "./logger";
+import { logInfo, writeToConsole } from "./logger";
 import type { Store } from "./storage";
 
 /* ────────────────────────────── Task shapes ────────────────────────────── */
@@ -418,6 +418,8 @@ export class TaskRunner {
    * `busy`: a reload starts from the head again.
    */
   private readonly blockedTypes = new Set<TaskType>();
+  /** Id of the task whose handler is running, while `busy`. */
+  private runningTaskId: string | null = null;
 
   constructor(
     private readonly queue: TaskQueue,
@@ -438,6 +440,25 @@ export class TaskRunner {
 
   get isBusy(): boolean {
     return this.busy;
+  }
+
+  /**
+   * The task this runner is working on; between ticks, the one the next tick
+   * would pick. `null` while it is stopped and idle, or has nothing it may run.
+   *
+   * What the queue view's ▶ and the panel's status line show. They used to
+   * take the head of the queue, which since a `retry` blocks only its own
+   * type (and `allowsType` passes over a switched-off type) is often not the
+   * task running: a shipment waiting for ships stayed marked while the
+   * upgrades behind it ran.
+   */
+  get currentTaskId(): string | null {
+    if (this.runningTaskId !== null) return this.runningTaskId;
+    if (this.timer === null) return null;
+    const tasks = this.allowedTasks();
+    const next =
+      tasks.find((task) => !this.blockedTypes.has(task.type)) ?? tasks[0];
+    return next?.id ?? null;
   }
 
   start(): void {
@@ -508,6 +529,7 @@ export class TaskRunner {
     }
 
     this.busy = true;
+    this.runningTaskId = task.id;
     try {
       const result = await handler(task);
       if (result.status !== "defer") this.deferStreak = 0;
@@ -562,7 +584,9 @@ export class TaskRunner {
       const message = (e as Error)?.message ?? String(e);
       logInfo(`Error while running task ${task.type}: ${message}`);
       reportBug("task-error", e, { taskType: task.type, taskData: task.data });
-      console.error(e);
+      // Never a bare `console.error`: on the game's page it is not a
+      // function, and throwing here skipped the streak count below.
+      writeToConsole("error", e);
 
       // ...but "the next tick will succeed" has to stop being assumed at some
       // point. A task that has thrown this many times in a row is not waiting
@@ -582,6 +606,7 @@ export class TaskRunner {
       }
     } finally {
       this.busy = false;
+      this.runningTaskId = null;
     }
   }
 }

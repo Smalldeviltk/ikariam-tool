@@ -264,7 +264,7 @@ describe("live state", () => {
     },
   );
 
-  it("toggles from the Space hotkey", () => {
+  it("toggles through togglePanel, as the menu entry does", () => {
     const win = document.querySelector<HTMLElement>(`#${WINDOW_ID}`)!;
     expect(win.hidden).toBe(false);
     togglePanel();

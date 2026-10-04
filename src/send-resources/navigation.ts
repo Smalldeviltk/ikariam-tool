@@ -5,7 +5,7 @@
  * `gotoTown`, `townClick` and `townClickWine` were all the same recursive shape.
  */
 
-import { clickIfPresent, qs, qsa, waitForElements } from "@core/dom";
+import { clickIfPresent, qs, qsa, waitForElement } from "@core/dom";
 import { waitFor } from "@core/async";
 import { getCurrentTownName, pageWindow } from "@core/ikariam/globals";
 import { modelCityName } from "@core/ikariam/model";
@@ -210,9 +210,13 @@ export async function gotoTown(townNumber: number | string): Promise<void> {
     pending?.target === target &&
     Date.now() - pending.sentAt < SWITCH_LANDING_WINDOW_MS
   ) {
+    // The seconds go to the log, not into the message: the bug reporter
+    // groups repeats by message, and a message that changed every second
+    // made one fault fill all 50 records (03/10).
     const secondsAgo = Math.round((Date.now() - pending.sentAt) / 1000);
+    logInfo(`The switch to "${target}" was sent ${secondsAgo}s ago`);
     throw new Error(
-      `The switch to "${target}" sent ${secondsAgo}s ago did not land ` +
+      `The switch to "${target}" did not land ` +
         `(now in "${getCurrentTownName()}") - not sending it again`,
     );
   }
@@ -292,54 +296,57 @@ function clickDropdownTown(townNumber: number | string): boolean {
 }
 
 /**
- * Open the current town's port.
+ * Whether the current town has a port, read from the town view's sea slots.
  *
- * The original probed `#position1` then `#position2`, and accepted a port under
- * construction as well. That priority order is preserved.
- * `includeConstruction: false` is used by Auto Wine, which only looked for
- * finished ports.
+ * The original probed `#position1` then `#position2`, and accepted a port
+ * under construction as well; the same test, without clicking it — the
+ * shipment form is opened directly now (`openShipmentForm`).
  */
-export function openPort(includeConstruction = true): boolean {
-  const classes = [
-    "port",
-    ...(includeConstruction ? ["constructionSite"] : []),
-  ];
-  for (const className of classes) {
+export function townHasPort(): boolean {
+  for (const className of ["port", "constructionSite"]) {
     for (const position of [1, 2]) {
       if (qs(SEL.position(position))?.className.includes(className)) {
-        return clickIfPresent(SEL.cityPositionLink(position));
+        return true;
       }
     }
   }
   return false;
 }
 
-/**
- * Pick the destination town inside the port view.
- *
- * Trap carried over from the original: the port list does NOT include the town
- * you are standing in, so every index above the source index shifts down by
- * one. This function expects an ALREADY adjusted index — see
- * `adjustDestinationIndex`.
- */
-export async function clickDestinationTown(
-  adjustedIndex: number,
-): Promise<void> {
-  const links = await waitForElements<HTMLElement>(SEL.dockCities, 1);
-  const link = links[adjustedIndex];
-  if (!link) {
-    throw new Error(`No destination town at port index ${adjustedIndex}`);
-  }
-  link.click();
-}
+/** How long the shipment form has to appear after asking for it. */
+const SHIPMENT_FORM_TIMEOUT_MS = 15_000;
 
-/** Compensate for the port list omitting the source town. */
-export function adjustDestinationIndex(
+/**
+ * Open the shipment form from the current town to `destination` (a dropdown
+ * index), and wait until it is on screen for that town.
+ *
+ * The game's port no longer lists destinations to click. Its transport panel
+ * (`#js_transportPanel`, hidden in every page) holds one `a.action_transport`
+ * per town, `href="?view=transport&destinationCityId=<id>"` with
+ * `onclick="ajaxHandlerCall(this.href)"` (measured 26/09); the form that
+ * opens carries the destination in a hidden `destinationCityId` field
+ * (captured 03/10). This makes the same call with the destination's city id
+ * — the dropdown entry's `selectvalue` — and waits for that field to hold it,
+ * so a form for another town is never filled in. Nothing is entered here, so
+ * throwing is safe: the runner retries, and gives up after a few.
+ */
+export async function openShipmentForm(
   destination: number | string,
-  origin: number | string,
-): number {
-  const dest = Number(destination);
-  return dest > Number(origin) ? dest - 1 : dest;
+): Promise<void> {
+  const cityId = townCityId(destination);
+  if (cityId === null) {
+    throw new Error(`No city id for the town at dropdown index ${destination}`);
+  }
+  const ajaxHandlerCall = (
+    pageWindow as { ajaxHandlerCall?: (url: string) => void }
+  ).ajaxHandlerCall;
+  if (typeof ajaxHandlerCall !== "function") {
+    throw new Error("The game's ajaxHandlerCall is not on this page");
+  }
+  ajaxHandlerCall(`?view=transport&destinationCityId=${cityId}`);
+  await waitForElement(SEL.shipmentDestination(cityId), {
+    timeoutMs: SHIPMENT_FORM_TIMEOUT_MS,
+  });
 }
 
 /**

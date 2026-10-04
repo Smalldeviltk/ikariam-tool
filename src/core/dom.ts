@@ -114,3 +114,39 @@ const HTML_ESCAPES: Readonly<Record<string, string>> = {
 export function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (char) => HTML_ESCAPES[char]);
 }
+
+/**
+ * Let `box` show at most `count` of the rows matched by `rowSelector` inside
+ * it, and scroll the rest: its `max-height` reaches the bottom of row
+ * `count` (anything above the rows, such as a header, included). With no
+ * more rows than that, the cap is removed.
+ *
+ * Measured rather than a fixed height, because a row's height depends on
+ * where it is drawn — this script's window and the game's popups style
+ * their tables differently. A box that is not laid out (hidden) measures
+ * zero and keeps the cap it had; call this again once it shows.
+ */
+export function capVisibleRows(
+  box: HTMLElement,
+  rowSelector: string,
+  count: number,
+): void {
+  const rows = box.querySelectorAll<HTMLElement>(rowSelector);
+  if (rows.length <= count) {
+    box.style.maxHeight = "";
+    return;
+  }
+
+  const previousCap = box.style.maxHeight;
+  const scrollTop = box.scrollTop;
+  box.style.overflowY = "auto";
+  box.style.maxHeight = "";
+  const top = box.getBoundingClientRect().top;
+  const bottom = rows[count - 1].getBoundingClientRect().bottom;
+  if (bottom - top <= 0) {
+    box.style.maxHeight = previousCap;
+    return;
+  }
+  box.style.maxHeight = `${Math.ceil(bottom - top)}px`;
+  box.scrollTop = scrollTop;
+}

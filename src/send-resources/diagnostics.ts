@@ -13,6 +13,7 @@
  */
 
 import {
+  buildBugReport,
   clearBugs,
   exportBugReport,
   getBugs,
@@ -20,10 +21,12 @@ import {
   summariseBugs,
 } from "@core/bug-report";
 import { qs, qsa } from "@core/dom";
-import { getCurrentTownName } from "@core/ikariam/globals";
+import { getCurrentTownName, pageWindow } from "@core/ikariam/globals";
+import { recentLogLines } from "@core/logger";
 import { hasModel, modelCurrentCityName } from "@core/ikariam/model";
 import { DIALOG_ID, SEL } from "@core/ikariam/selectors";
 import { getState } from "./state";
+import { LAUNCHER_CLASS, WINDOW_ID } from "./ui/panel";
 
 /**
  * Selectors whose absence explains a whole class of "it did nothing".
@@ -80,6 +83,126 @@ function appContext(): Record<string, unknown> {
   return context;
 }
 
+/** Characters kept of each captured piece of game markup or source. */
+const MAX_CAPTURE_CHARS = 20_000;
+/** Log lines a report carries, newest first. */
+const MAX_REPORT_LOG_LINES = 200;
+/** Visible controls listed from the shipment screen. */
+const MAX_CAPTURED_CONTROLS = 200;
+/** Characters kept of each control's text. */
+const MAX_CONTROL_TEXT = 40;
+/** What counts as a control on the shipment screen. */
+const SHIPMENT_CONTROLS =
+  "form, input, select, button, a.button, [id^=slider], [id*=submit]";
+/**
+ * This script's own controls — its window, its launcher, its settings
+ * dialogs — left out of the capture: with the window open they were most of
+ * the list (03/10), and none of them is the game's.
+ */
+const OWN_CONTROLS = `#${WINDOW_ID}, .${LAUNCHER_CLASS}, #${DIALOG_ID}`;
+
+/**
+ * The shipment screen as the game draws it today — the capture the trading
+ * port fix waits on (`docs/improvement-plan.md` §2.A). Only on screen after
+ * "Transport goods" was clicked; otherwise `present` is false.
+ *
+ * The same fields as the console command the plan gave: the form around the
+ * wine field, and every control of the game's that is showing.
+ */
+function captureShipmentForm(): Record<string, unknown> {
+  const wineField = qs<HTMLInputElement>(SEL.wineField);
+  const controls = qsa<HTMLElement>(SHIPMENT_CONTROLS)
+    .filter(
+      (element) =>
+        element.offsetParent !== null && !element.closest(OWN_CONTROLS),
+    )
+    .slice(0, MAX_CAPTURED_CONTROLS)
+    .map((element) => {
+      const field = element as HTMLInputElement;
+      return {
+        tag: element.tagName,
+        id: element.id,
+        name: element.getAttribute("name"),
+        cls: String(element.className).slice(0, 80),
+        type: field.type,
+        value: field.value,
+        text: (element.textContent ?? "").trim().slice(0, MAX_CONTROL_TEXT),
+        form: field.form?.id,
+      };
+    });
+  return {
+    present: !!wineField,
+    url: location.search,
+    wineFieldForm:
+      wineField?.form?.outerHTML.slice(0, MAX_CAPTURE_CHARS) ?? null,
+    visibleControls: controls,
+  };
+}
+
+/**
+ * The game's `createPopup`. Its parameters were named from this capture
+ * (03/10, `IkariamPageApi` in `core/ikariam/globals.ts`); kept, because the
+ * game can change it again. Neither script wraps it, so the source read here
+ * is the game's own.
+ */
+function captureCreatePopupSource(): string | null {
+  const popup = (
+    pageWindow as unknown as { ikariam?: { createPopup?: unknown } }
+  ).ikariam?.createPopup;
+  return typeof popup === "function"
+    ? String(popup).slice(0, MAX_CAPTURE_CHARS)
+    : null;
+}
+
+/**
+ * Game data the plan is still waiting on, read from the page as it is when
+ * Bug Report is pressed. Each piece is caught on its own, so one that fails
+ * cannot take the rest of the report with it.
+ */
+export function captureGameData(): Record<string, unknown> {
+  const capture = (read: () => unknown) => {
+    try {
+      return read();
+    } catch (e) {
+      return { error: String((e as Error)?.message ?? e) };
+    }
+  };
+  return {
+    shipmentForm: capture(captureShipmentForm),
+    createPopupSource: capture(captureCreatePopupSource),
+  };
+}
+
+export interface FullBugReport {
+  /** The bug report plus `gameData` and the recent log, as JSON. */
+  text: string;
+  /** Whether the shipment form was on screen and is in `text`. */
+  shipmentFormCaptured: boolean;
+  /** Whether the game's `createPopup` source is in `text`. */
+  createPopupCaptured: boolean;
+}
+
+/**
+ * The bug report, plus the game data above and the newest log lines — what
+ * Bug Report saves — and which of the game data was actually there, so the
+ * player can be told.
+ *
+ * The log is what a bug record cannot show: the order things happened in
+ * across page loads (`Going to town …`, `Back to the town view: …`, reloads).
+ * Two reports of a town switch that never landed (03/10) could not be
+ * explained without it.
+ */
+export function exportFullBugReport(): FullBugReport {
+  const gameData = captureGameData();
+  const shipmentForm = gameData.shipmentForm as { present?: unknown };
+  const log = recentLogLines(MAX_REPORT_LOG_LINES);
+  return {
+    text: JSON.stringify({ ...buildBugReport(), gameData, log }, null, 2),
+    shipmentFormCaptured: shipmentForm?.present === true,
+    createPopupCaptured: typeof gameData.createPopupSource === "string",
+  };
+}
+
 let installed = false;
 
 /**
@@ -100,7 +223,7 @@ export function installDiagnostics(): void {
     return getBugs();
   };
   anyWindow.ikaBugReport = () => {
-    const json = exportBugReport();
+    const json = exportFullBugReport().text;
     try {
       // DevTools' console helper; undefined anywhere else.
       const copyToClipboard = anyWindow.copy as

@@ -25,6 +25,15 @@ export const VISIBLE_TOWN_ROWS = 5;
 const TOWN_TAB_IDS = ["ResTab", "BuildTab", "ArmyTab"];
 
 /**
+ * Added (not in the original): towns already warned that their wine runs out
+ * within the threshold. The warning sits in the 5 s resource refresh, so a
+ * town under the threshold raised the same toast every 5 s. Now once, when it
+ * goes under; again only after it has been back above it (or wine stopped
+ * going down), or after a page load, which starts this empty.
+ */
+const wineWarnedCityIds = new Set<unknown>();
+
+/**
  * Cap a tab's height at its header, its first `VISIBLE_TOWN_ROWS` towns and
  * its totals. Measured rather than fixed, because the row height changes with
  * the font-size setting and differs between tabs.
@@ -3702,17 +3711,23 @@ export const render: any = {
                     drains && database.settings.wineWarningTime.value > 0
                       ? Utils.FormatTimeLengthToStr(time, 2)
                       : "";
-                  if (
+                  var underThreshold =
                     drains &&
-                    time < database.settings.wineWarningTime.value * 3600000 &&
-                    database.settings.wineWarning.value != 1
-                  )
+                    time < database.settings.wineWarningTime.value * 3600000;
+                  if (!underThreshold) {
+                    wineWarnedCityIds.delete(city.getId);
+                  } else if (
+                    database.settings.wineWarning.value != 1 &&
+                    !wineWarnedCityIds.has(city.getId)
+                  ) {
+                    wineWarnedCityIds.add(city.getId);
                     render.toastAlert(
                       "!!! " +
                         Constant.LanguageData[lang].alert_wine +
                         city._name +
                         " !!!",
                     );
+                  }
                 } else {
                   var time = currentResource.getFullTime;
                   time =

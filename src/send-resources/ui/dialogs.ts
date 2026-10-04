@@ -6,7 +6,14 @@
  */
 
 import { reportSelectorMiss } from "@core/bug-report";
-import { addStyle, escapeHtml, qs, qsa, removeElement } from "@core/dom";
+import {
+  addStyle,
+  capVisibleRows,
+  escapeHtml,
+  qs,
+  qsa,
+  removeElement,
+} from "@core/dom";
 import { formatInteger } from "@core/format";
 import { getCurrentTownName, getIkariam } from "@core/ikariam/globals";
 import { DIALOG_ID, SEL } from "@core/ikariam/selectors";
@@ -24,14 +31,19 @@ import {
 import {
   BUILD_DIALOG,
   BUTTON,
+  DURATION,
   MISC,
   SEND_DIALOG,
   WINE_DIALOG,
   WINE_PREVIEW,
 } from "../messages";
 import { getState, loadReceivers, loadSenders } from "../state";
-import { RESOURCE_OPTIONS } from "../types";
+import { RESOURCE_OPTIONS, resourceLabel } from "../types";
 import { action, moveButtons } from "./actions";
+import { VISIBLE_ROWS } from "./queue-view";
+
+/** The box around the Transport Settings table that scrolls past `VISIBLE_ROWS`. */
+const RESOURCE_TABLE_SCROLL_ID = "resourceTableScroll";
 
 function openPopup(title: string, html: string): void {
   const api = getIkariam();
@@ -42,7 +54,10 @@ function openPopup(title: string, html: string): void {
     showToast(MISC.popupUnavailable);
     return;
   }
-  api.createPopup(DIALOG_ID, title, html, "???", "class");
+  // A plain popup (no TYPE_* constant), with no extra class. The original
+  // passed "???" and "class" here: the first matched neither type, the second
+  // added a class named "class" that nothing styles.
+  api.createPopup(DIALOG_ID, title, html, null, null);
 }
 
 /** One `<th>` per label. Labels are trusted text: callers escape game data. */
@@ -72,7 +87,7 @@ export function renderResourceTable(): void {
       (task, index) => `<tr>
         <td>${escapeHtml(getTownNameFromList(task.data.origin))}</td>
         <td>${escapeHtml(getTownNameFromList(task.data.destination))}</td>
-        <td>${task.data.resource}</td>
+        <td>${resourceLabel(task.data.resource)}</td>
         <td>${task.data.amount}</td>
         <td>${escapeHtml(task.data.label ?? "")}</td>
         <td>${moveButtons(
@@ -86,6 +101,11 @@ export function renderResourceTable(): void {
 
   const body = qs("#resourceTableBody");
   if (body) body.innerHTML = rows;
+  // At most `VISIBLE_ROWS` shipments, the rest scroll — like the panel's queue.
+  const scroll = qs(`#${RESOURCE_TABLE_SCROLL_ID}`);
+  if (scroll) {
+    capVisibleRows(scroll, "#resourceTableBody > tr", VISIBLE_ROWS);
+  }
 }
 
 /** Id of the amount field for one resource in the send dialog. */
@@ -176,10 +196,12 @@ export function openSendResourcesDialog(): void {
      <button style="margin-right:5px" class="button" ${action("send.removeFirst")}>${SEND_DIALOG.removeFirst}</button>
      <button style="margin-right:5px" class="button" ${action("send.removeLast")}>${SEND_DIALOG.removeLast}</button>
      <button class="button" ${action("dialog.close")}>${BUTTON.close}</button><br/>
+     <div id="${RESOURCE_TABLE_SCROLL_ID}">
      <table id="resourceTable" class="fullTable" border="1" cellpadding="5">
        <thead>${headerCells(SEND_DIALOG.columns)}</thead>
        <tbody id="resourceTableBody"></tbody>
-     </table>`,
+     </table>
+     </div>`,
   );
   renderResourceTable();
 }
@@ -238,14 +260,14 @@ export function openAutoWineDialog(): void {
       const stock = measured ? Math.round(measured.stock) : null;
       const hours =
         measured && measured.consume > 0
-          ? (measured.stock / measured.consume).toFixed(1) + "h"
-          : "—";
+          ? DURATION.hoursToTenths(measured.stock / measured.consume)
+          : DURATION.unknown;
 
       return `<tr class="txtWine">
         <td><input type="checkbox" ${checked} id="cbSender_${id}" name="${escapeHtml(town.townName)}" value="${id}"/></td>
         <td>${escapeHtml(town.townName)}</td>
         <td><input type="text" id="txtWine_${id}" value="${escapeHtml(perHour)}"/></td>
-        <td style="text-align:right">${stock === null ? "—" : formatInteger(stock)}</td>
+        <td style="text-align:right">${stock === null ? DURATION.unknown : formatInteger(stock)}</td>
         <td style="text-align:right">${hours}</td>
       </tr>`;
     })
@@ -311,7 +333,7 @@ export function renderWinePlanPreview(fromTown: string): void {
         <td style="text-align:right">${formatInteger(allocation.stock)}</td>
         <td style="text-align:right">${formatInteger(allocation.consume)}</td>
         <td style="text-align:right"><b>${formatInteger(allocation.add)}</b></td>
-        <td style="text-align:right">${allocation.finalHours.toFixed(1)}h${
+        <td style="text-align:right">${DURATION.hoursToTenths(allocation.finalHours)}${
           allocation.storageFull ? WINE_PREVIEW.storageFull : ""
         }</td>
       </tr>`,

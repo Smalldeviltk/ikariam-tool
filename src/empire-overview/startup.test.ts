@@ -320,6 +320,11 @@ describe("Empire Overview startup", () => {
       const { render } = await import("./render");
       database.settings.wineWarningTime.value = 96;
       database.settings.wineWarning.value = false;
+      // Cleared before the response, so every toast it and the redraw below
+      // raise is counted — the board also redraws on its own as it records.
+      document
+        .querySelectorAll(".toastAlert")
+        .forEach((toast) => toast.remove());
 
       events("ajaxResponse").pub([
         [
@@ -343,9 +348,6 @@ describe("Empire Overview startup", () => {
         ],
       ]);
       await new Promise((resolve) => setTimeout(resolve, 0));
-      document
-        .querySelectorAll(".toastAlert")
-        .forEach((toast) => toast.remove());
       render.updateResourceCounters(true);
 
       const cell = document.querySelector(
@@ -355,6 +357,12 @@ describe("Empire Overview startup", () => {
         toasts: document.querySelectorAll(".toastAlert").length,
         text: cell?.textContent,
         red: cell?.classList.contains("Red"),
+        /** Redraw again, as the 5 s refresh does; returns the toast count. */
+        refresh: () => {
+          render.updateResourceCounters(true);
+          return document.querySelectorAll(".toastAlert").length;
+        },
+        database,
       };
     }
 
@@ -363,6 +371,23 @@ describe("Empire Overview startup", () => {
       expect(shown.toasts).toBe(1);
       expect(shown.red).toBe(true);
     });
+
+    it(
+      "REGRESSION: warns once per town, not on every 5 s refresh — and again " +
+        "after the town has been back above the threshold",
+      async () => {
+        const shown = await renderWine(50, 0, 100);
+        expect(shown.toasts).toBe(1);
+        expect(shown.refresh()).toBe(1);
+        expect(shown.refresh()).toBe(1);
+
+        // Above the threshold (no threshold at all), then under it again.
+        shown.database.settings.wineWarningTime.value = 0;
+        expect(shown.refresh()).toBe(1);
+        shown.database.settings.wineWarningTime.value = 96;
+        expect(shown.refresh()).toBe(2);
+      },
+    );
 
     it(
       "REGRESSION: does not warn about a town whose wine is not going down " +
@@ -431,6 +456,36 @@ describe("Empire Overview startup", () => {
           String(r.message).includes("Malformed ajaxResponse entry"),
         ),
       ).toBe(true);
+    },
+  );
+
+  it(
+    "does not report `[name, null]` — the game sends `ingameCounterData` and " +
+      "others that way after every town switch, and each one used to land " +
+      "in the bug report as malformed",
+    async () => {
+      await boot();
+      const { events } = await import("./events");
+
+      const seen: unknown[] = [];
+      events("updateCityData").sub((cityId: unknown) => seen.push(cityId));
+
+      events("ajaxResponse").pub([
+        [
+          "updateGlobalData",
+          { backgroundData: { id: 297034 }, headerData: {} },
+        ],
+        ["popupData", null],
+        ["ingameCounterData", null],
+      ]);
+
+      expect(seen).toContain(297034);
+      const reports = JSON.parse(localStorage.getItem("ikaBugReports") ?? "[]");
+      expect(
+        reports.filter((r: any) =>
+          String(r.message).includes("Malformed ajaxResponse entry"),
+        ),
+      ).toEqual([]);
     },
   );
   it(

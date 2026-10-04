@@ -15,6 +15,7 @@
  */
 
 import { escapeHtml } from "@core/dom";
+import { writeToConsole } from "@core/logger";
 import { MOVE_BUTTON } from "../messages";
 
 export type ActionHandler = (
@@ -85,7 +86,10 @@ export function installActionDispatcher(): void {
 
       const handler = handlers.get(name);
       if (!handler) {
-        console.warn(`[ika] No handler registered for action "${name}"`);
+        writeToConsole(
+          "warn",
+          `[ika] No handler registered for action "${name}"`,
+        );
         return;
       }
       event.preventDefault();
