@@ -19,7 +19,7 @@ import {
 } from "@core/notifications";
 import { reportBug } from "@core/bug-report";
 import { errorMessage } from "@core/format";
-import { upgradeBuildingNow } from "@core/ikariam/http";
+import { fetchTown, upgradeBuildingNow } from "@core/ikariam/http";
 
 /**
  * Added (not in the original): the town tables grew by one row per town with
@@ -63,6 +63,13 @@ function cityBuildingOfCell(target) {
  * the Build tab, without leaving the page. The button stays disabled until
  * the game has answered, so a second click cannot send a second order.
  * Each run is kept for Bug Report (`upgradeBuildingNow`).
+ *
+ * Once the game has started it, the town is loaded again (`fetchTown`, as a
+ * scan does) and the button stays locked until that answer is in. The
+ * upgrade order's own response did not carry the town's buildings, so the
+ * cell kept showing the building as idle and upgradable until a scan or a
+ * visit to the town. A refresh that fails does not undo a started upgrade:
+ * it is recorded, and the toast stands.
  */
 function quickUpgrade(city, building, button) {
   var text = Constant.LanguageData[database.settings.languageChange.value];
@@ -76,7 +83,15 @@ function quickUpgrade(city, building, button) {
     .then(function (outcome) {
       if (outcome.started) {
         render.toastAlert(text.quickUpgrade_started + label);
-        render.updateChangesForCityBuilding(city.getId, []);
+        return fetchTown(city.getId).then(
+          function () {},
+          function (e) {
+            reportBug("manual", e, {
+              where: "quick upgrade refresh",
+              cityId: city.getId,
+            });
+          },
+        );
       } else {
         render.toastAlert(
           text.quickUpgrade_refused +

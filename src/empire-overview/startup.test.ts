@@ -668,6 +668,77 @@ describe("Empire Overview startup", () => {
         }
       },
     );
+
+    it(
+      "REGRESSION: loads the town again once the upgrade has started, so the " +
+        "cell shows it - the order's own response does not carry the town's " +
+        "buildings, and the cell stayed idle and upgradable until a scan",
+      async () => {
+        let refreshed!: () => void;
+        const upgradeBuildingNow = vi.fn(async () => ({
+          started: true,
+          reason: null,
+        }));
+        const fetchTown = vi.fn(
+          () =>
+            new Promise<unknown[]>(
+              (resolve) => (refreshed = () => resolve([])),
+            ),
+        );
+        vi.doMock("@core/ikariam/http", async (importOriginal) => ({
+          ...(await importOriginal<typeof import("@core/ikariam/http")>()),
+          upgradeBuildingNow,
+          fetchTown,
+        }));
+        try {
+          await boot();
+          const { row } = await academyCell({ upgradable: true });
+
+          button(row)!.click();
+          await vi.waitFor(() =>
+            expect(fetchTown).toHaveBeenCalledWith(297034),
+          );
+          expect(document.body.textContent).toContain("Upgrade started");
+          // Still locked: until the refresh is in, the cell still reads as
+          // upgradable, and a second click would send a second order.
+          expect(button(row)!.disabled).toBe(true);
+
+          refreshed();
+          await vi.waitFor(() => expect(button(row)!.disabled).toBe(false));
+        } finally {
+          vi.doUnmock("@core/ikariam/http");
+        }
+      },
+    );
+
+    it("does not report a started upgrade as failed when the refresh fails", async () => {
+      const upgradeBuildingNow = vi.fn(async () => ({
+        started: true,
+        reason: null,
+      }));
+      const fetchTown = vi.fn(async () => {
+        throw new Error("HTTP 500");
+      });
+      vi.doMock("@core/ikariam/http", async (importOriginal) => ({
+        ...(await importOriginal<typeof import("@core/ikariam/http")>()),
+        upgradeBuildingNow,
+        fetchTown,
+      }));
+      try {
+        await boot();
+        const { row } = await academyCell({ upgradable: true });
+
+        button(row)!.click();
+        await vi.waitFor(() => expect(button(row)!.disabled).toBe(false));
+        expect(fetchTown).toHaveBeenCalledWith(297034);
+        expect(document.body.textContent).toContain("Upgrade started");
+        expect(document.body.textContent).not.toContain(
+          "Upgrade request failed",
+        );
+      } finally {
+        vi.doUnmock("@core/ikariam/http");
+      }
+    });
   });
 
   it("records nothing in the bug reporter", async () => {
