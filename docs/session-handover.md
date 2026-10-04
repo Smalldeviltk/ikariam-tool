@@ -10,7 +10,7 @@ It deliberately does **not** repeat the feature status. That lives in
 second. [project-summary.md](../project-summary.md) covers what the TypeScript
 port changed and what is still unverified.
 
-Last updated: 04/10/2026.
+Last updated: 04/10/2026, afternoon.
 
 ---
 
@@ -147,8 +147,8 @@ Not in `dist/`, not tried on the game.
 
 In `dist/` (built 03/10 22:54), not tried on the game.
 
-**03/10, later: Bug Report reworked, and what its first file settled, NOT
-committed** — see §15, and `improvement-plan.md` §2.N:
+**03/10, later: Bug Report reworked, and what its first file settled —
+committed 04/10 as `32fe3ba`** — see §15, and `improvement-plan.md` §2.N:
 
 - **Bug Report always saves a JSON file** (`ikariam-bug-report-<account>-<UTC
   time>.json`) instead of copying to the clipboard — two pasted reports were
@@ -166,8 +166,8 @@ committed** — see §15, and `improvement-plan.md` §2.N:
 
 In `dist/` (built 03/10 22:54, grepped), not tried on the game.
 
-**03–04/10: two more Bug Report files, and two rounds of fixes, NOT
-committed** — see §16, and `improvement-plan.md` §2.O and §2.P:
+**03–04/10: two more Bug Report files, and two rounds of fixes —
+committed 04/10 as `32fe3ba`** — see §16, and `improvement-plan.md` §2.O and §2.P:
 
 - **Why the runner never dropped the failing task: `console.error` is not a
   function on the game's page.** The runner's catch called it, threw, and
@@ -204,12 +204,59 @@ things — §17**, and `improvement-plan.md` §2.Q and §2.R:
 - **Auto Build Settings has its Close button back** — §16 had removed it;
   the user asked for it again.
 
-§17 is in `dist/` (04/10 09:44, grepped), not tried on the game.
+§17 is in `dist/` (04/10 09:44, grepped), not tried on the game. **§16 and
+§17 were committed later that morning as `32fe3ba` (docs `ec3fdc4`).**
 
-**Next:** nothing is blocked on the game any more. What is left is the
-user's answers (plan §6 questions 2 and 3, items U and V) and the small
-things in §7. If something fails on the game, press Bug Report at once and
-put the file in `tools/output/` — it holds the log.
+**04/10, midday: S and T, four small items, committed as `b2e9084`; the
+user's `barbarian.ts` change as `3f8a51b`** — see §18, and
+`improvement-plan.md` §2.S:
+
+- **Auto Wine ships whole ships.** A town's share of one merchant ship or
+  more is rounded down to whole ships; a share under one ship goes as it is.
+- **Auto Wine counts the wine drunk on the way.** Each real shipment
+  records its route's loading and sailing time from the form; Auto Wine then
+  splits by what each town will hold when the ships arrive.
+- Status line names an upgrade; a town whose only sea slot is a building
+  site defers instead of throwing; the two lists' header rows stay in place;
+  opening the panel redraws the queue.
+- `barbarian.ts`: the Barbarian Village shows ships + 1, as the fleet does —
+  the user's own change from 03/10, committed separately at their request.
+
+**04/10, afternoon: the user answered plan questions 2 and 3, and six items
+were built, NOT committed** — see §19, and `improvement-plan.md` §2.T:
+
+- **2.6:** a ↻ mark in the Town header of the board's three town tables
+  spins while Send Resources refreshes every town.
+- **R:** the board's `CheckForUpdates` is gone — it read the ORIGINAL Empire
+  Overview's version on greasyfork (script 764) and offered to install that
+  over this fork. An update channel of our own waits on the user (a public
+  URL).
+- **K:** each building on the city view carries its level (`12`, `12→13`).
+- **J:** desktop notifications — building finished, movement arrived, wine
+  running low, task dropped — each with its own checkbox, all off by
+  default. New files `src/core/notifications.ts` and its test (the user
+  agreed to create them).
+- **E:** a ▲ button in the Build tab's upgradable cells starts the upgrade
+  with the game's own upgrade link. Every run keeps the game's two responses
+  for Bug Report — the user asked for that, to check it on the game.
+- **2.8:** the stock figure in the Resource tab has a summary tooltip.
+  Everything else IkaEasy's resource tooltip shows, the board already had.
+
+**04/10, afternoon: building levels past 50, from the user's crawl of
+s303, NOT committed** — see §19 and plan §2.U. s303's help pages show times
+halved by the server and costs after the account's 14% research; they are
+stored converted back (time × 2, cost ÷ 0.86), 704 new levels.
+
+§18 and §19 are in `dist/` (built 04/10 13:11 from the working tree,
+grepped). **None of §17–§19 has been tried on the game, and the userscripts
+installed in the browser are older than that build.**
+
+**Next:** the user tries §17–§19 on the game — for E, one upgrade that
+starts and one the game refuses, then Bug Report, and the file goes to
+`tools/output/`. Plan items P and L wait on captures; R's update channel
+on the user (plan §6 question 5); V on the user's details. If something
+fails on the game, press Bug Report at once and put the file in
+`tools/output/` — it holds the log.
 
 **If a page is stuck reloading**, the way out from the console (it keeps
 working between loads) is
@@ -223,13 +270,14 @@ working between loads) is
 |             |                                                                  |
 | ----------- | ---------------------------------------------------------------- |
 | Branch      | `refactor`, tracking `origin/refactor`                            |
-| Pushed      | `origin/refactor` is at `066eb44` (the plan's §2.I–2.J docs), pushed by the user; §10's `1f7c0e7` and `4841fb9` are before it, so pushed too (checked with `git log origin/refactor..HEAD` on 02/10). **Seven local commits since, not pushed:** §11 is `6ed66c6` + `c38dca4`, its docs `b9f1d7a`; §12 and §13 are one code commit, `4f9436c` (25 files in `src/`), and one docs commit, `3209964`; §14 is `7ed3a85` (15 files), its docs `b45f792` |
+| Pushed      | `origin/refactor` is at `066eb44` (the plan's §2.I–2.J docs), pushed by the user; §10's `1f7c0e7` and `4841fb9` are before it, so pushed too (checked with `git log origin/refactor..HEAD` on 02/10). **Eleven local commits since, not pushed** (`git rev-list --count origin/refactor..HEAD` = 11 on 04/10): §11 is `6ed66c6` + `c38dca4`, its docs `b9f1d7a`; §12 and §13 are one code commit, `4f9436c` (25 files in `src/`), and one docs commit, `3209964`; §14 is `7ed3a85` (15 files), its docs `b45f792`; §15–§17 are `32fe3ba`, their docs `ec3fdc4`; §18 is `b2e9084` and `3f8a51b` (the user's `barbarian.ts` change) |
 | Committed 02/10 | At the user's request, in two commits as before: code and tests, then the two documents. The commit message went through a file (`git commit -F`): PowerShell 5.1 splits a here-string passed to a native command at its double quotes, and the first attempt failed with "pathspec did not match" — nothing was committed by it |
 | Committed 03/10 | §14, at the user's request, the same way: `7ed3a85` (code and tests), `b45f792` (the two documents), messages through `git commit -F`. `barbarian.ts` was left out (below) |
-| Uncommitted | §15, §16, §17 (03–04/10): 31 files in `src/` — core: `bug-report`, `dom`, `format` (+ test), `ikariam/globals`, `ikariam/selectors`, `logger`, `storage`, `task-queue` (+ test); Empire Overview: `game-api`, `render`, `utils`, `startup.test`; Send Resources: `app` (+ test), `diagnostics`, `messages`, `navigation` (+ test), `ship-capacity`, `features/send-resources` (+ test), `features/barbarian`, `ui/actions`, `ui/data-transfer-ui`, `ui/dialogs`, `ui/panel` (+ test), `ui/queue-view` (+ test). This document's and the plan's updates since `b45f792`. **`send-resources/features/barbarian.ts` holds two changes**: §16's `Math.ceil`, and `annotate(SEL.barbarianVillageResources, false)` → `true`, which no round here made — it appeared during the 03/10 session and was left out of `7ed3a85`; split the two when committing, and ask the user about the second. `.gitignore` and `docs/So_sanh_2_script_Ikariam.md` are the user's, as before, left out of every commit |
-| Tests       | 34 files, 583 tests, all passing (500 before §12, 515 after it, 537 after §13, 560 after §14, 567 after §15, 569 after §16's first round, 578 after §16). §11 added no test (see §11). Prettier: `core/ikariam/http.test.ts`, `send-resources/features/transport-buttons.test.ts` and `send-resources/town-cache.test.ts` are off its format at `HEAD` already — not touched |
+| Committed 04/10 | At the user's request, each time asked for in that turn: §15–§17 as `32fe3ba` (code and tests) and `ec3fdc4` (the two documents); then §18 as `b2e9084`, and — the user asked for `barbarian.ts` to go in too — its change on its own as `3f8a51b`. Messages through `git commit -F`. The documents were not updated for §18 until the §19 round |
+| Uncommitted | §19 (04/10 afternoon): 30 modified files in `src/` — core: `data-transfer`, `ikariam/http` (+ test), `messages`, `task-queue` (+ test); Empire Overview: `constants` (+ test), `empire`, `helpers`, `main`, `models/building` (+ test), `models/movement`, `render`, `startup.test`; Send Resources: `app` (+ test), `diagnostics`, `features/auto-build` (+ test), `features/sync-towns` (+ test), `features/wine-warning` (+ test), `messages`, `ui/panel` (+ test), `ui/styles` — and two new files, `src/core/notifications.ts` and `notifications.test.ts`. Plus this document's and the plan's updates since `ec3fdc4`. **Untracked and the user's, left out of every commit:** `docs/wiki/s303/` (their crawl, the source of §19's levels past 50), `.gitignore`, `docs/So_sanh_2_script_Ikariam.md` |
+| Tests       | 35 files, 643 tests, all passing (500 before §12, 515 after it, 537 after §13, 560 after §14, 567 after §15, 569 after §16's first round, 578 after §16, 583 after §17, 605 after §18 and §19's 2.6 and R, 608 after K, 627 after J, 640 after E, 641 after 2.8, 643 after the s303 levels). §11 added no test (see §11). Prettier: `core/ikariam/http.test.ts`, `send-resources/features/transport-buttons.test.ts` and `send-resources/town-cache.test.ts` are off its format at `HEAD` already — not reflowed; §19's tests appended to `http.test.ts` were formatted on their own and checked |
 | Typecheck   | Clean (`tsc --noEmit` and the strict config)                      |
-| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 01/10 at 02:23 and contains §11 (grepped: `Crawl Building` and `building-help-` in Send Resources; the new Academy figure `568954467` present and the old `582271779` gone, `winePressSavingPercent` and the time `12873600` in Empire Overview; `Math.min(50, …)` in Send Resources' `modelWineConsumption`). Earlier markers were checked in earlier builds: §2.I–2.J (`ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows`) and §10 (`ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save`, `capped`). **`dist/` was rebuilt by the user on 03/10 at 22:54 from the working tree and holds §12 to §15** (grepped in Send Resources: `wine.autoRun`, `ika-move`, `ika_pendingTownSwitch`, `to spare, less than one`, `ikaWindowOpen_`, `js-ika-build-time-buff`, `translateX(-146px)`, `ikariam-bug-report`, `then cleared them`, `createPopupSource`, and no `"???"` left; in Empire Overview: `listAccount` and `entry.length === 2 && typeof entry[0] === "string" && entry[1] === null`). It was built before §15 was committed, so it matches the working tree, not a commit. **The userscripts installed in the browser were older than that 22:54 `dist/`** (§2). **Rebuilt 04/10 at 09:09 with §16** (grepped: `?view=transport&destinationCityId=`, `shipment form to close`, `was sent `, `Move up`; Empire Overview writes the month as `month = 2592e3` — the minifier's form of 2592000) — the build the user tried on the game (§17). **Rebuilt again at 09:44 with §17** (grepped: `ika-queue-scroll`, `resourceTableScroll`, and the `dialog.close` button after `build.save`). That is the current `dist/`; it matches the working tree, not a commit |
+| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 01/10 at 02:23 and contains §11 (grepped: `Crawl Building` and `building-help-` in Send Resources; the new Academy figure `568954467` present and the old `582271779` gone, `winePressSavingPercent` and the time `12873600` in Empire Overview; `Math.min(50, …)` in Send Resources' `modelWineConsumption`). Earlier markers were checked in earlier builds: §2.I–2.J (`ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows`) and §10 (`ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save`, `capped`). **`dist/` was rebuilt by the user on 03/10 at 22:54 from the working tree and holds §12 to §15** (grepped in Send Resources: `wine.autoRun`, `ika-move`, `ika_pendingTownSwitch`, `to spare, less than one`, `ikaWindowOpen_`, `js-ika-build-time-buff`, `translateX(-146px)`, `ikariam-bug-report`, `then cleared them`, `createPopupSource`, and no `"???"` left; in Empire Overview: `listAccount` and `entry.length === 2 && typeof entry[0] === "string" && entry[1] === null`). It was built before §15 was committed, so it matches the working tree, not a commit. **The userscripts installed in the browser were older than that 22:54 `dist/`** (§2). **Rebuilt 04/10 at 09:09 with §16** (grepped: `?view=transport&destinationCityId=`, `shipment form to close`, `was sent `, `Move up`; Empire Overview writes the month as `month = 2592e3` — the minifier's form of 2592000) — the build the user tried on the game (§17). **Rebuilt again at 09:44 with §17** (grepped: `ika-queue-scroll`, `resourceTableScroll`, and the `dialog.close` button after `build.save`). **Rebuilt 04/10 at 13:11 from the working tree, with §18 and §19** (grepped: `ika-building-level` in Send Resources; `empire_quickUpgrade`, `stockTip_stock`, `empire_syncIndicator` and Academy level 51's time `15379200` in Empire Overview; `ikaNotifications` and `ikaQuickUpgradeTrace` in both). That is the current `dist/`; it matches the working tree, not a commit. **The installed userscripts are older** — reinstall both before trying anything |
 
 What landed: the AJAX transport layer, the shared window widget, the rewritten
 panel, four features (sync-towns, transport-buttons, queue-view, wine-warning),
@@ -563,6 +611,43 @@ Added 03–04/10, from two more saved reports
   `ikariam["changeCityFormSubmitted"]`. The cause is still unknown.
 - Two `Script error.` (uncaught, one per script) are cross-origin errors
   with no detail; nothing to act on.
+
+Added 04/10, from the user's crawl of s303's help pages (`docs/wiki/s303/`,
+28 buildings; §19), compared cell by cell with the s800 crawl in
+`docs/wiki/` on the levels both list:
+
+- **s303's help pages show upgrade times halved.** Twice s303's time equals
+  s800's in **696 of 696** cells, within the rounding of the displayed text
+  (one display step on each side). The server has a −50% build-time buff;
+  the user knew and said so.
+- **s303's help pages show costs after the account's research.** s303's
+  cost is `Math.round(s800 cost × 0.86)` in **1,640 of 1,640** cells — 14% =
+  Pulley 2% + Geometry 4% + Spirit Level 8%. The game rounds with
+  `Math.round` (floor matched 829 cells, ceil 849). Dividing back,
+  `Math.round(shown / 0.86)`, gives the original in 86% of cells and is off
+  by at most 1 elsewhere. So a help page's costs are **not** base figures on
+  an account with those researches; s800's were.
+- **Effects and descriptions are identical** on both servers (warehouse
+  capacity, scientists, tavern and museum bonuses, loading speed; every
+  description text), so `maxLevel` did not move.
+- Each s303 file is a 50-level window around the account's current level,
+  ending between 51 (Dockyard) and 96 (Architect, Carpenter, Optician).
+  Levels are contiguous; no cost cell is empty.
+- The help page writes high-level times coarsely ("9Y 5M", "2M 29D"); a year
+  is 365 days and a month 30 (both measured 01/10, §11).
+
+**Read from code, NOT measured** — §19's E relies on these, and the first
+Bug Report after trying it is the check:
+
+- The game's upgrade button (`#js_buildingUpgradeButton`) carries
+  `function=upgradeBuilding` in its link: the board's own click handler
+  (`render.AttachClickHandlers`) reads exactly that parameter. IkaEasy's
+  older `common.js` built `?action=UpgradeExistingBuilding&…` by hand; its
+  newer `helper/buildingUpgrade.js` reads the button's link instead, as E
+  now does.
+- `["provideFeedback", [{ type, text, … }]]` with `type` 10 for success: the
+  board (shipments, the game's upgrade button) and IkaEasy's transport code
+  both read `type` this way. The `text` field is assumed.
 
 ---
 
@@ -1103,6 +1188,64 @@ Added 04/10, each chosen by the user unless marked (§17):
 - **Auto Build Settings has Save and Close again**, both closing the dialog
   — this reverses §16's removal.
 
+Added 04/10, midday, each chosen by the user unless marked (§18):
+
+- **Auto Wine rounds a share of one ship or more down to whole ships**; a
+  share under one ship still goes as it is. The capacity is the calibrated
+  merchant ship (`getPerShipCapacity`).
+- **Travel time is recorded per route from real shipments** (the form's
+  `#loadingTime` + `#journeyTime`, keyed by city ids) and used when
+  planning; a route never shipped counts zero. Not estimated from map
+  distance.
+- **A town whose only sea slot is a building site defers** when no form
+  comes — the slot cannot tell a port being upgraded from a shipyard
+  (chosen here).
+- **The `barbarian.ts` change is the user's** and was committed on its own
+  (`3f8a51b`).
+
+Added 04/10, afternoon, each chosen by the user unless marked (§19):
+
+- **Plan question 2: Phase 2 includes the board.** 2.6 first, 2.8 later,
+  **2.7 only on a concrete bug** (flicker, a lost scroll position).
+- **Plan question 3:** R (at least the misdirected update check) and K
+  first; then O, J, E; P and L once there are captures; **F, G, I, M, N, Q
+  not now**. O was then dropped too — "not needed yet" — once the user
+  heard the game has its own notepad and O automates nothing.
+- **2.6 is a mark, not an overlay**: ↻ in the Town header of the three
+  tables, dimmed, spinning while `syncAllTowns` runs. The class goes on
+  `#empireBoard`, so a table redrawn mid-sync keeps it (chosen here).
+- **R: the old update check is removed, not repointed.** The `autoUpdates`
+  key stays in the settings schema so stored settings still load (chosen
+  here). An update channel of our own (`@updateURL`) needs the build at a
+  public URL — that publishes something, so it is the user's call, and
+  still open.
+- **K reads the level from the building's `title`**, as the settings dialog
+  does — not from the `levelNN` class cited when the item was explained
+  (`building vineyard level40`) — chosen here, to share one parser with the
+  dialog. The label lives in
+  `features/auto-build.ts`, not a new file. The observer watches
+  `document.body`, because nothing measured says the buildings sit inside
+  `#container`.
+- **J:** the page's `Notification` API in both builds — only while the
+  game's tab is open; all four kinds, one checkbox each, **off by
+  default**; announced when it happens, no "soon"; a new file
+  `src/core/notifications.ts` (+ test), which the user agreed to. Events
+  older than 2 minutes are not announced; a notice key is shown once across
+  both scripts and every tab (chosen here).
+- **E: a direct request, not a runner task**, with the game's own upgrade
+  link (option (a) of three; (b) would have queued it for Auto Build). Only
+  on cells the board shows as upgradable; the button stays disabled until
+  the game answers. **The user asked for it to be tested thoroughly and
+  checked against a Bug Report**, so every run keeps both responses
+  (`ikaQuickUpgradeTrace`, the last five) and Bug Report carries them.
+- **2.8: only the missing piece** — a tooltip on the stock figure — inside
+  the board's own tooltip system (option (b) of three).
+- **U: `Constant.BuildingData` stores original figures.** The user: s303's
+  times are after its −50% buff, so ×2, "and the calculation stays as the
+  current formula". Costs: the user chose ÷ 0.86 (asked separately, once
+  the 14% was found), so the board does not take the research off twice.
+  Levels 1–50 keep the s800 figures; only levels past them are added.
+
 ---
 
 ## 6. What is blocked, and on what
@@ -1225,7 +1368,12 @@ Report file now carries the log.
 "a formula instead of the tables"; the user then switched to the game's own
 figures in the tables. **Still open: levels past the 50 (30) the help page
 lists** — the user will find a source; do not invent one. Plan §4.2 "Ghi chú
-về U".
+về U". **Update 04/10 (§19):** the user crawled s303; 704 levels past 50
+added, converted back to original figures. Still without figures: Chronos'
+Forge, Palace, Governor's Residence, Pirate Fortress and Temple past their
+listed levels, and every building past the end of its s303 window (plan
+§2.U part 4). A crawl from another server needs its own factors checked on
+the overlapping levels — do not assume ×2 and ÷0.86.
 
 **Item V (01/10, the user's idea): research effects as the game computes
 them.** Four points: building cost reduction (**done**, §11), scientists' gold
@@ -1235,7 +1383,9 @@ file and formula, is in the plan, §4.2 "Ghi chú về V". The research data
 itself is only which topics are explored (`parseResearchAdvisor`), never an
 effect value; the effects are all hard-coded.
 
-Two questions in §6 of the plan are unanswered and are blocking real work:
+~~Two questions in §6 of the plan are unanswered and are blocking real work:~~
+**Both answered 04/10** (§5, "Added 04/10, afternoon"; §19). Kept for the
+record:
 
 1. **Does Phase 2 include the Empire Overview board, or only the panel?** Items
    2.6, 2.7 and 2.8 are all board-side. The board is 10,767 lines of mechanical
@@ -1244,10 +1394,23 @@ Two questions in §6 of the plan are unanswered and are blocking real work:
 2. **Take all the items in §4.2 (now A–V), or a subset?** The user was asked
    to mark the ones they want. Until then E–R are not started.
 
-Unblocked and ready to pick up: **nothing in the plan** since 02/10 — 1.4
-was the last Phase 1 item and is done (§13). D, H and the second half of 2.4
-were done on 28/09 (§10). What is left without a blocker is the small,
-unscheduled things in §7, each waiting for the user to say yes.
+**Blocked on captures (04/10):** P — a confirmation before abandoning a
+colony — needs the abandon screen (button and form); L — filling in the
+ships for a Barbarian Village attack — needs that attack form. Neither has
+ever been captured.
+
+**Blocked on the user (04/10):** R's update channel — whether to publish
+the build at a public URL for `@updateURL` (plan §6 question 5). V's three
+remaining points — the user will write the details.
+
+**Waiting on the user's test (04/10):** everything in §17–§19, none of it
+seen on the game. E first, as the user asked: one upgrade that starts, one
+the game refuses, then Bug Report — the file carries the game's two
+responses per run (`gameData.quickUpgrades`), the evidence for the parsing
+E was written against without a capture.
+
+Unblocked and ready to pick up: **nothing in the plan.** 2.7 waits for a
+concrete bug; F, G, I, M, N, O, Q are "not now" by the user's choice.
 
 ---
 
@@ -1407,6 +1570,23 @@ unscheduled things in §7, each waiting for the user to say yes.
   revert-to-prove-the-test round trip. Run `prettier --write` on just the files
   you touched — `npm run format` would sweep five files that were already dirty
   on this branch before any of this work.
+- **(04/10, §19) Not verified, written down so nobody assumes it:**
+  - **`Notification` inside Tampermonkey's sandbox.** Empire Overview runs
+    `@grant unsafeWindow`; whether the page's `Notification` reaches it is
+    unknown. Ticking a board checkbox and getting "This browser cannot
+    show notifications" would mean it does not.
+  - **The arrival hook has no test** (`updateTransportComplete` in
+    `models/movement.ts`): no test file covers movements, and creating one
+    was not asked for.
+  - **K's labels: where they sit, and whether they follow an upgrade without
+    a reload.** The CSS (centred, cream badge) is a guess; the observer
+    watches `document.body` because no capture shows the buildings' parent.
+  - **E's response shapes** (the link format, `provideFeedback`'s `text`) —
+    read from code (§2, "Added 04/10"). After a quick upgrade the game's
+    header keeps the old resources until the next page change: the response
+    is not applied by the game.
+  - **The two scripts have no update channel at all** since R; the user has
+    not decided on a public URL.
 
 ---
 
@@ -1840,7 +2020,7 @@ shipment form ("Transport goods", not sent) and put the file in
 
 ## 16. The 03–04/10 rounds: the runner's console, the trading port, seven small items
 
-**Not committed**; in `dist/` since the 04/10 09:09 build; tried on the game
+**Committed 04/10 as `32fe3ba` (docs `ec3fdc4`)**; in `dist/` since the 04/10 09:09 build; tried on the game
 by the user the same day — "roughly ok" (§17). The plan's
 write-ups, in Vietnamese, are §2.O (four parts) and §2.P (seven items); the
 facts are in §2 ("Added 03–04/10"), the decisions in §5 ("Added 03–04/10"),
@@ -1935,8 +2115,8 @@ the specific risks written down item by item (the board's scrolling tabs,
 `townHasPort` and a shipyard under construction, …) keep their open
 status. The M-Eretria switch did not come back; its cause was never found.
 
-**The changes** — not committed; in `dist/` (04/10 09:44, grepped); not
-tried on the game. 578 → 583 tests, typecheck (both configs) and prettier
+**The changes** — committed 04/10 as `32fe3ba` (docs `ec3fdc4`); in
+`dist/` (04/10 09:44, grepped); not tried on the game. 578 → 583 tests, typecheck (both configs) and prettier
 clean.
 
 | What | Where |
@@ -1960,3 +2140,130 @@ removed, and with the Close button removed — one test each.
 a scroll bar; open the panel after the queue grew — capped within a few
 seconds; Transport Settings with more than ten shipments — scrolls; Auto
 Build Settings — Save and Close.
+
+---
+
+## 18. 04/10 midday: whole ships, wine drunk on the way, four small items
+
+**Committed as `b2e9084`**, and the user's `barbarian.ts` change as
+`3f8a51b`; in `dist/` (04/10 13:11); not tried on the game. The plan's
+write-up, in Vietnamese, is §2.S; the decisions are in §5 ("Added 04/10,
+midday").
+
+| What | Where |
+| ---- | ----- |
+| S: `distributeWine(towns, supply, { shipCapacity })` rounds a share of one ship or more down to whole ships; `planWineRun` passes `getPerShipCapacity()` | `send-resources/features/wine-distribution.ts`, `features/auto-wine.ts` |
+| T: `recordRouteTime` reads `#loadingTime` + `#journeyTime` before the submit; `parseDurationSeconds`; `KEY.routeTimes = "ikaRouteTimes"` per account (`recordRouteSeconds`, `routeSeconds`), exported as `measurements` | `features/send-resources.ts`, `core/format.ts`, `state.ts`, `core/data-transfer.ts` |
+| T: `WineTown.transitHours`, `stockOnArrival`; `buildWineTowns(receivers, board, fromTown)` | `features/wine-distribution.ts`, `features/auto-wine.ts` |
+| Status line names an upgrade (`describeCurrentTransfer`) | `features/send-resources.ts` |
+| Only sea slot a building site and no form → `defer` (`townHasBuiltPort`, `seaSlotHas`) | `navigation.ts`, `features/send-resources.ts` |
+| Header rows of the queue and Transport Settings' table `position: sticky` | `ui/styles.ts` |
+| `togglePanel` redraws the queue when it opens | `ui/panel.ts` |
+| Barbarian Village annotated with ships + 1 (`annotate(…, true)`) — the user's change | `features/barbarian.ts` |
+
+**Tests:** the existing Auto Wine test now expects 31,500 — S's rounding.
+The documents were not updated in this commit; §19's round did it.
+
+**What to try on the game:** a receiving town that needs more than one
+ship — whole ships go; after a few manual shipments between two towns,
+Auto Wine gives the distant one more; a town upgrading its port — its
+shipment waits instead of failing.
+
+---
+
+## 19. 04/10 afternoon: the user's answers, six plan items, levels past 50
+
+**Not committed**; in `dist/` (04/10 13:11, grepped); **not tried on the
+game.** The plan's write-ups, in Vietnamese, are §2.T (seven parts) and §2.U
+(four); the decisions are in §5 ("Added 04/10, afternoon"); the facts in §2
+("Added 04/10"); the loose ends in §7. 583 → 643 tests across §18 and §19
+(605 once 2.6 and R were in), 35 files; typecheck and prettier clean on every file touched.
+
+**How it went.** The user answered plan question 2 ("ok, do as proposed")
+and question 3 ("do as proposed"), then said "continue" between items. Each
+item was proposed with its options before it was built: K needed nothing;
+O was explained and dropped; J and E each got a question with options, and
+the user took the recommendation; for E the user added, mid-build, that it
+must be tested thoroughly and checked against a Bug Report from the game;
+2.8 turned out to be mostly present already, and the user took the small
+option. Then the user supplied `docs/wiki/s303/` for item U, with the rule
+"Constant stores the original time; s303's is after a −50% buff, so ×2";
+the 14% on costs was found here and settled by a question.
+
+| Item | What | Where |
+| ---- | ---- | ----- |
+| 2.6 | `announceSync`, `onSyncChange` (`ika:syncStarted` / `ika:syncFinished` on `document`); `syncAllTowns` wraps the refresh in them; `syncIndicatorHtml`, `SYNCING_CLASS`, the spin keyframes | `core/ikariam/http.ts`, `send-resources/features/sync-towns.ts`, `empire-overview/render.ts`, `main.ts`, `helpers.ts` |
+| R | `CheckForUpdates`, `scriptId`, `scriptName`, the Update button, the `autoUpdates` checkbox and the "Global" group removed, with a "REMOVED (not in the original)" comment; the schema key kept | `empire-overview/empire.ts`, `render.ts`, `constants.ts` |
+| K | `readBuildingSlot` (shared with the settings dialog), `showBuildingLevels`, `startBuildingLevelObserver`, `BUILDING_LEVEL_CLASS`; started in `app.start()` | `send-resources/features/auto-build.ts`, `ui/styles.ts`, `app.ts` |
+| J | `notify`, `setNotificationEnabled`, `forgetNotification`, `ikaNotifications` / `ikaNotified`; `TaskRunner`'s `onTaskDropped`; `notifyLowWine`; the hooks in `completeUpgrade` and `updateTransportComplete`; the checkboxes in the board's Settings and the panel's "Notifications" group | `core/notifications.ts` (new), `core/task-queue.ts`, `core/messages.ts`, `core/data-transfer.ts`, `send-resources/features/wine-warning.ts`, `app.ts`, `ui/panel.ts`, `empire-overview/models/building.ts`, `models/movement.ts`, `render.ts` |
+| E | `upgradeBuildingNow`, `findUpgradeLink`, `responseFeedback`, `quickUpgradeTraces` (`ikaQuickUpgradeTrace`); the ▲ button (`QUICK_UPGRADE_CLASS`), `cityBuildingOfCell`, `quickUpgrade`; `gameData.quickUpgrades` and its toast line in Bug Report | `core/ikariam/http.ts`, `empire-overview/render.ts`, `helpers.ts`, `send-resources/diagnostics.ts`, `messages.ts` |
+| 2.8 | `getStockTip` in `dynamicTip`; `data-tooltip="dynamic"` on `span.current`; `stockTip_*` strings | `empire-overview/render.ts`, `constants.ts` |
+| U | 704 levels appended to 28 buildings' tables (costs ÷ 0.86, time × 2, effects as shown); a comment on `BuildingData` naming both sources and the conversion | `empire-overview/constants.ts` |
+
+**Tests, and which were seen red** (each fix broken on purpose, the matching
+test run, the file restored):
+
+- 2.6 — `http.test.ts` (the announcement crosses two module copies),
+  `sync-towns.test.ts`, `startup.test.ts` (three marks; the class on and
+  off). R — `startup.test.ts`: no Update button, no `autoUpdates` checkbox.
+- K — `auto-build.test.ts` (3). Red: writing the label unconditionally
+  makes the observer loop for ever — the test hangs rather than fails.
+- J — `notifications.test.ts` (10), `task-queue.test.ts` (2),
+  `wine-warning.test.ts` (2), `panel.test.ts` (3), `building.test.ts` (2).
+  Red: the stale-event check, the de-duplication, the give-up callback, the
+  untick on refusal, the wine reset — one each.
+- E — `http.test.ts` (9), `startup.test.ts` (2), `app.test.ts` (2). Red: the
+  upgradable condition, the button lock, the trace, a `#` link. **Two
+  checks did not go red and both exposed dead code, now removed**: a
+  `disabled` guard in the handler (a disabled button fires no click) and
+  deleting `actionRequest`/`ajax` from the link (`ikariamRequest`
+  overwrites them).
+- 2.8 — `startup.test.ts` (1). Red: the hook, the gold exclusion, the
+  attribute.
+- U — `constants.test.ts` (2): Academy level 51 from s303, converted; level
+  50 from s800, untouched. Beyond the tests, a one-off script checked all
+  125 existing tables unchanged and all 704 new levels against the pages.
+
+**Traps from this round:**
+
+- **`app.test.ts` counts the app's timers exactly** (`vi.getTimerCount()`
+  against `IDLE`/`RUNNING`). K's first observer coalesced with a
+  `setTimeout(0)` and turned 12 of those tests red. A `MutationObserver`
+  already batches its records per microtask; no timer was needed.
+- **The panel's click dispatcher calls `preventDefault`**, and a cancelled
+  click on a checkbox puts the tick back. J's panel checkboxes listen to
+  `change` on the window content instead.
+- **`auto-build.test.ts` installs fake timers file-wide**; a test that waits
+  on a real observer has to switch back (`vi.useRealTimers()` in its own
+  `beforeEach`), as the fast-path tests already did.
+- **Shell quoting ate code twice**: backticks inside a `node -e "…"` in
+  bash were taken as command substitution (an empty template literal
+  landed in `wine-warning.ts` and in a test), and a CSS rule inserted into
+  `helpers.ts`'s single-quoted style string went in with real line breaks,
+  breaking the whole file. Write longer patches with the Write tool to a
+  scratch file and splice them in with a short script; check
+  `git diff --stat` after any edit to `helpers.ts`'s one-line style string.
+- **A help page's costs are not base figures** on an account with Pulley,
+  Geometry or Spirit Level (§2, "Added 04/10"). Check any new crawl against
+  overlapping levels before loading it.
+
+**What to try on the game** (after reinstalling both userscripts from the
+13:11 `dist/`):
+
+- 2.6: refresh every town from Send Resources — the ↻ marks spin, then stop.
+- R: the board's Settings has no Update button.
+- K: labels on the city view; start an upgrade — `12` becomes `12→13`
+  without a reload.
+- J: tick each kind (the browser asks once); wait for a building to finish
+  and for a task to be dropped; a board checkbox reporting "cannot show
+  notifications" means the sandbox has no `Notification` (§7).
+- **E, as the user asked: one upgrade that starts, one the game refuses**
+  (for example a town that has just started another building, before the
+  board recolours its cell), **then Bug Report**, and the file into
+  `tools/output/`. Read `gameData.quickUpgrades` against §2's "Read from
+  code, NOT measured" before trusting the toasts.
+- 2.8: hover a stock figure in the Resource tab.
+- U: a building past level 50 shows costs and a time on the board; for one
+  of them, compare with the game's own upgrade view on s303 (the game's
+  figure will be lower by the server buff and the research — the board
+  applies both).

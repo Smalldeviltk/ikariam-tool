@@ -1,25 +1,44 @@
 # Kế hoạch cải thiện — UI và tính năng
 
-> Trạng thái: **đang thực hiện.** Cập nhật 04/10/2026.
+> Trạng thái: **đang thực hiện.** Cập nhật 04/10/2026, chiều.
 >
-> Đã xong: Phase 1 · Phase 2 phần panel (2.1–2.5) · A, B, C, D, H ·
-> **§2.A cảng biển** · §2.E → §2.P. **Người dùng thử trên game 04/10: "tạm
-> ok"** (§2.Q) — chi tiết từng mục chưa được báo riêng.
-> Còn lại: 2.6–2.8 (board, chờ câu hỏi 2) · E–G, I–T · U (◐) · V (◐).
+> Đã xong: Phase 1 · Phase 2 phần panel (2.1–2.5) và phần board (2.6, 2.8) ·
+> A, B, C, D, E, H, J, K, S, T · R (mức tối thiểu) · U (thêm cấp > 50 từ
+> s303) · **§2.A cảng biển** · §2.E → §2.U. **Người dùng thử trên game 04/10
+> sáng: "tạm ok"** (§2.Q) — từ §2.R trở đi **chưa thử**.
+> Còn lại: P, L (chờ capture) · 2.7 (chỉ làm khi có lỗi cụ thể) · V (◐) ·
+> phần U còn thiếu số (§2.U phần 4) · R: kênh cập nhật riêng (chờ người
+> dùng). **Không làm lúc này** (người dùng chọn 04/10): F, G, I, M, N, O, Q.
 >
-> Git (04/10): `origin/refactor` ở `066eb44`; **7 commit chưa push** —
-> `6ed66c6`, `c38dca4`, `b9f1d7a` (U + V), `4f9436c`, `3209964` (§2.K + §2.L)
-> và `7ed3a85`, `b45f792` (§2.M). **§2.N, §2.O, §2.P, §2.R chưa commit** (31
-> file trong `src/`; `barbarian.ts` có thêm một thay đổi **không do lượt nào
-> ở đây** — `annotate(…, false)` → `true` — nằm cùng file với sửa `Math.ceil`
-> của §2.P, phải tách khi commit). `dist/` do người dùng build **04/10
-> 09:44**: có đủ tới §2.R (đã grep: `ika-queue-scroll`,
-> `resourceTableScroll`, nút `dialog.close` cạnh `build.save` trong Send
-> Resources). Bản 09:09 trước đó — bản người dùng dùng để thử ở §2.Q — có
-> đủ tới §2.P (`?view=transport&destinationCityId=`, `shipment form to
-> close`, `was sent `, `Move up`; `month = 2592e3` trong Empire Overview).
+> Git (04/10 chiều): `origin/refactor` ở `066eb44`; **11 commit chưa push** —
+> `6ed66c6`, `c38dca4`, `b9f1d7a` (U + V), `4f9436c`, `3209964` (§2.K + §2.L),
+> `7ed3a85`, `b45f792` (§2.M), `32fe3ba`, `ec3fdc4` (§2.N → §2.R), `b2e9084`
+> (§2.S) và `3f8a51b` (thay đổi `barbarian.ts` của người dùng, commit riêng
+> theo yêu cầu). **§2.T và §2.U chưa commit:** 30 file sửa trong `src/` và 2
+> file mới, `src/core/notifications.ts` + `notifications.test.ts`.
+> `docs/wiki/s303/` (dữ liệu người dùng crawl), `.gitignore` và
+> `docs/So_sanh_2_script_Ikariam.md` là của người dùng — không tự đưa vào
+> commit. `dist/` build **04/10 13:11** từ working tree, có đủ tới §2.U (đã
+> grep: `ika-building-level`, `ikaNotifications`, `empire_quickUpgrade`,
+> `ikaQuickUpgradeTrace`, `stockTip_stock`, `empire_syncIndicator`, và
+> `15379200` — thời gian Academy cấp 51); **người dùng chưa cài lại**.
 >
-> **Mới nhất (§2.R, 04/10, chưa commit):** queue trong panel và bảng lệnh gửi
+> **Mới nhất (§2.T, §2.U — 04/10 chiều, chưa commit, chưa thử trên game):**
+> trả lời câu hỏi 2 và 3 (§6); board có **chỉ báo đồng bộ** (2.6) và
+> **tooltip trên số tồn kho** (2.8); **bỏ kiểm tra bản mới** trỏ nhầm sang
+> script gốc (R); **cấp công trình hiện trên city view** (K); **thông báo
+> desktop** 4 loại, mỗi loại một checkbox (J); **nút ▲ nâng cấp nhanh** trong
+> tab Build, mỗi lần bấm lưu response của game cho Bug Report (E); và
+> `Constant.BuildingData` thêm **704 cấp > 50** từ trang Help của s303 —
+> thời gian × 2, chi phí ÷ 0,86 (U).
+>
+> **§2.S (04/10 trưa, commit `b2e9084`):** Auto Wine gửi theo **tàu nguyên**
+> và tính **rượu uống trong lúc chở** (S, T); dòng trạng thái gọi tên task
+> upgrade; cảng chỉ có ô đang xây thì hoãn thay vì ném lỗi; hàng tiêu đề
+> đứng yên khi cuộn; mở panel là vẽ lại queue ngay. Kèm `3f8a51b`: Barbarian
+> Village hiện số tàu + 1 như Barbarian Fleet.
+>
+> **§2.R (04/10, commit `32fe3ba`):** queue trong panel và bảng lệnh gửi
 > của Transport Settings hiện **tối đa 10 hàng**, nhiều hơn thì cuộn; Auto
 > Build Settings có lại **nút Close** (§2.P đã bỏ nó).
 >
@@ -27,7 +46,7 @@
 > (§2.A, runner, mục menu, thời gian xây, §2.P, §2.E lỗi 3–6, §2.F → §2.L,
 > U/V) và lỗi đổi town sang M-Eretria: **"cả 2 tạm ok"**.
 >
-> **Đợt §2.O + §2.P (03–04/10, chưa commit):** từ hai file Bug
+> **Đợt §2.O + §2.P (03–04/10, commit `32fe3ba`, docs `ec3fdc4`):** từ hai file Bug
 > Report: **runner không bỏ task lỗi vì `console.error` không phải hàm trên
 > trang game** — đã sửa; câu lỗi "did not land" bỏ số giây; Bug Report kèm
 > 200 dòng log; **sửa cảng biển §2.A** (mở form bằng
@@ -36,12 +55,12 @@
 > lên, tháng = 30 ngày, ▶ theo task runner đang chạy, "Warning wine" mỗi
 > town một lần, Space chỉ cho Empire Overview.
 >
-> **Đợt §2.N (03/10, chưa commit):** nút **Bug Report** làm lại —
+> **Đợt §2.N (03/10, commit `32fe3ba`, docs `ec3fdc4`):** nút **Bug Report** làm lại —
 > luôn **lưu một file JSON** (không copy clipboard), kèm `gameData` (source
 > `createPopup` và form gửi hàng nếu đang mở), lưu xong thì **xoá** lỗi đã
 > ghi. Từ file đầu tiên: **§2.D xong** (`createPopup` đặt tên theo source
-> của game), Empire Overview hết báo nhầm `[tên, null]`. Còn mở: lỗi "đổi
-> town sang M-Eretria không tới nơi" (§2.N phần 4).
+> của game), Empire Overview hết báo nhầm `[tên, null]`. Lỗi "đổi
+> town sang M-Eretria không tới nơi" (§2.N phần 4): không gặp lại (§2.Q).
 >
 > **Đợt §2.M (03/10, commit `7ed3a85`, docs `b45f792`, chưa push):** Send Resources có **mục menu
 > trái** như Empire Overview — đo được trên game rằng mục lạ có class
@@ -72,7 +91,7 @@
 > Building**, dữ liệu thô ở `docs/wiki/`): chi phí, thời gian (giờ là bảng
 > giây), hiệu ứng, `maxLevel` logic. Công trình giảm giá có trần 50% (chi phí
 > xây dựng tối đa 64% cùng research; Wine Press trên rượu Tavern). Còn thiếu: số
-> cho cấp > 50. Chi tiết: §4.2, ghi chú về U và về V.
+> cho cấp > 50 — **đã thêm 04/10 từ s303** (§2.U). Chi tiết: §4.2, ghi chú về U và về V.
 >
 > Đợt §2.J (29/09, commit `a62e8dd`): hết tàu rảnh thì lệnh gửi
 > hàng giữ đầu queue và **chặn luôn các task upgrade** phía sau. Runner giờ
@@ -1384,7 +1403,7 @@ false)` → `true`) — để nguyên, chờ người dùng.
 
 ### 2.N Bug Report lưu file, `createPopup`, báo nhầm `[tên, null]` (03/10/2026)
 
-**Chưa commit. Có trong `dist/` build 03/10 22:54 (đã grep), chưa thử trên
+**Commit `32fe3ba` (docs `ec3fdc4`, 04/10); lúc viết thì chưa commit. Có trong `dist/` build 03/10 22:54 (đã grep), chưa thử trên
 game bản cuối** — file bug report 14:10 đến từ một bản build giữa chừng (đã
 lưu file và có `gameData`). Người dùng yêu cầu từng bước. 34 file, 560 → 567
 test, typecheck (cả cấu hình strict) và prettier sạch.
@@ -1488,7 +1507,7 @@ nào làm — để nguyên.
 
 ### 2.O Runner, câu lỗi, log trong Bug Report, cảng biển (03–04/10/2026)
 
-**Chưa commit. Chưa build, chưa thử trên game.** Người dùng chọn cả bốn việc
+**Commit `32fe3ba` (docs `ec3fdc4`, 04/10); lúc viết thì chưa commit. Chưa build, chưa thử trên game.** Người dùng chọn cả bốn việc
 sau khi đọc hai file Bug Report. 34 file, 567 → 569 test, typecheck (cả cấu
 hình strict) và prettier sạch (trừ ba file test lệch sẵn từ trước:
 `http.test.ts`, `transport-buttons.test.ts`, `town-cache.test.ts`).
@@ -1606,7 +1625,7 @@ lượng **nhỏ** → Start Timer của Transport → hàng đi đúng town đ�
 
 ### 2.P Bảy việc nhỏ (04/10/2026)
 
-**Chưa commit. Chưa build, chưa thử trên game.** Người dùng duyệt danh sách
+**Commit `32fe3ba` (docs `ec3fdc4`, 04/10); lúc viết thì chưa commit. Chưa build, chưa thử trên game.** Người dùng duyệt danh sách
 "việc nhỏ chưa xếp lịch" (giữ lại nút Crawl Building — còn cần crawl). 569 →
 578 test. Mỗi việc có test đều đã thấy **đỏ** khi tạm làm hỏng đúng chỗ đó.
 
@@ -1631,7 +1650,7 @@ toast từ trước response; bản cũ xoá toast giữa hai lần vẽ nên ng
 toast lặp). Việc 2 và 3 không có test (`barbarian.ts` chưa có file test).
 
 **Chú ý khi commit:** `barbarian.ts` có cả sửa `Math.ceil` này lẫn thay đổi
-`annotate(…, false)` → `true` không do lượt nào ở đây — tách khi commit.
+`annotate(…, false)` → `true` không do lượt nào ở đây — tách khi commit. **Đã làm 04/10:** `Math.ceil` vào `32fe3ba`; thay đổi `annotate` là của người dùng (Barbarian Village hiện số tàu + 1 như Barbarian Fleet), commit riêng `3f8a51b` theo yêu cầu.
 
 
 ### 2.Q Thử trên game (04/10/2026)
@@ -1670,7 +1689,7 @@ của các mục dưới, gửi người dùng cùng ngày, gộp theo nhóm:
 
 ### 2.R Tối đa 10 hàng rồi cuộn; nút Close của Auto Build có lại (04/10/2026)
 
-**Chưa commit. Có trong `dist/` build 04/10 09:44 (đã grep), chưa thử trên
+**Commit `32fe3ba` (docs `ec3fdc4`, 04/10); lúc viết thì chưa commit. Có trong `dist/` build 04/10 09:44 (đã grep), chưa thử trên
 game.** Người dùng yêu cầu. 578 → 583 test, typecheck (cả cấu hình strict) và
 prettier sạch.
 
@@ -1704,6 +1723,311 @@ không yêu cầu giữ cố định.
 sau khi queue dài lên → vài giây sau có giới hạn; Transport Settings có hơn
 10 lệnh gửi → cuộn; Auto Build Settings có hai nút Save, Close.
 
+
+### 2.S Auto Wine theo tàu nguyên và rượu uống trên đường; bốn việc nhỏ (04/10/2026)
+
+**Commit `b2e9084`** (cùng `3f8a51b` cho `barbarian.ts`). Có trong `dist/`
+13:11; chưa thử trên game. Người dùng yêu cầu làm S và T (trước đó chỉ ghi
+lại ở §4.2) cùng bốn việc nhỏ.
+
+#### 1. S — làm tròn theo tàu
+
+**Người dùng chọn:** phần chia của một town từ **một tàu trở lên** thì
+**làm tròn xuống** theo số tàu nguyên; phần **dưới một tàu** vẫn gửi nguyên.
+Phần dư ở lại town nguồn cho lượt sau.
+
+- `distributeWine(towns, supply, { shipCapacity })`
+  (`features/wine-distribution.ts`): sau khi chia, mỗi phần ≥ `shipCapacity`
+  được làm tròn xuống bội số của `shipCapacity`.
+- `planWineRun` truyền `getPerShipCapacity()` — sức chứa merchant ship đã
+  Calibrate (`ship-capacity.ts`).
+- Test Auto Wine có sẵn đổi số mong đợi thành 31.500 vì quy tắc này.
+
+#### 2. T — rượu town nhận uống trong lúc chở
+
+**Người dùng chọn:** ghi thời gian **theo từng tuyến** khi gửi thật, rồi
+dùng khi lập kế hoạch.
+
+- Mỗi lệnh gửi đọc `#loadingTime` + `#journeyTime` trên form **trước khi
+  submit** (`recordRouteTime` trong `features/send-resources.ts`), đổi ra giây
+  bằng `parseDurationSeconds` (`core/format.ts`, mới), lưu theo cặp city id:
+  `KEY.routeTimes = "ikaRouteTimes"` (theo tài khoản; `recordRouteSeconds`,
+  `routeSeconds` trong `state.ts`). Export Data xếp nó vào nhóm
+  `measurements`.
+- Auto Wine: `buildWineTowns(receivers, board, fromTown)` gắn
+  `transitHours` cho mỗi town; `stockOnArrival` = tồn kho − tiêu thụ ×
+  `transitHours`; chia rượu theo lượng **lúc tàu tới**, nên town xa được bù
+  tới cùng số giờ như town gần.
+- Tuyến **chưa gửi bao giờ** tính 0 giờ — như trước khi có T.
+
+#### 3. Bốn việc nhỏ
+
+| Việc | Thay đổi | Ở đâu |
+| ---- | -------- | ----- |
+| Dòng trạng thái | Gọi tên task upgrade runner đang làm (`QUEUE_VIEW.upgrade`), thay vì "Nothing is transferring" | `features/send-resources.ts` (`describeCurrentTransfer`) |
+| Cảng chỉ có ô đang xây | Ô biển duy nhất của town là công trường (cảng đang nâng hoặc shipyard — ô không cho biết là gì) và form gửi không mở: task **hoãn** (`defer`) thay vì ném lỗi tới khi runner bỏ nó. `townHasBuiltPort`, `seaSlotHas` | `navigation.ts`, `features/send-resources.ts` |
+| Hàng tiêu đề đứng yên | Tiêu đề của queue và bảng Transport Settings `position: sticky` khi cuộn (§2.R chưa giữ) | `ui/styles.ts` |
+| Mở panel | `togglePanel` vẽ lại queue ngay khi mở, để giới hạn 10 hàng áp liền (trước phải chờ vòng trạng thái kế tiếp) | `ui/panel.ts` |
+
+#### 4. `barbarian.ts` (commit `3f8a51b`)
+
+Thay đổi `annotate(SEL.barbarianVillageResources, false)` → `true` là **của
+người dùng** (có từ phiên 03/10, không lượt nào ở đây làm). Người dùng xác
+nhận và yêu cầu commit riêng: Barbarian Village hiện **số tàu + 1** như
+Barbarian Fleet, thay vì "tàu (tổng)".
+
+**Cần thử trên game:** Auto Wine với một town nhận cần hơn một tàu — gửi
+đúng số tàu nguyên; sau vài lần gửi tay giữa hai town, Auto Wine chia cho
+town xa nhiều hơn; một town đang nâng cảng — lệnh gửi chờ thay vì báo lỗi.
+
+
+### 2.T Board và tính năng IkaEasy: 2.6, R, K, J, E, 2.8 (04/10/2026)
+
+**Chưa commit. Có trong `dist/` build 04/10 13:11 (đã grep), chưa thử trên
+game.** 583 → 643 test (gồm cả §2.S và §2.U), 35 file test; typecheck và
+prettier sạch. Mỗi việc có test đều đã thấy **đỏ** khi tạm làm hỏng đúng
+chỗ đó (chi tiết từng phần).
+
+#### 1. Câu hỏi 2 và 3 — người dùng đã trả lời
+
+- **Câu hỏi 2** (Phase 2 có gồm board không): "ok, làm như đề xuất" —
+  **có**. Thứ tự: **2.6 trước**, **2.8 sau**, **2.7 chỉ làm khi có lỗi cụ
+  thể** (nháy, mất vị trí cuộn).
+- **Câu hỏi 3** (lấy mục nào ở §4.2): "làm theo đề xuất đi" — **R** (tối
+  thiểu: tắt kiểm tra bản mới trỏ nhầm) và **K** trước; rồi **O, J, E**;
+  **P, L** khi có capture; **F, G, I, M, N, Q không làm lúc này**.
+- **O (ghi chú):** sau khi nghe giải thích (game đã có sổ ghi chú riêng; O
+  không tự động hoá gì), người dùng: "vậy thì **chưa cần**".
+
+#### 2. 2.6 — chỉ báo đồng bộ trên board
+
+**Người dùng chọn:** icon **↻** ở góc ô tiêu đề Town của ba bảng
+Resource / Build / Army; bình thường mờ, **xoay** trong lúc Send Resources
+làm mới mọi town. Chỉ là chỉ báo — không overlay, không chặn thao tác.
+
+- Hai script là hai bundle, nên tin báo đi qua `document`:
+  `announceSync(running)` phát `ika:syncStarted` / `ika:syncFinished`,
+  `onSyncChange(handler)` nghe (`core/ikariam/http.ts`).
+- `syncAllTowns` (`features/sync-towns.ts`) bọc `refreshEveryTown` trong
+  `announceSync(true)` … `finally announceSync(false)` — lỗi giữa chừng vẫn
+  tắt chỉ báo.
+- Board: `syncIndicatorHtml(lang)` chèn `span.empire_syncIndicator` vào 3 ô
+  `th.city_name`; `main.ts` bật/tắt class `empire_syncing` trên
+  `#empireBoard` — đặt trên board, không trên icon, nên bảng vẽ lại giữa
+  chừng vẫn giữ trạng thái. CSS `@keyframes empire_syncSpin` ở `helpers.ts`;
+  tooltip `syncIndicator` trong `constants.ts`.
+- Test: `http.test.ts` (tin đi từ bản module của script này sang bản của
+  script kia — `vi.resetModules()` mô phỏng hai bundle),
+  `sync-towns.test.ts`, `startup.test.ts` (3 icon, class bật rồi tắt).
+
+#### 3. R — bỏ kiểm tra bản mới trỏ nhầm
+
+**Phát hiện:** `CheckForUpdates` của board (từ bản gốc) đọc phiên bản của
+**script Empire Overview gốc trên greasyfork (id 764)** và mời cài **bản
+đó**, đè lên bản fork này. Không chỗ nào gọi nó tự động (checkbox "tự kiểm
+tra" không làm gì); chỉ nút "check" trong Settings gọi.
+
+- **Đã bỏ:** `CheckForUpdates`, `scriptId`, `scriptName` (`empire.ts`, có
+  comment "REMOVED (not in the original)"); nút Update, checkbox
+  `autoUpdates`, nhóm "Global" của Settings, handler và hai lần khởi tạo
+  `.button()` (`render.ts`); các chuỗi liên quan (`constants.ts`). **Giữ**
+  khoá `autoUpdates` trong schema settings, để settings đã lưu vẫn nạp được.
+- **Chưa làm — chờ người dùng:** kênh cập nhật riêng (`@updateURL` /
+  `@downloadURL`) cần đặt bản build ở một URL công khai. Đó là việc đưa ra
+  ngoài, người dùng quyết; chưa trả lời.
+- Test: `startup.test.ts` — Settings không còn nút Update, checkbox
+  `autoUpdates`; đã thấy đỏ.
+
+#### 4. K — cấp công trình trên city view
+
+- Code ở **cuối `features/auto-build.ts`** (không tạo file mới): phần đọc
+  title "Tên (N)" tách thành `readBuildingSlot`, dùng chung với
+  `listBuildingsInCurrentTown` (danh sách trong Settings không đổi).
+- `showBuildingLevels`: mỗi `SEL.buildings` có một `span.ika-building-level`
+  ghi `12`, hoặc `12→13` khi đang nâng (`constructionSite`), `0→1` khi đang
+  xây cấp đầu. Title không có ngoặc → không nhãn.
+- `startBuildingLevelObserver`: `MutationObserver` trên **`document.body`**
+  (`childList`, `subtree`, thuộc tính `class`/`title`). Chọn body vì **chưa
+  xác minh** được các ô công trình có nằm trong `#container` không (chưa có
+  capture DOM city view). Mỗi lô thay đổi một lần chạy, **không có timer
+  riêng** — test của `app.ts` đếm đúng số timer, một `setTimeout` thêm làm
+  12 test đỏ.
+- **Chỉ ghi khi chữ khác**: nhãn tự thêm vào cũng kích observer; ghi lại
+  không điều kiện thì lặp vô hạn (đã thấy: test treo).
+- CSS (`ui/styles.ts`): giữa hình công trình, nền kem, viền nâu,
+  `pointer-events: none` (bấm xuyên qua). **Vị trí và kiểu là đoán.**
+- Khởi động trong `app.start()`, sau `startTransportButtonObserver()`.
+- Ghi chú: giải thích câu hỏi 3 nói class DOM có sẵn cấp (`building vineyard
+  level40`); code đọc title như Settings dialog, không đọc class.
+- Test: `auto-build.test.ts` (3: nhãn đúng cho 4 kiểu slot; chạy lại không
+  thêm nhãn thứ hai; observer theo game rồi dừng).
+
+#### 5. J — thông báo desktop
+
+**Người dùng chọn (theo đề xuất):** `Notification` API của trang cho cả hai
+bản build (chỉ báo khi tab game còn mở, kể cả tab nằm sau hay thu nhỏ); cả
+4 loại, **mỗi loại một checkbox**; báo **đúng lúc** xảy ra (không "báo
+trước"); code chung trong **file mới** `src/core/notifications.ts` (+ test)
+— người dùng đồng ý tạo.
+
+**Sửa ghi chú cũ:** ghi chú về J ở §4.2 nói extension đã khai quyền
+`notifications`/`alarms` — **sai**: manifest (`build/build-extension.mjs`)
+chỉ có `host_permissions`. Báo cả khi đã đóng tab cần quyền đó + background
+service worker + đường tin trang → content script → background; để sau.
+
+| Loại | Báo khi | Nối ở đâu | Checkbox |
+| ---- | ------- | --------- | -------- |
+| `buildFinished` | Công trình xây xong | `completeUpgrade` (`empire-overview/models/building.ts`) | Settings của board |
+| `arrival` | Tàu/quân tới nơi, cả town người khác ("another player's town") | `updateTransportComplete` (`models/movement.ts`) | Settings của board |
+| `wineLow` | Town còn dưới `CRITICAL_HOURS` (12 giờ) rượu; mỗi town một lần, báo lại sau khi đã lên trên ngưỡng | `notifyLowWine` (`features/wine-warning.ts`), chạy trên nhịp 5 giây có sẵn (`TOWN_SNAPSHOT_INTERVAL_MS`) | panel, nhóm Notifications |
+| `taskDropped` | Runner bỏ một task: `failed`, hoặc ném lỗi `maxConsecutiveErrors` lần liền | option mới `onTaskDropped` của `TaskRunner` (`core/task-queue.ts`) | panel, nhóm Notifications |
+
+- **Core** (`core/notifications.ts`): công tắc ở `ikaNotifications` (nhóm
+  `config`, có trong Export); bản ghi đã báo ở `ikaNotified` (nhóm
+  `runtime`, xoá sau 7 ngày) — **chống báo trùng** giữa hai script và nhiều
+  tab, kèm `tag` của hệ điều hành; sự kiện cũ hơn **2 phút**
+  (`STALE_AFTER_MS`) không báo (load trang sau khi game đóng lâu thì không
+  ra cả loạt); bấm thông báo thì về tab game.
+- **Bật**: `setNotificationEnabled` xin quyền trình duyệt trước; bị từ chối
+  thì ô tự bỏ tick và có toast (`NOTIFICATION_PERMISSION` trong
+  `core/messages.ts`). Mọi loại **mặc định tắt**.
+- Checkbox của panel nghe sự kiện `change`, **không** qua bộ dispatch click:
+  bộ đó `preventDefault`, mà click bị huỷ thì trình duyệt trả lại dấu tick.
+- Checkbox của board lưu qua core, không vào `database.settings`.
+- Test: `notifications.test.ts` (10), `task-queue.test.ts` (2),
+  `wine-warning.test.ts` (2), `panel.test.ts` (3), `building.test.ts` (2).
+  Đỏ đã thấy: bỏ kiểm tra "sự kiện cũ", bỏ chống trùng, bỏ callback khi bỏ
+  task, bỏ việc bỏ tick khi bị từ chối, bỏ việc reset rượu. **Điểm nối
+  "tàu tới" chưa có test** (không có file test đúng chủ đề).
+- **Chưa xác minh:** Empire Overview chạy trong sandbox Tampermonkey —
+  `Notification` có dùng được ở đó không. Nếu tick ô trong Settings của
+  board mà báo "This browser cannot show notifications" thì là vì vậy.
+
+#### 6. E — nút ▲ nâng cấp nhanh trong tab Build
+
+**Người dùng chọn (a)** trong ba cách: gửi thẳng lệnh nâng cấp, không qua
+runner. Rồi dặn: **"cần test kĩ, làm xong cần thu thập log (bug report) của
+game để chắc chắn"**.
+
+- **Phát hiện khi đọc code:** nút Upgrade của game giờ mang
+  `function=upgradeBuilding` (handler có sẵn của board đọc đúng tham số này),
+  còn code cũ của IkaEasy tự ghép `action=UpgradeExistingBuilding`. Nên
+  **không tự ghép URL**: lấy link của chính nút Upgrade, như helper
+  `buildingUpgrade.js` của IkaEasy V4.
+- `upgradeBuildingNow(cityId, view, position)` (`core/ikariam/http.ts`):
+  request view của công trình (`backgroundView=city`, `currentCityId`) →
+  `findUpgradeLink` (`href` của `#js_buildingUpgradeButton`; `#` = không có
+  nút) → request link đó (`actionRequest`, `ajax` được `ikariamRequest` ghi
+  đè) → `responseFeedback`: `provideFeedback` type 10 là thành công, chữ lý
+  do đổi sang text thường. Cả hai response vào board qua `onResponse`, ô tự
+  cập nhật.
+- Board (`render.ts`): nút `button.empire_quickUpgrade` (▲) **chỉ ở ô
+  `upgradable`** (đủ tài nguyên, town không xây gì); `cityBuildingOfCell`
+  dùng chung với handler bấm số cấp; `quickUpgrade` khoá nút tới khi game trả
+  lời (nút disabled không phát click — đó chính là khoá), toast "Upgrade
+  started" / "The game did not start the upgrade: … : lý do" / "Upgrade
+  request failed" (lỗi hẳn còn vào `reportBug`).
+- **Dữ liệu cho Bug Report:** 5 lần gần nhất ở `ikaQuickUpgradeTrace` (nhóm
+  `diagnostics`), mỗi lần: hai response (mỗi cái tối đa 20.000 ký tự), HTML
+  nút Upgrade, link đã gửi, kết quả, lỗi. Bug Report thêm
+  `gameData.quickUpgrades`; toast báo "Quick upgrades from the board: N
+  included."
+- Red check: bỏ điều kiện hiện nút, bỏ khoá nút, bỏ ghi trace, nhận link `#`
+  → đỏ. **Hai red check không đỏ, cả hai là code thừa — đã bỏ:** kiểm tra
+  `disabled` trong handler, và lệnh xoá `actionRequest`/`ajax` khỏi link.
+- Test: `http.test.ts` (9), `startup.test.ts` (2), `app.test.ts` (2).
+- **Chưa xác minh:** dạng response (field `text` của `provideFeedback`, dạng
+  link) đọc từ code, chưa capture. Header tài nguyên của game không tự cập
+  nhật tới lần chuyển trang kế tiếp. Request mở view gửi `currentCityId`
+  của town đó, như sync town.
+
+**Cần thử trên game (người dùng yêu cầu):** một lần thành công (ô xanh →
+▲ → town bắt đầu xây); một lần bị từ chối (ví dụ bấm ở town vừa bắt đầu xây
+cái khác, trước khi board đổi màu ô); rồi **Bug Report**, chép file vào
+`tools/output/` — đối chiếu response thật để chỉnh phần đọc link và lý do.
+
+#### 7. 2.8 — tooltip trên số tồn kho
+
+- **Phát hiện:** hệ tooltip của board (`render.toolTip`) đã giống IkaEasy
+  (đi theo chuột, lật khi chạm mép), và nội dung phần lớn đã có: thanh tiến
+  độ (sức chứa, an toàn, %, từng kho), dòng sản lượng (sản lượng/tiêu hao
+  **1 giờ / 1 ngày / 1 tuần**), `emptytime`. Ghi chú cũ "thay cho
+  `data-tooltip="dynamic"` của game" **sai** — đó là tooltip của chính
+  board. Chỗ thiếu duy nhất: **số tồn kho** không có tooltip.
+- **Người dùng chọn (b):** chỉ bổ sung chỗ thiếu. `getStockTip` (trong
+  `dynamicTip`): tồn kho; sức chứa + % đầy; an toàn; sản lượng mỗi giờ / ngày;
+  tiêu hao mỗi giờ / ngày / tuần (đỏ, rượu); "Empty in" (đỏ) hoặc "Full in".
+  Ô vàng không có. `span.current` thêm `data-tooltip="dynamic"`; chuỗi
+  `stockTip_*`.
+- Sửa lại một câu đã nói với người dùng: lúc đề xuất mình ghi "sản lượng mỗi
+  ngày chưa có" — thật ra tooltip sản lượng đã có.
+- Test: `startup.test.ts` (1). Đỏ khi bỏ nối `getStockTip`, bỏ loại trừ ô
+  vàng, bỏ `data-tooltip` của số tồn kho.
+
+**Cần thử trên game (cả §2.T):** ↻ xoay khi bấm làm mới mọi town; Settings
+của board không còn nút Update; nhãn cấp trên city view (vị trí, có cập
+nhật khi bắt đầu/xong nâng cấp không cần tải lại); tick từng loại thông báo
+(trình duyệt hỏi quyền), rồi chờ một công trình xây xong và một task bị bỏ;
+E như trên; rê chuột lên số tồn kho.
+
+
+### 2.U U: cấp > 50 từ trang Help của s303 (04/10/2026)
+
+**Chưa commit. Có trong `dist/` 13:11, chưa thử trên game.**
+
+#### 1. Dữ liệu
+
+Người dùng crawl trang Help > building details trên **`s303-en`** (04/10,
+nút Crawl Building), lưu ở `docs/wiki/s303/` (**untracked** — dữ liệu của
+người dùng). 28 công trình; mỗi file là một cửa sổ **50 cấp** quanh cấp hiện
+tại của tài khoản, kết thúc ở cấp 51 (Dockyard) tới 96 (Architect, Carpenter,
+Optician). **Không có** (người dùng: không khác bản cũ nên không lấy):
+Chronos' Forge, Palace, Governor's Residence, Pirate Fortress, Temple.
+
+#### 2. Đo trên các cấp hai server cùng có (so với s800, `docs/wiki/`)
+
+| Cột | Kết quả | Kết luận |
+| --- | ------- | -------- |
+| Thời gian | s303 × 2 khớp s800 ở **696/696** ô (trong mức làm tròn của chữ hiển thị) | s303 có buff **−50% thời gian xây** |
+| Chi phí | `round(s800 × 0,86)` = s303 ở **1.640/1.640** ô | Trang Help hiển thị chi phí **đã trừ 14%** — đúng bằng Pulley 2% + Geometry 4% + Spirit Level 8% của tài khoản |
+| Hiệu ứng | Giống hệt | Không bị buff nào ảnh hưởng |
+| Mô tả | Giống hệt ở cả 28 file | `maxLevel` giữ nguyên |
+
+Thêm: các cấp liên tục, không có ô chi phí trống; chia ngược `÷ 0,86` ra
+đúng số gốc ở 86% ô, còn lại lệch **tối đa 1 đơn vị**.
+
+#### 3. Quyết định và cách nạp
+
+- **Người dùng:** "lưu constant cần original time … thông tin get từ s303
+  là đã apply buff −50% … cần x2 … việc tính toán vẫn như công thức hiện
+  tại". **Chi phí** (mình phát hiện, hỏi riêng): người dùng chọn **÷ 0,86**,
+  để board không trừ research hai lần (`getUpgradeCost` tự trừ).
+- Chỉ **thêm** cấp sau phần đã có; cấp 1–50 (s800) giữ nguyên.
+- Thời gian = s303 × 2 (giây); chi phí = `round(s303 ÷ 0,86)`; hiệu ứng lấy
+  nguyên. Bảng hiệu ứng được kéo dài, ánh xạ cột dò bằng cách so với số s800
+  đã nạp: `academy.maxScientists`, `museum.basicBonus`, `port.loadingSpeed`,
+  `tavern.wineUse` / `basicBonus` / `wineBonus` (chỉ số = cấp);
+  `warehouse.capacity`, `dump.capacity` (chỉ số = cấp − 1). Không đụng
+  `tavern.wineUse2`, `townHall.actionPointsMax` (không từ trang Help).
+- Kết quả: **704 cấp mới** ở 28 công trình. Kiểm: **125/125 bảng cũ** không
+  đổi số nào; 704/704 cấp mới khớp trang Help sau quy đổi. Ví dụ Academy cấp
+  51: wood 668.834.826 ÷ 0,86 = 777.714.914; thời gian 2M 29D × 2 =
+  15.379.200 s.
+- Comment trên `BuildingData` (`constants.ts`) ghi nguồn và cách quy đổi.
+  Script nạp ở scratchpad của phiên, không vào repo.
+- Test: `constants.test.ts` (2) chốt Academy cấp 51 (s303 đã quy đổi) và cấp
+  50 (s800).
+
+#### 4. Còn thiếu / giới hạn
+
+- Cấp rất cao chỉ có thời gian **thô** trên trang Help (ví dụ "9Y 5M"); × 2
+  thì sai số cũng × 2 — chính xác tới khoảng một tháng.
+- Vẫn không có số: 5 công trình kể trên quá cấp đã liệt kê; mỗi công trình
+  quá cuối cửa sổ của s303 (ví dụ Dockyard > 51); Palace và Governor's
+  Residence > 30. Ở đó chi phí và thời gian vẫn ra `0` (`|| 0`) như trước.
+- Nếu crawl thêm từ server khác: kiểm lại hệ số (server buff, research của
+  tài khoản) bằng các cấp trùng như ở phần 2, đừng mặc định 0,86 và × 2.
+
 ---
 
 ## 3. Phase 2 — UI
@@ -1730,9 +2054,9 @@ town cache được xây để gỡ bỏ. Thay vào đó: tách một widget c�
 | 2.3 ✅ | Nhóm điều khiển theo tính năng — đã làm thành sáu nhóm **Wine** / **Transport** / **Build** / **Queue** / **Account** / **Data** — thay vì một hàng phẳng                                                                                                                                                                                                | `tpl/dummy/empire/window.ejs`            |
 | 2.4 ✅ | Dòng trạng thái sống: task đang chạy, độ dài queue, tàu rảnh, action point. Tàu rảnh + action point thêm 28/09 (§2.G)                                                                                                                                                                                                                                    | `#empire_sync` + overlay của tab         |
 | 2.5 ✅ | Bỏ toạ độ pixel cứng; nhớ vị trí cửa sổ vào storage                                                                                                                                                                                                                                                                                                      | `settings.window`                        |
-| 2.6 ⏸  | Overlay "đang đồng bộ" + icon refresh xoay, thay vì im lặng                                                                                                                                                                                                                                                                                              | `.empire-tab-overlay`                    |
-| 2.7 ⏸  | Cập nhật bảng **tăng dần** thay vì vẽ lại toàn bộ mỗi vài giây (mất vị trí scroll, nháy)                                                                                                                                                                                                                                                                 | CHANGELOG 4.0.0.0                        |
-| 2.8 ⏸  | Tooltip dùng chung: tồn kho / trần kho / sản lượng / % — thay cho `data-tooltip="dynamic"` của game                                                                                                                                                                                                                                                      | `js/helper/tooltip.js`                   |
+| 2.6 ✅ | Overlay "đang đồng bộ" + icon refresh xoay, thay vì im lặng. **04/10 (§2.T phần 2):** chỉ làm icon ↻ ở tiêu đề Town của 3 bảng, xoay khi Send Resources làm mới mọi town; không overlay                                                                                                                                                                                                                                                                                              | `.empire-tab-overlay`                    |
+| 2.7 ⏸  | Cập nhật bảng **tăng dần** thay vì vẽ lại toàn bộ mỗi vài giây (mất vị trí scroll, nháy). **Người dùng 04/10: chỉ làm khi có lỗi cụ thể**                                                                                                                                                                                                                                                                 | CHANGELOG 4.0.0.0                        |
+| 2.8 ✅ | Tooltip dùng chung: tồn kho / trần kho / sản lượng / % — thay cho `data-tooltip="dynamic"` của game. **04/10 (§2.T phần 7):** `dynamic` là tooltip của chính board và đã có phần lớn số liệu; chỉ thêm tooltip cho số tồn kho                                                                                                                                                                                                                                                      | `js/helper/tooltip.js`                   |
 
 ### Đã làm tới đâu
 
@@ -1749,8 +2073,11 @@ Nút góc chỉ hiện khi trang không có `.menu_slots`. Từ 03/10 cửa sổ
 **2.4 xong (28/09, §2.G).** Footer có task đang chạy, độ dài queue, số tàu
 rảnh (thương thuyền + freighter) và action point (`setTransferInfo`).
 
-**2.6–2.8 chưa động vì đều nằm ở board Empire Overview** — tức là bị chặn bởi
-câu hỏi 2 ở mục 6, chưa phải vì khó.
+**2.6–2.8 nằm ở board Empire Overview**, nên chờ câu hỏi 2 ở mục 6. **04/10:
+người dùng trả lời "có"** (§2.T phần 1): **2.6 xong** (icon ↻ xoay khi đồng
+bộ, §2.T phần 2), **2.8 xong ở mức rút gọn** (tooltip trên số tồn kho — phần
+còn lại board đã có, §2.T phần 7), **2.7 chỉ làm khi có lỗi cụ thể** (nháy,
+mất vị trí cuộn).
 
 **Cố ý không lấy:** templater EJS. Dự án đã có TypeScript và template literal;
 thêm một engine template nữa chỉ tăng bề mặt bảo trì mà không được gì.
@@ -1787,26 +2114,28 @@ Cột **Build** cho biết tính năng chạy được ở đâu: `US` = userscr
 | B ✅ | **Xem và sửa queue.** `TaskQueue` đã có `removeById` / `replaceById` / `moveToBack` dựa trên id — đúng để sửa khi đang chạy. UI hiện tại là **một dòng text** (`describeCurrentTransfer`). Không xem được còn bao nhiêu lệnh, không xoá được lệnh sai, không đổi thứ tự. API có rồi, chỉ thiếu mặt.                                                                                                                                                  | cả hai      | —                            |
 | C ✅ | **Cảnh báo hết rượu.** `empireStore` đã mang `wineCurrent` + `wineConsumption` mọi town → "còn mấy giờ" là phép tính trên dữ liệu đang có. Tô đỏ town dưới ngưỡng.                                                                                                                                                                                                                                                                                   | cả hai      | —                            |
 | D ✅ | **Chỉ báo kho đầy.** Sọc chéo đỏ/cam trên progress bar khi chạm trần. Thuần CSS, bê gần nguyên từ `css/empire-resources.css`.                                                                                                                                                                                                                                                                                                                        | cả hai      | —                            |
-| E ⬜ | **Nút nâng cấp nhanh ngay trong tab Build.** Ta có tab Build nhưng phải mở từng thành phố mới nâng được. `js/helper/buildingUpgrade.js` + `tpl/dummy/empire/other/building.ejs`                                                                                                                                                                                                                                                                      | cả hai      | Phase 1                      |
-| F ⬜ | **Kéo-thả chuyển tài nguyên giữa các thành phố.** Kéo một dòng town thả lên town khác → mở form transport điền sẵn. `js/page/modules/empire/resources.js:220`                                                                                                                                                                                                                                                                                        | cả hai      | Phase 1                      |
-| G ⬜ | **Kéo-thả điều quân / hạm đội.** Tương tự F nhưng cho tab Army.                                                                                                                                                                                                                                                                                                                                                                                      | cả hai      | Phase 1, F                   |
+| E ✅ | **Nút nâng cấp nhanh ngay trong tab Build.** Ta có tab Build nhưng phải mở từng thành phố mới nâng được. `js/helper/buildingUpgrade.js` + `tpl/dummy/empire/other/building.ejs` **✅ 04/10 (§2.T phần 6):** nút ▲ ở ô `upgradable`, gửi thẳng link của nút Upgrade lấy từ view công trình; mỗi lần bấm lưu response cho Bug Report. Chưa thử trên game. | cả hai      | Phase 1                      |
+| F ⬜ | **Kéo-thả chuyển tài nguyên giữa các thành phố.** Kéo một dòng town thả lên town khác → mở form transport điền sẵn. `js/page/modules/empire/resources.js:220` **Người dùng 04/10: không làm lúc này** (board đã có nút transport mỗi hàng; giá trị thêm thấp). | cả hai      | Phase 1                      |
+| G ⬜ | **Kéo-thả điều quân / hạm đội.** Tương tự F nhưng cho tab Army. **Người dùng 04/10: không làm lúc này.** | cả hai      | Phase 1, F                   |
 | H ✅ | **Khoá đồng bộ giữa nhiều tab.** Hiện **chưa có gì** ngăn hai task runner ở hai tab cùng lái một tài khoản và gửi trùng. `js/helper/syncLock.js`                                                                                                                                                                                                                                                                                                     | cả hai      | —                            |
-| I ⬜ | **Tab Espionage.** Số điệp viên rảnh theo thành phố, đang phái đi đâu, mục tiêu. Ta không có gì tương đương. `js/page/modules/empire/espionage.js`                                                                                                                                                                                                                                                                                                   | cả hai      | Phase 1                      |
-| J ⬜ | **Thông báo desktop**: xây xong, sắp xong, transport đã tải / đã đến / đã về, tuyển quân xong. Đây là thứ biến script thành công cụ chạy nền thật sự.                                                                                                                                                                                                                                                                                                | xem ghi chú | Phase 1                      |
-| K ⬜ | **Cấp công trình hiện ngay trên city view** — khỏi rê chuột từng cái. `option.city_details`                                                                                                                                                                                                                                                                                                                                                          | cả hai      | —                            |
-| L ⬜ | **Chọn tàu chở tự động cho Barbarian Village.** Ta mới _hiển thị_ số tàu cần (theo sức chứa merchant ship đã Calibrate từ §2.F, trước đó hard-code 520); họ _chọn_ luôn, dùng đúng cấp nâng cấp Workshop.                                                                                                                                                                                                                                            | cả hai      | —                            |
-| M ⬜ | **Tìm đảo theo tham số ở world view.** `js/page/modules/worldmap-islandSearch.js`                                                                                                                                                                                                                                                                                                                                                                    | cả hai      | —                            |
-| N ⬜ | **Chi tiết đảo ở island view** — action point, chủ tàu, thông tin thành phố/mỏ.                                                                                                                                                                                                                                                                                                                                                                      | cả hai      | —                            |
-| O ⬜ | **Ghi chú (notes).** Lưu trong IndexedDB theo server. `js/page/modules/notes.js`                                                                                                                                                                                                                                                                                                                                                                     | cả hai      | —                            |
-| P ⬜ | **Chặn phá nhầm thuộc địa không di dời được.** Một hộp xác nhận, tránh mất trắng một thành phố.                                                                                                                                                                                                                                                                                                                                                      | cả hai      | —                            |
-| Q ⬜ | **Nút trả lời nhanh / xử lý hiệp ước trong Diplomacy.**                                                                                                                                                                                                                                                                                                                                                                                              | cả hai      | —                            |
-| R ⬜ | **Kiểm tra bản mới.** Ta không có cơ chế cập nhật nào — Tampermonkey cần `@updateURL`/`@downloadURL`, extension cài tay thì không có gì.                                                                                                                                                                                                                                                                                                             | cả hai      | —                            |
-| S ⬜ | **Auto Wine: làm tròn lượng gửi theo sức chứa tàu.** `distributeWine` chia tới từng đơn vị, nên một chuyến 621 rượu tốn 2 thương thuyền (620/tàu trên server đang test). Làm tròn theo bội số của `ship-capacity.ts` để đỡ tốn tàu, nhất là khi tàu rảnh đang thiếu; phần dư giữ lại town nguồn.                                                                                                                                                     | cả hai      | 2.A                          |
-| T ⬜ | **Auto Wine: tính rượu tiêu hao trong lúc chở.** Tới lúc hàng cập bến, town nhận đã uống thêm `consume × thời gian di chuyển`, nên mức giờ thực tế thấp hơn `targetHours`. Cần thời gian di chuyển giữa hai town — Send Resources hiện chưa đọc con số này ở đâu cả.                                                                                                                                                                                 | cả hai      | 2.A                          |
-| U ◐  | **Chi phí và thời gian nâng cấp đúng với game.** Đề xuất 29/09 là công thức; **01/10 đổi hướng: giữ bảng `Constant`, nạp lại số của chính game** (trang Help > building details). Đã nạp chi phí, thời gian, hiệu ứng và `maxLevel` logic; công thức giảm giá đã áp (tối đa 64%). **03/10:** thời gian tính thêm buff server và Chronos' Forge, làm tròn tới giây (§2.M phần 3). Còn: cấp vượt quá số cấp trang Help liệt kê. Ghi chú về U bên dưới. | chỉ board   | nguồn số cho cấp > 50        |
+| I ⬜ | **Tab Espionage.** Số điệp viên rảnh theo thành phố, đang phái đi đâu, mục tiêu. Ta không có gì tương đương. `js/page/modules/empire/espionage.js` **Người dùng 04/10: không làm lúc này.** | cả hai      | Phase 1                      |
+| J ✅ | **Thông báo desktop**: xây xong, sắp xong, transport đã tải / đã đến / đã về, tuyển quân xong. Đây là thứ biến script thành công cụ chạy nền thật sự. **✅ 04/10 (§2.T phần 5):** 4 loại — xây xong, tàu tới, rượu sắp hết, task bị bỏ — mỗi loại một checkbox; `Notification` của trang, chỉ khi tab còn mở. Chưa thử trên game. | xem ghi chú | Phase 1                      |
+| K ✅ | **Cấp công trình hiện ngay trên city view** — khỏi rê chuột từng cái. `option.city_details` **✅ 04/10 (§2.T phần 4):** nhãn `12` / `12→13` trên mỗi công trình. Chưa thử trên game. | cả hai      | —                            |
+| L ⬜ | **Chọn tàu chở tự động cho Barbarian Village.** Ta mới _hiển thị_ số tàu cần (theo sức chứa merchant ship đã Calibrate từ §2.F, trước đó hard-code 520); họ _chọn_ luôn, dùng đúng cấp nâng cấp Workshop. **Người dùng 04/10: làm khi có capture** form tấn công Barbarian Village. | cả hai      | —                            |
+| M ⬜ | **Tìm đảo theo tham số ở world view.** `js/page/modules/worldmap-islandSearch.js` **Người dùng 04/10: không làm lúc này.** | cả hai      | —                            |
+| N ⬜ | **Chi tiết đảo ở island view** — action point, chủ tàu, thông tin thành phố/mỏ. **Người dùng 04/10: không làm lúc này.** | cả hai      | —                            |
+| O ⬜ | **Ghi chú (notes).** Lưu trong IndexedDB theo server. `js/page/modules/notes.js` **Người dùng 04/10: chưa cần** (game đã có sổ ghi chú; O không tự động hoá gì). | cả hai      | —                            |
+| P ⬜ | **Chặn phá nhầm thuộc địa không di dời được.** Một hộp xác nhận, tránh mất trắng một thành phố. **Người dùng 04/10: làm khi có capture** màn phá thuộc địa (nút và form). | cả hai      | —                            |
+| Q ⬜ | **Nút trả lời nhanh / xử lý hiệp ước trong Diplomacy.** **Người dùng 04/10: không làm lúc này.** | cả hai      | —                            |
+| R ◐ | **Kiểm tra bản mới.** Ta không có cơ chế cập nhật nào — Tampermonkey cần `@updateURL`/`@downloadURL`, extension cài tay thì không có gì. **◐ 04/10 (§2.T phần 3):** bỏ `CheckForUpdates` của board — nó trỏ tới script gốc trên greasyfork (id 764). Kênh cập nhật riêng cần URL công khai: chờ người dùng. | cả hai      | —                            |
+| S ✅ | **Auto Wine: làm tròn lượng gửi theo sức chứa tàu.** `distributeWine` chia tới từng đơn vị, nên một chuyến 621 rượu tốn 2 thương thuyền (620/tàu trên server đang test). Làm tròn theo bội số của `ship-capacity.ts` để đỡ tốn tàu, nhất là khi tàu rảnh đang thiếu; phần dư giữ lại town nguồn. **✅ 04/10 (§2.S phần 1, commit `b2e9084`):** phần ≥ 1 tàu làm tròn xuống theo tàu nguyên; phần < 1 tàu gửi nguyên. | cả hai      | 2.A                          |
+| T ✅ | **Auto Wine: tính rượu tiêu hao trong lúc chở.** Tới lúc hàng cập bến, town nhận đã uống thêm `consume × thời gian di chuyển`, nên mức giờ thực tế thấp hơn `targetHours`. Cần thời gian di chuyển giữa hai town — Send Resources hiện chưa đọc con số này ở đâu cả. **✅ 04/10 (§2.S phần 2, commit `b2e9084`):** thời gian bốc hàng + đi biển ghi theo tuyến khi gửi thật; Auto Wine chia theo tồn kho lúc tàu tới. | cả hai      | 2.A                          |
+| U ◐  | **Chi phí và thời gian nâng cấp đúng với game.** Đề xuất 29/09 là công thức; **01/10 đổi hướng: giữ bảng `Constant`, nạp lại số của chính game** (trang Help > building details). Đã nạp chi phí, thời gian, hiệu ứng và `maxLevel` logic; công thức giảm giá đã áp (tối đa 64%). **03/10:** thời gian tính thêm buff server và Chronos' Forge, làm tròn tới giây (§2.M phần 3). Còn: cấp vượt quá số cấp trang Help liệt kê. Ghi chú về U bên dưới. **04/10 (§2.U):** thêm 704 cấp > 50 từ trang Help của s303 (thời gian × 2, chi phí ÷ 0,86). Còn thiếu: 5 công trình không có trong s303 và các cấp quá cửa sổ đã crawl. | chỉ board   | nguồn số cho cấp > 50        |
 | V ◐  | **Hiệu ứng của research tính đúng với game.** Người dùng đề xuất 01/10, bốn điểm: giảm chi phí xây dựng, giảm chi phí vàng cho scientist, dân số tối đa, hài lòng. Hiện trạng: ghi chú về V bên dưới.                                                                                                                                                                                                                                                | chỉ board   | chi tiết (người dùng sẽ ghi) |
 
-**Đã làm: A, B, C, D, H.** D và H ghi ở §2.G.
+**Đã làm: A, B, C, D, E, H, J, K, S, T; R ở mức tối thiểu.** D và H ghi ở
+§2.G; S và T ở §2.S; E, J, K, R ở §2.T. **Người dùng chọn 04/10** (câu hỏi
+3): P, L làm khi có capture; F, G, I, M, N, Q không làm lúc này; O chưa cần.
 
 - **A** — `src/send-resources/features/transport-buttons.ts`. Khác plan một
   điểm có chủ đích: các bước **không** cố định 500/1k/5k/50k mà là **bội số của
@@ -1869,7 +2198,12 @@ thể))` × 1000. Buff nhập theo tài khoản trong bảng Account của Send
   | shrineOfOlympus                                           | 21       | bảng: "Blessed Cities" đạt 21 ở cấp 21 rồi đứng yên                               |
   | còn lại                                                   | 0        | mô tả không nêu. Sea Chart Archive nói trần 90% nhưng không nói mỗi cấp bao nhiêu |
 
-- **⏸ Còn thiếu — cấp vượt quá số cấp trang Help liệt kê** (51+; Palace và
+- **◐ 04/10 — đã thêm cấp > 50 từ trang Help của s303 (§2.U):** 704 cấp ở 28
+  công trình, thời gian × 2 (s303 xây nhanh gấp đôi), chi phí ÷ 0,86 (s303
+  hiển thị sau 14% research của tài khoản). Đo trên các cấp trùng với s800:
+  696/696 ô thời gian, 1.640/1.640 ô chi phí. Đoạn dưới là hiện trạng trước
+  04/10, giữ lại; phần còn thiếu nay ở §2.U phần 4.
+- **⏸ (trước 04/10) Còn thiếu — cấp vượt quá số cấp trang Help liệt kê** (51+; Palace và
   Governor's Residence 31+). Trang Help chỉ in 50 (hoặc 30) cấp dù game không
   giới hạn. Người dùng chọn **để trống**, sẽ tìm cách bổ sung sau. Hệ quả hiện
   tại: chi phí và thời gian của các cấp đó ra `0` (`|| 0` có sẵn), nên công
@@ -1977,7 +2311,7 @@ có `baseTime` và `baseCost`, không có chi phí tài nguyên của quân/tàu
 không có phần nào về cải tiến Workshop hay thí nghiệm Academy. Nếu sau này
 thêm, phải áp giảm giá theo bảng này.
 
-**Ghi chú về J (thông báo).** Extension đã khai `"permissions": ["notifications", "alarms"]` nên làm được đầy đủ, kể cả khi tab game không ở trước mặt. Bản userscript chỉ dùng được `Notification` API của trang và cần người dùng cấp quyền — nhắc được khi tab còn mở, không nhắc được khi đã đóng. Nên coi đây là tính năng **ưu tiên cho bản extension**, userscript làm mức rút gọn.
+**Ghi chú về J (thông báo).** **✅ Làm 04/10 (§2.T phần 5).** **Sửa 04/10:** câu "extension đã khai `"permissions": ["notifications", "alarms"]`" dưới đây **sai** — manifest (`build/build-extension.mjs`) chỉ có `host_permissions`; có lẽ nhầm sang manifest của IkaEasy. Bản đã làm dùng `Notification` của trang cho cả hai bản build. Nguyên văn cũ: ~~Extension đã khai `"permissions": ["notifications", "alarms"]` nên làm được đầy đủ, kể cả khi tab game không ở trước mặt.~~ Bản userscript chỉ dùng được `Notification` API của trang và cần người dùng cấp quyền — nhắc được khi tab còn mở, không nhắc được khi đã đóng. Nên coi đây là tính năng **ưu tiên cho bản extension**, userscript làm mức rút gọn.
 
 ### 4.3 Cố ý không lấy
 
@@ -1997,26 +2331,32 @@ thêm, phải áp giảm giá theo bảng này.
 ✅ TRƯỚC HẾT   §2.A                   cảng biển — sửa 04/10 (§2.O phần 4), người dùng thử: tạm ok (§2.Q)
 
 ✅ Phase 1   1.1 → 1.5              nền móng AJAX (1.4 xong 02/10, §2.L)
-✅ Phase 2   2.1 → 2.5              cửa sổ dùng chung + panel
+✅ Phase 2   2.1 → 2.5, 2.6, 2.8    cửa sổ dùng chung + panel; board: ↻ đồng bộ, tooltip số tồn kho (04/10, §2.T)
 ✅ Đợt rẻ    A, B, C                nút transport, xem queue, cảnh báo rượu
 ✅ 28/09     D, H, 2.4, log backToCity   (§2.G)
 ✅ 02/10     §2.K, §2.L             ↑/↓, Start Auto Wine, tồn kho, runner theo timer, chuỗi, 1.4
 ✅ 03/10     §2.M                   mục menu trái (không `expandable`); panel nhớ mở/đóng; thời gian xây: buff server (✎/✓), Chronos' Forge, làm tròn giây — commit `7ed3a85`
-✅ 03/10     §2.N, §2.D             Bug Report lưu file JSON (+ gameData, xoá sau khi lưu); `createPopup` đặt tên; hết báo nhầm `[tên, null]` — chưa commit
-✅ 03–04/10  §2.O                   runner bỏ task lỗi được (console.error); câu lỗi không số giây; Bug Report kèm log; cảng biển — chưa commit
-✅ 04/10     §2.P                   bảy việc nhỏ (nhãn, Close, needingShip, tháng 30 ngày, ▶, Warning wine, Space) — chưa commit
-✅ 04/10     §2.R                   queue và bảng Transport Settings tối đa 10 hàng rồi cuộn; nút Close của Auto Build Settings có lại — chưa commit, có trong `dist/` 09:44
+✅ 03/10     §2.N, §2.D             Bug Report lưu file JSON (+ gameData, xoá sau khi lưu); `createPopup` đặt tên; hết báo nhầm `[tên, null]` — commit `32fe3ba`
+✅ 03–04/10  §2.O                   runner bỏ task lỗi được (console.error); câu lỗi không số giây; Bug Report kèm log; cảng biển — commit `32fe3ba`
+✅ 04/10     §2.P                   bảy việc nhỏ (nhãn, Close, needingShip, tháng 30 ngày, ▶, Warning wine, Space) — commit `32fe3ba`
+✅ 04/10     §2.R                   queue và bảng Transport Settings tối đa 10 hàng rồi cuộn; nút Close của Auto Build Settings có lại — commit `32fe3ba`
+✅ 04/10     §2.S                   S (tàu nguyên), T (rượu uống trên đường), bốn việc nhỏ — commit `b2e9084`; `barbarian.ts` của người dùng — `3f8a51b`
+✅ 04/10     §2.T                   2.6 (↻ đồng bộ), R (bỏ kiểm tra bản mới trỏ nhầm), K (cấp trên city view), J (thông báo desktop), E (▲ nâng cấp nhanh + trace cho Bug Report), 2.8 (tooltip số tồn kho) — chưa commit, có trong `dist/` 13:11
+✅ 04/10     §2.U                   U: 704 cấp > 50 từ s303 (thời gian × 2, chi phí ÷ 0,86) — chưa commit, có trong `dist/` 13:11
 
 ✅ ~~Chờ capture form gửi~~: §2.A — có từ Bug Report 03/10 23:04 (§2.O phần 4)
 ✅ ~~Chờ người dùng thử lại~~: §2.E lỗi 3–6, §2.F → §2.P, U/V — người dùng thử 04/10 với `dist/` 09:09: tạm ok (§2.Q)
 ✅ ~~Chờ log~~:            §2.O phần 1 — đổi town sang M-Eretria: người dùng báo tạm ok 04/10 (§2.Q); nguyên nhân gốc chưa từng được xác định
 ✅ ~~Chờ code của game~~: §2.D tham số `createPopup` — xong 03/10 (§2.N phần 2)
 ⬜ Lượt review sau:        thử trên game thật các mục §2.D; chuỗi còn sót ngoài danh sách §2.D (§2.L phần 4)
-⏸ Chờ câu hỏi 2:          2.6, 2.7, 2.8   (đều ở board)
-⏸ Chờ câu hỏi 3:          E, F, G, I, J, K, L, M, N, O, P, Q, R
-◐ U (01/10):               đã nạp số game vào Constant và công thức giảm giá; ⏸ cấp > 50 — ghi chú về U ở §4.2
+⬜ Chờ người dùng thử:     §2.R → §2.U trên game (cài lại cả hai userscript từ `dist/` 13:11); riêng E: một lần thành công, một lần bị từ chối, rồi Bug Report
+✅ ~~Chờ câu hỏi 2~~:      trả lời 04/10 — 2.6 ✅, 2.8 ✅ (rút gọn); ⏸ 2.7 chỉ khi có lỗi cụ thể
+✅ ~~Chờ câu hỏi 3~~:      trả lời 04/10 — E, J, K ✅; R ◐; O chưa cần; F, G, I, M, N, Q không làm lúc này
+⏸ Chờ capture:            P (màn phá thuộc địa), L (form tấn công Barbarian Village)
+⏸ Chờ người dùng:         R — có đặt bản build ở URL công khai (@updateURL) không
+◐ U (01/10, 04/10):        số game trong Constant, công thức giảm giá, cấp > 50 từ s303; ⏸ phần còn thiếu ở §2.U phần 4
 ◐ V (01/10):               giảm chi phí xây dựng xong; ⏸ vàng scientist, dân số tối đa, hài lòng — người dùng sẽ ghi; ghi chú về V ở §4.2
-⬜ Ghi lại, chưa cần làm: S, T (Auto Wine)
+✅ ~~Ghi lại, chưa cần làm: S, T (Auto Wine)~~ — làm 04/10 (§2.S)
 ```
 
 **§2.A đi trước mọi thứ khác.** Thêm tính năng lên một tầng gửi hàng không chạy
@@ -2025,7 +2365,9 @@ thêm, phải áp giảm giá theo bảng này.
 (một lượng nhỏ), vì S, T và mọi thử nghiệm Auto Wine đều phụ thuộc nó.
 
 Không còn việc nào "làm được ngay, không phụ thuộc gì": 1.4 xong 02/10
-(§2.L). D, H và nửa sau của 2.4 đã xong ngày 28/09 (§2.G).
+(§2.L). D, H và nửa sau của 2.4 đã xong ngày 28/09 (§2.G). **04/10 chiều:**
+việc kế tiếp là **người dùng thử §2.R → §2.U trên game** (E kèm Bug Report);
+P, L chờ capture; R chờ câu hỏi 5 ở §6; V chờ người dùng ghi chi tiết.
 
 **Hai việc phát sinh** (việc thứ nhất xong 02/10, §2.L phần 3):
 
@@ -2052,13 +2394,20 @@ Không còn việc nào "làm được ngay, không phụ thuộc gì": 1.4 xong
    được kiểm theo header), payload có mang `actionRequest`, và một request
    `fetchTown` mất 328–974 ms so với 2367 ms cho mỗi lần đổi town bằng cách đi
    bộ. 1.2 được viết dựa trên các số đo này.
-2. **Phase 2 có bao gồm board Empire Overview không, hay chỉ panel Send
-   Resources?** Board đã dùng jQuery UI tabs và kéo thả sẵn; đụng vào nó là đụng
+2. ~~**Phase 2 có bao gồm board Empire Overview không, hay chỉ panel Send
+   Resources?**~~ **Đã trả lời 04/10: có** — 2.6 trước, 2.8 sau, 2.7 chỉ khi có
+   lỗi cụ thể (§2.T phần 1). Câu hỏi gốc: Board đã dùng jQuery UI tabs và kéo thả sẵn; đụng vào nó là đụng
    10.767 dòng code port cơ học, rủi ro cao hơn hẳn so với làm lại panel.
-3. **Mục 4.2 lấy hết hay lấy một phần?** 22 mục (A–V); A, B, C, D, H đã xong,
+3. ~~**Mục 4.2 lấy hết hay lấy một phần?**~~ **Đã trả lời 04/10:** R (tối
+   thiểu) và K trước, rồi O, J, E; P, L khi có capture; F, G, I, M, N, Q không
+   làm lúc này; sau đó O "chưa cần" (§2.T phần 1). Câu hỏi gốc: 22 mục (A–V); A, B, C, D, H đã xong,
    S và T chỉ ghi lại, U và V do người dùng đề xuất. Bạn đánh dấu mục nào cần,
    tôi làm theo thứ tự đó.
 4. ~~**U: công thức lấy từ đâu, hay đọc số thật từ game?**~~ **Đã trả lời
    29/09:** công thức; người dùng có sẵn nguồn và sẽ cung cấp sau. **Đổi
    01/10:** giữ bảng `Constant`, nạp số thật từ trang Help của game (§4.2,
-   ghi chú về U).
+   ghi chú về U). **04/10:** thêm cấp > 50 từ trang Help của s303 (§2.U).
+5. **R: có đặt bản build ở một URL công khai (ví dụ GitHub) để dùng
+   `@updateURL` / `@downloadURL` không?** Đó là việc đưa ra ngoài, người dùng
+   quyết. Cho tới khi có câu trả lời, hai script không có kênh cập nhật; kiểm
+   tra cũ trỏ nhầm đã bỏ (§2.T phần 3).
