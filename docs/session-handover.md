@@ -10,7 +10,7 @@ It deliberately does **not** repeat the feature status. That lives in
 second. [project-summary.md](../project-summary.md) covers what the TypeScript
 port changed and what is still unverified.
 
-Last updated: 04/10/2026, evening.
+Last updated: 05/10/2026.
 
 ---
 
@@ -279,13 +279,36 @@ and `improvement-plan.md` §2.W:
   **every test on the game so far was the userscripts; the extension has
   never run.**
 
-The documents for §20 and §21 are the commit after `9c363f7`; all at the
-user's request.
+The documents for §20 and §21 are `e36516a`; the user's s303 crawl went in
+as `180fead`; all at the user's request.
 
-**Next:** reinstall both userscripts from the 21:21 `dist/` (it holds §20)
-and the user tries §17–§20 on the game — for E, one upgrade that starts
-(the cell should turn to upgrading by itself) and one the game refuses,
-then Bug Report, and the file goes to `tools/output/`. Load
+**05/10: a review of all of `src`, and its fixes — not committed, in the
+05/10 02:03 `dist/`, not tried on the game** — see §22, and
+`improvement-plan.md` §2.X; the full report is
+`sample/review-source/review-src-2026-10-04.md` (gitignored):
+
+- **The board could stop recording everything until a reload.** jQuery
+  2.2.4's `Callbacks.fire` has no try/finally, so one subscriber that threw
+  left the topic firing for ever and every later response was queued and
+  dropped. ▲ on a Palace or Museum did it: the fetched view went through
+  `parseViewData`, whose parsers read the page. Fixed: subscribers isolated
+  in `events()`, and a fetched response runs only the Town Hall parser.
+- **A reload loop between two towns** while a shipment's source is out of
+  action points (`retry` after a town switch). It now defers.
+- Also: a fetched town no longer becomes the board's current town; no
+  `actionRequest` token in Bug Report files; the import re-classifies every
+  key and the board escapes names (XSS through a foreign export); town names
+  read as text; Build's one-off Start survives reloads; a missing submit
+  button no longer counts as sent; no wine warning for a source town; the
+  first Bug Report snapshot kept; 39 plan references out of comments and
+  test names (rule 11); dead code gone, the board's Website and Report Bug
+  buttons included; three new test files. 645 → 698 tests, 38 files.
+
+**Next:** reinstall both userscripts from the 05/10 02:03 `dist/` (it holds
+§20–§22) and the user tries §17–§22 on the game — for E, one upgrade that
+starts (the cell should turn to upgrading by itself) and one the game
+refuses, then Bug Report, and the file goes to `tools/output/` (it should
+hold no `actionRequest=` value now); §22's own list is at its end. Load
 `dist/extension` again in Chrome (§21) — with the two userscripts switched
 off, or each script runs twice. Plan items P and L wait on captures; R's update channel
 on the user (plan §6 question 5); V on the user's details. If something
@@ -304,14 +327,14 @@ working between loads) is
 |             |                                                                  |
 | ----------- | ---------------------------------------------------------------- |
 | Branch      | `refactor`, tracking `origin/refactor`                            |
-| Pushed      | `origin/refactor` is at `066eb44` (the plan's §2.I–2.J docs), pushed by the user; §10's `1f7c0e7` and `4841fb9` are before it, so pushed too (checked with `git log origin/refactor..HEAD` on 02/10). **Sixteen local commits since, not pushed** (`git rev-list --count origin/refactor..HEAD` = 15 on 04/10 evening, before the docs commit for §20–§21): §11 is `6ed66c6` + `c38dca4`, its docs `b9f1d7a`; §12 and §13 are one code commit, `4f9436c` (25 files in `src/`), and one docs commit, `3209964`; §14 is `7ed3a85` (15 files), its docs `b45f792`; §15–§17 are `32fe3ba`, their docs `ec3fdc4`; §18 is `b2e9084` and `3f8a51b` (the user's `barbarian.ts` change); §19 is `c78b49e` (32 files in `src/`, two of them new), its docs `0da427b`; §20 is `cefcc92`, §21 is `9c363f7`, their docs the commit after |
+| Pushed      | `origin/refactor` is at `066eb44` (the plan's §2.I–2.J docs), pushed by the user; §10's `1f7c0e7` and `4841fb9` are before it, so pushed too (checked with `git log origin/refactor..HEAD` on 02/10). **Seventeen local commits since, not pushed** (`git rev-list --count origin/refactor..HEAD` = 17 on 05/10, at `180fead`): §11 is `6ed66c6` + `c38dca4`, its docs `b9f1d7a`; §12 and §13 are one code commit, `4f9436c` (25 files in `src/`), and one docs commit, `3209964`; §14 is `7ed3a85` (15 files), its docs `b45f792`; §15–§17 are `32fe3ba`, their docs `ec3fdc4`; §18 is `b2e9084` and `3f8a51b` (the user's `barbarian.ts` change); §19 is `c78b49e` (32 files in `src/`, two of them new), its docs `0da427b`; §20 is `cefcc92`, §21 is `9c363f7`, their docs `e36516a`; the s303 crawl `180fead` |
 | Committed 02/10 | At the user's request, in two commits as before: code and tests, then the two documents. The commit message went through a file (`git commit -F`): PowerShell 5.1 splits a here-string passed to a native command at its double quotes, and the first attempt failed with "pathspec did not match" — nothing was committed by it |
 | Committed 03/10 | §14, at the user's request, the same way: `7ed3a85` (code and tests), `b45f792` (the two documents), messages through `git commit -F`. `barbarian.ts` was left out (below) |
 | Committed 04/10 | At the user's request, each time asked for in that turn: §15–§17 as `32fe3ba` (code and tests) and `ec3fdc4` (the two documents); then §18 as `b2e9084`, and — the user asked for `barbarian.ts` to go in too — its change on its own as `3f8a51b`. Messages through `git commit -F`. The documents were not updated for §18 until the §19 round. §19 the same afternoon, again at the user's request: `c78b49e` (code and tests, `src/core/notifications.ts` and its test added) and `0da427b` (the two documents). In the evening, asked for in the turn after §21: `cefcc92` (§20, `render.ts` and its test), `9c363f7` (§21, `build/build-extension.mjs`), then the two documents |
-| Uncommitted | Nothing of ours (04/10 evening, after the docs commit for §20–§21). **Untracked or modified and the user's, left out of every commit:** `docs/wiki/s303/` (their crawl, the source of §19's levels past 50), `.gitignore`, `docs/So_sanh_2_script_Ikariam.md` |
-| Tests       | 35 files, 645 tests, all passing (645 after §20; 500 before §12, 515 after it, 537 after §13, 560 after §14, 567 after §15, 569 after §16's first round, 578 after §16, 583 after §17, 605 after §18 and §19's 2.6 and R, 608 after K, 627 after J, 640 after E, 641 after 2.8, 643 after the s303 levels). §11 added no test (see §11). Prettier: `core/ikariam/http.test.ts`, `send-resources/features/transport-buttons.test.ts` and `send-resources/town-cache.test.ts` are off its format at `HEAD` already — not reflowed; §19's tests appended to `http.test.ts` were formatted on their own and checked |
+| Uncommitted | **§22 (05/10):** 55 modified files — 52 in `src/`, `build/vite.empire-overview.ts`, `project-summary.md` and both documents — and three new test files the user agreed to (`src/core/dom.test.ts`, `src/send-resources/features/summary-account.test.ts`, `src/send-resources/ui/data-transfer-ui.test.ts`). **Modified or untracked and the user's, left out of every commit:** `.gitignore`, `docs/So_sanh_2_script_Ikariam.md`. `docs/wiki/s303/` (their crawl, the source of §19's levels past 50) was committed at the user's request on 04/10 evening as `180fead` |
+| Tests       | **38 files, 698 tests, all passing (05/10, after §22)**; before it 35 files, 645 tests (645 after §20; 500 before §12, 515 after it, 537 after §13, 560 after §14, 567 after §15, 569 after §16's first round, 578 after §16, 583 after §17, 605 after §18 and §19's 2.6 and R, 608 after K, 627 after J, 640 after E, 641 after 2.8, 643 after the s303 levels). §11 added no test (see §11). Prettier: `core/ikariam/http.test.ts`, `send-resources/features/transport-buttons.test.ts` and `send-resources/town-cache.test.ts` are off its format at `HEAD` already — not reflowed; §19's tests appended to `http.test.ts` were formatted on their own and checked |
 | Typecheck   | Clean (`tsc --noEmit` and the strict config)                      |
-| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 01/10 at 02:23 and contains §11 (grepped: `Crawl Building` and `building-help-` in Send Resources; the new Academy figure `568954467` present and the old `582271779` gone, `winePressSavingPercent` and the time `12873600` in Empire Overview; `Math.min(50, …)` in Send Resources' `modelWineConsumption`). Earlier markers were checked in earlier builds: §2.I–2.J (`ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows`) and §10 (`ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save`, `capped`). **`dist/` was rebuilt by the user on 03/10 at 22:54 from the working tree and holds §12 to §15** (grepped in Send Resources: `wine.autoRun`, `ika-move`, `ika_pendingTownSwitch`, `to spare, less than one`, `ikaWindowOpen_`, `js-ika-build-time-buff`, `translateX(-146px)`, `ikariam-bug-report`, `then cleared them`, `createPopupSource`, and no `"???"` left; in Empire Overview: `listAccount` and `entry.length === 2 && typeof entry[0] === "string" && entry[1] === null`). It was built before §15 was committed, so it matches the working tree, not a commit. **The userscripts installed in the browser were older than that 22:54 `dist/`** (§2). **Rebuilt 04/10 at 09:09 with §16** (grepped: `?view=transport&destinationCityId=`, `shipment form to close`, `was sent `, `Move up`; Empire Overview writes the month as `month = 2592e3` — the minifier's form of 2592000) — the build the user tried on the game (§17). **Rebuilt again at 09:44 with §17** (grepped: `ika-queue-scroll`, `resourceTableScroll`, and the `dialog.close` button after `build.save`). **Rebuilt 04/10 at 13:11 from the working tree, with §18 and §19** (grepped: `ika-building-level` in Send Resources; `empire_quickUpgrade`, `stockTip_stock`, `empire_syncIndicator` and Academy level 51's time `15379200` in Empire Overview; `ikaNotifications` and `ikaQuickUpgradeTrace` in both). It matched the working tree at 13:11, not a commit. **Rebuilt 04/10 at 21:21, holding §20 and §21** (grepped: `quick upgrade refresh` in `Ikariam Empire Overview -VN-.user.js` and in `extension/page/empire-overview.js`; `dist/extension/manifest.json` has `exclude_globs`). `dist/extension/` was rebuilt in this session with `npm run build:extension`, which builds the extension only; the two userscripts carry 21:21 too, so the user built them. That is the current `dist/`; it matches `9c363f7`. **The installed userscripts are older** — reinstall both before trying anything; the extension has never loaded before §21 |
+| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 01/10 at 02:23 and contains §11 (grepped: `Crawl Building` and `building-help-` in Send Resources; the new Academy figure `568954467` present and the old `582271779` gone, `winePressSavingPercent` and the time `12873600` in Empire Overview; `Math.min(50, …)` in Send Resources' `modelWineConsumption`). Earlier markers were checked in earlier builds: §2.I–2.J (`ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows`) and §10 (`ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save`, `capped`). **`dist/` was rebuilt by the user on 03/10 at 22:54 from the working tree and holds §12 to §15** (grepped in Send Resources: `wine.autoRun`, `ika-move`, `ika_pendingTownSwitch`, `to spare, less than one`, `ikaWindowOpen_`, `js-ika-build-time-buff`, `translateX(-146px)`, `ikariam-bug-report`, `then cleared them`, `createPopupSource`, and no `"???"` left; in Empire Overview: `listAccount` and `entry.length === 2 && typeof entry[0] === "string" && entry[1] === null`). It was built before §15 was committed, so it matches the working tree, not a commit. **The userscripts installed in the browser were older than that 22:54 `dist/`** (§2). **Rebuilt 04/10 at 09:09 with §16** (grepped: `?view=transport&destinationCityId=`, `shipment form to close`, `was sent `, `Move up`; Empire Overview writes the month as `month = 2592e3` — the minifier's form of 2592000) — the build the user tried on the game (§17). **Rebuilt again at 09:44 with §17** (grepped: `ika-queue-scroll`, `resourceTableScroll`, and the `dialog.close` button after `build.save`). **Rebuilt 04/10 at 13:11 from the working tree, with §18 and §19** (grepped: `ika-building-level` in Send Resources; `empire_quickUpgrade`, `stockTip_stock`, `empire_syncIndicator` and Academy level 51's time `15379200` in Empire Overview; `ikaNotifications` and `ikaQuickUpgradeTrace` in both). It matched the working tree at 13:11, not a commit. **Rebuilt 04/10 at 21:21, holding §20 and §21** (grepped: `quick upgrade refresh` in `Ikariam Empire Overview -VN-.user.js` and in `extension/page/empire-overview.js`; `dist/extension/manifest.json` has `exclude_globs`). `dist/extension/` was rebuilt in this session with `npm run build:extension`, which builds the extension only; the two userscripts carry 21:21 too, so the user built them. It matched `9c363f7`. **Rebuilt 05/10 at 02:03 with `npm run build` in this session, from the working tree, holding §22** (grepped: `event subscriber` and `quick upgrade refresh` in Empire Overview, `ika_oneOffRunTypes` in Send Resources, in both the userscripts and the extension; no `GM_xmlhttpRequest` left in Empire Overview's header). That is the current `dist/`; it matches the working tree, not a commit. **The installed userscripts are older** — reinstall both before trying anything; the extension has never loaded before §21 |
 
 What landed: the AJAX transport layer, the shared window widget, the rewritten
 panel, four features (sync-towns, transport-buttons, queue-view, wine-warning),
@@ -704,6 +727,23 @@ documentation:
   still documented for MV3 content scripts (Chrome's "Content scripts"
   page). Not yet seen loading in Chrome.
 
+Added 05/10 (§22), read from source, not measured on the game:
+
+- **jQuery 2.2.4's `$.Callbacks` dies on one throw.** `fire()` sets
+  `firing = true`, calls the list with no try/finally, and only then clears
+  it (`node_modules/jquery/dist/jquery.js`, the version the userscript
+  `@require`s). After a callback throws, `fireWith` only pushes onto the
+  queue (`if (!firing) fire()` is never true again): the topic is dead until
+  the page reloads. Empire Overview's `events()` is built on it, so every
+  subscriber is now wrapped (§22). The page's own jQuery version is not
+  known.
+- **The board's view parsers read the page, not the response.**
+  `parsePalace`, `parseMuseum`, `parseFinances`, `parseCityMilitary`,
+  `parseTavern` … read `$("#palace")` and the like. For a view the game drew
+  that works; for a response a script fetched (scan, ▲) the view is not on
+  the page. `parseTownHall` reads the template data and is the one parser a
+  fetched response still runs.
+
 ---
 
 ## 3. How this branch works, the hard way
@@ -870,6 +910,34 @@ reproduces production; `http.test.ts` and `startup.test.ts` both do it now.
   the original back — then a full run at the end to confirm the restore.
   Print "PATCH DID NOT APPLY" when the replace changed nothing, so a missed
   match is never mistaken for a green test.
+
+**Traps from the 05/10 review round (§22):**
+
+- **A PowerShell script in the scratchpad must be ASCII.** Windows
+  PowerShell 5.1 reads a `.ps1` without a BOM in the console code page; a
+  `×` in a pattern became mojibake and the whole script failed to parse —
+  nothing ran, nothing changed, but nothing was checked either. Likewise
+  `git show HEAD:<file>` captured in PowerShell is decoded with the console
+  code page: set `[Console]::OutputEncoding = [Text.Encoding]::UTF8` first,
+  or the HEAD copy of a file with `Quản lý` or `→` in it is written back
+  mangled. A long one-liner with `?`/`:` inside quoted replacement strings
+  also failed to parse; a small Node script (`break.mjs`: patch one string,
+  run one test file, restore in `finally`) was the reliable red check.
+- **A board test leaves its intervals running.** `vi.resetModules()` gives
+  the next test a fresh board but keeps the old one's 1 s timers, which then
+  redraw a board that is gone and throw. Once subscribers were isolated,
+  those throws reached the bug reporter and broke "records nothing" checks.
+  `startup.test.ts` now records every `setInterval` and clears them after
+  each test.
+- **A red check that stays green means the test misses.** The first test
+  for escaping town names on the board put `<img>` in the name and passed
+  without the fix: the name sits inside `data-tooltip="…"`, where `<img>`
+  makes no element. A name with a `"` (which closes the attribute) is what
+  goes red.
+- **`build/*.ts` show as off prettier for two reasons.**
+  `build/vite.empire-overview.ts` and `build/vite.send-resources.ts` are off
+  at `HEAD`; `build/shared.ts` is clean at `HEAD` but checked out with CRLF.
+  Neither is from §22.
 
 **A Chrome match pattern is not a Tampermonkey glob** (§21). The
 userscripts' `@include`/`@exclude` (`build/shared.ts`) are globs and take
@@ -1050,8 +1118,9 @@ Added 28–29/09, each chosen by the user:
   `sendResource` row per filled field. Digits only (`^\d+$`); any bad field
   queues nothing and names the field.
 - **`needingShip` divides by `getPerShipCapacity()`** — calibrated, 500
-  until calibrated. Rounding is still `Math.round`, which can come out a
-  ship short; the user was told and has not asked for `Math.ceil`.
+  until calibrated. ~~Rounding is still `Math.round`, which can come out a
+  ship short; the user was told and has not asked for `Math.ceil`.~~
+  *Superseded 04/10 (§16): `Math.ceil`, approved with that round's list.*
 
 Added 29/09 evening, each chosen by the user unless marked (write-ups in
 `improvement-plan.md` §2.I–2.J):
@@ -1332,6 +1401,43 @@ choose between that the user was asked about:
   `exclude_matches`, where it was valid. The `.de` domain still has no
   forum exclusion in the extension, as before.
 
+Added 05/10, each chosen by the user unless marked (§22):
+
+- **The review covered all of `src`**, by six agents, one dimension each,
+  every 🔴/⚠️ checked at `file:line` before it was reported; the report is a
+  new file the user asked for, `sample/review-source/review-src-2026-10-04.md`.
+  Fixes went "in the proposed order": 🔴 1, 🔴 2, ⚠️ 4, ⚠️ 5, ⚠️ 11, 🔴 3,
+  then the other ⚠️. The 💡 items were not part of it.
+- **Every `events()` subscriber runs in its own try** and a throw goes to
+  `reportBug` (chosen here, as the fix for the dead-topic bug). `sub` keeps a
+  handler → wrapper map so `unsub` still works.
+- **A fetched response is marked** (`FETCHED_RESPONSE`, published by
+  `main.ts`) and runs only the Town Hall parser, quietly; it records its data
+  on its own town and then gives `_currentCity` back, publishing no
+  `cityChanged` (chosen here).
+- **After a town switch a handler answers `defer`, not `retry`** — out of
+  action points, no cargo field, no submit button. `retry` stays for no idle
+  ships at all, which the check before the switch answers on the next page
+  without switching (chosen here; written into `TaskResult`'s comment).
+- **Build's one-off run is kept in `sessionStorage`** (`ika_oneOffRunTypes`,
+  this tab, out of the export), restored only for a type still queued
+  (chosen here).
+- **A town ticked as an Auto Wine source is never "running out of wine"**
+  (chosen here: it makes its own; the alternative, subtracting production,
+  needs a figure the cache does not hold).
+- **Import trusts nothing in the file**: each key classified again, string
+  values only; values from storage escaped wherever HTML is built (chosen
+  here). The "kept under the other account" toast now says what happens.
+- **The board's Website and Report Bug buttons are removed** (the user's
+  choice of three; Bug Report lives in the Send Resources panel).
+- **The "task dropped" notification keeps the failure reason** (the user's
+  choice), while its first line is now the queue's wording of the task.
+- **Three new test files** (the user agreed): `core/dom.test.ts`,
+  `features/summary-account.test.ts`, `ui/data-transfer-ui.test.ts`.
+- **Left as they are, on purpose:** the two safe JSON storage wrappers
+  (`notifications.ts`, `http.ts`) — they catch what `Store` does not; the
+  `autoUpdates` settings key (§19).
+
 ---
 
 ## 6. What is blocked, and on what
@@ -1489,9 +1595,11 @@ ever been captured.
 the build at a public URL for `@updateURL` (plan §6 question 5). V's three
 remaining points — the user will write the details.
 
-**Waiting on the user's test (04/10):** everything in §17–§20, none of it
+**Waiting on the user's test (05/10):** everything in §17–§22, none of it
 seen on the game as a round — except ▲, which the user pressed and which
-led to §20. The 21:21 `dist/` holds all of it; reinstall first. And §21:
+led to §20. The 05/10 02:03 `dist/` holds all of it; reinstall first, and
+let Tampermonkey take the new Empire Overview header (three grants fewer).
+§22's own list is at the end of §22. And §21:
 load `dist/extension` in Chrome — the extension build has never run, so
 everything that is the extension's own (the content script injecting
 `page/*.js`, `web_accessible_resources`) is unseen. E first, as the
@@ -1569,10 +1677,13 @@ concrete bug; F, G, I, M, N, O, Q are "not now" by the user's choice.
   `init` retry, line 6650 is `var ikariam = {`). `sample/Quản lý Ika Perseus
   -VN-.user.js` is a slightly different copy, 10,769 lines — a review agent
   compared against that one and reported every number as stale. It was not.
-- **Every localStorage key the scripts write is checked against the export
-  table** by a test in `core/data-transfer.test.ts`. Adding a key without
-  classifying it in `core/data-transfer.ts` now fails the suite rather than
-  silently dropping out of exports.
+- **The storage keys the scripts write are checked against the export
+  table** by a test in `core/data-transfer.test.ts` — against a list written
+  out in the test, so a key added to the code and not to that list is not
+  caught. *Corrected 05/10 (the `src` review): this said every key, and
+  Empire Overview's `ikaAjaxTrace` was in fact unclassified; it is now
+  `diagnostics`, and the test lists it, the quick-upgrade trace and the two
+  notification keys.*
 - **Done 04/10 from the lists below (§16):** the Close button in Auto
   Build Settings is gone (*back again in §17, at the user's request*); `needingShip` rounds up; the queue's ▶ and the
   status line follow the task the runner is on; "Warning wine" toasts once
@@ -1580,9 +1691,9 @@ concrete bug; F, G, I, M, N, O, Q are "not now" by the user's choice.
   Transport Settings table shows labels and the Auto Wine dialog takes `"—"`
   and the hours from `DURATION`; Space no longer toggles both boards. What
   remains of those lists is marked inline as still open.
-- **Small things left from 03–04/10** (§16): the status line still reads
+- **Small things left from 03–04/10** (§16): ~~the status line still reads
   "idle" when the runner's task is an upgrade (`describeCurrentTransfer`
-  describes shipments only). With the runner stopped there is no ▶ at all —
+  describes shipments only)~~ *fixed §18*. With the runner stopped there is no ▶ at all —
   chosen, but it reads differently from before. `townHasPort` accepts a
   `constructionSite` in slot 1 or 2, as the original did, though those
   slots can hold a shipyard too; a town whose only sea building is a
@@ -1596,40 +1707,39 @@ concrete bug; F, G, I, M, N, O, Q are "not now" by the user's choice.
   shows it uncapped for up to one status tick. The header rows of both
   tables scroll away with the rows. `core/dom.ts` has no test file of its
   own; `capVisibleRows` is tested through its two callers.
-- **Small things left from 28–29/09, not scheduled:** the panel's status
-  line still reads "idle" while the queue head is an Auto Build task
-  (`describeCurrentTransfer` only describes `sendResource`); Auto Build
-  Settings still has a Close button that now does exactly what Save does —
-  the user was asked whether to drop it, no answer yet; `needingShip` rounds
-  with `Math.round` (§5).
+- **Small things left from 28–29/09** — *all closed:* ~~the panel's status
+  line still reads "idle" while the queue head is an Auto Build task~~
+  *(§18)*; ~~Auto Build Settings still has a Close button that now does
+  exactly what Save does~~ *(removed §16, back at the user's request §17)*;
+  ~~`needingShip` rounds with `Math.round`~~ *(`Math.ceil` since §16)*.
 - **Small things left from 29/09 evening, not scheduled** (plan §2.I–2.J):
-  the queue view's ▶ and the panel's status line still point at the head of
-  the queue, which since the `retry` fix may be a shipment waiting while an
-  upgrade behind it runs — showing the task the runner picked needs the
-  runner to expose it. With a shipment still waiting, the queue never drains,
+  ~~the queue view's ▶ and the panel's status line still point at the head of
+  the queue~~ *(they follow `TaskRunner.currentTaskId` since §16)*. With a
+  shipment still waiting, the queue never drains,
   so the next Auto Build lap has to come from the keep-alive reload and
   `start()`, not `onDrain` — not checked live (since 02/10 this holds only
   with both timers on: with Build's alone, a queue of shipments counts as
-  drained, §13). "Warning wine" still toasts
-  every 5 s for a town that really is running dry. The toast for
+  drained, §13). ~~"Warning wine" still toasts every 5 s for a town that
+  really is running dry~~ *(once per town since §16)*. The toast for
   `skippingOtherAccount` shows just before a `confirm()` and may be hidden by
   it.
 - **Small things left from 30/09–01/10, not scheduled** (§11):
-  `core/format.ts`'s `TIME_FACTORS` makes a month 2,520,000 s (29.17 days)
-  where the game's is 30 days — every "M" the scripts print is off by about
-  3%; not fixed, out of scope. Discounts round with `Math.round`; one point of
+  ~~`core/format.ts`'s `TIME_FACTORS` makes a month 2,520,000 s (29.17 days)
+  where the game's is 30 days~~ *(30 days in both formatters since §16)*.
+  Discounts round with `Math.round`; one point of
   the old wiki (64 × 0.98 = 62.72 shown as 62) hints the game floors — not
   checked. A building past level 50 shows cost 0 and so reads as upgradable.
   The Crawl Building button is still in the panel. No test in the repo covers
   the time table, `isMaxLevel` or the 50% cap (checked with throwaway runs,
   §11).
-- **Small things left from 02/10, not scheduled** (§13): display strings
+- **Small things left from 02/10, not scheduled** (§13): ~~display strings
   outside §2.D's list — Transport Settings' table still shows the resource
-  id (`glass`), and the Auto Wine dialog writes `"—"` and `"h"` inline. A
-  scan that falls back to walking (model unreadable) stops at the first
+  id (`glass`), and the Auto Wine dialog writes `"—"` and `"h"` inline~~
+  *(labels and `DURATION` since §16)*. A scan that falls back to walking (model unreadable) stops at the first
   switch now that a switch reloads.
-- **Small things left from 03/10, not scheduled** (§14): Space toggles
-  BOTH boards at once — both scripts bind it, as before. Whether the game
+- **Small things left from 03/10, not scheduled** (§14): ~~Space toggles
+  BOTH boards at once~~ *(Space is Empire Overview's alone since §16)*.
+  Whether the game
   rounds construction times or floors them is not measured; `Math.round`
   was the user's "round to the second". The buff field exists only for an
   account with a row in the table (the current one gets it at startup).
@@ -1680,10 +1790,8 @@ concrete bug; F, G, I, M, N, O, Q are "not now" by the user's choice.
   - **The two scripts have no update channel at all** since R; the user has
     not decided on a public URL.
 - **(04/10 evening, §20) Left as they are:**
-  - **`upgradeBuildingNow`'s doc comment is now wrong** (`core/ikariam/http.ts`):
-    it says both responses reach the board "so it redraws the town" — the
-    user's test showed it does not. Not edited; only the documents were
-    asked for.
+  - ~~**`upgradeBuildingNow`'s doc comment is now wrong**~~ *Fixed 05/10
+    (§22): it now says the board loads the town again itself.*
   - **`updateChangesForCityBuilding(cityId, [])` does nothing** — it acts
     only on a non-empty `changes`. The board's own handler for the game's
     upgrade button (`AttachClickHandlers` in `render.ts`) still calls it
@@ -1698,6 +1806,22 @@ concrete bug; F, G, I, M, N, O, Q are "not now" by the user's choice.
   sharing the page without Tampermonkey's sandbox (Empire Overview runs
   `@grant unsafeWindow` as a userscript) — are untested live. Its forum
   exclusion covers `.com` only (`MATCHES` has `.de` too).
+- **(05/10, §22) Left from the review**, all in
+  `sample/review-source/review-src-2026-10-04.md` with `file:line`:
+  - **Every 💡 item**, among them: the module's `actionRequest` always wins
+    over a newer one in the model (server behaviour unmeasured);
+    `_statusPoll` publishes with no city id, so a cell does not turn
+    upgradable by itself; action points read "N/undefined" past Town Hall
+    level 65; Auto Wine does not count wine already at sea; a storage write
+    failing after a successful shipment re-runs it; `TabLock` swallows a
+    rejection; `start()` does not reset `pausedUntil`; the log is kept
+    escaped (`&amp;`) through the textarea's `innerHTML`; the IkaLogs setting
+    loads a third-party script; time constants and magic numbers.
+  - **Not verified:** that a fetched Palace/Museum view carries `changeView`
+    with that name (what made 🔴 1 fire — the isolation covers it either
+    way); the page's jQuery version.
+  - Strings that reach the "task dropped" notification from thrown errors
+    are code text, kept by the user's choice.
 
 ---
 
@@ -2479,3 +2603,83 @@ Chrome has not loaded it yet.
 → no error; open the game → the Empire Overview board and the Send
 Resources panel appear and work as the userscripts do. A new error from
 Chrome → paste it; a page that misbehaves → Bug Report, as usual.
+
+---
+
+## 22. 05/10: a review of all of `src`, and its fixes
+
+**Not committed; in `dist/` (05/10 02:03, grepped); not tried on the game.**
+The plan's write-up, in Vietnamese, is §2.X (a table of every fix); the
+facts are in §2 ("Added 05/10"), the decisions in §5, the traps in §4, the
+leftovers in §7. The review itself, finding by finding, is
+`sample/review-source/review-src-2026-10-04.md`. 645 → 698 tests, 35 → 38
+files; typecheck clean on both configs; prettier clean on every file
+touched (the three test files off at `HEAD` stay off).
+
+**How it went.** The user asked for a review of `src` following
+`sample/prompt/review-source-workflow.md`, chose "all of `src`" over "what
+changed since `1983f45`", and chose agents by dimension. Six read-only
+agents ran in parallel: correctness of `core` + `extension`, of
+`send-resources` and of `empire-overview`; code quality (the prompt's step
+2b) for two areas; tests, documents and security. Their reports were
+merged, duplicates dropped (three agents found the `innerHTML` town names),
+and every 🔴/⚠️ checked at `file:line` before it went into the report —
+which is how the token finding was confirmed against the real reports in
+`tools/output/` (none held a token yet; the next one after ▲ would have).
+The user then had the report written to a new file and said "fix in the
+proposed order", and answered three questions on the way (§5).
+
+| Item | What | Where |
+| ---- | ---- | ----- |
+| 🔴 1 | `isolatedSubscriber` in `events()` (a `reportBug` per throw, `unsub` through a wrapper map); `FETCHED_RESPONSE` published with fetched responses; `parseViewData(view, html, tData, fetched)` — a fetched response runs `parseTownHall(tData, quiet)` only; `parseViewData` in its own try; `parsePalace` returns on an empty form of government; `upgradeSuccessCheck` guards `[name, null]` | `empire-overview/events.ts`, `game-api.ts`, `main.ts`, `render.ts` |
+| 🔴 2 | out of action points and no cargo field → `defer`; `TaskResult`'s comment states the rule | `send-resources/features/send-resources.ts`, `core/task-queue.ts` |
+| ⚠️ 4 | `cityBeforeResponse` restored after a fetched response, no `cityChanged` | `game-api.ts` |
+| ⚠️ 5 | `redactTokens`, `TOKEN_PLACEHOLDER`; every token of the run (`noteToken`, the link's) taken out of the trace before it is cut | `core/ikariam/http.ts` |
+| ⚠️ 11 | `readTownName(element)`, used by `getCurrentTownName`, `clickBoardTownName`, `getTownNameFromList`'s fallback, `openAutoBuildDialog`, `enqueueAutoBuild` | `core/ikariam/globals.ts` and the callers |
+| 🔴 3 | 39 plan references out; `var test` removed; `city.ts` one-letter names renamed (by a script limited to the two getters, diff read) | ~25 files |
+| ⚠️ 6 | `importData` re-classifies (`classifyKey`), string values only, `IMPORT_NOTES.notOurs`; `escapeHtml` on the buff cell, five board templates, the resource label | `core/data-transfer.ts`, `core/messages.ts`, `summary-account.ts`, `render.ts`, `ui/dialogs.ts`, `messages.ts` |
+| ⚠️ 7 | `saveOneOffRunTypes`, `addOneOffRunType`, `clearOneOffRunTypes`, `restoreOneOffRunTypes` | `send-resources/app.ts` |
+| ⚠️ 8 | submit looked for before entering and at the click; missing → `defer` | `features/send-resources.ts` |
+| ⚠️ 9 | `wineStatus` treats ticked senders as not running out | `features/wine-warning.ts` |
+| ⚠️ 10 | first snapshot kept apart | `core/bug-report.ts` |
+| ⚠️ 12, 15 | `languageText()` in `utils.ts`; `const`/`let` in new board code; `errorMessage`, `ensureStyle`, `isTypingTarget`, `reductionBuildingPercent`, `accountsInBundle` | as listed in plan §2.X |
+| ⚠️ 13 | three GM shims, their declarations, grants and test stubs; the zoom toggle; `waitForElements`; a re-export; two unused strings; `_version`/`isOldVersion`; empty `//todo`s; `TaskHandler<any>`; the board's Website and Report Bug buttons and their four strings | as listed in plan §2.X |
+| ⚠️ 14 | `describeCurrentTransfer` → `describeTask` | `features/send-resources.ts` |
+| ⚠️ 16 | `ikaAjaxTrace` classified; documents corrected | `core/data-transfer.ts`, docs, `project-summary.md` |
+| ⚠️ 17 | `core/dom.test.ts`, `features/summary-account.test.ts`, `ui/data-transfer-ui.test.ts` | new |
+| found while testing | the keep-alive skipped its first reload at minute :00 (`Number(null)` is 0) | `features/summary-account.ts` |
+
+**Tests, and which were seen red.** Each fix was broken on purpose and the
+matching test run, then the file restored (§4's round trip, plus a Node
+`break.mjs` for single-string breaks):
+
+- 🔴 1, four combinations: all four files at `HEAD` → 4 red; `events.ts`
+  alone → the subscriber test; `game-api.ts` + `main.ts` → the Palace and
+  Town Hall tests; `render.ts` alone → the `provideFeedback` test.
+- ⚠️ 4: only the `_currentCity` restore line removed → red (a check with
+  `game-api.ts` at `HEAD` was red too, but mixed with `main.ts` importing a
+  name `HEAD` lacks, so the narrower one is the one that counts).
+- ⚠️ 5: `redactTokens` returning its input → 2 red. 🔴 2, ⚠️ 6 (three
+  tests), ⚠️ 7, ⚠️ 8, ⚠️ 9, ⚠️ 10, ⚠️ 11 (two), ⚠️ 14, ⚠️ 16, the buttons:
+  each red against `HEAD` or with its lines taken out.
+- New files: `escapeHtml` without the quote → 2 red; the remap left out →
+  1 red; the keep-alive's minute check or its reload guard taken out → 1
+  red each; `summary-account.ts` at `HEAD` → the two minute :00 tests red.
+- Refactors (⚠️ 12, 15) change no behaviour: the suite stayed green.
+
+**What to try on the game** (after reinstalling both userscripts from the
+05/10 02:03 `dist/`):
+
+- ▲ on a Palace or Museum cell if one is upgradable, then use the board: it
+  must keep updating (before, it froze until a reload).
+- A scan: no row of "Updated:" toasts with no name; the highlighted row
+  stays the town on screen; a town name or transport button on the board
+  works for the last town scanned.
+- A queued shipment from a town with 0 action points and an upgrade in
+  another town, both timers on: no reloading back and forth.
+- Build's Start (one lap, timer off) across several towns: every town gets
+  its turn.
+- The board's Settings: no Website or Report Bug button.
+- ▲, then Bug Report: the file holds no `actionRequest=` value.
+- The status line names a shipment as the queue does (`12,000 Crystal: A →
+  B`).

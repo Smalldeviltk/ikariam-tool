@@ -1,10 +1,11 @@
 # Kế hoạch cải thiện — UI và tính năng
 
-> Trạng thái: **đang thực hiện.** Cập nhật 04/10/2026, tối.
+> Trạng thái: **đang thực hiện.** Cập nhật 05/10/2026.
 >
 > Đã xong: Phase 1 · Phase 2 phần panel (2.1–2.5) và phần board (2.6, 2.8) ·
 > A, B, C, D, E, H, J, K, S, T · R (mức tối thiểu) · U (thêm cấp > 50 từ
-> s303) · **§2.A cảng biển** · §2.E → §2.W. **Người dùng thử trên game 04/10
+> s303) · **§2.A cảng biển** · §2.E → §2.W · **§2.X review toàn bộ `src` và
+> sửa (05/10)**. **Người dùng thử trên game 04/10
 > sáng: "tạm ok"** (§2.Q) — từ §2.R trở đi **chưa thử** như một lượt; riêng
 > nút ▲ (E) người dùng đã bấm thử và báo lỗi, sửa ở §2.V. **Bản extension
 > Chrome chưa từng load được** cho tới §2.W (manifest sai từ đầu) — mọi lần
@@ -13,33 +14,47 @@
 > phần U còn thiếu số (§2.U phần 4) · R: kênh cập nhật riêng (chờ người
 > dùng). **Không làm lúc này** (người dùng chọn 04/10): F, G, I, M, N, O, Q.
 >
-> Git (04/10 tối): `origin/refactor` ở `066eb44`; **16 commit chưa push** —
+> Git (05/10): `origin/refactor` ở `066eb44`; **17 commit chưa push** —
 > `6ed66c6`, `c38dca4`, `b9f1d7a` (U + V), `4f9436c`, `3209964` (§2.K + §2.L),
 > `7ed3a85`, `b45f792` (§2.M), `32fe3ba`, `ec3fdc4` (§2.N → §2.R), `b2e9084`
 > (§2.S), `3f8a51b` (thay đổi `barbarian.ts` của người dùng, commit riêng
 > theo yêu cầu), **`c78b49e` (§2.T + §2.U: 32 file trong `src/`, gồm 2 file
 > mới `src/core/notifications.ts` + `notifications.test.ts`) và `0da427b`
 > (hai tài liệu)**, **`cefcc92` (§2.V: `render.ts`, `startup.test.ts`),
-> `9c363f7` (§2.W: `build/build-extension.mjs`) và commit tài liệu ngay sau
-> đó** (04/10 tối, người dùng yêu cầu). Working tree sạch trừ các file của
-> người dùng: `docs/wiki/s303/` (dữ liệu người dùng crawl), `.gitignore` và
-> `docs/So_sanh_2_script_Ikariam.md` — không tự đưa vào commit. **`dist/`
-> 04/10 21:21** từ working tree (khớp `9c363f7`), có §2.V (đã grep `quick upgrade refresh` trong cả
-> `Ikariam Empire Overview -VN-.user.js` lẫn `extension/page/empire-overview.js`)
-> và manifest đã sửa của §2.W (`exclude_globs`). `dist/extension/` do
-> `npm run build:extension` trong phiên này build lại; hai userscript cũng
-> mang giờ 21:21 nhưng lệnh đó không build userscript — người dùng đã build
-> chúng. **Người dùng chưa cài lại / chưa load lại.**
+> `9c363f7` (§2.W: `build/build-extension.mjs`), `e36516a` (tài liệu) và
+> `180fead` (`docs/wiki/s303/` — dữ liệu người dùng crawl, commit theo yêu
+> cầu)** (04/10 tối). **Chưa commit (05/10): §2.X** — 55 file sửa (52 trong
+> `src/`, `build/vite.empire-overview.ts`, `project-summary.md` và hai tài
+> liệu này) và 3 file test mới (`src/core/dom.test.ts`,
+> `src/send-resources/features/summary-account.test.ts`,
+> `src/send-resources/ui/data-transfer-ui.test.ts` — người dùng đồng ý tạo).
+> `.gitignore` và `docs/So_sanh_2_script_Ikariam.md` là của người dùng —
+> không tự đưa vào commit. **`dist/` 05/10 02:03** (`npm run build` trong
+> phiên, từ working tree): có §2.V, §2.W và §2.X (đã grep `event subscriber`
+> và `quick upgrade refresh` trong Empire Overview, `ika_oneOffRunTypes` trong
+> Send Resources, ở cả userscript lẫn extension; header Empire Overview không
+> còn `GM_xmlhttpRequest`). **Người dùng chưa cài lại / chưa load lại.**
 >
-> **Mới nhất (§2.W — 04/10 tối, commit `9c363f7`, chưa push):** Chrome từ chối load
+> **Mới nhất (§2.X — 05/10, chưa commit, có trong `dist/` 02:03, chưa thử
+> trên game):** review toàn bộ `src` theo
+> `sample/prompt/review-source-workflow.md` (6 agent, báo cáo ở
+> `sample/review-source/review-src-2026-10-04.md`) rồi sửa theo thứ tự đề
+> xuất. Nặng nhất: **một subscriber ném lỗi làm board ngừng ghi nhận mọi
+> response tới khi tải lại** — nút ▲ trên Palace/Museum gây ra (jQuery
+> `Callbacks` không có try/finally); **vòng reload qua lại khi town nguồn hết
+> action point**; response fetch làm board đổi "town hiện tại"; token
+> `actionRequest` lọt vào Bug Report; import tin mọi thứ trong file (đường
+> XSS); 39 comment/tên test trỏ tới mục plan (rule 11). 645 → 698 test,
+> 35 → 38 file.
+>
+> **§2.W (04/10 tối, commit `9c363f7`, chưa push):** Chrome từ chối load
 > `dist/extension` — `Invalid value for 'content_scripts[0].exclude_matches[0]':
 > Invalid host wildcard`. Pattern loại trừ diễn đàn
 > `*://board.*.ikariam.gameforge.com/*` có `*` giữa tên host, match pattern
 > của Chrome không cho; chuyển sang **`exclude_globs`**. Lỗi có từ commit dựng
 > toolchain (`e551bb8`). Đã build lại; **chưa load lại trong Chrome**.
 >
-> **§2.V (04/10 tối, commit `cefcc92`, chưa push, có trong `dist/` 21:21,
-> chưa thử trên game):** người dùng báo bấm ▲ trên board thì game nâng cấp (toast "Upgrade
+> **§2.V (04/10 tối, commit `cefcc92`, chưa push, chưa thử trên game):** người dùng báo bấm ▲ trên board thì game nâng cấp (toast "Upgrade
 > started"), nhưng ô vẫn hiện công trình rảnh, phải Scan hoặc sang town đó
 > mới đúng. Sửa: nâng cấp thành công thì **tải lại town đó** (`fetchTown`,
 > như Scan), nút ▲ khoá tới khi tải xong; tải lại lỗi thì ghi Bug Report,
@@ -644,7 +659,8 @@ cuối giữ nguyên.
   dưới) thay vì chữ.~~
 - Bảng `Constant.LanguageData` của Empire Overview chỉ có `en`. Ba key mới
   (`toast_updated`, `toast_movementAdded`, `toast_remoteVersionUnreadable`) chỉ
-  được thêm vào đó.
+  được thêm vào đó. *05/10: `toast_remoteVersionUnreadable` đã xoá — không
+  còn chỗ dùng từ khi bỏ `CheckForUpdates` (§2.T phần 3).*
 - `tools/collect-dom-report.js` viết thẳng key `"ikaAjaxTrace"`; trong `src/`
   giờ là `TRACE_STORAGE_KEY` (`empire-overview/ajax-trace.ts`). Crawler không
   nằm trong build nên không import được — đổi tên thì phải sửa cả hai.
@@ -1994,14 +2010,14 @@ E như trên; rê chuột lên số tồn kho.
 ### 2.U U: cấp > 50 từ trang Help của s303 (04/10/2026)
 
 **Commit `c78b49e` (docs `0da427b`, 04/10, chưa push). Có trong `dist/` 13:11,
-chưa thử trên game.** `docs/wiki/s303/` (nguồn số) vẫn untracked — dữ liệu
-của người dùng.
+chưa thử trên game.** `docs/wiki/s303/` (nguồn số, dữ liệu của người dùng)
+commit riêng ở `180fead` theo yêu cầu.
 
 #### 1. Dữ liệu
 
 Người dùng crawl trang Help > building details trên **`s303-en`** (04/10,
-nút Crawl Building), lưu ở `docs/wiki/s303/` (**untracked** — dữ liệu của
-người dùng). 28 công trình; mỗi file là một cửa sổ **50 cấp** quanh cấp hiện
+nút Crawl Building), lưu ở `docs/wiki/s303/` (dữ liệu của người dùng, commit
+`180fead`). 28 công trình; mỗi file là một cửa sổ **50 cấp** quanh cấp hiện
 tại của tài khoản, kết thúc ở cấp 51 (Dockyard) tới 96 (Architect, Carpenter,
 Optician). **Không có** (người dùng: không khác bản cũ nên không lấy):
 Chronos' Forge, Palace, Governor's Residence, Pirate Fortress, Temple.
@@ -2196,6 +2212,101 @@ thẻ thì Reload) → không báo lỗi; mở game → board Empire Overview v�
 Send Resources hiện như bản userscript. **Tắt hai userscript trong
 Tampermonkey trước** — chạy cả hai bản cùng lúc thì mỗi script có hai bản sao
 trên trang.
+
+
+### 2.X Review toàn bộ `src` và sửa (04–05/10/2026)
+
+**Chưa commit. Có trong `dist/` 05/10 02:03 (đã grep), chưa thử trên game.**
+645 → 698 test, 35 → 38 file test; typecheck (cả cấu hình strict) sạch;
+prettier chỉ còn lệch 3 file test đã lệch từ trước (`http.test.ts`,
+`transport-buttons.test.ts`, `town-cache.test.ts`).
+
+#### 1. Cách review
+
+- **Người dùng chọn:** toàn bộ `src` (108 file, ~33.500 dòng, `HEAD` =
+  `180fead`) thay vì chỉ phần đổi từ lần review trước (`1983f45`, §2.D); chia
+  agent theo dimension thay vì một mình.
+- Theo `sample/prompt/review-source-workflow.md`, bỏ phần riêng của SAMS (DB,
+  migration, seed, xlsx/webmock). 6 agent chạy song song, chỉ đọc: tính đúng
+  của `core` + `extension` / `send-resources` / `empire-overview`; chất lượng
+  code (Bước 2b) cho hai vùng; test + tài liệu + security. Mỗi agent được dặn
+  đọc handover §2–§5, §7 và §2.D để không báo lại quyết định đã chốt.
+- Gộp, bỏ trùng, **tự kiểm lại tại `file:line`** mọi 🔴/⚠️ (đánh dấu ✔/◌ trong
+  báo cáo). Kết quả: 3 🔴, 14 ⚠️, ~20 💡.
+- **Báo cáo đầy đủ:** `sample/review-source/review-src-2026-10-04.md` (người
+  dùng yêu cầu ghi ra file mới ở đó; `sample/` gitignore).
+
+#### 2. Đã sửa (người dùng: "sửa theo thứ tự đề xuất")
+
+| # | Lỗi | Sửa | Ở đâu |
+| - | --- | --- | ----- |
+| 🔴 1 | **Một subscriber ném lỗi → board ngừng ghi nhận mọi response tới khi tải lại.** `$.Callbacks.fire` của jQuery 2.2.4 không có try/finally: callback ném thì `firing` kẹt `true`, mọi `pub` sau chỉ xếp hàng (đã đọc trong source jQuery). ▲ trên Palace/Museum: response fetch → `parseViewData` (nằm ngoài try) chạy `parsePalace`/`parseMuseum` trên DOM không có view đó → ném; `parsePalace` còn đặt chính thể `""` trước, làm mọi `getUpgradeCost` ném. `onResponse` nuốt lỗi bằng `catch {}` nên không có bản ghi nào | `events().sub` chạy mỗi handler trong try + `reportBug` (giữ map handler → wrapper để `unsub` đúng). Response fetch được đánh dấu (`FETCHED_RESPONSE`): chỉ parser Town Hall chạy (đọc template data — Scan cần), không toast; parser đọc DOM bỏ qua. `parseViewData` có try riêng. `parsePalace` không nhận chính thể rỗng. `upgradeSuccessCheck` chặn `provideFeedback` rỗng | `empire-overview/events.ts`, `game-api.ts`, `main.ts`, `render.ts` |
+| 🔴 2 | **Vòng reload qua lại khi town nguồn hết action point.** `retry` chặn loại task chỉ trong bộ nhớ; sau khi đổi town (reload), upgrade ở town khác đổi town (reload), lệnh gửi chạy trước lại đổi về | Hết AP, và "No input field", trả **`defer`**. "Ships became unavailable en route" giữ `retry` (tàu là của cả tài khoản; phép kiểm trước khi đi trả lời không cần đổi town). Comment của `TaskResult` ghi luật mới | `features/send-resources.ts`, `core/task-queue.ts` |
+| ⚠️ 4 | **Response fetch đổi "town hiện tại" của board.** Sau Scan là town quét cuối, sau ▲ là town được nâng: tô sai hàng, tên/nút transport của town đó không làm gì, `loadUrl` quyết định ngược | Response fetch vẫn ghi dữ liệu vào town của nó, rồi trả `_currentCity` về như trước và không publish `cityChanged` | `game-api.ts` |
+| ⚠️ 5 | **Token `actionRequest` lọt vào Bug Report** qua trace của ▲ (response thô, HTML nút, link) | Mọi token thấy trong lần chạy (gửi đi, trong response, trong link) thay bằng `<actionRequest>` trước khi lưu; regex cho `"actionRequest":"…"` và `actionRequest=…`. Doc comment sai của `upgradeBuildingNow` sửa luôn | `core/ikariam/http.ts` |
+| ⚠️ 11 | **Tên town đọc bằng `innerHTML`**: town tên có `&` không khớp (route bấm tên trên board, hộp thoại Auto Build escape hai lần) | Helper `readTownName` (đọc text) ở `core/ikariam/globals.ts`, dùng ở 4 chỗ | `globals.ts`, `navigation.ts`, `ui/dialogs.ts`, `features/auto-build.ts` |
+| 🔴 3 | **Rule 11:** 39 comment/tên test trỏ tới mục plan (`plan §4.2 item E`, `(plan item T)`, `(§2.A)`…); biến tạm `var test: any = ""; //ToDo` | Bỏ tham chiếu, giữ "Added (not in the original)"; viết lại các câu "the plan is waiting on"; xoá hai dòng `test`; đổi tên biến một chữ trong `city.ts` (`garrisonsea`: `portLevel`/`shipyardLevel`/`harbourLevel`; `_getSatisfactionData`: `satisfaction`/`source`/`part`). Đường dẫn file kèm số mục (`docs/improvement-plan.md` §1) giữ — là đường dẫn thật | ~25 file |
+| ⚠️ 6 | **Import tin mọi thứ trong file** (`group`, key, value) → ghi được runtime state và key của game; kèm các chỗ ghi HTML chưa escape = đường XSS khi import file người khác | `importData` phân loại lại từng key bằng `classifyKey`, chỉ ghi giá trị chuỗi, ghi chú `notOurs`. Escape ô buff, tên town trong 5 template của board (đặc biệt `data-tooltip="…{2}"`), nhãn tài nguyên trong bảng Transport Settings. Câu `skippingOtherAccount` sửa cho đúng hành vi (entry vẫn được ghi dưới tài khoản kia, không ai đọc) | `core/data-transfer.ts`, `core/messages.ts`, `summary-account.ts`, `render.ts`, `ui/dialogs.ts`, `messages.ts` |
+| ⚠️ 7 | **Start (một vòng) của Build dừng ở lần đổi town đầu** — `oneOffRunTypes` chỉ trong bộ nhớ | Lưu thêm vào `sessionStorage` (`ika_oneOffRunTypes`, riêng tab, ngoài export); `start()` khôi phục khi còn task loại đó; `onDrain` xoá | `app.ts` |
+| ⚠️ 8 | **Không có nút Submit vẫn tính là đã gửi** (`?.click()`) | Kiểm nút trước khi điền và ngay lúc bấm (game có thể vẽ lại form); thiếu → `defer` | `features/send-resources.ts` |
+| ⚠️ 9 | **Cảnh báo/thông báo "hết rượu" sai cho town nguồn** — `stock / consume` bỏ qua sản lượng; Auto Wine để town nguồn giữ đúng 1 giờ | Town đã tick Sender không bị tính là sắp hết | `features/wine-warning.ts` |
+| ⚠️ 10 | **Bug Report mất snapshot đầu tiên** (`[c0, ...rest, new].slice(-3)`) | Giữ `c0` riêng + 2 mới nhất | `core/bug-report.ts` |
+| ⚠️ 12 | Code mới của Empire Overview dùng `var`/`any` (trái quyết định) | `const`/`let` trong các hàm mới; `languageText()` dùng chung ở `utils.ts` (thay 5 chỗ tra `LanguageData`, gồm `languageText(): any` của `game-api.ts`) | `render.ts`, `models/building.ts`, `models/movement.ts`, `resource-production.ts`, `utils.ts`, `game-api.ts` |
+| ⚠️ 13 | Code chết | Bỏ 3 shim `GM_openInTab` / `GM_registerMenuCommand` / `GM_xmlhttpRequest` + khai báo kiểu + **3 `@grant`** của Empire Overview + stub trong test; nút zoom (action, hàm, CSS); `waitForElements`; re-export `exportBugReport`; `toast_remoteVersionUnreadable`, `alert_daily`; `_version` + `isOldVersion` (dữ liệu cũ có `_version` vẫn nạp được — `$.mergeValues`); `//todo` trống, code comment-out; `TaskHandler<any>`. **Người dùng chọn: bỏ cả hai nút Website và Report Bug** của board (không làm gì; Website vẫn trỏ greasyfork) | `extension/gm-shim.ts`, `empire-overview/globals.d.ts`, `build/vite.empire-overview.ts`, `app.ts`, `ui/panel.ts`, `ui/styles.ts`, `core/dom.ts`, `diagnostics.ts`, `constants.ts`, `models/*.ts`, `render.ts`, `core/task-queue.ts` |
+| ⚠️ 14 | Dòng trạng thái ghép câu tại chỗ, id thô `1000 glass` (cũng là thân thông báo "task dropped") | Dùng `describeTask` của queue: `12,000 Crystal: A → B`. **Người dùng chọn: giữ lý do lỗi** trong thông báo "task dropped" | `features/send-resources.ts` |
+| ⚠️ 15 | Logic lặp | `errorMessage` thay 4 chỗ tự viết; `ensureStyle` (4 chỗ); `isTypingTarget` (2); `reductionBuildingPercent` (3); `accountsInBundle` | `core/dom.ts`, `core/ikariam/model.ts`, các chỗ dùng |
+| ⚠️ 16 | Tài liệu cũ; `ikaAjaxTrace` chưa phân loại | `ikaAjaxTrace` → `diagnostics`; test kiểm thêm key quick-upgrade và hai key notifications. Sửa handover §1/§5/§7 (gạch các loose end đã xong), plan (s303, số commit, key đã xoá), `project-summary.md` (số test) | `core/data-transfer.ts`, tài liệu |
+| ⚠️ 17 | Thiếu test | **Người dùng đồng ý tạo 3 file:** `core/dom.test.ts` (13), `features/summary-account.test.ts` (12), `ui/data-transfer-ui.test.ts` (8) | 3 file mới |
+
+#### 3. Tìm thấy trong lúc sửa
+
+- **Keep-alive bỏ qua phút :00 lần đầu.** `minute === Number(getFlag(…))`
+  với cờ chưa có: `Number(null)` = 0. Test mới bắt được; sửa: chỉ so khi đã
+  có cờ (`summary-account.ts`).
+- **Test của board để lại interval.** `vi.resetModules()` không dừng timer;
+  interval 1 s của board test trước ném vào board đã bị xoá. Trước đây lỗi đó
+  âm thầm làm chết topic; từ khi subscriber được cô lập, nó vào Bug Report và
+  làm test "không có bug" chập chờn. `startup.test.ts` giờ ghi lại và dừng mọi
+  `setInterval` sau mỗi test.
+- Test escape tên trên board lúc đầu **xanh cả khi bỏ escape** — `{2}` nằm
+  trong `data-tooltip="…"`, nên `<img>` không thành phần tử; đổi sang tên có
+  dấu `"` (thoát khỏi thuộc tính) thì đỏ đúng.
+
+#### 4. Test, và đã thấy đỏ
+
+Mỗi bản sửa có test đều đã thấy **đỏ** khi tạm bỏ đúng phần sửa (đưa file về
+`HEAD`, hoặc thay đúng đoạn sửa), rồi khôi phục. Riêng 🔴 1 kiểm 4 tổ hợp:
+cả 4 file ở `HEAD` → 4 đỏ; chỉ `events.ts` → test subscriber đỏ;
+`game-api.ts` + `main.ts` → test Palace, Town Hall đỏ; chỉ `render.ts` → test
+`provideFeedback` đỏ. Refactor (⚠️ 12, 15) không đổi hành vi: suite xanh.
+
+#### 5. Giữ nguyên, có lý do
+
+- **Đọc/ghi JSON trong localStorage** (`notifications.ts`, `http.ts`) không
+  gom về `Store`: hai hàm bọc đó bắt được lỗi `Store` không bắt (`getItem` khi
+  storage bị chặn, `setItem` khi hết dung lượng). `bug-report.ts` có lý do
+  riêng từ trước.
+- **Setting `autoUpdates`** giữ trong schema (quyết định §2.T phần 3).
+- **Lý do lỗi trong thông báo "task dropped"** — người dùng chọn giữ.
+- Các mục 💡 (hằng thời gian, magic number, comment ghi ngày, export không
+  dùng, token ưu tiên của module, `_statusPoll` thiếu city id, AP "N/undefined"
+  khi Town Hall ≥ 66, rượu đang trên biển, IkaLogs…) — ngoài phạm vi lần này,
+  còn nguyên trong báo cáo.
+
+#### 6. Chưa kiểm chứng
+
+- Response fetch của view Palace/Museum mang `changeView` đúng tên view — giả
+  định của parser board, chưa capture (độ tin trung bình-cao).
+- Bản jQuery của **trang** game (đường `observeGameResponses` → `ajaxSuccess`)
+  chưa biết; isolation ở `events()` che cả đường đó.
+- Gỡ 3 `@grant`: Tampermonkey có thể hỏi lại quyền khi cập nhật script.
+
+**Cần thử trên game** (cài lại cả hai userscript từ `dist/` 05/10 02:03):
+▲ trên Palace (nếu có ô xanh) → board vẫn cập nhật sau đó; Scan → không còn
+loạt toast "Updated:" trống, hàng tô "town hiện tại" không nhảy; town nguồn hết
+AP với một upgrade ở town khác trong queue → không reload qua lại; Start (một
+vòng) của Build đi hết các town; tab Settings của board không còn Website /
+Report Bug; bấm ▲ rồi Bug Report → file không có token (tìm `actionRequest=`).
 
 ---
 
@@ -2514,13 +2625,15 @@ thêm, phải áp giảm giá theo bảng này.
 ✅ 04/10     §2.U                   U: 704 cấp > 50 từ s303 (thời gian × 2, chi phí ÷ 0,86) — commit `c78b49e`
 ✅ 04/10 tối §2.V                   nút ▲: tải lại town sau khi nâng cấp thành công để ô chuyển sang đang nâng — commit `cefcc92`, có trong `dist/` 21:21
 ✅ 04/10 tối §2.W                   extension Chrome: pattern loại trừ diễn đàn chuyển sang `exclude_globs` (manifest bị Chrome từ chối từ `e551bb8`) — commit `9c363f7`, `dist/extension/` đã build lại
+✅ 05/10     §2.X                   review toàn bộ `src` (6 agent) và sửa 3 🔴 + 14 ⚠️: board chết âm thầm khi subscriber ném, vòng reload khi hết AP, "town hiện tại" bị fetch đổi, token trong Bug Report, import/XSS, rule 11, 3 file test mới — chưa commit, có trong `dist/` 05/10 02:03
 
 ✅ ~~Chờ capture form gửi~~: §2.A — có từ Bug Report 03/10 23:04 (§2.O phần 4)
 ✅ ~~Chờ người dùng thử lại~~: §2.E lỗi 3–6, §2.F → §2.P, U/V — người dùng thử 04/10 với `dist/` 09:09: tạm ok (§2.Q)
 ✅ ~~Chờ log~~:            §2.O phần 1 — đổi town sang M-Eretria: người dùng báo tạm ok 04/10 (§2.Q); nguyên nhân gốc chưa từng được xác định
 ✅ ~~Chờ code của game~~: §2.D tham số `createPopup` — xong 03/10 (§2.N phần 2)
 ⬜ Lượt review sau:        thử trên game thật các mục §2.D; chuỗi còn sót ngoài danh sách §2.D (§2.L phần 4)
-⬜ Chờ người dùng thử:     §2.R → §2.V trên game (cài lại cả hai userscript từ `dist/` 21:21); riêng E: một lần thành công (ô phải tự chuyển sang đang nâng), một lần bị từ chối, rồi Bug Report
+⬜ Chờ người dùng thử:     §2.R → §2.X trên game (cài lại cả hai userscript từ `dist/` 05/10 02:03); riêng E: một lần thành công (ô phải tự chuyển sang đang nâng), một lần bị từ chối, rồi Bug Report (file không còn token); danh sách thử của §2.X ở cuối mục đó
+⬜ Lượt sau của review:    các mục 💡 trong `sample/review-source/review-src-2026-10-04.md` (chưa làm)
 ⬜ Chờ người dùng thử:     §2.W — load lại `dist/extension` trong Chrome (tắt hai userscript trước); bản extension chưa từng chạy trên game
 ✅ ~~Chờ câu hỏi 2~~:      trả lời 04/10 — 2.6 ✅, 2.8 ✅ (rút gọn); ⏸ 2.7 chỉ khi có lỗi cụ thể
 ✅ ~~Chờ câu hỏi 3~~:      trả lời 04/10 — E, J, K ✅; R ◐; O chưa cần; F, G, I, M, N, Q không làm lúc này
@@ -2537,9 +2650,9 @@ thêm, phải áp giảm giá theo bảng này.
 (một lượng nhỏ), vì S, T và mọi thử nghiệm Auto Wine đều phụ thuộc nó.
 
 Không còn việc nào "làm được ngay, không phụ thuộc gì": 1.4 xong 02/10
-(§2.L). D, H và nửa sau của 2.4 đã xong ngày 28/09 (§2.G). **04/10 tối:**
-việc kế tiếp là **người dùng cài lại từ `dist/` 21:21 và thử §2.R → §2.V
-trên game** (E kèm Bug Report), và **load lại extension Chrome** (§2.W);
+(§2.L). D, H và nửa sau của 2.4 đã xong ngày 28/09 (§2.G). **05/10:**
+việc kế tiếp là **người dùng cài lại từ `dist/` 05/10 02:03 và thử §2.R →
+§2.X trên game** (E kèm Bug Report), và **load lại extension Chrome** (§2.W);
 P, L chờ capture; R chờ câu hỏi 5 ở §6; V chờ người dùng ghi chi tiết.
 
 **Hai việc phát sinh** (việc thứ nhất xong 02/10, §2.L phần 3):

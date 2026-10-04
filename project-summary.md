@@ -127,7 +127,7 @@ Four independent checks:
   states `500 + 20 × level`; the captured shipyard text implies the same; and the
   game's own `transportConfig` reports `maxCapacityPerTransport: 620` and
   `freighterCapacity: 53000` — exactly what this project computes.
-- **274 unit tests**, most of them anchored to markup or strings copied verbatim
+- **698 unit tests** (05/10/2026), most of them anchored to markup or strings copied verbatim
   from those captures — including a startup smoke test that boots Empire
   Overview end to end against a synthetic Ikariam page.
 - **The Empire Overview board has now been run against the live game, and
@@ -241,7 +241,7 @@ Full table in the README.
 ## Status
 
 - `npm run typecheck` — green on both the base and the full-strict config
-- `npm run test` — 274 tests passing
+- `npm run test` — 698 tests passing in 38 files (05/10/2026)
 - `npm run build` — two userscripts + the extension
 - No `@ts-nocheck` or `@ts-ignore` anywhere
 - `src/core/**` and `src/send-resources/**` pass **full strict mode**
