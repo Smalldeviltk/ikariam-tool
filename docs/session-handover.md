@@ -10,7 +10,7 @@ It deliberately does **not** repeat the feature status. That lives in
 second. [project-summary.md](../project-summary.md) covers what the TypeScript
 port changed and what is still unverified.
 
-Last updated: 04/10/2026, afternoon.
+Last updated: 04/10/2026, evening.
 
 ---
 
@@ -223,7 +223,8 @@ user's `barbarian.ts` change as `3f8a51b`** — see §18, and
   the user's own change from 03/10, committed separately at their request.
 
 **04/10, afternoon: the user answered plan questions 2 and 3, and six items
-were built, NOT committed** — see §19, and `improvement-plan.md` §2.T:
+were built — committed as `c78b49e` (docs `0da427b`), not pushed** — see
+§19, and `improvement-plan.md` §2.T:
 
 - **2.6:** a ↻ mark in the Town header of the board's three town tables
   spins while Send Resources refreshes every town.
@@ -243,17 +244,50 @@ were built, NOT committed** — see §19, and `improvement-plan.md` §2.T:
   Everything else IkaEasy's resource tooltip shows, the board already had.
 
 **04/10, afternoon: building levels past 50, from the user's crawl of
-s303, NOT committed** — see §19 and plan §2.U. s303's help pages show times
+s303 — in the same commit, `c78b49e`** — see §19 and plan §2.U. s303's help pages show times
 halved by the server and costs after the account's 14% research; they are
 stored converted back (time × 2, cost ÷ 0.86), 704 new levels.
 
 §18 and §19 are in `dist/` (built 04/10 13:11 from the working tree,
-grepped). **None of §17–§19 has been tried on the game, and the userscripts
-installed in the browser are older than that build.**
+grepped). **None of §17–§19 has been tried on the game as a round, and the
+userscripts installed in the browser are older than that build.**
 
-**Next:** the user tries §17–§19 on the game — for E, one upgrade that
-starts and one the game refuses, then Bug Report, and the file goes to
-`tools/output/`. Plan items P and L wait on captures; R's update channel
+**04/10, evening: a bug in E the user reported, fixed — committed as
+`cefcc92`, not pushed, in the 21:21 `dist/`** — see §20, and
+`improvement-plan.md` §2.V:
+
+- **After ▲ the cell stayed idle.** The game started the upgrade ("Upgrade
+  started" toast), but the board's cell kept showing the building idle and
+  upgradable until a scan or a visit to the town. Most likely (read from
+  code, not measured) the upgrade order is sent with the button link's own
+  parameters only, without `backgroundView=city`, so its response carries
+  no `backgroundData` — the only thing the board updates buildings from.
+- **Fix, the user's choice:** once the game reports the upgrade started,
+  the board loads that town again with `fetchTown` (the scan's request) and
+  keeps ▲ locked until it is in. A failed refresh is recorded, and the
+  "started" toast stands.
+
+**04/10, evening, later: the Chrome extension had never loaded — fixed,
+committed as `9c363f7`, not pushed, `dist/extension/` rebuilt** — see §21,
+and `improvement-plan.md` §2.W:
+
+- Chrome refused the manifest: `Invalid value for
+  'content_scripts[0].exclude_matches[0]': Invalid host wildcard.` The
+  forum exclusion `*://board.*.ikariam.gameforge.com/*` has its `*` in the
+  middle of the host, which a match pattern does not allow. It is now in
+  `exclude_globs`. The pattern dates from `e551bb8`, the toolchain commit:
+  **every test on the game so far was the userscripts; the extension has
+  never run.**
+
+The documents for §20 and §21 are the commit after `9c363f7`; all at the
+user's request.
+
+**Next:** reinstall both userscripts from the 21:21 `dist/` (it holds §20)
+and the user tries §17–§20 on the game — for E, one upgrade that starts
+(the cell should turn to upgrading by itself) and one the game refuses,
+then Bug Report, and the file goes to `tools/output/`. Load
+`dist/extension` again in Chrome (§21) — with the two userscripts switched
+off, or each script runs twice. Plan items P and L wait on captures; R's update channel
 on the user (plan §6 question 5); V on the user's details. If something
 fails on the game, press Bug Report at once and put the file in
 `tools/output/` — it holds the log.
@@ -270,14 +304,14 @@ working between loads) is
 |             |                                                                  |
 | ----------- | ---------------------------------------------------------------- |
 | Branch      | `refactor`, tracking `origin/refactor`                            |
-| Pushed      | `origin/refactor` is at `066eb44` (the plan's §2.I–2.J docs), pushed by the user; §10's `1f7c0e7` and `4841fb9` are before it, so pushed too (checked with `git log origin/refactor..HEAD` on 02/10). **Eleven local commits since, not pushed** (`git rev-list --count origin/refactor..HEAD` = 11 on 04/10): §11 is `6ed66c6` + `c38dca4`, its docs `b9f1d7a`; §12 and §13 are one code commit, `4f9436c` (25 files in `src/`), and one docs commit, `3209964`; §14 is `7ed3a85` (15 files), its docs `b45f792`; §15–§17 are `32fe3ba`, their docs `ec3fdc4`; §18 is `b2e9084` and `3f8a51b` (the user's `barbarian.ts` change) |
+| Pushed      | `origin/refactor` is at `066eb44` (the plan's §2.I–2.J docs), pushed by the user; §10's `1f7c0e7` and `4841fb9` are before it, so pushed too (checked with `git log origin/refactor..HEAD` on 02/10). **Sixteen local commits since, not pushed** (`git rev-list --count origin/refactor..HEAD` = 15 on 04/10 evening, before the docs commit for §20–§21): §11 is `6ed66c6` + `c38dca4`, its docs `b9f1d7a`; §12 and §13 are one code commit, `4f9436c` (25 files in `src/`), and one docs commit, `3209964`; §14 is `7ed3a85` (15 files), its docs `b45f792`; §15–§17 are `32fe3ba`, their docs `ec3fdc4`; §18 is `b2e9084` and `3f8a51b` (the user's `barbarian.ts` change); §19 is `c78b49e` (32 files in `src/`, two of them new), its docs `0da427b`; §20 is `cefcc92`, §21 is `9c363f7`, their docs the commit after |
 | Committed 02/10 | At the user's request, in two commits as before: code and tests, then the two documents. The commit message went through a file (`git commit -F`): PowerShell 5.1 splits a here-string passed to a native command at its double quotes, and the first attempt failed with "pathspec did not match" — nothing was committed by it |
 | Committed 03/10 | §14, at the user's request, the same way: `7ed3a85` (code and tests), `b45f792` (the two documents), messages through `git commit -F`. `barbarian.ts` was left out (below) |
-| Committed 04/10 | At the user's request, each time asked for in that turn: §15–§17 as `32fe3ba` (code and tests) and `ec3fdc4` (the two documents); then §18 as `b2e9084`, and — the user asked for `barbarian.ts` to go in too — its change on its own as `3f8a51b`. Messages through `git commit -F`. The documents were not updated for §18 until the §19 round |
-| Uncommitted | §19 (04/10 afternoon): 30 modified files in `src/` — core: `data-transfer`, `ikariam/http` (+ test), `messages`, `task-queue` (+ test); Empire Overview: `constants` (+ test), `empire`, `helpers`, `main`, `models/building` (+ test), `models/movement`, `render`, `startup.test`; Send Resources: `app` (+ test), `diagnostics`, `features/auto-build` (+ test), `features/sync-towns` (+ test), `features/wine-warning` (+ test), `messages`, `ui/panel` (+ test), `ui/styles` — and two new files, `src/core/notifications.ts` and `notifications.test.ts`. Plus this document's and the plan's updates since `ec3fdc4`. **Untracked and the user's, left out of every commit:** `docs/wiki/s303/` (their crawl, the source of §19's levels past 50), `.gitignore`, `docs/So_sanh_2_script_Ikariam.md` |
-| Tests       | 35 files, 643 tests, all passing (500 before §12, 515 after it, 537 after §13, 560 after §14, 567 after §15, 569 after §16's first round, 578 after §16, 583 after §17, 605 after §18 and §19's 2.6 and R, 608 after K, 627 after J, 640 after E, 641 after 2.8, 643 after the s303 levels). §11 added no test (see §11). Prettier: `core/ikariam/http.test.ts`, `send-resources/features/transport-buttons.test.ts` and `send-resources/town-cache.test.ts` are off its format at `HEAD` already — not reflowed; §19's tests appended to `http.test.ts` were formatted on their own and checked |
+| Committed 04/10 | At the user's request, each time asked for in that turn: §15–§17 as `32fe3ba` (code and tests) and `ec3fdc4` (the two documents); then §18 as `b2e9084`, and — the user asked for `barbarian.ts` to go in too — its change on its own as `3f8a51b`. Messages through `git commit -F`. The documents were not updated for §18 until the §19 round. §19 the same afternoon, again at the user's request: `c78b49e` (code and tests, `src/core/notifications.ts` and its test added) and `0da427b` (the two documents). In the evening, asked for in the turn after §21: `cefcc92` (§20, `render.ts` and its test), `9c363f7` (§21, `build/build-extension.mjs`), then the two documents |
+| Uncommitted | Nothing of ours (04/10 evening, after the docs commit for §20–§21). **Untracked or modified and the user's, left out of every commit:** `docs/wiki/s303/` (their crawl, the source of §19's levels past 50), `.gitignore`, `docs/So_sanh_2_script_Ikariam.md` |
+| Tests       | 35 files, 645 tests, all passing (645 after §20; 500 before §12, 515 after it, 537 after §13, 560 after §14, 567 after §15, 569 after §16's first round, 578 after §16, 583 after §17, 605 after §18 and §19's 2.6 and R, 608 after K, 627 after J, 640 after E, 641 after 2.8, 643 after the s303 levels). §11 added no test (see §11). Prettier: `core/ikariam/http.test.ts`, `send-resources/features/transport-buttons.test.ts` and `send-resources/town-cache.test.ts` are off its format at `HEAD` already — not reflowed; §19's tests appended to `http.test.ts` were formatted on their own and checked |
 | Typecheck   | Clean (`tsc --noEmit` and the strict config)                      |
-| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 01/10 at 02:23 and contains §11 (grepped: `Crawl Building` and `building-help-` in Send Resources; the new Academy figure `568954467` present and the old `582271779` gone, `winePressSavingPercent` and the time `12873600` in Empire Overview; `Math.min(50, …)` in Send Resources' `modelWineConsumption`). Earlier markers were checked in earlier builds: §2.I–2.J (`ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows`) and §10 (`ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save`, `capped`). **`dist/` was rebuilt by the user on 03/10 at 22:54 from the working tree and holds §12 to §15** (grepped in Send Resources: `wine.autoRun`, `ika-move`, `ika_pendingTownSwitch`, `to spare, less than one`, `ikaWindowOpen_`, `js-ika-build-time-buff`, `translateX(-146px)`, `ikariam-bug-report`, `then cleared them`, `createPopupSource`, and no `"???"` left; in Empire Overview: `listAccount` and `entry.length === 2 && typeof entry[0] === "string" && entry[1] === null`). It was built before §15 was committed, so it matches the working tree, not a commit. **The userscripts installed in the browser were older than that 22:54 `dist/`** (§2). **Rebuilt 04/10 at 09:09 with §16** (grepped: `?view=transport&destinationCityId=`, `shipment form to close`, `was sent `, `Move up`; Empire Overview writes the month as `month = 2592e3` — the minifier's form of 2592000) — the build the user tried on the game (§17). **Rebuilt again at 09:44 with §17** (grepped: `ika-queue-scroll`, `resourceTableScroll`, and the `dialog.close` button after `build.save`). **Rebuilt 04/10 at 13:11 from the working tree, with §18 and §19** (grepped: `ika-building-level` in Send Resources; `empire_quickUpgrade`, `stockTip_stock`, `empire_syncIndicator` and Academy level 51's time `15379200` in Empire Overview; `ikaNotifications` and `ikaQuickUpgradeTrace` in both). That is the current `dist/`; it matches the working tree, not a commit. **The installed userscripts are older** — reinstall both before trying anything |
+| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 01/10 at 02:23 and contains §11 (grepped: `Crawl Building` and `building-help-` in Send Resources; the new Academy figure `568954467` present and the old `582271779` gone, `winePressSavingPercent` and the time `12873600` in Empire Overview; `Math.min(50, …)` in Send Resources' `modelWineConsumption`). Earlier markers were checked in earlier builds: §2.I–2.J (`ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows`) and §10 (`ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save`, `capped`). **`dist/` was rebuilt by the user on 03/10 at 22:54 from the working tree and holds §12 to §15** (grepped in Send Resources: `wine.autoRun`, `ika-move`, `ika_pendingTownSwitch`, `to spare, less than one`, `ikaWindowOpen_`, `js-ika-build-time-buff`, `translateX(-146px)`, `ikariam-bug-report`, `then cleared them`, `createPopupSource`, and no `"???"` left; in Empire Overview: `listAccount` and `entry.length === 2 && typeof entry[0] === "string" && entry[1] === null`). It was built before §15 was committed, so it matches the working tree, not a commit. **The userscripts installed in the browser were older than that 22:54 `dist/`** (§2). **Rebuilt 04/10 at 09:09 with §16** (grepped: `?view=transport&destinationCityId=`, `shipment form to close`, `was sent `, `Move up`; Empire Overview writes the month as `month = 2592e3` — the minifier's form of 2592000) — the build the user tried on the game (§17). **Rebuilt again at 09:44 with §17** (grepped: `ika-queue-scroll`, `resourceTableScroll`, and the `dialog.close` button after `build.save`). **Rebuilt 04/10 at 13:11 from the working tree, with §18 and §19** (grepped: `ika-building-level` in Send Resources; `empire_quickUpgrade`, `stockTip_stock`, `empire_syncIndicator` and Academy level 51's time `15379200` in Empire Overview; `ikaNotifications` and `ikaQuickUpgradeTrace` in both). It matched the working tree at 13:11, not a commit. **Rebuilt 04/10 at 21:21, holding §20 and §21** (grepped: `quick upgrade refresh` in `Ikariam Empire Overview -VN-.user.js` and in `extension/page/empire-overview.js`; `dist/extension/manifest.json` has `exclude_globs`). `dist/extension/` was rebuilt in this session with `npm run build:extension`, which builds the extension only; the two userscripts carry 21:21 too, so the user built them. That is the current `dist/`; it matches `9c363f7`. **The installed userscripts are older** — reinstall both before trying anything; the extension has never loaded before §21 |
 
 What landed: the AJAX transport layer, the shared window widget, the rewritten
 panel, four features (sync-towns, transport-buttons, queue-view, wine-warning),
@@ -648,6 +682,27 @@ Bug Report after trying it is the check:
 - `["provideFeedback", [{ type, text, … }]]` with `type` 10 for success: the
   board (shipments, the game's upgrade button) and IkaEasy's transport code
   both read `type` this way. The `text` field is assumed.
+- *Added 04/10 evening (§20), inferred from the user's report, not
+  measured:* **the upgrade order's response carries no town buildings.**
+  Sent with only the button link's parameters (no `backgroundView=city`, no
+  `currentCityId`), its response did not turn the board's cell to
+  upgrading, while a scan (`fetchTown`, which sends both) did. The Bug
+  Report trace (`upgradeLink`, `upgradeResponse`) is what settles it.
+
+Added 04/10, evening, later (§21), from Chrome's own error and its
+documentation:
+
+- **Chrome rejects the whole manifest over one bad match pattern.** Load
+  unpacked of `dist/extension` gave `Invalid value for
+  'content_scripts[0].exclude_matches[0]': Invalid host wildcard. Could not
+  load manifest.` Chrome's "Match patterns" page: a `*` in the host "must
+  be the first or only character, and it must be followed by a period (`.`)
+  or forward slash (`/`)". `*://board.*.ikariam.gameforge.com/*` breaks
+  that.
+- **`exclude_globs` takes `*` anywhere** ("matches any string of any
+  length, including the empty string"), is applied after `matches`, and is
+  still documented for MV3 content scripts (Chrome's "Content scripts"
+  page). Not yet seen loading in Chrome.
 
 ---
 
@@ -815,6 +870,15 @@ reproduces production; `http.test.ts` and `startup.test.ts` both do it now.
   the original back — then a full run at the end to confirm the restore.
   Print "PATCH DID NOT APPLY" when the replace changed nothing, so a missed
   match is never mistaken for a green test.
+
+**A Chrome match pattern is not a Tampermonkey glob** (§21). The
+userscripts' `@include`/`@exclude` (`build/shared.ts`) are globs and take
+`*` anywhere — `board.*.…`, `gameforge.*`. The extension's `matches`,
+`exclude_matches`, `host_permissions` and `web_accessible_resources` are
+match patterns: `*` only at the start of the host, and none in the TLD.
+One bad pattern and Chrome loads nothing. Anything with a wildcard inside
+the host goes in `exclude_globs` / `include_globs`. Nothing in the repo
+tests the manifest; load it in Chrome after changing `writeManifest`.
 
 **Markdown is not in the repo's prettier scope** (`npm run format` covers only
 `src/` and `build/`). Do not run prettier over `docs/` — it reflows every table
@@ -1246,6 +1310,28 @@ Added 04/10, afternoon, each chosen by the user unless marked (§19):
   the 14% was found), so the board does not take the research off twice.
   Levels 1–50 keep the s800 figures; only levels past them are added.
 
+Added 04/10, evening, each chosen by the user unless marked (§20):
+
+- **After a quick upgrade the game reports started, the board loads that
+  town again** (`fetchTown`, the scan's request), rather than adding
+  `backgroundView=city` + `currentCityId` to the upgrade order (unmeasured
+  whether the server then sends the buildings) or waiting for a Bug Report
+  first. One more request per ▲.
+- **▲ stays locked until the refresh is in** (chosen here): until then the
+  cell still reads as upgradable, and a second click would send a second
+  order.
+- **A refresh that fails does not undo the "started" toast** (chosen here):
+  the upgrade did start; the failure goes to `reportBug` with `where:
+  "quick upgrade refresh"`.
+
+Added 04/10, evening, later (§21), chosen here — a plain fix, nothing to
+choose between that the user was asked about:
+
+- **The forum's host exclusion is an `exclude_globs` entry**, not dropped
+  and not spelled out per language. The `/board*` path exclusion stays in
+  `exclude_matches`, where it was valid. The `.de` domain still has no
+  forum exclusion in the extension, as before.
+
 ---
 
 ## 6. What is blocked, and on what
@@ -1403,11 +1489,17 @@ ever been captured.
 the build at a public URL for `@updateURL` (plan §6 question 5). V's three
 remaining points — the user will write the details.
 
-**Waiting on the user's test (04/10):** everything in §17–§19, none of it
-seen on the game. E first, as the user asked: one upgrade that starts, one
-the game refuses, then Bug Report — the file carries the game's two
-responses per run (`gameData.quickUpgrades`), the evidence for the parsing
-E was written against without a capture.
+**Waiting on the user's test (04/10):** everything in §17–§20, none of it
+seen on the game as a round — except ▲, which the user pressed and which
+led to §20. The 21:21 `dist/` holds all of it; reinstall first. And §21:
+load `dist/extension` in Chrome — the extension build has never run, so
+everything that is the extension's own (the content script injecting
+`page/*.js`, `web_accessible_resources`) is unseen. E first, as the
+user asked: one upgrade that starts (the cell should now turn to upgrading
+within seconds, with no scan), one the game refuses, then Bug Report — the
+file carries the game's two responses per run (`gameData.quickUpgrades`),
+the evidence for the parsing E was written against without a capture, and
+for §20's inferred cause.
 
 Unblocked and ready to pick up: **nothing in the plan.** 2.7 waits for a
 concrete bug; F, G, I, M, N, O, Q are "not now" by the user's choice.
@@ -1587,6 +1679,25 @@ concrete bug; F, G, I, M, N, O, Q are "not now" by the user's choice.
     is not applied by the game.
   - **The two scripts have no update channel at all** since R; the user has
     not decided on a public URL.
+- **(04/10 evening, §20) Left as they are:**
+  - **`upgradeBuildingNow`'s doc comment is now wrong** (`core/ikariam/http.ts`):
+    it says both responses reach the board "so it redraws the town" — the
+    user's test showed it does not. Not edited; only the documents were
+    asked for.
+  - **`updateChangesForCityBuilding(cityId, [])` does nothing** — it acts
+    only on a non-empty `changes`. The board's own handler for the game's
+    upgrade button (`AttachClickHandlers` in `render.ts`) still calls it
+    that way; harmless, since the game's own response carries the
+    buildings. §20 removed the copy in `quickUpgrade`.
+  - **The game's header still keeps the old resources after ▲**: the
+    refresh goes to the board, not to the game's responder.
+- **(04/10 evening, §21) The extension build has never run on the game.**
+  Its manifest was refused from `e551bb8` until `9c363f7`, so every "seen
+  working" in this document is the userscripts. The extension's own parts —
+  `content.js` injecting `page/*.js` as `<script>` tags, the two bundles
+  sharing the page without Tampermonkey's sandbox (Empire Overview runs
+  `@grant unsafeWindow` as a userscript) — are untested live. Its forum
+  exclusion covers `.com` only (`MATCHES` has `.de` too).
 
 ---
 
@@ -1961,7 +2072,7 @@ then closed.
 
 ## 15. The later 03/10 round: Bug Report saves a file, `createPopup`, `[name, null]`
 
-**Not committed**; in `dist/` (03/10 22:54, grepped — §1); not tried on
+**Committed 04/10 as `32fe3ba` (docs `ec3fdc4`)**; in `dist/` (03/10 22:54, grepped — §1); not tried on
 the game in its final form (the 14:10 report came from an in-between
 build that already saved a file and carried `gameData`). The plan's
 write-up, in Vietnamese, is §2.N (four parts); the facts are in §2 ("Added
@@ -2173,8 +2284,8 @@ shipment waits instead of failing.
 
 ## 19. 04/10 afternoon: the user's answers, six plan items, levels past 50
 
-**Not committed**; in `dist/` (04/10 13:11, grepped); **not tried on the
-game.** The plan's write-ups, in Vietnamese, are §2.T (seven parts) and §2.U
+**Committed as `c78b49e` (docs `0da427b`), not pushed**; in `dist/` (04/10
+13:11, grepped); **not tried on the game.** The plan's write-ups, in Vietnamese, are §2.T (seven parts) and §2.U
 (four); the decisions are in §5 ("Added 04/10, afternoon"); the facts in §2
 ("Added 04/10"); the loose ends in §7. 583 → 643 tests across §18 and §19
 (605 once 2.6 and R were in), 35 files; typecheck and prettier clean on every file touched.
@@ -2267,3 +2378,104 @@ test run, the file restored):
   of them, compare with the game's own upgrade view on s303 (the game's
   figure will be lower by the server buff and the research — the board
   applies both).
+
+---
+
+## 20. 04/10 evening: ▲ left the cell idle
+
+**Committed as `cefcc92` (docs in the commit after `9c363f7`), not pushed;
+in `dist/` (04/10 21:21, grepped); not tried on the game.** The plan's
+write-up, in Vietnamese, is §2.V; the decisions are in §5 ("Added 04/10, evening");
+the inferred fact in §2 (end of "Read from code, NOT measured"); the loose
+ends in §7. 643 → 645 tests, 35 files; typecheck (both configs) and
+prettier clean on both files touched.
+
+**Reported by the user:** on the Empire Overview board, ▲ starts the
+upgrade ("Upgrade started: …"), but the building's cell does not turn to
+upgrading; a scan, or switching to that town, puts it right.
+
+**How it was traced** (from code; no capture):
+
+- The board changes a building's state only from a response's
+  `updateGlobalData.backgroundData.position` or `updateBackgroundData`
+  (`game-api.ts`, `setupEventHandlers` → `updateBuildingData` →
+  `City.updateBuildingsDataFromAjax` → `Building.update`, which reads
+  `completed`). Only while the page's background is the city view
+  (`ikariam.viewIsCity`) — a scan worked for the user, so that held.
+- `upgradeBuildingNow` sends two requests. The first (the building's view)
+  sends `backgroundView=city` and `currentCityId`, but describes the town
+  before the upgrade. The second (the order) sends the button link's own
+  parameters only; the test fixture's link has neither. So its response
+  most likely carries no buildings.
+- IkaEasy V4 sends that same link through the page's `ajaxHandlerCall`
+  (`js/page/bg/city.js`), which adds the view context; its demolish link
+  writes `backgroundView=city&currentCityId=…` out.
+- The `render.updateChangesForCityBuilding(city.getId, [])` after success
+  was copied from the board's handler for the game's own button and does
+  nothing with an empty array (§7).
+
+| What | Where |
+| ---- | ----- |
+| On `outcome.started`: toast, then `return fetchTown(city.getId)` with its rejection handled (`reportBug`, `where: "quick upgrade refresh"`), so `finally` unlocks ▲ only after the refresh and a failed refresh never reaches the "failed" toast | `empire-overview/render.ts`, `quickUpgrade` |
+| `updateChangesForCityBuilding(city.getId, [])` removed | same |
+| `fetchTown` imported next to `upgradeBuildingNow` | same |
+
+**Tests** — `startup.test.ts`, "the quick upgrade button" (+2), both
+mocking `@core/ikariam/http` with `vi.doMock` as the existing test does:
+
+- REGRESSION: `started` → `fetchTown(297034)`, the toast, ▲ still disabled
+  while the refresh is pending, enabled once it resolves.
+- A refresh that rejects → no "Upgrade request failed", ▲ enabled again.
+- Seen red with §4's PowerShell round trip: `HEAD`'s `render.ts` → both red;
+  with only the refresh's rejection handler taken out → the second red.
+  The file was copied back and `git diff --stat` checked after each.
+
+**What to try on the game** (after reinstalling Empire Overview from the
+21:21 `dist/`): ▲ on an upgradable cell → "Upgrade started" → within seconds the
+cell shows the building upgrading, no scan; ▲ cannot be clicked meanwhile.
+Then Bug Report into `tools/output/` — `gameData.quickUpgrades[].upgradeLink`
+and `upgradeResponse` settle §2's inferred cause.
+
+---
+
+## 21. 04/10 evening, later: Chrome would not load the extension
+
+**Committed as `9c363f7` (docs in the commit after it), not pushed;
+`dist/extension/` rebuilt 04/10 21:21; not yet loaded again in Chrome.**
+The plan's write-up, in Vietnamese, is §2.W; the facts are in §2 ("Added
+04/10, evening, later"), the decision in §5, the trap in §4, the loose end
+in §7.
+
+**Reported by the user:** Load unpacked of `D:\Working\Ika\dist\extension`:
+
+```
+Failed to load extension
+Invalid value for 'content_scripts[0].exclude_matches[0]': Invalid host wildcard.
+Could not load manifest.
+```
+
+**Cause.** `writeManifest` in `build/build-extension.mjs` wrote
+`exclude_matches: ["*://board.*.ikariam.gameforge.com/*",
+"*://*.ikariam.gameforge.com/board*"]` to keep the scripts off the forum.
+The first has a `*` in the middle of the host, which Chrome's match
+patterns forbid (§2). `git log -L` on those lines: they arrived with
+`e551bb8`, the toolchain commit, and were never changed — the extension has
+never loaded. The userscripts were unaffected: their `@exclude`
+(`excludeBoard` in `build/shared.ts`) is a glob.
+
+| What | Where |
+| ---- | ----- |
+| `*://board.*.ikariam.gameforge.com/*` moved to `exclude_globs`, with a comment saying why | `build/build-extension.mjs`, `writeManifest` |
+| `*://*.ikariam.gameforge.com/board*` kept in `exclude_matches` | same |
+
+**Checked:** `npm run build:extension`, then read
+`dist/extension/manifest.json`: the two exclusions as above; every other
+pattern (`matches`, `host_permissions`, `web_accessible_resources`) starts
+its host with `*.`. **No test** — nothing in the repo tests `build/` — and
+Chrome has not loaded it yet.
+
+**What to try:** switch the two userscripts off in Tampermonkey; in
+`chrome://extensions`, Load unpacked `dist/extension` (or Reload its card)
+→ no error; open the game → the Empire Overview board and the Send
+Resources panel appear and work as the userscripts do. A new error from
+Chrome → paste it; a page that misbehaves → Bug Report, as usual.
