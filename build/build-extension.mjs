@@ -111,10 +111,11 @@ function writeManifest() {
     content_scripts: [
       {
         matches: MATCHES,
-        exclude_matches: [
-          "*://board.*.ikariam.gameforge.com/*",
-          "*://*.ikariam.gameforge.com/board*",
-        ],
+        exclude_matches: ["*://*.ikariam.gameforge.com/board*"],
+        // The forum's host has its wildcard in the middle (board.<lang>.…),
+        // which a match pattern does not allow — Chrome refuses the whole
+        // manifest ("Invalid host wildcard"). A glob's `*` matches anywhere.
+        exclude_globs: ["*://board.*.ikariam.gameforge.com/*"],
         js: ["content.js"],
         // The game renders late; this matches Tampermonkey's default timing.
         run_at: "document_idle",
