@@ -288,9 +288,16 @@ export function enqueueWineRun(fromTown: string): number {
   const { queue } = getState();
   queue.removeByLabel(AUTO_WINE_LABEL);
 
+  // Ship first to the town with the fewest hours of wine left now, so the
+  // one closest to running dry does not wait behind towns that can hold out
+  // longer. Only towns that drink get a share, so `consume` is never 0 here;
+  // `sort` is stable, so towns that tie keep their configured order.
+  const fewestHoursFirst = plan.allocations
+    .filter((allocation) => allocation.add > 0)
+    .sort((a, b) => a.stock / a.consume - b.stock / b.consume);
+
   let added = 0;
-  for (const allocation of plan.allocations) {
-    if (allocation.add <= 0) continue;
+  for (const allocation of fewestHoursFirst) {
     queue.push({
       type: "sendResource",
       data: {

@@ -85,7 +85,18 @@ th { font-weight: bold; }
 /* Popup styles — declared but never attached in the original. */
 #${DIALOG_ID} .popupContent,
 #${DIALOG_ID} .popupMessage { width: max-content !important; }
-#${DIALOG_ID} #autoBuildTable { overflow: auto; max-height: 501px; }
+/* One column per town: past 1250px, the table scrolls sideways instead of
+   widening the popup. The table
+   element is a block (.fullTable) and only the scroll box; its rows lay
+   out as their own table at their natural width, so the columns keep
+   their width instead of being squeezed into the box. */
+#${DIALOG_ID} #autoBuildTable { overflow: auto; max-height: 501px; max-width: 1250px; }
+#${DIALOG_ID} #autoBuildTable > tbody { display: table; width: max-content; }
+/* The building list stays in view while the town columns scroll under it. */
+#${DIALOG_ID} #autoBuildTable tr > :first-child {
+  position: sticky; left: 0; z-index: 1; background: #fdf7dd;
+}
+#${DIALOG_ID} #autoBuildTable th:first-child { background: #f8e7b3; }
 #${DIALOG_ID} #autoBuildTable button { float: right; }
 #${DIALOG_ID} #autoBuildTable span { float: left; width: 100%; border-bottom: 1px dotted gray; }
 #${DIALOG_ID} #autoBuildTable th { padding: 2px; }

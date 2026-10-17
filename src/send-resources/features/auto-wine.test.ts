@@ -355,6 +355,31 @@ describe("enqueueWineRun", () => {
     },
   );
 
+  it(
+    "queues the town with the fewest hours of wine left first, not in the " +
+      "configured order",
+    () => {
+      // Sparta holds more hours (10h) but less wine than Corinth (2h), so
+      // this tells hours left apart from the stock alone.
+      document.body.innerHTML =
+        townDropdown(TOWNS) +
+        renderBoard([
+          boardRow("Athens", "50,000", "-525"),
+          boardRow("Sparta", "1,000", "-100"),
+          boardRow("Corinth", "2,000", "-1,000"),
+        ]);
+      saveReceivers([
+        { townNumber: "1", winePerHour: "100" },
+        { townNumber: "2", winePerHour: "1000" },
+      ]);
+
+      expect(enqueueWineRun("0")).toBe(2);
+
+      const queued = getState().queue.listOfType("sendResource");
+      expect(queued.map((task) => task.data.destination)).toEqual(["2", "1"]);
+    },
+  );
+
   it("still refuses when the source town has nothing to spare", () => {
     document.body.innerHTML =
       townDropdown(TOWNS) +
