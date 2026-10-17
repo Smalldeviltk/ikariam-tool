@@ -10,7 +10,7 @@ It deliberately does **not** repeat the feature status. That lives in
 second. [project-summary.md](../project-summary.md) covers what the TypeScript
 port changed and what is still unverified.
 
-Last updated: 05/10/2026.
+Last updated: 17/10/2026.
 
 ---
 
@@ -304,6 +304,22 @@ as `180fead`; all at the user's request.
   test names (rule 11); dead code gone, the board's Website and Report Bug
   buttons included; three new test files. 645 → 698 tests, 38 files.
 
+**17/10: two changes the user asked for — not committed, not in `dist/`, not tried on the game** — see §23, and
+`improvement-plan.md` §2.Y:
+
+- **Auto Wine ships to the town with the fewest hours of wine left first.**
+  Hours = stock ÷ hourly consumption, as the user chose; wine drunk on the
+  way is not counted. Only the order the shipments enter the queue changed
+  (`enqueueWineRun`); the split and the settings dialog's preview did not.
+- **Auto Build Settings is at most 1250px wide**, wider scrolls sideways, the
+  town columns keep their natural width, and the "List Building" column is
+  pinned to the left. Pure CSS in `ui/styles.ts`; the first attempt
+  (`max-width` alone) squeezed every column — see §23.
+
+**The git facts in §1 were stale and are corrected there:** §22 is committed
+(`1baf274` code, `772a055` docs) and `origin/refactor` is at `772a055`, so
+nothing was unpushed on 17/10.
+
 **Next:** reinstall both userscripts from the 05/10 02:03 `dist/` (it holds
 §20–§22) and the user tries §17–§22 on the game — for E, one upgrade that
 starts (the cell should turn to upgrading by itself) and one the game
@@ -327,12 +343,12 @@ working between loads) is
 |             |                                                                  |
 | ----------- | ---------------------------------------------------------------- |
 | Branch      | `refactor`, tracking `origin/refactor`                            |
-| Pushed      | `origin/refactor` is at `066eb44` (the plan's §2.I–2.J docs), pushed by the user; §10's `1f7c0e7` and `4841fb9` are before it, so pushed too (checked with `git log origin/refactor..HEAD` on 02/10). **Seventeen local commits since, not pushed** (`git rev-list --count origin/refactor..HEAD` = 17 on 05/10, at `180fead`): §11 is `6ed66c6` + `c38dca4`, its docs `b9f1d7a`; §12 and §13 are one code commit, `4f9436c` (25 files in `src/`), and one docs commit, `3209964`; §14 is `7ed3a85` (15 files), its docs `b45f792`; §15–§17 are `32fe3ba`, their docs `ec3fdc4`; §18 is `b2e9084` and `3f8a51b` (the user's `barbarian.ts` change); §19 is `c78b49e` (32 files in `src/`, two of them new), its docs `0da427b`; §20 is `cefcc92`, §21 is `9c363f7`, their docs `e36516a`; the s303 crawl `180fead` |
+| Pushed      | **Checked 17/10: `origin/refactor` is at `772a055` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0 — everything below is pushed.** The rest is the 05/10 note, kept for the commit list: `origin/refactor` was at `066eb44` (the plan's §2.I–2.J docs), pushed by the user; §10's `1f7c0e7` and `4841fb9` are before it, so pushed too (checked with `git log origin/refactor..HEAD` on 02/10). **Seventeen local commits since, not pushed** (`git rev-list --count origin/refactor..HEAD` = 17 on 05/10, at `180fead`): §11 is `6ed66c6` + `c38dca4`, its docs `b9f1d7a`; §12 and §13 are one code commit, `4f9436c` (25 files in `src/`), and one docs commit, `3209964`; §14 is `7ed3a85` (15 files), its docs `b45f792`; §15–§17 are `32fe3ba`, their docs `ec3fdc4`; §18 is `b2e9084` and `3f8a51b` (the user's `barbarian.ts` change); §19 is `c78b49e` (32 files in `src/`, two of them new), its docs `0da427b`; §20 is `cefcc92`, §21 is `9c363f7`, their docs `e36516a`; the s303 crawl `180fead` |
 | Committed 02/10 | At the user's request, in two commits as before: code and tests, then the two documents. The commit message went through a file (`git commit -F`): PowerShell 5.1 splits a here-string passed to a native command at its double quotes, and the first attempt failed with "pathspec did not match" — nothing was committed by it |
 | Committed 03/10 | §14, at the user's request, the same way: `7ed3a85` (code and tests), `b45f792` (the two documents), messages through `git commit -F`. `barbarian.ts` was left out (below) |
 | Committed 04/10 | At the user's request, each time asked for in that turn: §15–§17 as `32fe3ba` (code and tests) and `ec3fdc4` (the two documents); then §18 as `b2e9084`, and — the user asked for `barbarian.ts` to go in too — its change on its own as `3f8a51b`. Messages through `git commit -F`. The documents were not updated for §18 until the §19 round. §19 the same afternoon, again at the user's request: `c78b49e` (code and tests, `src/core/notifications.ts` and its test added) and `0da427b` (the two documents). In the evening, asked for in the turn after §21: `cefcc92` (§20, `render.ts` and its test), `9c363f7` (§21, `build/build-extension.mjs`), then the two documents |
-| Uncommitted | **§22 (05/10):** 55 modified files — 52 in `src/`, `build/vite.empire-overview.ts`, `project-summary.md` and both documents — and three new test files the user agreed to (`src/core/dom.test.ts`, `src/send-resources/features/summary-account.test.ts`, `src/send-resources/ui/data-transfer-ui.test.ts`). **Modified or untracked and the user's, left out of every commit:** `.gitignore`, `docs/So_sanh_2_script_Ikariam.md`. `docs/wiki/s303/` (their crawl, the source of §19's levels past 50) was committed at the user's request on 04/10 evening as `180fead` |
-| Tests       | **38 files, 698 tests, all passing (05/10, after §22)**; before it 35 files, 645 tests (645 after §20; 500 before §12, 515 after it, 537 after §13, 560 after §14, 567 after §15, 569 after §16's first round, 578 after §16, 583 after §17, 605 after §18 and §19's 2.6 and R, 608 after K, 627 after J, 640 after E, 641 after 2.8, 643 after the s303 levels). §11 added no test (see §11). Prettier: `core/ikariam/http.test.ts`, `send-resources/features/transport-buttons.test.ts` and `send-resources/town-cache.test.ts` are off its format at `HEAD` already — not reflowed; §19's tests appended to `http.test.ts` were formatted on their own and checked |
+| Uncommitted | **17/10: §23** — `src/send-resources/features/auto-wine.ts`, `auto-wine.test.ts`, `src/send-resources/ui/styles.ts`, and both documents. **§22 was committed after the next sentence was written** (`1baf274` code, `772a055` docs). The 05/10 row, kept for the file list: §22 (05/10): 55 modified files — 52 in `src/`, `build/vite.empire-overview.ts`, `project-summary.md` and both documents — and three new test files the user agreed to (`src/core/dom.test.ts`, `src/send-resources/features/summary-account.test.ts`, `src/send-resources/ui/data-transfer-ui.test.ts`). **Modified or untracked and the user's, left out of every commit:** `.gitignore`, `docs/So_sanh_2_script_Ikariam.md`. `docs/wiki/s303/` (their crawl, the source of §19's levels past 50) was committed at the user's request on 04/10 evening as `180fead` |
+| Tests       | **38 files, 699 tests, all passing (17/10, after §23)**; 698 after §22; before it 35 files, 645 tests (645 after §20; 500 before §12, 515 after it, 537 after §13, 560 after §14, 567 after §15, 569 after §16's first round, 578 after §16, 583 after §17, 605 after §18 and §19's 2.6 and R, 608 after K, 627 after J, 640 after E, 641 after 2.8, 643 after the s303 levels). §11 added no test (see §11). Prettier: `core/ikariam/http.test.ts`, `send-resources/features/transport-buttons.test.ts` and `send-resources/town-cache.test.ts` are off its format at `HEAD` already — not reflowed; §19's tests appended to `http.test.ts` were formatted on their own and checked |
 | Typecheck   | Clean (`tsc --noEmit` and the strict config)                      |
 | Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 01/10 at 02:23 and contains §11 (grepped: `Crawl Building` and `building-help-` in Send Resources; the new Academy figure `568954467` present and the old `582271779` gone, `winePressSavingPercent` and the time `12873600` in Empire Overview; `Math.min(50, …)` in Send Resources' `modelWineConsumption`). Earlier markers were checked in earlier builds: §2.I–2.J (`ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows`) and §10 (`ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save`, `capped`). **`dist/` was rebuilt by the user on 03/10 at 22:54 from the working tree and holds §12 to §15** (grepped in Send Resources: `wine.autoRun`, `ika-move`, `ika_pendingTownSwitch`, `to spare, less than one`, `ikaWindowOpen_`, `js-ika-build-time-buff`, `translateX(-146px)`, `ikariam-bug-report`, `then cleared them`, `createPopupSource`, and no `"???"` left; in Empire Overview: `listAccount` and `entry.length === 2 && typeof entry[0] === "string" && entry[1] === null`). It was built before §15 was committed, so it matches the working tree, not a commit. **The userscripts installed in the browser were older than that 22:54 `dist/`** (§2). **Rebuilt 04/10 at 09:09 with §16** (grepped: `?view=transport&destinationCityId=`, `shipment form to close`, `was sent `, `Move up`; Empire Overview writes the month as `month = 2592e3` — the minifier's form of 2592000) — the build the user tried on the game (§17). **Rebuilt again at 09:44 with §17** (grepped: `ika-queue-scroll`, `resourceTableScroll`, and the `dialog.close` button after `build.save`). **Rebuilt 04/10 at 13:11 from the working tree, with §18 and §19** (grepped: `ika-building-level` in Send Resources; `empire_quickUpgrade`, `stockTip_stock`, `empire_syncIndicator` and Academy level 51's time `15379200` in Empire Overview; `ikaNotifications` and `ikaQuickUpgradeTrace` in both). It matched the working tree at 13:11, not a commit. **Rebuilt 04/10 at 21:21, holding §20 and §21** (grepped: `quick upgrade refresh` in `Ikariam Empire Overview -VN-.user.js` and in `extension/page/empire-overview.js`; `dist/extension/manifest.json` has `exclude_globs`). `dist/extension/` was rebuilt in this session with `npm run build:extension`, which builds the extension only; the two userscripts carry 21:21 too, so the user built them. It matched `9c363f7`. **Rebuilt 05/10 at 02:03 with `npm run build` in this session, from the working tree, holding §22** (grepped: `event subscriber` and `quick upgrade refresh` in Empire Overview, `ika_oneOffRunTypes` in Send Resources, in both the userscripts and the extension; no `GM_xmlhttpRequest` left in Empire Overview's header). That is the current `dist/`; it matches the working tree, not a commit. **The installed userscripts are older** — reinstall both before trying anything; the extension has never loaded before §21 |
 
@@ -2683,3 +2699,56 @@ matching test run, then the file restored (§4's round trip, plus a Node
 - ▲, then Bug Report: the file holds no `actionRequest=` value.
 - The status line names a shipment as the queue does (`12,000 Crystal: A →
   B`).
+
+---
+
+## 23. 17/10: Auto Wine's shipping order, and Auto Build Settings' width
+
+**Not committed; not in `dist/`; not tried on the game.** The plan's write-up,
+in Vietnamese, is §2.Y. 698 → 699 tests, 38 files; typecheck (both configs)
+and prettier clean.
+
+| What | Where |
+| ---- | ----- |
+| `enqueueWineRun` queues the allocations with `add > 0` sorted by `stock / consume` ascending (hours of wine left now); the sort is stable, so ties keep the configured order | `send-resources/features/auto-wine.ts` |
+| `#autoBuildTable { max-width: 1250px }`; `#autoBuildTable > tbody { display: table; width: max-content }`; the first cell of every row `position: sticky; left: 0` with a background | `send-resources/ui/styles.ts` |
+
+**Decisions, chosen by the user:**
+
+- "Fewest wine" means **hours left** (stock ÷ consumption), not the absolute
+  stock and not the stock on arrival. Offered: all three; the user took hours
+  left. A town that drinks fast but holds more wine still goes first if it is
+  about to run dry.
+- The width cap is **1250px** (first asked as 1.5 times the 500px height cap,
+  750px, then raised). Past it the table scrolls sideways; the column widths
+  stay as they were, and only the first column is pinned.
+
+**Test:** `auto-wine.test.ts`, in `enqueueWineRun` (+1): Sparta 1,000 wine at
+100/h (10 h) and Corinth 2,000 at 1,000/h (2 h) → Corinth is queued first
+although it holds more wine, so the test tells hours left from stock. Red
+against `HEAD`'s `auto-wine.ts` (it gave `["1", "2"]`), restored after. The
+CSS has no test: happy-dom has no layout.
+
+**A trap from this round:** `#autoBuildTable` is a `display: block` element
+(`.fullTable`) holding table rows. `max-width` on it alone made the rows fit
+the box, so every town column shrank — the user saw "the columns get narrower
+with every town". Making its `tbody` a `display: table` at `max-content`
+width lets the rows keep their natural width inside the scroll box.
+
+**Known, not done:**
+
+- The order uses the stock now. `transitHours` is not counted, though
+  `distributeWine` does count it for the split.
+- The settings dialog's preview table still lists towns in the configured
+  order.
+- The header row of the build dialog is not pinned when scrolling down; only
+  the first column is.
+- The sticky column's colours (`#fdf7dd`, `#f8e7b3`) were picked from the
+  panel's own palette, not measured against the game's popup.
+
+**What to try on the game** (after building and reinstalling): Auto Wine with
+two or more receiving towns at different hours → the queue lists the town with
+the fewest hours first and ships in that order; Auto Build Settings with many
+towns queued → the dialog stops at 1250px, scrolls sideways, the columns keep
+their width, "List Building" stays put. Without a build, the CSS can be tried
+from the console with a `<style>` on `#ikaMationTransporterDialog #autoBuildTable`.

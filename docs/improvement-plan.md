@@ -1,6 +1,8 @@
 # Kế hoạch cải thiện — UI và tính năng
 
-> Trạng thái: **đang thực hiện.** Cập nhật 05/10/2026.
+> Trạng thái: **đang thực hiện.** Cập nhật 17/10/2026.
+>
+> **Mới nhất (§2.Y — 17/10, chưa commit, chưa build vào `dist/`, chưa thử trên game):** hai chỉnh sửa người dùng yêu cầu — **Auto Wine gửi cho town còn ít giờ rượu nhất trước** (trước đó theo thứ tự cấu hình), và **hộp thoại Auto Build Settings rộng tối đa 1250px**, cột đầu "List Building" ghim bên trái, các cột town cuộn ngang. 698 → 699 test.
 >
 > Đã xong: Phase 1 · Phase 2 phần panel (2.1–2.5) và phần board (2.6, 2.8) ·
 > A, B, C, D, E, H, J, K, S, T · R (mức tối thiểu) · U (thêm cấp > 50 từ
@@ -14,7 +16,7 @@
 > phần U còn thiếu số (§2.U phần 4) · R: kênh cập nhật riêng (chờ người
 > dùng). **Không làm lúc này** (người dùng chọn 04/10): F, G, I, M, N, O, Q.
 >
-> Git (05/10): `origin/refactor` ở `066eb44`; **17 commit chưa push** —
+> Git (17/10, đã kiểm lại): `origin/refactor` ở `772a055` = `HEAD`, **không còn commit nào chưa push**; §2.X đã commit (`1baf274` code, `772a055` tài liệu). Chưa commit: §2.Y (`auto-wine.ts`, `auto-wine.test.ts`, `styles.ts`) và hai tài liệu này. Đoạn sau là danh sách commit cũ (05/10), giữ để tra; lúc viết nó ghi `origin/refactor` ở `066eb44` và 17 commit chưa push —
 > `6ed66c6`, `c38dca4`, `b9f1d7a` (U + V), `4f9436c`, `3209964` (§2.K + §2.L),
 > `7ed3a85`, `b45f792` (§2.M), `32fe3ba`, `ec3fdc4` (§2.N → §2.R), `b2e9084`
 > (§2.S), `3f8a51b` (thay đổi `barbarian.ts` của người dùng, commit riêng
@@ -23,7 +25,7 @@
 > (hai tài liệu)**, **`cefcc92` (§2.V: `render.ts`, `startup.test.ts`),
 > `9c363f7` (§2.W: `build/build-extension.mjs`), `e36516a` (tài liệu) và
 > `180fead` (`docs/wiki/s303/` — dữ liệu người dùng crawl, commit theo yêu
-> cầu)** (04/10 tối). **Chưa commit (05/10): §2.X** — 55 file sửa (52 trong
+> cầu)** (04/10 tối). **Chưa commit lúc viết (05/10; đã commit sau đó, xem trên): §2.X** — 55 file sửa (52 trong
 > `src/`, `build/vite.empire-overview.ts`, `project-summary.md` và hai tài
 > liệu này) và 3 file test mới (`src/core/dom.test.ts`,
 > `src/send-resources/features/summary-account.test.ts`,
@@ -2310,6 +2312,46 @@ Report Bug; bấm ▲ rồi Bug Report → file không có token (tìm `actionRe
 
 ---
 
+### 2.Y Auto Wine gửi theo giờ rượu còn lại; bề rộng hộp thoại Auto Build (17/10/2026)
+
+**Chưa commit. Chưa build vào `dist/`, chưa thử trên game.** Người dùng yêu cầu từng việc. 698 → 699 test, 38 file; typecheck (cả cấu hình strict) và prettier sạch.
+
+#### 1. Auto Wine: town ít rượu nhất gửi trước
+
+**Người dùng muốn:** sau khi tính xong lượng phân bổ, gửi cho town còn ít rượu nhất trước (trước đó theo thứ tự cấu hình/alphabet). Hỏi tiêu chí "ít rượu" — người dùng chọn **số giờ còn lại** (tồn kho ÷ lượng uống mỗi giờ), không phải số rượu tuyệt đối, và không trừ rượu uống trên đường.
+
+| Thay đổi | Ở đâu |
+| -------- | ----- |
+| `enqueueWineRun` lọc các phân bổ có `add > 0`, sắp theo `stock / consume` tăng dần rồi mới nạp vào queue. `sort` ổn định nên hai town bằng giờ giữ thứ tự cấu hình. `consume` không bao giờ bằng 0 ở đây vì `distributeWine` bỏ town không uống. **Chỉ đổi thứ tự nạp queue**; cách chia (`distributeWine`) và bảng xem trước trong Auto Wine Settings giữ nguyên | `send-resources/features/auto-wine.ts` |
+
+**Test** (`features/auto-wine.test.ts`, nhóm `enqueueWineRun`, +1): Sparta 1.000 rượu uống 100/h (10 giờ), Corinth 2.000 rượu uống 1.000/h (2 giờ) → Corinth đứng trước dù nhiều rượu hơn, nên test phân biệt "ít giờ" với "ít rượu". Đã thấy **đỏ** trên `auto-wine.ts` ở `HEAD` (ra `["1", "2"]`, thứ tự cấu hình), rồi khôi phục.
+
+**Đã biết, chưa làm:** thứ tự lấy theo tồn kho lúc bấm; `transitHours` không được tính vào thứ tự (người dùng không chọn phương án "giờ lúc tàu tới"). Bảng xem trước vẫn theo thứ tự cũ.
+
+**Cần thử trên game:** Auto Wine với ít nhất hai town nhận có số giờ khác nhau → queue có town ít giờ nhất đứng đầu, ▶ và log đi theo thứ tự đó.
+
+#### 2. Auto Build Settings: bề rộng tối đa, cột đầu ghim
+
+**Người dùng báo:** hộp thoại rộng ra theo số town. Muốn bề rộng tối đa, rộng hơn thì cuộn ngang, **các cột town giữ độ rộng như cũ**, cột "List Building" cố định.
+
+Ba vòng điều chỉnh, ghi lại vì lỗi đầu đáng nhớ:
+
+1. `max-width: 750px` (1,5 lần `max-height` 500px) trên `#autoBuildTable` — **sai**: bảng là `display: block` (`.fullTable`), nên các hàng bị ép vào 750px và **mọi cột co hẹp** lại.
+2. Sửa: `#autoBuildTable > tbody { display: table; width: max-content; }` — bảng ngoài chỉ còn là khung cuộn, các hàng tự bố trí ở độ rộng tự nhiên. Người dùng yêu cầu thêm: tăng 750px lên **1250px**.
+3. `#autoBuildTable tr > :first-child { position: sticky; left: 0; z-index: 1; background: #fdf7dd; }`, ô tiêu đề nền `#f8e7b3` (có nền để cột town trượt dưới không lộ chữ).
+
+| Thay đổi | Ở đâu |
+| -------- | ----- |
+| `max-width: 1250px` cho `#autoBuildTable`; `tbody` là `display: table; width: max-content`; ô đầu mỗi hàng `position: sticky; left: 0` | `send-resources/ui/styles.ts` |
+
+**Không có test** — thuần CSS, happy-dom không có layout. **Chưa xem trên game.** Người dùng có thể thử ngay bằng một `<style>` dán vào console (id hộp thoại là `#ikaMationTransporterDialog`).
+
+**Không làm:** ghim hàng tên town khi cuộn dọc (người dùng chỉ nói cột đầu); header/footer của hộp thoại Empire Overview chỉ là tham khảo cho kiểu ghim.
+
+**Cần thử trên game:** nhiều town có queue → hộp thoại không rộng quá 1250px, có thanh cuộn ngang, cột các town không bị hẹp, "List Building" đứng yên khi cuộn; còn ít town thì như cũ.
+
+---
+
 ## 3. Phase 2 — UI
 
 ### Quyết định thiết kế: **không** gộp panel vào board
@@ -2411,7 +2453,7 @@ Cột **Build** cho biết tính năng chạy được ở đâu: `US` = userscr
 | S ✅ | **Auto Wine: làm tròn lượng gửi theo sức chứa tàu.** `distributeWine` chia tới từng đơn vị, nên một chuyến 621 rượu tốn 2 thương thuyền (620/tàu trên server đang test). Làm tròn theo bội số của `ship-capacity.ts` để đỡ tốn tàu, nhất là khi tàu rảnh đang thiếu; phần dư giữ lại town nguồn. **✅ 04/10 (§2.S phần 1, commit `b2e9084`):** phần ≥ 1 tàu làm tròn xuống theo tàu nguyên; phần < 1 tàu gửi nguyên.                                                                                                                                                                                                         | cả hai      | 2.A                          |
 | T ✅ | **Auto Wine: tính rượu tiêu hao trong lúc chở.** Tới lúc hàng cập bến, town nhận đã uống thêm `consume × thời gian di chuyển`, nên mức giờ thực tế thấp hơn `targetHours`. Cần thời gian di chuyển giữa hai town — Send Resources hiện chưa đọc con số này ở đâu cả. **✅ 04/10 (§2.S phần 2, commit `b2e9084`):** thời gian bốc hàng + đi biển ghi theo tuyến khi gửi thật; Auto Wine chia theo tồn kho lúc tàu tới.                                                                                                                                                                                                        | cả hai      | 2.A                          |
 | U ◐  | **Chi phí và thời gian nâng cấp đúng với game.** Đề xuất 29/09 là công thức; **01/10 đổi hướng: giữ bảng `Constant`, nạp lại số của chính game** (trang Help > building details). Đã nạp chi phí, thời gian, hiệu ứng và `maxLevel` logic; công thức giảm giá đã áp (tối đa 64%). **03/10:** thời gian tính thêm buff server và Chronos' Forge, làm tròn tới giây (§2.M phần 3). Còn: cấp vượt quá số cấp trang Help liệt kê. Ghi chú về U bên dưới. **04/10 (§2.U):** thêm 704 cấp > 50 từ trang Help của s303 (thời gian × 2, chi phí ÷ 0,86). Còn thiếu: 5 công trình không có trong s303 và các cấp quá cửa sổ đã crawl. | chỉ board   | nguồn số cho cấp > 50        |
-| V ◐  | **Hiệu ứng của research tính đúng với game.** Người dùng đề xuất 01/10, bốn điểm: giảm chi phí xây dựng, giảm chi phí vàng cho scientist, dân số tối đa, hài lòng. Hiện trạng: ghi chú về V bên dưới.                                                                                                                                                                                                                                                                                                                                                                                                                        | chỉ board   | chi tiết (người dùng sẽ ghi) |
+| V ◐  | **Hiệu ứng của research tính đúng với game.** Người dùng đề xuất 01/10, bốn điểm: giảm chi phí xây dựng, giảm chi phí vàng cho scientist, dân số tối đa, hài lòng. Hiện trạng: ghi chú về V bên dưới (17/10: đã ghi công thức hiện tại của ba điểm còn lại và danh sách số liệu cần thu thập).                                                                                                                                                                                                                                                                                                                                                                                                                        | chỉ board   | chi tiết (người dùng sẽ ghi) |
 
 **Đã làm: A, B, C, D, E, H, J, K, S, T; R ở mức tối thiểu.** D và H ghi ở
 §2.G; S và T ở §2.S; E, J, K, R ở §2.T. **Người dùng chọn 04/10** (câu hỏi
@@ -2573,6 +2615,63 @@ Hiện trạng đọc từ code ngày 01/10, bản port giống hệt legacy:
   | Dân số tối đa                    | Well Construction +50, Utopia +200, Holiday +50, Economic Future +20/cấp                         | cộng thêm vào dân số tính từ Town Hall                               | `models/city.ts`                                   |
   | Hài lòng                         | Holiday (2080) ×25, Economic Future (2999) ×10, Well Construction (3010) ×50, Utopia (2120) ×200 | cộng vào `r.research`                                                | `models/city.ts`, `_getSatisfactionData`           |
 
+**Công thức hiện tại của ba điểm còn lại (đọc lại từ code 17/10, bản port giống legacy; chưa điểm nào được đối chiếu với game, và không có test nào cho ba hàm này — chưa grep hết, lần đọc không thấy).**
+
+*1. Vàng của scientist* — `models/city-research.ts`, `_researchCostModifier`:
+
+```
+vàng mỗi scientist = (6 + researcherCost của chính thể − 3 × cấp Letter Chute (3110)) × serverTyp
+vàng mỗi giờ       = số scientist × vàng mỗi scientist
+```
+
+- `researcherCost` bằng 0 ở mọi chính thể trừ một chính thể có giá trị 1 (chưa tra tên). `serverTyp` = 3 trên server `s201`/`s202`, còn lại 1.
+- Số scientist lấy từ game, hoặc suy ngược từ chi phí nếu chi phí mới hơn lần cập nhật số scientist.
+- Cùng file có phần điểm nghiên cứu sinh ra: Paper +2%, Ink +4%, Mechanical Pen +8%, Scientific Future +2% (mỗi cấp, tính trên scientist không bị tham nhũng), cộng hàng văn hóa nhân hệ số chính thể. Người dùng không nhắc tới phần này.
+
+*2. Dân số tối đa* — `models/city.ts`, `_getMaxPopulation`:
+
+```
+cơ bản = floor(10 × cấp Town Hall^1,5) × 2 + 40        (0 nếu không có Town Hall)
++ 50   nếu có Well Construction (3010) VÀ (town có Palace HOẶC chỉ có 1 town)
++ 200  nếu có Utopia (2120) VÀ town có Palace
++ 50   nếu có Holiday (2080), mọi town
++ 20 × cấp Economic Future (2999)
+```
+
+Well Construction, Utopia và Holiday chỉ xét **có / không** (cấp > 0); chỉ Economic Future nhân theo cấp.
+
+*3. Hài lòng* — `models/city.ts`, `_getSatisfactionData`, tổng của:
+
+| Phần | Cách tính |
+| ---- | --------- |
+| Thành phố | cố định 196 |
+| Museum | 50 × số hàng văn hóa + `basicBonus[cấp museum]` (0 nếu không có museum hoặc quá bảng) |
+| Chính thể | `happiness` + `happinessWithoutTemple` nếu town không có Temple |
+| Tavern | `basicBonus[cấp tavern]` + `wineBonus` ứng với mức rượu tiêu thụ (so với bảng `wineUse`, sai số 1; mức tiêu thụ đã cộng lại phần Wine Press giảm) |
+| Research | 25 × Holiday (2080) + 10 × Economic Future (2999) + 50 × Well Construction (3010) nếu có Palace hoặc chỉ có 1 town + 200 × Utopia (2120) nếu có Palace |
+| Priest | `priest × 500 / dân số tối đa × happinessBonusWithTempleConversion`, tối đa 150 |
+
+Dân số được dự báo (`projectPopData`): `happiness = (1 − tham nhũng) × tổng − dân số`; dân số tiến dần tới đó theo `1 − e^(−giờ/50)`, chặn ở dân số tối đa; tăng trưởng = `happiness × 0,02 × serverTyp`.
+
+**Chỗ đáng nghi, cần đối chiếu với game khi người dùng có số liệu:**
+
+- Well Construction (3010) và Utopia (2120) dùng cho **cả** dân số tối đa lẫn hài lòng, nhưng ở dân số tối đa tính "có / không", ở hài lòng thì **nhân theo cấp** (×50, ×200). Chưa biết game tính đúng như vậy không.
+- Dòng research của hài lòng cộng 50 × Well Construction khi chỉ có 1 town rồi trừ lại đúng số đó khi town vừa có Palace vừa là town duy nhất: kết quả có thể đúng nhưng chép từ bản gốc, chưa kiểm.
+- Hệ số 3 theo server `s201`/`s202`, hằng 196, các hệ số 0,02 / 0,04 / 0,08 và 0,02 của tăng trưởng đều là số cứng chép từ bản gốc.
+- Với `s202`, hiệu ứng rượu của tavern dò bảng `wineUse2` (hài lòng), còn chỗ khác chỉ dò `wineUse` (§2.I mục 2).
+- Cấp quá bảng help cho 0 (tavern, museum) — sau §2.U đã có số tới cấp 51+ cho phần lớn công trình, nhưng chưa phải tất cả.
+
+**Cần người dùng thu thập (người dùng nói sẽ bổ sung sau; chưa làm gì cho tới khi có):**
+
+```
+Vàng scientist : số scientist, vàng/giờ thực tế game hiển thị, cấp Letter Chute, chính thể, server
+Dân số tối đa  : dân số tối đa game hiển thị ở vài town (có / không Palace, 1 town / nhiều town) kèm cấp Town Hall và các research đã nghiên cứu
+Hài lòng       : bảng phân rã hài lòng game hiển thị (thành phố, museum, chính thể, tavern, research, priest) cho vài town, kèm cấp Museum/Tavern, rượu, số priest
+Research       : cấp hiện tại của Holiday, Economic Future, Well Construction, Utopia, Letter Chute
+```
+
+Cách đối chiếu đề xuất: với mỗi town, so từng phần game hiển thị với `_getSatisfactionData` (và dân số tối đa, vàng scientist); phần nào lệch thì mới sửa đúng phần đó. Không đổi công thức trước khi có số game để so.
+
 **Phạm vi của 5 công trình giảm giá** (người dùng cung cấp 01/10). Mỗi công
 trình giảm 1%/cấp, tối đa 50%, cho **mọi** chỗ trong town dùng tài nguyên của
 nó, không chỉ xây dựng. Trần 50% là `REDUCTION_BUILDING_MAX_PERCENT` trong
@@ -2632,7 +2731,8 @@ thêm, phải áp giảm giá theo bảng này.
 ✅ ~~Chờ log~~:            §2.O phần 1 — đổi town sang M-Eretria: người dùng báo tạm ok 04/10 (§2.Q); nguyên nhân gốc chưa từng được xác định
 ✅ ~~Chờ code của game~~: §2.D tham số `createPopup` — xong 03/10 (§2.N phần 2)
 ⬜ Lượt review sau:        thử trên game thật các mục §2.D; chuỗi còn sót ngoài danh sách §2.D (§2.L phần 4)
-⬜ Chờ người dùng thử:     §2.R → §2.X trên game (cài lại cả hai userscript từ `dist/` 05/10 02:03); riêng E: một lần thành công (ô phải tự chuyển sang đang nâng), một lần bị từ chối, rồi Bug Report (file không còn token); danh sách thử của §2.X ở cuối mục đó
+✅ 17/10     §2.Y                   Auto Wine gửi town ít giờ rượu nhất trước; hộp thoại Auto Build Settings rộng tối đa 1250px, cột "List Building" ghim, cột town cuộn ngang — chưa commit, chưa build
+⬜ Chờ người dùng thử:     §2.R → §2.Y trên game (cài lại cả hai userscript từ `dist/` 05/10 02:03); riêng E: một lần thành công (ô phải tự chuyển sang đang nâng), một lần bị từ chối, rồi Bug Report (file không còn token); danh sách thử của §2.X ở cuối mục đó
 ⬜ Lượt sau của review:    các mục 💡 trong `sample/review-source/review-src-2026-10-04.md` (chưa làm)
 ⬜ Chờ người dùng thử:     §2.W — load lại `dist/extension` trong Chrome (tắt hai userscript trước); bản extension chưa từng chạy trên game
 ✅ ~~Chờ câu hỏi 2~~:      trả lời 04/10 — 2.6 ✅, 2.8 ✅ (rút gọn); ⏸ 2.7 chỉ khi có lỗi cụ thể
