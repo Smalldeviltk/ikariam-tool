@@ -175,4 +175,10 @@ describe("timestampedFilename", () => {
       /^report-A_B_C-\d{4}-\d\d-\d\d-\d\d-\d\d-\d\d\.json$/,
     );
   });
+
+  it("takes another extension when asked", () => {
+    expect(timestampedFilename("tester", "ikariam-wine", "js")).toMatch(
+      /^ikariam-wine-tester-\d{4}-\d\d-\d\d-\d\d-\d\d-\d\d\.js$/,
+    );
+  });
 });

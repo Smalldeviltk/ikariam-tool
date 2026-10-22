@@ -6,6 +6,8 @@ import {
   TOAST_STACK_ID,
   TOAST_STYLE_ID,
   toastDuration,
+  WINDOW_COLLAPSE_CLASS,
+  WINDOW_COLLAPSED_CLASS,
   WINDOW_STYLE_ID,
 } from "./window";
 import { accountStore } from "@core/storage";
@@ -143,6 +145,69 @@ describe("remembering whether it was left open", () => {
     win.close();
 
     expect(store.get("ikaWindowOpen_test-window")).toBeNull();
+  });
+});
+
+describe("folding down to the title bar", () => {
+  const options = (store = accountStore("tester")) => ({
+    id: "test-window",
+    title: "Test",
+    store,
+    collapsible: true,
+    openByDefault: true,
+  });
+
+  const foldButton = (win: { root: HTMLElement }) =>
+    win.root.querySelector<HTMLElement>(`.${WINDOW_COLLAPSE_CLASS}`);
+
+  it("has no fold button unless asked for", () => {
+    expect(
+      foldButton(createWindow({ id: "test-window", title: "T" })),
+    ).toBeNull();
+  });
+
+  it("folds from the header's button and unfolds again, staying open", () => {
+    const win = createWindow(options());
+    const button = foldButton(win)!;
+    expect(button.textContent).toBe("▾");
+    expect(win.root.classList.contains(WINDOW_COLLAPSED_CLASS)).toBe(false);
+
+    button.click();
+    expect(win.root.classList.contains(WINDOW_COLLAPSED_CLASS)).toBe(true);
+    expect(button.textContent).toBe("▸");
+    expect(button.title).toBe("Expand");
+    expect(win.isOpen()).toBe(true);
+
+    button.click();
+    expect(win.root.classList.contains(WINDOW_COLLAPSED_CLASS)).toBe(false);
+    expect(button.title).toBe("Collapse");
+  });
+
+  it("stays folded on the next load", () => {
+    const store = accountStore("tester");
+    foldButton(createWindow(options(store)))!.click();
+
+    document.body.innerHTML = `<div id="container"></div>`;
+    const next = createWindow(options(store));
+    expect(next.root.classList.contains(WINDOW_COLLAPSED_CLASS)).toBe(true);
+    expect(foldButton(next)!.textContent).toBe("▸");
+  });
+
+  it("hides the body and footer while folded, keeping the header", () => {
+    createWindow(options());
+    const css = document.getElementById(WINDOW_STYLE_ID)!.textContent!;
+    expect(css).toContain(
+      `.${WINDOW_COLLAPSED_CLASS} .ika-window-body,\n.${WINDOW_COLLAPSED_CLASS} .ika-window-footer { display: none; }`,
+    );
+  });
+
+  it("does not start a drag when the fold button is pressed", () => {
+    const win = createWindow(options());
+    const before = [win.root.style.left, win.root.style.top];
+
+    drag(foldButton(win)!, [10, 10], [200, 200]);
+
+    expect([win.root.style.left, win.root.style.top]).toEqual(before);
   });
 });
 

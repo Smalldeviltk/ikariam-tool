@@ -35,6 +35,7 @@ import {
 import {
   BUILD_DIALOG,
   BUTTON,
+  CRAWL_DIALOG,
   DURATION,
   MISC,
   SEND_DIALOG,
@@ -448,4 +449,48 @@ export function refreshTownQueueCell(townName: string): void {
     (element) => element.dataset.ikaTownCell === townName,
   );
   if (cell) cell.innerHTML = renderTownQueue(townName);
+}
+
+/* ─────────────────────────── Crawl dialog ──────────────────────────────── */
+
+/** The radio group's name: one group, so only one crawl can be picked. */
+const CRAWL_KIND_NAME = "ikaCrawlKind";
+
+/** What the Crawl dialog can save, one per press: a key of `CRAWL_DIALOG.kinds`. */
+export type CrawlKind = keyof typeof CRAWL_DIALOG.kinds;
+
+/** Every crawl, in the order the dialog lists them. */
+const CRAWL_KINDS = Object.keys(CRAWL_DIALOG.kinds) as CrawlKind[];
+
+/** The id of a crawl's radio button. */
+export function crawlRadioId(kind: CrawlKind): string {
+  return `ikaCrawl_${kind}`;
+}
+
+/**
+ * One radio button per thing Crawl can save, none picked at first. A single
+ * choice rather than checkboxes: two crawls started by one press ran side by
+ * side, the wine one scanning every town while the other read the page.
+ */
+export function openCrawlDialog(): void {
+  const radios = CRAWL_KINDS.map(
+    (kind) =>
+      `<label style="display:block; margin-bottom:6px">` +
+      `<input type="radio" name="${CRAWL_KIND_NAME}" id="${crawlRadioId(kind)}" value="${kind}"/> ` +
+      `${CRAWL_DIALOG.kinds[kind]}</label>`,
+  ).join("");
+  openPopup(
+    CRAWL_DIALOG.title,
+    `<div>${radios}</div><br/>
+     <button style="margin-right:20px" class="button" ${action("crawl.run")}>${CRAWL_DIALOG.run}</button>
+     <button class="button" ${action("dialog.close")}>${BUTTON.close}</button><br/><br/>`,
+  );
+}
+
+/** The crawl picked in the dialog, or `null` when none is. */
+export function readCrawlChoice(): CrawlKind | null {
+  const picked = qs<HTMLInputElement>(
+    `input[name="${CRAWL_KIND_NAME}"]:checked`,
+  );
+  return CRAWL_KINDS.find((kind) => kind === picked?.value) ?? null;
 }

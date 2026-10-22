@@ -141,7 +141,7 @@ function readBuildingHelp(dialog: Element): BuildingHelpCapture {
   };
 }
 
-/** The panel button's action. */
+/** Crawl's building part, run when Building is ticked in the Crawl dialog. */
 export function saveBuildingHelpToFile(): void {
   const dialog = qs(HELP_DIALOG_SELECTOR);
   if (!dialog) {

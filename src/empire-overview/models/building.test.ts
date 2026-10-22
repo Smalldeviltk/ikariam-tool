@@ -35,6 +35,9 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+/** The id of the stub city every test building belongs to. */
+const CITY_ID = 297034;
+
 /** A city stub good enough for an empty building slot. */
 function makeBuilding(): any {
   // `getUpgradeCost` asks the city for the Carpenter's Workshop discount and
@@ -42,6 +45,7 @@ function makeBuilding(): any {
   // The constructor wraps the city in a closure itself, so pass the object.
   return new Building(
     {
+      getId: CITY_ID,
       getResource: () => ({ getCurrent: 1e9 }),
       getBuildingFromName: () => null,
     },
@@ -74,8 +78,12 @@ describe("Building.startUpgradeTimer", () => {
     vi.useFakeTimers();
     const building = makeBuilding();
     const seen: any[] = [];
-    events(Constant.Events.BUILDINGS_UPDATED).sub((changes: any) =>
-      seen.push(changes),
+    const cityIds: unknown[] = [];
+    events(Constant.Events.BUILDINGS_UPDATED).sub(
+      (cityId: unknown, changes: any) => {
+        cityIds.push(cityId);
+        seen.push(changes);
+      },
     );
 
     // Empty slot: not upgradable, not upgrading, so the poll should stay
@@ -92,6 +100,10 @@ describe("Building.startUpgradeTimer", () => {
     vi.advanceTimersByTime(3_000);
     expect(seen).toHaveLength(1);
     expect(seen[0][0]).toMatchObject({ position: 3, name: "port" });
+    // REGRESSION: the board's handler takes (cityId, changes). The poll used
+    // to publish the changes alone, so the handler looked up a city by an
+    // array, found none, and the cell never turned upgradable by itself.
+    expect(cityIds).toEqual([CITY_ID]);
 
     events(Constant.Events.BUILDINGS_UPDATED).unsub();
   });

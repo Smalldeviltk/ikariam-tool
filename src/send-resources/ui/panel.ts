@@ -54,51 +54,93 @@ export const NOTIFICATION_SWITCH_ATTR = "data-ika-notification";
 /** The menu entry's icon: the game's own transport picture. */
 const MENU_ENTRY_ICON = "cdn/all/both/minimized/transport.png";
 
+/** Marks a panel group; its value is the group's key in `PANEL.groups`. */
+export const GROUP_ATTR = "data-ika-group";
+/** On a group whose body is folded away, leaving only its title. */
+export const GROUP_COLLAPSED_CLASS = "ika-group-collapsed";
+/**
+ * The groups left collapsed, kept in the account store next to the window's
+ * position and open state — like those, per machine, so out of the export.
+ */
+export const COLLAPSED_GROUPS_KEY = "ikaPanelCollapsedGroups";
+
+type GroupKey = keyof typeof PANEL.groups;
+
 let panelWindow: GameWindow | null = null;
 
-/** One titled block of buttons. */
-function group(title: string, body: string): string {
-  return `<div class="ika-group"><div class="ika-group-title">${title}</div>${body}</div>`;
+function collapsedGroups(): GroupKey[] {
+  return getState().account.getJSON<GroupKey[]>(COLLAPSED_GROUPS_KEY, []);
+}
+
+/** One titled block of buttons; its title folds the block away and back. */
+function group(key: GroupKey, body: string): string {
+  const collapsed = collapsedGroups().includes(key);
+  return (
+    `<div class="ika-group${collapsed ? ` ${GROUP_COLLAPSED_CLASS}` : ""}" ${GROUP_ATTR}="${key}">` +
+    `<div class="ika-group-title">${PANEL.groups[key]}</div>` +
+    `<div class="ika-group-body">${body}</div></div>`
+  );
+}
+
+/**
+ * A click on a group's title collapses or expands that group, and the state
+ * is remembered: the script reloads the page every two minutes, and a group
+ * the player folded away should stay that way.
+ */
+function watchGroupTitles(root: HTMLElement): void {
+  root.addEventListener("click", (event) => {
+    const title = (event.target as HTMLElement).closest(".ika-group-title");
+    const block = title?.parentElement;
+    const key = block?.getAttribute(GROUP_ATTR) as GroupKey | null;
+    if (!block || !key) return;
+    const collapsed = block.classList.toggle(GROUP_COLLAPSED_CLASS);
+    const others = collapsedGroups().filter((other) => other !== key);
+    getState().account.setJSON(
+      COLLAPSED_GROUPS_KEY,
+      collapsed ? [...others, key] : others,
+    );
+  });
 }
 
 function windowContent(): string {
   return (
     group(
-      PANEL.groups.wine,
+      "wine",
       `<button class="button" id="btnStartScriptAutoWine" ${action("wine.autoRun")}>${BUTTON.start}</button>` +
         `<button class="button" ${action("wine.settings")}>${BUTTON.settings}</button>` +
         `<div id="${WINE_WARNING_ID}"></div>`,
     ) +
     group(
-      PANEL.groups.transport,
+      "transport",
       `<button class="button" id="btnStartScript" ${action("queue.toggle")}>${BUTTON.startTimer}</button>` +
         `<button class="button" ${action("send.settings")}>${BUTTON.settings}</button>` +
         `<button class="button" id="calibratePerShipCapacity" ${action("ship.calibrate")}>${PANEL.calibrateCargo}</button>`,
     ) +
     group(
-      PANEL.groups.build,
+      "build",
       `<button class="button" ${action("build.startNow")}>${BUTTON.start}</button>` +
         `<button class="button" id="btnStartAutoBuild" ${action("build.toggleTimer")}>${BUTTON.startTimer}</button>` +
         `<button class="button" ${action("build.settings")}>${BUTTON.settings}</button>` +
         `<button class="button" id="btnStartScanBuilding" ${action("build.scan")}>${PANEL.scan}</button>`,
     ) +
-    group(PANEL.groups.queue, `<div id="${QUEUE_LIST_ID}"></div>`) +
+    group("queue", `<div id="${QUEUE_LIST_ID}"></div>`) +
     group(
-      PANEL.groups.account,
+      "account",
       `<button class="button" ${action("account.update")}>${PANEL.updateAccount}</button>` +
         `<div id="summaryAccountList"></div>`,
     ) +
     group(
-      PANEL.groups.data,
+      "data",
       `<button class="button" id="btnExportData" ${action("data.export")}>${PANEL.exportData}</button>` +
         `<button class="button" id="btnImportData" ${action("data.import")}>${PANEL.importData}</button>` +
         `<button class="button" id="btnBugReport" ${action("bug.report")}>${PANEL.bugReport}</button>` +
         `<button class="button" ${action("log.clear")}>${PANEL.clearLog}</button>` +
-        // Temporary: saves the building shown in the game's help dialog.
-        `<button class="button" ${action("buildingHelp.save")}>${PANEL.crawlBuildingHelp}</button>`,
+        // Opens the Crawl dialog: the building shown in the game's help
+        // dialog, and the receiving towns' wine figures.
+        `<button class="button" ${action("crawl.open")}>${PANEL.crawl}</button>`,
     ) +
     group(
-      PANEL.groups.notifications,
+      "notifications",
       notificationSwitch(
         "wineLow",
         NOTIFICATIONS.wineLowSwitch,
@@ -180,6 +222,18 @@ ${entry}:hover { transform: translateX(0) !important; z-index: 120000 !important
 `;
 }
 
+/** A group's title folds its body away: ▾ when open, ▸ when collapsed. */
+function groupStyles(): string {
+  const collapsed = `#${WINDOW_ID} .${GROUP_COLLAPSED_CLASS}`;
+  return `
+#${WINDOW_ID} .ika-group-title { cursor: pointer; user-select: none; }
+#${WINDOW_ID} .ika-group-title::before { content: "\\25BE  "; }
+${collapsed} > .ika-group-title::before { content: "\\25B8  "; }
+${collapsed} > .ika-group-title { border-bottom: none; margin-bottom: 0; }
+${collapsed} > .ika-group-body { display: none; }
+`;
+}
+
 function buildLauncher(onClick: () => void): void {
   const menu = qs(SEL.menuSlots);
   if (menu) {
@@ -208,6 +262,7 @@ export function buildPanel(): void {
 
   addStyle(buildStyles());
   addStyle(menuEntryStyles());
+  addStyle(groupStyles());
 
   panelWindow = createWindow({
     id: WINDOW_ID,
@@ -215,9 +270,11 @@ export function buildPanel(): void {
     store: getState().account,
     rememberOpen: true,
     openByDefault: true,
+    collapsible: true,
   });
   panelWindow.content.innerHTML = windowContent();
   watchNotificationSwitches(panelWindow.content);
+  watchGroupTitles(panelWindow.content);
 
   refreshQueueView();
   buildLauncher(togglePanel);

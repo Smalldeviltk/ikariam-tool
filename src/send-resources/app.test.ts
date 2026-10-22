@@ -27,12 +27,15 @@ vi.mock("@core/ui/window", async (importOriginal) => ({
 
 // Files the app saves (Bug Report). Captured instead of downloaded; the other
 // exports of the module stay real.
-const { downloadJson } = vi.hoisted(() => ({
+const { downloadJson, downloadText } = vi.hoisted(() => ({
   downloadJson: vi.fn<(filename: string, json: string) => void>(),
+  downloadText:
+    vi.fn<(filename: string, text: string, mimeType: string) => void>(),
 }));
 vi.mock("./ui/data-transfer-ui", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./ui/data-transfer-ui")>()),
   downloadJson,
+  downloadText,
 }));
 
 // The scan is tested in `auto-build.test.ts`; here Auto Wine's Start only
@@ -557,6 +560,191 @@ describe("Auto Wine", () => {
       expect(timers()).toBe(IDLE);
     },
   );
+
+  describe("Crawl with Wine picked", () => {
+    /** The Crawl dialog as the game's popup would draw it, Wine picked. */
+    function pickWineInCrawlDialog(): void {
+      const createPopup = (id: string, _title: string, html: string) =>
+        document.body.insertAdjacentHTML(
+          "beforeend",
+          `<div id="${id}">${html}</div>`,
+        );
+      Object.assign(window, { ikariam: { createPopup } });
+      actions["crawl.open"](document.body);
+      delete window.ikariam;
+      (document.querySelector("#ikaCrawl_wine") as HTMLInputElement).checked =
+        true;
+    }
+
+    beforeEach(() => {
+      downloadText.mockClear();
+    });
+
+    it(
+      "REGRESSION: scans, takes each town's measured consumption as Load " +
+        "then Save would, then saves the receiving towns' figures as a " +
+        "`const csv` snippet — a town never loaded into Auto Wine Settings " +
+        "was missing from the file although the scan had measured it",
+      async () => {
+        // Nothing saved as a receiver yet: only the scan knows M-Corinth drinks.
+        const state = await startWithSource();
+        pickWineInCrawlDialog();
+
+        await actions["crawl.run"](document.body);
+        await settle();
+
+        expect(scanBuildings).toHaveBeenCalledTimes(1);
+        expect(downloadText).toHaveBeenCalledTimes(1);
+        const [filename, text, mimeType] = downloadText.mock.calls[0];
+        expect(filename).toMatch(
+          /^ikariam-wine-tester-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}\.js$/,
+        );
+        expect(mimeType).toBe("text/javascript");
+        // Figures from the board the scan drew: the source holds 10,000 and
+        // keeps one hour (100), so 9,900 can go.
+        expect(text).toBe(
+          "const csv = `\n" +
+            "account,town,stock,consume,maxSupply\n" +
+            "tester, M-Corinth    , 0    , 200    , 9900\n" +
+            "`;\n",
+        );
+        // Saved as Auto Wine Settings' Load then Save would have, so the
+        // dialog's Wine/h shows the scan's figure without a Load.
+        expect(state.loadReceivers()).toEqual([
+          { townNumber: "1", winePerHour: "200" },
+        ]);
+        expect(document.querySelector("#ikaCrawl_wine")).toBeNull();
+      },
+    );
+
+    it("saves nothing, and changes no setting, when the scan refuses to run", async () => {
+      scanBuildings.mockResolvedValue(false);
+      const state = await startWithSource();
+      state.saveReceivers([{ townNumber: "1", winePerHour: "50" }]);
+      pickWineInCrawlDialog();
+
+      await actions["crawl.run"](document.body);
+      await settle();
+
+      expect(downloadText).not.toHaveBeenCalled();
+      expect(state.loadReceivers()).toEqual([
+        { townNumber: "1", winePerHour: "50" },
+      ]);
+    });
+
+    it("says so after the scan, and saves no file, when no town drinks wine", async () => {
+      scanBuildings.mockImplementation(async () => {
+        document.body.insertAdjacentHTML(
+          "beforeend",
+          `<div id="ResTab"><table><tbody>` +
+            boardRow("W-Athens", "10,000", "-100") +
+            boardRow("M-Corinth", "500", "0") +
+            `</tbody></table></div>`,
+        );
+        return true;
+      });
+      await startWithSource();
+      pickWineInCrawlDialog();
+
+      await actions["crawl.run"](document.body);
+      await settle();
+
+      expect(scanBuildings).toHaveBeenCalledTimes(1);
+      expect(downloadText).not.toHaveBeenCalled();
+      expect(showToast).toHaveBeenCalledWith(
+        expect.stringContaining("No town is set to receive wine"),
+      );
+    });
+  });
+});
+
+describe("the Crawl dialog", () => {
+  /** Draw the dialog the way the game's popup would. */
+  async function openCrawl(): Promise<void> {
+    await startWith({});
+    const createPopup = (id: string, _title: string, html: string) =>
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<div id="${id}">${html}</div>`,
+      );
+    Object.assign(window, { ikariam: { createPopup } });
+    try {
+      actions["crawl.open"](document.body);
+    } finally {
+      delete window.ikariam;
+    }
+  }
+
+  beforeEach(() => {
+    showToast.mockClear();
+    scanBuildings.mockReset();
+    downloadJson.mockClear();
+    downloadText.mockClear();
+  });
+
+  it(
+    "the panel's Crawl button opens it with one radio button per crawl, " +
+      "all in one group, none picked",
+    async () => {
+      await openCrawl();
+
+      expect(
+        document.querySelector('[data-ika-action="crawl.open"]')?.textContent,
+      ).toBe("Crawl");
+      // Every crawl the messages declare, so a new one is covered too.
+      const { CRAWL_DIALOG } = await import("./messages");
+      const kinds = Object.keys(CRAWL_DIALOG.kinds);
+      expect(kinds).toEqual(["building", "wine"]);
+      const choices = kinds.map((kind) =>
+        document.querySelector<HTMLInputElement>(`#ikaCrawl_${kind}`)!,
+      );
+      // REGRESSION: one group of radio buttons, not checkboxes — two crawls
+      // from one press ran side by side.
+      expect(choices.map((input) => input.type)).toEqual(
+        kinds.map(() => "radio"),
+      );
+      expect(new Set(choices.map((input) => input.name)).size).toBe(1);
+      expect(choices.some((input) => input.checked)).toBe(false);
+      expect(
+        document.querySelector('[data-ika-action="crawl.run"]'),
+      ).not.toBeNull();
+    },
+  );
+
+  it("with nothing picked, says so and crawls nothing", async () => {
+    await openCrawl();
+
+    await actions["crawl.run"](document.body);
+
+    expect(showToast).toHaveBeenCalledWith(
+      expect.stringContaining("Pick what to crawl"),
+    );
+    expect(scanBuildings).not.toHaveBeenCalled();
+    expect(downloadJson).not.toHaveBeenCalled();
+    expect(downloadText).not.toHaveBeenCalled();
+  });
+
+  it("with Building picked, saves the building open in the game's help", async () => {
+    await openCrawl();
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="buildingDetail"><h3 class="header">Academy</h3>` +
+        `<div class="content"><table class="table01">` +
+        `<tr><th>Level</th></tr><tr><td>1</td></tr><tr><td>2</td></tr>` +
+        `</table></div></div>`,
+    );
+    (document.querySelector("#ikaCrawl_building") as HTMLInputElement).checked =
+      true;
+
+    await actions["crawl.run"](document.body);
+
+    expect(downloadJson).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(downloadJson.mock.calls[0][1])).toMatchObject({
+      name: "Academy",
+      rows: [["1"], ["2"]],
+    });
+    expect(scanBuildings).not.toHaveBeenCalled();
+  });
 });
 
 describe("the Auto Build settings dialog", () => {
@@ -1055,6 +1243,24 @@ describe("Bug Report", () => {
       expect(report.log).toHaveLength(200);
       expect(report.log[0]).toBe("line 250");
       expect(report.log[199]).toBe("line 51");
+    },
+  );
+
+  it(
+    "REGRESSION: carries a log line as it was written, not HTML-escaped " +
+      "by a round trip through the log box's markup",
+    async () => {
+      await startWith({});
+      // This file silences `logInfo`; the real one writes the log box and
+      // the stored copy that Bug Report reads.
+      const { logInfo } =
+        await vi.importActual<typeof import("@core/logger")>("@core/logger");
+      logInfo('Going to town "A & B" <1>');
+      logInfo("next line");
+
+      const report = await pressBugReport();
+
+      expect(report.log[1]).toContain('Going to town "A & B" <1>');
     },
   );
 

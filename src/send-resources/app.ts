@@ -25,6 +25,7 @@ import { showToast } from "@core/ui/window";
 
 import {
   BUG_REPORT,
+  CRAWL_DIALOG,
   NOTIFICATIONS,
   QUEUE_VIEW,
   SEND_DIALOG,
@@ -53,8 +54,10 @@ import {
   handleSendResource,
 } from "./features/send-resources";
 import {
+  buildWineCsv,
   collectWineSettings,
   enqueueWineRun,
+  hasReceiversFor,
   loadConsumedWine,
   saveMeasuredReceivers,
 } from "./features/auto-wine";
@@ -98,6 +101,7 @@ import { calibrateShipCapacity } from "./ship-capacity";
 import { installActionDispatcher, registerActions } from "./ui/actions";
 import {
   downloadJson,
+  downloadText,
   exportDataToFile,
   importDataFromFile,
   timestampedFilename,
@@ -106,8 +110,11 @@ import {
   closeDialog,
   openAutoBuildDialog,
   openAutoWineDialog,
+  openCrawlDialog,
   openSendResourcesDialog,
   openWineSourceDialog,
+  readCrawlChoice,
+  type CrawlKind,
   readSendForm,
   refreshTownQueueCell,
   renderResourceTable,
@@ -151,6 +158,8 @@ const KEY_SAFEHOUSE = "KeyS";
 const BUG_SUMMARY_PREVIEW_CHARS = 800;
 /** Bug Report's file name starts with this, then the account and the time. */
 const BUG_REPORT_FILE_PREFIX = "ikariam-bug-report";
+/** Crawl's wine file name starts with this, then the account and the time. */
+const WINE_CRAWL_FILE_PREFIX = "ikariam-wine";
 
 let runner: TaskRunner;
 /** Keeps a second tab of the same account from driving the same queue. */
@@ -331,6 +340,52 @@ async function runAutoWine(fromTown: string): Promise<void> {
   saveMeasuredReceivers();
   if (!queueWineRun(fromTown)) return;
   if (!isAutoStart()) toggleQueueRunner();
+}
+
+/**
+ * Crawl's wine part, the first steps of Auto Wine's Start: scan every town
+ * and wait for it, take each town's measured consumption as Load then Save
+ * would, then save the receiving towns' wine figures as a `const csv`
+ * snippet. Nothing is saved when the scan refuses to run.
+ *
+ * The receivers come from the scan, not from what was saved before it: a
+ * town never loaded into Auto Wine Settings used to be missing from the file
+ * although the scan had just measured it.
+ */
+async function crawlWine(fromTown: string): Promise<void> {
+  if (!(await scanBuildings(undefined, () => runner.isRunning))) return;
+  saveMeasuredReceivers();
+  if (!hasReceiversFor(fromTown)) return;
+  const { accountName } = getState();
+  const csv = buildWineCsv(fromTown, accountName);
+  const filename = timestampedFilename(
+    accountName,
+    WINE_CRAWL_FILE_PREFIX,
+    "js",
+  );
+  downloadText(filename, csv.text, "text/javascript");
+  logInfo(`Saved the wine figures of ${csv.rows} towns: ${filename}`);
+  showToast(CRAWL_DIALOG.wineSaved(csv.rows, filename));
+}
+
+/**
+ * What each crawl of the Crawl dialog runs. A `Record` over every kind, so a
+ * crawl added to `CRAWL_DIALOG.kinds` without a run here does not compile.
+ */
+const CRAWLS: Record<CrawlKind, () => void> = {
+  building: saveBuildingHelpToFile,
+  wine: () => withWineSource("crawl.wineFrom", (town) => void crawlWine(town)),
+};
+
+/** The Crawl dialog's button: the one crawl picked. */
+function runCrawl(): void {
+  const kind = readCrawlChoice();
+  if (kind === null) {
+    showToast(CRAWL_DIALOG.nothingChosen);
+    return;
+  }
+  closeDialog();
+  CRAWLS[kind]();
 }
 
 /**
@@ -583,8 +638,14 @@ function registerUiActions(): void {
     /* ── Misc ── */
     "ship.calibrate": calibrateShipCapacity,
     "log.clear": clearLog,
-    // Temporary: saves the building shown in the game's help dialog.
-    "buildingHelp.save": saveBuildingHelpToFile,
+    "crawl.open": openCrawlDialog,
+    "crawl.run": runCrawl,
+    "crawl.wineFrom": (element) => {
+      const town = element.dataset.ikaTown;
+      if (!town) return;
+      closeDialog();
+      void crawlWine(town);
+    },
   });
 
   // The summary table's auto-build checkbox reacts to `change`, not `click`,

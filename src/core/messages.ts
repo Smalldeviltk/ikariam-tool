@@ -19,6 +19,10 @@ export const TIME_FINISHED = "Finished.";
 /** Tooltip of the close button on the shared window widget. */
 export const WINDOW_CLOSE_TITLE = "Close";
 
+/** Tooltips of the fold button on a collapsible window, by what it will do. */
+export const WINDOW_COLLAPSE_TITLE = "Collapse";
+export const WINDOW_EXPAND_TITLE = "Expand";
+
 export const BUGS_NONE_RECORDED = "No bugs recorded.";
 
 /** Why a notification switch stayed off (`notifications.ts`). */

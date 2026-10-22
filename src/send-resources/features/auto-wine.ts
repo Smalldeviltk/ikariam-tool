@@ -214,6 +214,70 @@ export function getSourceSupply(
   return cached ? Math.max(0, cached.stock - reserve) : 0;
 }
 
+/**
+ * Whether any configured receiver is not the source town itself. When none
+ * is, says why in a toast and returns false.
+ */
+export function hasReceiversFor(fromTown: string): boolean {
+  const configured = loadReceivers();
+  if (configured.some((r) => r.townNumber !== fromTown)) return true;
+  // Two quite different situations reach this point, and "No receiving towns
+  // configured for wine!" described neither well enough to act on. The
+  // common one is ticking most towns as Sender: the tick and the Wine/h
+  // figure are the two roles and `collectWineSettings` treats them as
+  // exclusive, so a ticked town can never be a receiver.
+  const senderCount = loadSenders().length;
+  const townCount = getTownList().length;
+  showToast(
+    configured.length === 0
+      ? AUTO_WINE.noReceivers(senderCount, townCount)
+      : AUTO_WINE.onlyReceiverIsSource,
+  );
+  return false;
+}
+
+/** Keeps text literal inside a JavaScript template literal. */
+function escapeTemplateLiteral(text: string): string {
+  return text
+    .replace(/\\/g, "\\\\")
+    .replace(/`/g, "\\`")
+    .replace(/\$\{/g, "\\${");
+}
+
+/**
+ * The receiving towns' wine figures as the snippet the player pastes into
+ * their own sheet:
+ *
+ *     const csv = `
+ *     account,town,stock,consume,maxSupply
+ *     Smalldevil1, S-Nuithanh    , 0    , 194    , 65000
+ *     `;
+ *
+ * One row per receiver Auto Wine would ship to from `fromTown`, with the
+ * same stock and hourly consumption it plans with. `maxSupply` is what the
+ * source can spare — its stock less one hour of its own consumption, the
+ * `supply` of `planWineRun` — and is the same on every row. The spacing
+ * copies the player's sample.
+ */
+export function buildWineCsv(
+  fromTown: string,
+  accountName: string,
+): { text: string; rows: number } {
+  const board = readWineBoard();
+  const receivers = loadReceivers().filter((r) => r.townNumber !== fromTown);
+  const maxSupply = Math.round(getSourceSupply(fromTown, board));
+  const lines = buildWineTowns(receivers, board).map(
+    (town) =>
+      `${accountName}, ${town.townName}    , ${Math.round(town.stock)}    , ` +
+      `${Math.round(town.consume)}    , ${maxSupply}`,
+  );
+  const body = ["account,town,stock,consume,maxSupply", ...lines].join("\n");
+  return {
+    text: "const csv = `\n" + escapeTemplateLiteral(body) + "\n`;\n",
+    rows: lines.length,
+  };
+}
+
 /** A distribution plan, plus what the source town could spare and keeps. */
 export interface WineRunPlan extends WineDistributionResult {
   /** Wine the source can ship, after its reserve. */
@@ -261,23 +325,7 @@ export function planWineRun(fromTown: string): WineRunPlan {
  * the plan was lost and the user had to remember to press Start again later.
  */
 export function enqueueWineRun(fromTown: string): number {
-  const configured = loadReceivers();
-  const receivers = configured.filter((r) => r.townNumber !== fromTown);
-  if (receivers.length === 0) {
-    // Two quite different situations reach this point, and "No receiving towns
-    // configured for wine!" described neither well enough to act on. The
-    // common one is ticking most towns as Sender: the tick and the Wine/h
-    // figure are the two roles and `collectWineSettings` treats them as
-    // exclusive, so a ticked town can never be a receiver.
-    const senderCount = loadSenders().length;
-    const townCount = getTownList().length;
-    showToast(
-      configured.length === 0
-        ? AUTO_WINE.noReceivers(senderCount, townCount)
-        : AUTO_WINE.onlyReceiverIsSource,
-    );
-    return 0;
-  }
+  if (!hasReceiversFor(fromTown)) return 0;
 
   const plan = planWineRun(fromTown);
   if (plan.supply <= 0) {

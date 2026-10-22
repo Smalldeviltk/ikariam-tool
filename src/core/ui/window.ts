@@ -19,7 +19,11 @@
  */
 
 import { ensureStyle, isTypingTarget } from "@core/dom";
-import { WINDOW_CLOSE_TITLE } from "@core/messages";
+import {
+  WINDOW_CLOSE_TITLE,
+  WINDOW_COLLAPSE_TITLE,
+  WINDOW_EXPAND_TITLE,
+} from "@core/messages";
 import type { Store } from "@core/storage";
 
 /** Where the window was left. Stored so it stays put across page loads. */
@@ -43,6 +47,11 @@ export interface WindowOptions {
   rememberOpen?: boolean;
   /** Open on creation; with `rememberOpen`, only until a state is stored. */
   openByDefault?: boolean;
+  /**
+   * A ▾ / ▸ button in the header folds the window down to its title bar and
+   * back. With `store`, the folded state is remembered across page loads.
+   */
+  collapsible?: boolean;
   onClose?: () => void;
 }
 
@@ -77,6 +86,11 @@ const DEFAULT_POSITION: WindowPosition = { left: 120, top: 120 };
 
 export const WINDOW_STYLE_ID = "ika-window-style";
 
+/** The header's fold button, on a `collapsible` window. */
+export const WINDOW_COLLAPSE_CLASS = "ika-window-collapse";
+/** On a window folded down to its title bar. */
+export const WINDOW_COLLAPSED_CLASS = "ika-window-collapsed";
+
 /**
  * The stylesheet, installed once for all windows.
  *
@@ -109,13 +123,18 @@ function windowStyles(): string {
   user-select: none;
 }
 .ika-window-title { font-weight: bold; font-size: 12px; }
-.ika-window-close {
+.ika-window-close,
+.ika-window-collapse {
   cursor: pointer;
   padding: 0 4px;
   font-weight: bold;
   line-height: 1;
 }
 .ika-window-close:hover { color: #a3301f; }
+.ika-window-collapse:hover { color: #6b5433; }
+.ika-window-collapsed .ika-window-header { border-bottom: none; border-radius: 3px; }
+.ika-window-collapsed .ika-window-body,
+.ika-window-collapsed .ika-window-footer { display: none; }
 .ika-window-body { overflow: auto; padding: 8px; }
 .ika-window-footer {
   padding: 4px 8px;
@@ -187,8 +206,12 @@ function makeDraggable(
   };
 
   handle.addEventListener("pointerdown", (event: PointerEvent) => {
-    // Let the close button do its job.
-    if ((event.target as HTMLElement)?.classList.contains("ika-window-close")) {
+    // Let the header's buttons do their job.
+    if (
+      (event.target as HTMLElement)?.closest?.(
+        `.ika-window-close, .${WINDOW_COLLAPSE_CLASS}`,
+      )
+    ) {
       return;
     }
     event.preventDefault();
@@ -227,10 +250,13 @@ export function createWindow(options: WindowOptions): GameWindow {
   root.style.top = `${position.top}px`;
   if (options.width) root.style.width = options.width;
 
+  const collapseButton = options.collapsible
+    ? `<span class="${WINDOW_COLLAPSE_CLASS}"></span>`
+    : "";
   root.innerHTML = `
     <div class="ika-window-header">
       <span class="ika-window-title"></span>
-      <span class="ika-window-close" title="${WINDOW_CLOSE_TITLE}">&#10005;</span>
+      <span>${collapseButton}<span class="ika-window-close" title="${WINDOW_CLOSE_TITLE}">&#10005;</span></span>
     </div>
     <div class="ika-window-body"></div>
     <div class="ika-window-footer"></div>`;
@@ -300,6 +326,25 @@ export function createWindow(options: WindowOptions): GameWindow {
   root
     .querySelector<HTMLElement>(".ika-window-close")!
     .addEventListener("click", () => api.close());
+
+  const collapse = root.querySelector<HTMLElement>(`.${WINDOW_COLLAPSE_CLASS}`);
+  if (collapse) {
+    const collapsedKey = `ikaWindowCollapsed_${options.id}`;
+    const showCollapsed = (collapsed: boolean) => {
+      root.classList.toggle(WINDOW_COLLAPSED_CLASS, collapsed);
+      collapse.textContent = collapsed ? "▸" : "▾";
+      collapse.title = collapsed ? WINDOW_EXPAND_TITLE : WINDOW_COLLAPSE_TITLE;
+    };
+    showCollapsed(
+      options.store?.getJSON<boolean>(collapsedKey, false) ?? false,
+    );
+    collapse.addEventListener("click", () => {
+      const collapsed = !root.classList.contains(WINDOW_COLLAPSED_CLASS);
+      showCollapsed(collapsed);
+      // Kept like the position: per machine, so out of the data export.
+      options.store?.setJSON(collapsedKey, collapsed);
+    });
+  }
 
   document.addEventListener("keydown", closeOnEscape);
 

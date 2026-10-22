@@ -15,6 +15,7 @@ import {
 } from "./auto-wine";
 import { saveTownStats } from "../town-cache";
 import {
+  buildWineCsv,
   buildWineTowns,
   enqueueWineRun,
   FALLBACK_WINE_RESERVE,
@@ -392,6 +393,55 @@ describe("enqueueWineRun", () => {
 
     expect(enqueueWineRun("0")).toBe(0);
     expect(getState().queue.length).toBe(0);
+  });
+});
+
+describe("buildWineCsv", () => {
+  it(
+    "writes one row per receiving town, with what the source can spare on " +
+      "every row, spaced like the player's sample",
+    () => {
+      document.body.innerHTML =
+        townDropdown(TOWNS) +
+        renderBoard([
+          boardRow("Athens", "50,000", "-525"),
+          boardRow("Sparta", "1,000", "-100"),
+          boardRow("Corinth", "2,000", "-1,000"),
+        ]);
+      // Athens is also configured as a receiver: as the source it is left out.
+      saveReceivers([
+        { townNumber: "0", winePerHour: "525" },
+        { townNumber: "1", winePerHour: "100" },
+        { townNumber: "2", winePerHour: "1000" },
+      ]);
+
+      const csv = buildWineCsv("0", "Smalldevil1");
+
+      // 50,000 less one hour of Athens' own 525 per hour.
+      expect(csv).toEqual({
+        rows: 2,
+        text:
+          "const csv = `\n" +
+          "account,town,stock,consume,maxSupply\n" +
+          "Smalldevil1, Sparta    , 1000    , 100    , 49475\n" +
+          "Smalldevil1, Corinth    , 2000    , 1000    , 49475\n" +
+          "`;\n",
+      });
+    },
+  );
+
+  it("keeps a backtick in a town name from ending the template literal", () => {
+    document.body.innerHTML =
+      townDropdown(["Athens", "Spar`ta"]) +
+      renderBoard([
+        boardRow("Athens", "5,000", "-100"),
+        boardRow("Spar`ta", "10", "-50"),
+      ]);
+    saveReceivers([{ townNumber: "1", winePerHour: "50" }]);
+
+    const { text } = buildWineCsv("0", "tester");
+
+    expect(text).toContain("tester, Spar\\`ta    , 10    , 50    , 4900");
   });
 });
 

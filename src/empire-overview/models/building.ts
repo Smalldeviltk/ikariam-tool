@@ -99,7 +99,12 @@ export function Building(city, pos) {
               name: this.getName,
               upgraded: this.isUpgrading != b,
             };
-            events(Constant.Events.BUILDINGS_UPDATED).pub([changes]);
+            // FIX (not in the original): the city id goes first, as every
+            // other publisher sends it; without it the board's handler found
+            // no city and the cell never turned upgradable on its own.
+            events(Constant.Events.BUILDINGS_UPDATED).pub(this.city().getId, [
+              changes,
+            ]);
             a = this.isUpgradable;
             b = this.isUpgrading;
           }

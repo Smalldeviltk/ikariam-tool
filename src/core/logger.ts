@@ -42,7 +42,7 @@ export function writeToConsole(
 export function initLogger(accountName: string): void {
   accountLabel = accountName;
   const box = qs<HTMLTextAreaElement>(`#${TEXTAREA_ID}`);
-  if (box) box.innerHTML = localStorage.getItem(LOGGER_STORAGE_KEY) ?? "";
+  if (box) box.textContent = localStorage.getItem(LOGGER_STORAGE_KEY) ?? "";
 }
 
 export function logInfo(message: string): void {
@@ -50,9 +50,12 @@ export function logInfo(message: string): void {
   const box = qs<HTMLTextAreaElement>(`#${TEXTAREA_ID}`);
 
   if (box) {
-    let next = line + box.innerHTML;
+    // Text, not markup: reading `innerHTML` back escaped every `&`, `<` and
+    // `>` (`&amp;`), and that escaped form was what got stored and reached
+    // Bug Report.
+    let next = line + (box.textContent ?? "");
     if (next.length > MAX_CHARS) next = next.slice(0, MAX_CHARS);
-    box.innerHTML = next;
+    box.textContent = next;
     localStorage.setItem(LOGGER_STORAGE_KEY, next);
   }
   writeToConsole("log", `[ika] ${line.trimEnd()}`);
@@ -72,6 +75,6 @@ export function recentLogLines(count: number): string[] {
 
 export function clearLog(): void {
   const box = qs<HTMLTextAreaElement>(`#${TEXTAREA_ID}`);
-  if (box) box.innerHTML = "";
+  if (box) box.textContent = "";
   localStorage.setItem(LOGGER_STORAGE_KEY, "");
 }

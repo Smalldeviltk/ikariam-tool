@@ -476,6 +476,9 @@ export class TaskRunner {
   start(): void {
     if (this.timer !== null) return;
     this.drained = false;
+    // A rest left from before a stop must not hold back a fresh start: the
+    // player pressed Start to run the queue now, not after the cooldown.
+    this.pausedUntil = 0;
     this.timer = window.setInterval(
       () => void this.tick(),
       this.options.intervalMs ?? DEFAULT_INTERVAL_MS,

@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { classifyKey } from "@core/data-transfer";
 import { isNotificationEnabled } from "@core/notifications";
 import { getState, initState } from "../state";
 import {
   buildPanel,
+  COLLAPSED_GROUPS_KEY,
+  GROUP_ATTR,
+  GROUP_COLLAPSED_CLASS,
   LAUNCHER_CLASS,
   NOTIFICATION_SWITCH_ATTR,
   setAutoBuildButtonLabel,
@@ -496,5 +500,106 @@ describe("the notification switches", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("folding the whole window", () => {
+  it("has a fold button in its header, and stays folded on the next load", () => {
+    buildPanel();
+    const win = () => document.querySelector<HTMLElement>(`#${WINDOW_ID}`)!;
+    win().querySelector<HTMLElement>(".ika-window-collapse")!.click();
+    expect(win().classList.contains("ika-window-collapsed")).toBe(true);
+
+    document.body.innerHTML = `<div id="container"></div><div id="footer"></div>`;
+    buildPanel();
+
+    expect(win().classList.contains("ika-window-collapsed")).toBe(true);
+    expect(classifyKey(`testerikaWindowCollapsed_${WINDOW_ID}`)).toBeNull();
+  });
+});
+
+describe("collapsing a group", () => {
+  /** The panel's group blocks, keyed by group. */
+  function groups(): Record<string, HTMLElement> {
+    return Object.fromEntries(
+      [...document.querySelectorAll<HTMLElement>(`[${GROUP_ATTR}]`)].map(
+        (block) => [block.getAttribute(GROUP_ATTR)!, block],
+      ),
+    );
+  }
+
+  function clickTitle(key: string): void {
+    groups()
+      [key].querySelector<HTMLElement>(".ika-group-title")!
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  }
+
+  const collapsedKeys = () =>
+    Object.entries(groups())
+      .filter(([, block]) => block.classList.contains(GROUP_COLLAPSED_CLASS))
+      .map(([key]) => key);
+
+  it("starts with every group open", () => {
+    buildPanel();
+
+    expect(Object.keys(groups())).toEqual([
+      "wine",
+      "transport",
+      "build",
+      "queue",
+      "account",
+      "data",
+      "notifications",
+    ]);
+    expect(collapsedKeys()).toEqual([]);
+  });
+
+  it("collapses a group from its title, and expands it again, leaving the others alone", () => {
+    buildPanel();
+
+    clickTitle("transport");
+    expect(collapsedKeys()).toEqual(["transport"]);
+    // Folded away, not removed: the timer label is still found and set.
+    setQueueButtonLabel(true);
+    expect(document.querySelector("#btnStartScript")!.textContent).toBe(
+      "Stop Timer",
+    );
+
+    clickTitle("transport");
+    expect(collapsedKeys()).toEqual([]);
+  });
+
+  it(
+    "REGRESSION: keeps a collapsed group collapsed on the next load — the " +
+      "script reloads the page every two minutes",
+    () => {
+      buildPanel();
+      clickTitle("wine");
+      clickTitle("data");
+      clickTitle("data");
+
+      document.body.innerHTML = `<div id="container"></div><div id="footer"></div>`;
+      buildPanel();
+
+      expect(collapsedKeys()).toEqual(["wine"]);
+      expect(getState().account.getJSON(COLLAPSED_GROUPS_KEY, [])).toEqual([
+        "wine",
+      ]);
+    },
+  );
+
+  it("hides a collapsed group's body and keeps its title", () => {
+    buildPanel();
+
+    const css = [...document.head.querySelectorAll("style")]
+      .map((style) => style.textContent)
+      .join("\n");
+    expect(css).toContain(
+      `#${WINDOW_ID} .${GROUP_COLLAPSED_CLASS} > .ika-group-body { display: none; }`,
+    );
+  });
+
+  it("stays out of the data export, like the window's position", () => {
+    expect(classifyKey(`tester${COLLAPSED_GROUPS_KEY}`)).toBeNull();
   });
 });

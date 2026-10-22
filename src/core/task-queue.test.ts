@@ -526,6 +526,24 @@ describe("TaskRunner", () => {
     expect(calls.length).toBeGreaterThan(afterLap);
   });
 
+  it("REGRESSION: a stop then a start runs at once instead of finishing the old rest", async () => {
+    queue.push(ship("1"));
+    queue.push(ship("2"));
+    const { runner, calls } = runnerWith(
+      { status: "defer" },
+      { deferCooldownMs: 60_000 },
+    );
+    runner.start();
+    await tick(2); // both tasks deferred -> a full lap, resting 60 s
+    const afterLap = calls.length;
+
+    runner.stop();
+    runner.start();
+    await tick();
+
+    expect(calls.length).toBeGreaterThan(afterLap);
+  });
+
   it("`progress` writes the remainder back in place", async () => {
     queue.push(ship("1", 500));
     const { runner } = runnerWith((t) => ({
