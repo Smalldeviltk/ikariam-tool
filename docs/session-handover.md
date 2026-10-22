@@ -10,7 +10,7 @@ It deliberately does **not** repeat the feature status. That lives in
 second. [project-summary.md](../project-summary.md) covers what the TypeScript
 port changed and what is still unverified.
 
-Last updated: 17/10/2026.
+Last updated: 22/10/2026.
 
 ---
 
@@ -282,7 +282,7 @@ and `improvement-plan.md` §2.W:
 The documents for §20 and §21 are `e36516a`; the user's s303 crawl went in
 as `180fead`; all at the user's request.
 
-**05/10: a review of all of `src`, and its fixes — not committed, in the
+**05/10: a review of all of `src`, and its fixes — committed later as `1baf274` (docs `772a055`), in the
 05/10 02:03 `dist/`, not tried on the game** — see §22, and
 `improvement-plan.md` §2.X; the full report is
 `sample/review-source/review-src-2026-10-04.md` (gitignored):
@@ -304,7 +304,7 @@ as `180fead`; all at the user's request.
   test names (rule 11); dead code gone, the board's Website and Report Bug
   buttons included; three new test files. 645 → 698 tests, 38 files.
 
-**17/10: two changes the user asked for — not committed, not in `dist/`, not tried on the game** — see §23, and
+**17/10: two changes the user asked for — committed later as `21464dd` (docs `534f066`), pushed; not in `dist/`, not tried on the game** — see §23, and
 `improvement-plan.md` §2.Y:
 
 - **Auto Wine ships to the town with the fewest hours of wine left first.**
@@ -318,7 +318,32 @@ as `180fead`; all at the user's request.
 
 **The git facts in §1 were stale and are corrected there:** §22 is committed
 (`1baf274` code, `772a055` docs) and `origin/refactor` is at `772a055`, so
-nothing was unpushed on 17/10.
+nothing was unpushed on 17/10. **Checked again 22/10:** §23 is committed too
+(`21464dd` code, `534f066` docs), `origin/refactor` is at `534f066` = `HEAD`,
+and `git status --short` is empty.
+
+**22/10, later still: the Send Resources panel's groups collapse — not
+committed; in the 22/10 `dist/`; not tried on the game** — see §26, and
+`improvement-plan.md` §2.AB. A click on a group's title folds it away and
+back, and a ▾/▸ button in the header folds the whole window to its title
+bar; both are remembered across loads.
+
+**22/10, later: Crawl Building became Crawl — not committed; in the 22/10
+`dist/`; not tried on the game** — see §25, and `improvement-plan.md` §2.AA.
+The panel's button opens a dialog with **one radio button per crawl** (first
+built with checkboxes; changed at the user's request, see the end of §25):
+**Building**
+(the old crawl) and **Wine**, which scans every town and saves Auto Wine's
+receiving towns as a `const csv = \`…\`;` snippet (`account, town, stock,
+consume, maxSupply`).
+
+**22/10: three small fixes from the review's 💡 list — not committed; in the
+22/10 `dist/` built on Linux, which holds §23 too; not tried on the game** —
+see §24, and `improvement-plan.md` §2.Z: the board's status poll publishes
+the city id, so a building cell turns upgradable by itself; a runner that
+is stopped and started again does not sit out an old rest; the log is
+stored as text, not HTML-escaped. **The paragraph below names the 05/10
+`dist/`; the 22/10 build replaces it** — it is the one to install.
 
 **Next:** reinstall both userscripts from the 05/10 02:03 `dist/` (it holds
 §20–§22) and the user tries §17–§22 on the game — for E, one upgrade that
@@ -343,12 +368,13 @@ working between loads) is
 |             |                                                                  |
 | ----------- | ---------------------------------------------------------------- |
 | Branch      | `refactor`, tracking `origin/refactor`                            |
-| Pushed      | **Checked 17/10: `origin/refactor` is at `772a055` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0 — everything below is pushed.** The rest is the 05/10 note, kept for the commit list: `origin/refactor` was at `066eb44` (the plan's §2.I–2.J docs), pushed by the user; §10's `1f7c0e7` and `4841fb9` are before it, so pushed too (checked with `git log origin/refactor..HEAD` on 02/10). **Seventeen local commits since, not pushed** (`git rev-list --count origin/refactor..HEAD` = 17 on 05/10, at `180fead`): §11 is `6ed66c6` + `c38dca4`, its docs `b9f1d7a`; §12 and §13 are one code commit, `4f9436c` (25 files in `src/`), and one docs commit, `3209964`; §14 is `7ed3a85` (15 files), its docs `b45f792`; §15–§17 are `32fe3ba`, their docs `ec3fdc4`; §18 is `b2e9084` and `3f8a51b` (the user's `barbarian.ts` change); §19 is `c78b49e` (32 files in `src/`, two of them new), its docs `0da427b`; §20 is `cefcc92`, §21 is `9c363f7`, their docs `e36516a`; the s303 crawl `180fead` |
+| Checkout (22/10) | The 22/10 session ran on Linux, in `/data/Projects/dump/ikariam-tool`, with Node v20.20.2 and npm 10.8.2. That checkout has no `node_modules/`, `dist/`, `sample/` or `tools/output/` (dependencies, build output and gitignored folders), so tests, the build, the bug report files and the review report were not available there. The PowerShell and CRLF traps in §4 come from the earlier Windows checkout (`D:\Working\Ika`) |
+| Pushed      | **Checked 22/10: `origin/refactor` is at `534f066` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0.** **Checked 17/10: `origin/refactor` is at `772a055` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0 — everything below is pushed.** The rest is the 05/10 note, kept for the commit list: `origin/refactor` was at `066eb44` (the plan's §2.I–2.J docs), pushed by the user; §10's `1f7c0e7` and `4841fb9` are before it, so pushed too (checked with `git log origin/refactor..HEAD` on 02/10). **Seventeen local commits since, not pushed** (`git rev-list --count origin/refactor..HEAD` = 17 on 05/10, at `180fead`): §11 is `6ed66c6` + `c38dca4`, its docs `b9f1d7a`; §12 and §13 are one code commit, `4f9436c` (25 files in `src/`), and one docs commit, `3209964`; §14 is `7ed3a85` (15 files), its docs `b45f792`; §15–§17 are `32fe3ba`, their docs `ec3fdc4`; §18 is `b2e9084` and `3f8a51b` (the user's `barbarian.ts` change); §19 is `c78b49e` (32 files in `src/`, two of them new), its docs `0da427b`; §20 is `cefcc92`, §21 is `9c363f7`, their docs `e36516a`; the s303 crawl `180fead` |
 | Committed 02/10 | At the user's request, in two commits as before: code and tests, then the two documents. The commit message went through a file (`git commit -F`): PowerShell 5.1 splits a here-string passed to a native command at its double quotes, and the first attempt failed with "pathspec did not match" — nothing was committed by it |
 | Committed 03/10 | §14, at the user's request, the same way: `7ed3a85` (code and tests), `b45f792` (the two documents), messages through `git commit -F`. `barbarian.ts` was left out (below) |
 | Committed 04/10 | At the user's request, each time asked for in that turn: §15–§17 as `32fe3ba` (code and tests) and `ec3fdc4` (the two documents); then §18 as `b2e9084`, and — the user asked for `barbarian.ts` to go in too — its change on its own as `3f8a51b`. Messages through `git commit -F`. The documents were not updated for §18 until the §19 round. §19 the same afternoon, again at the user's request: `c78b49e` (code and tests, `src/core/notifications.ts` and its test added) and `0da427b` (the two documents). In the evening, asked for in the turn after §21: `cefcc92` (§20, `render.ts` and its test), `9c363f7` (§21, `build/build-extension.mjs`), then the two documents |
-| Uncommitted | **17/10: §23** — `src/send-resources/features/auto-wine.ts`, `auto-wine.test.ts`, `src/send-resources/ui/styles.ts`, and both documents. **§22 was committed after the next sentence was written** (`1baf274` code, `772a055` docs). The 05/10 row, kept for the file list: §22 (05/10): 55 modified files — 52 in `src/`, `build/vite.empire-overview.ts`, `project-summary.md` and both documents — and three new test files the user agreed to (`src/core/dom.test.ts`, `src/send-resources/features/summary-account.test.ts`, `src/send-resources/ui/data-transfer-ui.test.ts`). **Modified or untracked and the user's, left out of every commit:** `.gitignore`, `docs/So_sanh_2_script_Ikariam.md`. `docs/wiki/s303/` (their crawl, the source of §19's levels past 50) was committed at the user's request on 04/10 evening as `180fead` |
-| Tests       | **38 files, 699 tests, all passing (17/10, after §23)**; 698 after §22; before it 35 files, 645 tests (645 after §20; 500 before §12, 515 after it, 537 after §13, 560 after §14, 567 after §15, 569 after §16's first round, 578 after §16, 583 after §17, 605 after §18 and §19's 2.6 and R, 608 after K, 627 after J, 640 after E, 641 after 2.8, 643 after the s303 levels). §11 added no test (see §11). Prettier: `core/ikariam/http.test.ts`, `send-resources/features/transport-buttons.test.ts` and `send-resources/town-cache.test.ts` are off its format at `HEAD` already — not reflowed; §19's tests appended to `http.test.ts` were formatted on their own and checked |
+| Uncommitted | **22/10, after §26:** §26's `src/send-resources/ui/panel.ts` (+ test), `src/core/ui/window.ts` (+ test), `src/core/messages.ts`, and §24's files — `src/core/logger.ts`, `src/core/task-queue.ts` (+ test), `src/empire-overview/models/building.ts` (+ test) — and §25's — `src/send-resources/app.ts`, `features/auto-wine.ts` (+ test), `features/building-help-crawler.ts`, `messages.ts`, `ui/dialogs.ts`, `ui/panel.ts`, `ui/data-transfer-ui.ts` (+ test) — plus `src/send-resources/app.test.ts` (both rounds) and both documents. Before §24 the tree was clean (`git status --short` empty). §23 was committed after the 17/10 note below (`21464dd` code, `534f066` docs). The user's `.gitignore` change no longer differs from `HEAD`, and `docs/So_sanh_2_script_Ikariam.md` is not on disk in the 22/10 checkout; it is listed in `.gitignore`. The 17/10 note, kept for the file list: **§23** — `src/send-resources/features/auto-wine.ts`, `auto-wine.test.ts`, `src/send-resources/ui/styles.ts`, and both documents. **§22 was committed after the next sentence was written** (`1baf274` code, `772a055` docs). The 05/10 row, kept for the file list: §22 (05/10): 55 modified files — 52 in `src/`, `build/vite.empire-overview.ts`, `project-summary.md` and both documents — and three new test files the user agreed to (`src/core/dom.test.ts`, `src/send-resources/features/summary-account.test.ts`, `src/send-resources/ui/data-transfer-ui.test.ts`). **Modified or untracked and the user's, left out of every commit:** `.gitignore`, `docs/So_sanh_2_script_Ikariam.md`. `docs/wiki/s303/` (their crawl, the source of §19's levels past 50) was committed at the user's request on 04/10 evening as `180fead` |
+| Tests       | **38 files, 721 tests, all passing (22/10, after §26's window fold, on Linux)**; 715 before it; 710 after §25; 701 after §24; 699 after §23 (17/10, and again 22/10 before §24); 698 after §22; before it 35 files, 645 tests (645 after §20; 500 before §12, 515 after it, 537 after §13, 560 after §14, 567 after §15, 569 after §16's first round, 578 after §16, 583 after §17, 605 after §18 and §19's 2.6 and R, 608 after K, 627 after J, 640 after E, 641 after 2.8, 643 after the s303 levels). §11 added no test (see §11). Prettier: `core/ikariam/http.test.ts`, `send-resources/features/transport-buttons.test.ts` and `send-resources/town-cache.test.ts` are off its format at `HEAD` already — not reflowed; §19's tests appended to `http.test.ts` were formatted on their own and checked |
 | Typecheck   | Clean (`tsc --noEmit` and the strict config)                      |
 | Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 01/10 at 02:23 and contains §11 (grepped: `Crawl Building` and `building-help-` in Send Resources; the new Academy figure `568954467` present and the old `582271779` gone, `winePressSavingPercent` and the time `12873600` in Empire Overview; `Math.min(50, …)` in Send Resources' `modelWineConsumption`). Earlier markers were checked in earlier builds: §2.I–2.J (`ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows`) and §10 (`ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save`, `capped`). **`dist/` was rebuilt by the user on 03/10 at 22:54 from the working tree and holds §12 to §15** (grepped in Send Resources: `wine.autoRun`, `ika-move`, `ika_pendingTownSwitch`, `to spare, less than one`, `ikaWindowOpen_`, `js-ika-build-time-buff`, `translateX(-146px)`, `ikariam-bug-report`, `then cleared them`, `createPopupSource`, and no `"???"` left; in Empire Overview: `listAccount` and `entry.length === 2 && typeof entry[0] === "string" && entry[1] === null`). It was built before §15 was committed, so it matches the working tree, not a commit. **The userscripts installed in the browser were older than that 22:54 `dist/`** (§2). **Rebuilt 04/10 at 09:09 with §16** (grepped: `?view=transport&destinationCityId=`, `shipment form to close`, `was sent `, `Move up`; Empire Overview writes the month as `month = 2592e3` — the minifier's form of 2592000) — the build the user tried on the game (§17). **Rebuilt again at 09:44 with §17** (grepped: `ika-queue-scroll`, `resourceTableScroll`, and the `dialog.close` button after `build.save`). **Rebuilt 04/10 at 13:11 from the working tree, with §18 and §19** (grepped: `ika-building-level` in Send Resources; `empire_quickUpgrade`, `stockTip_stock`, `empire_syncIndicator` and Academy level 51's time `15379200` in Empire Overview; `ikaNotifications` and `ikaQuickUpgradeTrace` in both). It matched the working tree at 13:11, not a commit. **Rebuilt 04/10 at 21:21, holding §20 and §21** (grepped: `quick upgrade refresh` in `Ikariam Empire Overview -VN-.user.js` and in `extension/page/empire-overview.js`; `dist/extension/manifest.json` has `exclude_globs`). `dist/extension/` was rebuilt in this session with `npm run build:extension`, which builds the extension only; the two userscripts carry 21:21 too, so the user built them. It matched `9c363f7`. **Rebuilt 05/10 at 02:03 with `npm run build` in this session, from the working tree, holding §22** (grepped: `event subscriber` and `quick upgrade refresh` in Empire Overview, `ika_oneOffRunTypes` in Send Resources, in both the userscripts and the extension; no `GM_xmlhttpRequest` left in Empire Overview's header). That is the current `dist/`; it matches the working tree, not a commit. **The installed userscripts are older** — reinstall both before trying anything; the extension has never loaded before §21 |
 
@@ -1826,13 +1852,15 @@ concrete bug; F, G, I, M, N, O, Q are "not now" by the user's choice.
   `sample/review-source/review-src-2026-10-04.md` with `file:line`:
   - **Every 💡 item**, among them: the module's `actionRequest` always wins
     over a newer one in the model (server behaviour unmeasured);
-    `_statusPoll` publishes with no city id, so a cell does not turn
-    upgradable by itself; action points read "N/undefined" past Town Hall
-    level 65; Auto Wine does not count wine already at sea; a storage write
-    failing after a successful shipment re-runs it; `TabLock` swallows a
-    rejection; `start()` does not reset `pausedUntil`; the log is kept
-    escaped (`&amp;`) through the textarea's `innerHTML`; the IkaLogs setting
-    loads a third-party script; time constants and magic numbers.
+    ~~`_statusPoll` publishes with no city id, so a cell does not turn
+    upgradable by itself~~ *(fixed 22/10, §24)*; action points read
+    "N/undefined" past Town Hall level 65; Auto Wine does not count wine
+    already at sea; a storage write failing after a successful shipment
+    re-runs it; `TabLock` swallows a rejection; ~~`start()` does not reset
+    `pausedUntil`~~ *(fixed 22/10, §24)*; ~~the log is kept escaped
+    (`&amp;`) through the textarea's `innerHTML`~~ *(fixed 22/10, §24)*;
+    the IkaLogs setting loads a third-party script; time constants and
+    magic numbers.
   - **Not verified:** that a fetched Palace/Museum view carries `changeView`
     with that name (what made 🔴 1 fire — the isolation covers it either
     way); the page's jQuery version.
@@ -1862,7 +1890,7 @@ What was reviewed and why each finding was or was not fixed is
 
 `.gitignore` is modified and `docs/So_sanh_2_script_Ikariam.md` is untracked;
 both were so before either 25/09 round — not part of this work, and left out
-of every commit.
+of every commit. *(22/10: neither shows in `git status` any more — see §1.)*
 
 Per §7, grep `dist/` before believing a fix reached the bundle. (The note
 that stood here said `dist/` predated this review; it has been rebuilt since
@@ -2624,7 +2652,7 @@ Chrome → paste it; a page that misbehaves → Bug Report, as usual.
 
 ## 22. 05/10: a review of all of `src`, and its fixes
 
-**Not committed; in `dist/` (05/10 02:03, grepped); not tried on the game.**
+**Committed later as `1baf274` (docs `772a055`); in `dist/` (05/10 02:03, grepped); not tried on the game.**
 The plan's write-up, in Vietnamese, is §2.X (a table of every fix); the
 facts are in §2 ("Added 05/10"), the decisions in §5, the traps in §4, the
 leftovers in §7. The review itself, finding by finding, is
@@ -2704,7 +2732,7 @@ matching test run, then the file restored (§4's round trip, plus a Node
 
 ## 23. 17/10: Auto Wine's shipping order, and Auto Build Settings' width
 
-**Not committed; not in `dist/`; not tried on the game.** The plan's write-up,
+**Committed later as `21464dd` (docs `534f066`), pushed; not in `dist/`; not tried on the game.** The plan's write-up,
 in Vietnamese, is §2.Y. 698 → 699 tests, 38 files; typecheck (both configs)
 and prettier clean.
 
@@ -2752,3 +2780,260 @@ the fewest hours first and ships in that order; Auto Build Settings with many
 towns queued → the dialog stops at 1250px, scrolls sideways, the columns keep
 their width, "List Building" stays put. Without a build, the CSS can be tried
 from the console with a `<style>` on `#ikaMationTransporterDialog #autoBuildTable`.
+
+---
+
+## 24. 22/10: three fixes from the review's 💡 list
+
+**Not committed; in the 22/10 `dist/` (built on Linux, grepped); not tried
+on the game.** The plan's write-up, in Vietnamese, is §2.Z. The user asked
+for "the things that can be done" from the remaining plan; these three were
+the 💡 items whose fix has one obvious shape. The others need a measurement
+or a choice (§7). 699 → 701 tests, 38 files; typecheck (both configs) and
+prettier clean on every file touched.
+
+| What | Where |
+| ---- | ----- |
+| The status poll publishes `BUILDINGS_UPDATED` as `(cityId, [changes])`, as `completeUpgrade` and `City` do. It sent `([changes])`, so `render.updateChangesForCityBuilding(cityID, changes)` looked a city up by an array, found none, and a cell never turned upgradable (or back) by itself | `empire-overview/models/building.ts`, `startUpgradeTimer` |
+| `TaskRunner.start()` clears `pausedUntil`. A Stop then a Start inside the 60 s rest after a full lap of `defer` ran nothing until the rest was over | `core/task-queue.ts` |
+| The logger reads and writes the log box with `textContent`, not `innerHTML`. Reading `innerHTML` back escaped `&`, `<`, `>`, and that escaped text was stored and reached Bug Report | `core/logger.ts` |
+
+**Tests, and each seen red** (a Node script took the fix out, ran the one
+test file, and put the file back from a copy; `md5sum -c` confirmed all
+three restored):
+
+- `building.test.ts`, "polls the building itself": the city stub has an id,
+  and the subscriber now takes `(cityId, changes)` and expects the id. Red
+  with `pub([changes])` back. The old version of this test asserted the
+  buggy shape (`seen[0][0]` was the changes).
+- `task-queue.test.ts` (+1): two shipments defer, a lap rests 60 s, Stop,
+  Start, one tick → a handler call. Red without the reset.
+- `app.test.ts`, "Bug Report" (+1): a line with `"A & B" <1>` reaches the
+  report unescaped. Red with `innerHTML` back. This file mocks `logInfo`, so
+  the test calls the real one through `vi.importActual`; Bug Report reads
+  the stored copy, not the module. There is no `core/logger.test.ts`, and a
+  new file was not asked for.
+
+**Known, not done:**
+
+- Log lines stored before this build are still escaped (`&amp;`) and now
+  show as such in the box and in Bug Report, until the 100,000-character
+  cap pushes them out. Not converted.
+- With the status poll fixed, every building's 3 s poll now actually
+  redraws its cell on a change, and `database.SaveSoon` (also subscribed)
+  runs on each — the same path `completeUpgrade` already takes. Load not
+  measured on a full empire.
+
+**What to try on the game:** a town short of resources for an upgrade —
+once production makes it affordable, its Build-tab cell turns upgradable
+within a few seconds, with no scan; Stop Timer then Start Timer while the
+panel log says "pausing for 60s" — the queue runs at once; a town name with
+`&` in the log, then Bug Report — the file shows `&`, not `&amp;`.
+
+---
+
+## 25. 22/10, later: Crawl Building becomes Crawl, with a wine crawl
+
+**Not committed; in the 22/10 `dist/` (grepped); not tried on the game.**
+The plan's write-up, in Vietnamese, is §2.AA. 701 → 710 tests, 38 files;
+typecheck (both configs) and prettier clean on every file touched.
+
+**Asked for by the user:** the panel button becomes **Crawl**; it opens a
+dialog with a checkbox per crawl, the old building crawl being one of them;
+a new **Wine** crawl saves
+
+```
+const csv = `
+account,town,stock,consume,maxSupply
+Smalldevil1, S-Nuithanh    , 0    , 194    , 65000
+`;
+```
+
+where `maxSupply` is the wine the source town can ship.
+
+**Chosen by the user** (four questions, each offered with options):
+
+- The rows are **Auto Wine's receiving towns**, without the source — the
+  list `planWineRun` splits wine between.
+- `maxSupply` is **the source's stock less one hour of its own
+  consumption** — `getSourceSupply`, the `supply` Auto Wine plans with — on
+  every row. Several ticked sources → the source popup, as Start does.
+- **Scan first, then read** (as Auto Wine's Start); a scan that refuses to
+  run (a timer on) saves nothing.
+- **Saved as a file**, `ikariam-wine-<account>-<UTC time>.js`, holding
+  exactly the snippet. The spacing copies the sample: four spaces before
+  each comma, one after.
+
+**Chosen here:** stock and consumption are rounded to whole units
+(`Math.round`); a town with no measured figures takes its Wine/h and a stock
+of 0, as `buildWineTowns` does for Auto Wine; a backtick, backslash or `${`
+in a town name is escaped so the file stays valid JavaScript (a comma in a
+name is not — it would add a CSV column); with both boxes ticked the
+building is saved first, since the wine part waits for a scan; the boxes
+start unticked and are not remembered; the dialog closes when Crawl runs.
+
+| What | Where |
+| ---- | ----- |
+| `buildWineCsv(fromTown, accountName)`; `hasReceiversFor` (the receivers check and its toasts, moved out of `enqueueWineRun` to share them); `escapeTemplateLiteral` | `send-resources/features/auto-wine.ts` |
+| `crawlWine` (receivers → scan → file), `runCrawl`; actions `crawl.open`, `crawl.run`, `crawl.wineFrom`; `buildingHelp.save` removed | `send-resources/app.ts` |
+| `openCrawlDialog`, `readCrawlChoice` (checkboxes `#ikaCrawlBuilding`, `#ikaCrawlWine` at first; *now radio buttons `#ikaCrawl_<kind>`, below*) | `send-resources/ui/dialogs.ts` |
+| `downloadText(filename, text, mimeType)` (`downloadJson` goes through it); `timestampedFilename(…, extension = "json")` | `send-resources/ui/data-transfer-ui.ts` |
+| `PANEL.crawl` ("Crawl") in place of `crawlBuildingHelp`; `CRAWL_DIALOG`; `BUILDING_CRAWL.noDialog` names the new route | `send-resources/messages.ts`, `ui/panel.ts`, `features/building-help-crawler.ts` |
+
+**Tests, and each seen red** (`break-fix.mjs` in the session scratchpad: one
+piece taken out, one test file run, the file restored; `md5sum -c` OK for
+all four sources):
+
+- `auto-wine.test.ts`, `buildWineCsv` (+2): the exact text for two
+  receivers with the source also configured as one — red with the source
+  kept; a backtick in a name — red without the escape.
+- `app.test.ts`, "Crawl with Wine ticked" (+3, inside "Auto Wine", to reuse
+  its board and dropdown): scan, then the exact file — filename, type and
+  text, read from the board the scan mock draws; nothing saved when the
+  scan refuses; no scan and no file with no receiver. Both of the first two
+  red with the scan wait taken out.
+- `app.test.ts`, "the Crawl dialog" (+3): the panel's button reads Crawl
+  and the dialog has both boxes — red with the old action on the button;
+  nothing ticked → toast, nothing crawled — red without the guard; Building
+  ticked → the help page saved — red without that line.
+- `data-transfer-ui.test.ts` (+1): another extension — red with `.json`
+  hard-coded.
+
+**Known, not measured:**
+
+- **Whether opening the Crawl dialog closes the game's Help page.** The
+  dialog goes through the game's `createPopup`, as every settings dialog
+  does; `#buildingDetail` is read only after Crawl is pressed. If the help
+  page is gone by then, Building answers with its "open Help first" toast —
+  the fallback would be to read the help page before the dialog opens.
+- A scan that falls back to walking (model unreadable) ends in
+  `backToCity`, which can reload the page; the file is then never saved —
+  the same limit as Auto Wine's Start (§12).
+- `maxSupply` is the same on every row by design; it is not split.
+
+**What to try on the game:** Help > building details open on a building →
+Crawl → pick Building → Crawl: the JSON file as before. Then Crawl → pick
+Wine → Crawl (timers off): "Sync finished", then `ikariam-wine-….js` with
+one row per receiving town; compare stock and consumption with the board.
+
+**Changed the same day, at the user's request: one crawl per press, and a
+list of crawls to grow.**
+
+- **Radio buttons, not checkboxes** — "to keep several crawls from one
+  press causing errors". One group (`name="ikaCrawlKind"`), none picked at
+  first; Crawl with none picked → "Pick what to crawl." The checkbox-only
+  choices above (building first when both ticked, boxes unticked) no longer
+  apply. The user offered radio or a dropdown; radio was taken here (two
+  choices, both visible at once).
+- **Each crawl is declared once.** Its label is a key of
+  `CRAWL_DIALOG.kinds` (`messages.ts`) — the dialog draws one radio per key,
+  in that order, id `ikaCrawl_<kind>` (`crawlRadioId`), and
+  `CrawlKind = keyof typeof CRAWL_DIALOG.kinds`. Its run is the entry of
+  `CRAWLS: Record<CrawlKind, () => void>` in `app.ts`; `runCrawl` calls
+  `CRAWLS[kind]()`. **A new crawl = one label + one run**; a label without a
+  run fails to compile.
+- **Seen red:** a third key added to `kinds` with no run →
+  `error TS2741: Property 'army' is missing … Record<"wine" | "building" |
+  "army", () => void>` (`app.ts:369`); `building` wired to a no-op → the
+  Building test; the inputs back to checkboxes → the radio test, which now
+  walks every key of `CRAWL_DIALOG.kinds`. (A first try at the compile check
+  patched nothing — a quoting slip in a `node -e` one-liner — and was
+  redone by hand.)
+- Tests: 710, unchanged in number (the dialog tests were rewritten for the
+  radios and the derived ids).
+
+**Fixed the same day — the wine file missed towns.** The user: "the scan
+seems not to take the last town of the board; the exported file has no last
+town; Auto Wine Settings needs Load". Checked:
+
+- **The scan reaches every town** (read from code, not measured on the
+  game): `syncAllTowns` walks every `ownCity` in `relatedCityData`. A
+  throwaway board test with three towns and three fetched responses
+  recorded each town's own wine and drew all three Resource rows; it was not
+  kept in the repo.
+- **The cause was this round's own choice.** Crawl Wine took the receivers
+  as saved (`loadReceivers`), while Auto Wine's Start re-measures them after
+  the scan (`saveMeasuredReceivers`, Load then Save). A town never loaded
+  into Auto Wine Settings — Wine/h 0 or empty — was left out of the file
+  although the scan had just measured it. Crawl also checked for receivers
+  before scanning, so a profile with none saved refused outright.
+- **Fix, the user's choice ("like Start, Load + Save, then the file"):**
+  `crawlWine` now scans, calls `saveMeasuredReceivers()`, then checks for
+  receivers and writes the file. Like Start, it overwrites the saved Wine/h
+  with the measured figures — so the settings dialog shows them without a
+  Load. The source town (ticked Sender) is still left out, by the user's
+  earlier choice — the likely reason the board's first town was missing too.
+- **Tests** (`app.test.ts`, "Crawl with Wine picked", rewritten): REGRESSION
+  — no receiver saved before, the scan measures M-Corinth, the file has its
+  row and the receivers are saved; a refused scan saves nothing and changes
+  no setting; with no town drinking, the scan runs, the no-receiver toast
+  shows and no file is saved. Red without `saveMeasuredReceivers()`, and red
+  with the receivers check back before the scan. 715 tests.
+- **Still not measured:** whether each fetched response describes the town
+  asked for on the live game; and the board's `CurrentCityId`
+  (`game-api.ts`), which falls back to the selected town when the page's
+  background is not the city view, so a scan from the island or world view
+  may record every fetched town's resources on the selected one — read from
+  code, not tried.
+
+---
+
+## 26. 22/10, later still: the panel's groups collapse
+
+**Not committed; in the 22/10 `dist/` (grepped); not tried on the game.**
+The plan's write-up, in Vietnamese, is §2.AB. 710 → 715 tests, 38 files;
+typecheck (both configs) and prettier clean on every file touched.
+
+**Chosen by the user** (two questions with options): each **group** of the
+panel collapses on its own — not the whole window, not the Transport
+Settings popup — and **the state is remembered** across loads.
+
+| What | Where |
+| ---- | ----- |
+| `group(key, body)` takes a key of `PANEL.groups`, not the title text: the block carries `data-ika-group="<key>"`, its body sits in `.ika-group-body`, and a group stored as collapsed is drawn with `ika-group-collapsed` | `send-resources/ui/panel.ts` |
+| `watchGroupTitles`: a click on `.ika-group-title` toggles the class and stores the collapsed keys under `ikaPanelCollapsedGroups` in the account store — next to the window's position and open state, and like them **unclassified, so out of the export** (chosen here). A `click` listener on the window content, as `watchNotificationSwitches` listens for `change` | `panel.ts` |
+| `groupStyles`: pointer cursor, ▾ open / ▸ collapsed, the body `display: none`. In `panel.ts` beside `menuEntryStyles`, not in `styles.ts`, because `styles.ts` importing from `panel.ts` would close an import cycle (`panel.ts` imports `buildStyles`) | `panel.ts` |
+
+All groups start open. The body is hidden, not removed, so code that finds
+a control inside it (the Start Timer labels, the queue list) still does.
+
+**Tests** (`ui/panel.test.ts`, +5), each seen red: every group open at
+first; a title click folds the group and a second click opens it, the
+others untouched, a label inside a folded group still updates — red without
+`watchGroupTitles`; REGRESSION: a folded group stays folded after the panel
+is built again — red when nothing is stored, and red when drawing ignores
+what is stored; the CSS hides the body — red without the rule; the key is
+not exported (`classifyKey` returns `null`). The first break of the "stored"
+part produced invalid syntax and the test file did not load ("no tests") —
+a mistake in the check, redone with a valid patch.
+
+**Not measured:** the look on the game (the arrows, the spacing); the
+queue's ten-row cap while the Queue group is folded — a box with no layout
+keeps its old cap and the next redraw with the group open sets it again,
+as when the window is closed.
+
+**What to try on the game:** click each group's title — it folds and opens;
+fold a few, reload — they stay folded; with Transport folded press nothing,
+open it — the Start Timer label is right.
+
+**Added the same day, asked for by the user: a button that folds the whole
+window.** ▾ / ▸ in the window's header, beside ✕, folds it down to its title
+bar (body and footer hidden) and back; it stays open and draggable, unlike
+✕. Remembered across loads, as the groups are (chosen here, following the
+user's "remember" for the groups).
+
+| What | Where |
+| ---- | ----- |
+| `createWindow`'s new `collapsible` option: `.ika-window-collapse` in the header (▾ / ▸, tooltips `WINDOW_COLLAPSE_TITLE` / `WINDOW_EXPAND_TITLE`); `ika-window-collapsed` on the window hides `.ika-window-body` and `.ika-window-footer`; with `store`, kept under `ikaWindowCollapsed_<id>` — unclassified, out of the export, like the position. The two header buttons share one `<span>` so `space-between` keeps the title left. The drag now skips both buttons (it skipped ✕ only) | `core/ui/window.ts`, `core/messages.ts` |
+| The panel passes `collapsible: true` | `send-resources/ui/panel.ts` |
+
+**Tests** (`core/ui/window.test.ts` +5, `ui/panel.test.ts` +1), each seen
+red: no button unless asked for; folds and unfolds, staying open — red when
+the click changes nothing; stays folded after the window is built again —
+red when the stored state is not read; the CSS hides body and footer — red
+without the rule; pressing the button does not drag — red with the drag
+guard back to ✕ only; the panel has the button and remembers — red without
+`collapsible`. 715 → 721 tests.
+
+The board bundle's own `tabs({ collapsible: true })` (jQuery UI, from the
+original) is unrelated; `window.ts` is not in that bundle.

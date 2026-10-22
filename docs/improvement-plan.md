@@ -1,8 +1,14 @@
 # Kế hoạch cải thiện — UI và tính năng
 
-> Trạng thái: **đang thực hiện.** Cập nhật 17/10/2026.
+> Trạng thái: **đang thực hiện.** Cập nhật 22/10/2026.
 >
-> **Mới nhất (§2.Y — 17/10, chưa commit, chưa build vào `dist/`, chưa thử trên game):** hai chỉnh sửa người dùng yêu cầu — **Auto Wine gửi cho town còn ít giờ rượu nhất trước** (trước đó theo thứ tự cấu hình), và **hộp thoại Auto Build Settings rộng tối đa 1250px**, cột đầu "List Building" ghim bên trái, các cột town cuộn ngang. 698 → 699 test.
+> **Mới nhất (§2.AB — 22/10, chưa commit, có trong `dist/` build 22/10, chưa thử trên game):** panel Send Resources **thu gọn / mở từng nhóm** bằng cách bấm tiêu đề nhóm, và **nút ▾/▸ thu gọn cả cửa sổ** về thanh tiêu đề; cả hai được nhớ qua các lần tải trang. 710 → 721 test.
+>
+> **§2.AA — 22/10, chưa commit, có trong `dist/` build 22/10, chưa thử trên game):** nút **Crawl Building** thành **Crawl**, mở dialog có **radio** cho từng việc crawl (bản đầu là checkbox, đổi theo yêu cầu; danh sách việc crawl khai báo một chỗ, dễ thêm loại mới): **Building** (crawl cũ) và **Wine** (mới — Scan rồi lưu file `const csv = \`…\`;` gồm `account, town, stock, consume, maxSupply` cho các town nhận của Auto Wine). 701 → 710 test.
+>
+> **§2.Z — 22/10, chưa commit, có trong `dist/` build 22/10 trên Linux, chưa thử trên game):** ba lỗi nhỏ trong danh sách 💡 của review 05/10 — ô công trình trên board **tự chuyển sang "có thể nâng"** (poll trạng thái gửi thiếu city id); **Stop rồi Start** runner chạy ngay thay vì chờ hết lượt nghỉ 60 s cũ; log lưu dạng **chữ thường**, không còn `&amp;`. 699 → 701 test.
+>
+> **§2.Y — 17/10, commit `21464dd` (tài liệu `534f066`), đã push; chưa build vào `dist/`, chưa thử trên game):** hai chỉnh sửa người dùng yêu cầu — **Auto Wine gửi cho town còn ít giờ rượu nhất trước** (trước đó theo thứ tự cấu hình), và **hộp thoại Auto Build Settings rộng tối đa 1250px**, cột đầu "List Building" ghim bên trái, các cột town cuộn ngang. 698 → 699 test.
 >
 > Đã xong: Phase 1 · Phase 2 phần panel (2.1–2.5) và phần board (2.6, 2.8) ·
 > A, B, C, D, E, H, J, K, S, T · R (mức tối thiểu) · U (thêm cấp > 50 từ
@@ -16,7 +22,7 @@
 > phần U còn thiếu số (§2.U phần 4) · R: kênh cập nhật riêng (chờ người
 > dùng). **Không làm lúc này** (người dùng chọn 04/10): F, G, I, M, N, O, Q.
 >
-> Git (17/10, đã kiểm lại): `origin/refactor` ở `772a055` = `HEAD`, **không còn commit nào chưa push**; §2.X đã commit (`1baf274` code, `772a055` tài liệu). Chưa commit: §2.Y (`auto-wine.ts`, `auto-wine.test.ts`, `styles.ts`) và hai tài liệu này. Đoạn sau là danh sách commit cũ (05/10), giữ để tra; lúc viết nó ghi `origin/refactor` ở `066eb44` và 17 commit chưa push —
+> Git (22/10, đã kiểm lại): `origin/refactor` ở `534f066` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Y đã commit (`21464dd` code, `534f066` tài liệu). Checkout 22/10 chạy trên Linux, không có `node_modules/`, `dist/`, `sample/`, `tools/output/` (handover §1). Ghi chú 17/10, giữ để tra: `origin/refactor` ở `772a055` = `HEAD`, **không còn commit nào chưa push**; §2.X đã commit (`1baf274` code, `772a055` tài liệu). Chưa commit: §2.Y (`auto-wine.ts`, `auto-wine.test.ts`, `styles.ts`) và hai tài liệu này. Đoạn sau là danh sách commit cũ (05/10), giữ để tra; lúc viết nó ghi `origin/refactor` ở `066eb44` và 17 commit chưa push —
 > `6ed66c6`, `c38dca4`, `b9f1d7a` (U + V), `4f9436c`, `3209964` (§2.K + §2.L),
 > `7ed3a85`, `b45f792` (§2.M), `32fe3ba`, `ec3fdc4` (§2.N → §2.R), `b2e9084`
 > (§2.S), `3f8a51b` (thay đổi `barbarian.ts` của người dùng, commit riêng
@@ -31,13 +37,15 @@
 > `src/send-resources/features/summary-account.test.ts`,
 > `src/send-resources/ui/data-transfer-ui.test.ts` — người dùng đồng ý tạo).
 > `.gitignore` và `docs/So_sanh_2_script_Ikariam.md` là của người dùng —
-> không tự đưa vào commit. **`dist/` 05/10 02:03** (`npm run build` trong
+> không tự đưa vào commit. *(22/10: `.gitignore` không còn khác `HEAD`;
+> `So_sanh_2_script_Ikariam.md` không có trong checkout này và đã nằm trong
+> `.gitignore`.)* **`dist/` 05/10 02:03** (`npm run build` trong
 > phiên, từ working tree): có §2.V, §2.W và §2.X (đã grep `event subscriber`
 > và `quick upgrade refresh` trong Empire Overview, `ika_oneOffRunTypes` trong
 > Send Resources, ở cả userscript lẫn extension; header Empire Overview không
 > còn `GM_xmlhttpRequest`). **Người dùng chưa cài lại / chưa load lại.**
 >
-> **Mới nhất (§2.X — 05/10, chưa commit, có trong `dist/` 02:03, chưa thử
+> **Mới nhất (§2.X — 05/10, commit sau đó `1baf274` (tài liệu `772a055`), có trong `dist/` 02:03, chưa thử
 > trên game):** review toàn bộ `src` theo
 > `sample/prompt/review-source-workflow.md` (6 agent, báo cáo ở
 > `sample/review-source/review-src-2026-10-04.md`) rồi sửa theo thứ tự đề
@@ -281,8 +289,8 @@ một thứ ta đã biết là yếu.
 | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
 | 1.1 ✅ | **Xác minh trước.** Một lệnh gọi tay trong crawler, bắn đúng một request `view=townHall&cityId=X&ajax=1` và dump shape response. Không bao giờ tự chạy.                                                                                                                                                                                   | `tools/collect-dom-report.js`               |
 | 1.2 ✅ | `ikariamRequest(params)` — thêm `actionRequest` + `ajax=1`, throttle, timeout, trả về mảng đã parse                                                                                                                                                                                                                                       | `src/core/ikariam/http.ts` _(mới)_          |
-| 1.3 ✅ | `applyResponse(array)` — publish vào `events("ajaxResponse")` của Empire Overview; Send Resources dùng mảng trực tiếp                                                                                                                                                                                                                     | `src/core/ikariam/http.ts`                  |
-| 1.4 ✅ | `switchCity(cityId)` — serialize `#changeCityForm`, POST, xác nhận từ response. `gotoTown` thử cách này trước, giữ đường click làm dự phòng. **02/10:** đo được server trả lời bằng lệnh **reload** vào town mới, nên "xác nhận" là xác nhận **sau reload**; form xếp **đầu**, có chặn vòng lặp reload (§2.L, phần 5). Chưa thử trên game | `src/send-resources/navigation.ts`          |
+| 1.3 ✅ | `onResponse(handler)` (tên lúc lập plan: `applyResponse(array)`) — response đi qua DOM event `ika:ajaxResponse` vào `events("ajaxResponse")` của Empire Overview; Send Resources dùng mảng trực tiếp                                                                                                                                                                                                                     | `src/core/ikariam/http.ts`                  |
+| 1.4 ✅ | `submitChangeCityForm(townNumber)` (tên lúc lập plan: `switchCity(cityId)`) — serialize `#changeCityForm`, POST, xác nhận từ response. `gotoTown` thử cách này trước, giữ đường click làm dự phòng. **02/10:** đo được server trả lời bằng lệnh **reload** vào town mới, nên "xác nhận" là xác nhận **sau reload**; form xếp **đầu**, có chặn vòng lặp reload (§2.L, phần 5). Chưa thử trên game | `src/send-resources/navigation.ts`          |
 | 1.5 ✅ | `syncAllTowns()` thay ruột `scanBuildings`; nút Scan giữ nguyên                                                                                                                                                                                                                                                                           | `src/send-resources/features/auto-build.ts` |
 
 ### Đã làm tới đâu
@@ -2218,7 +2226,7 @@ trên trang.
 
 ### 2.X Review toàn bộ `src` và sửa (04–05/10/2026)
 
-**Chưa commit. Có trong `dist/` 05/10 02:03 (đã grep), chưa thử trên game.**
+**Commit `1baf274` (tài liệu `772a055`); lúc viết thì chưa commit. Có trong `dist/` 05/10 02:03 (đã grep), chưa thử trên game.**
 645 → 698 test, 35 → 38 file test; typecheck (cả cấu hình strict) sạch;
 prettier chỉ còn lệch 3 file test đã lệch từ trước (`http.test.ts`,
 `transport-buttons.test.ts`, `town-cache.test.ts`).
@@ -2314,7 +2322,7 @@ Report Bug; bấm ▲ rồi Bug Report → file không có token (tìm `actionRe
 
 ### 2.Y Auto Wine gửi theo giờ rượu còn lại; bề rộng hộp thoại Auto Build (17/10/2026)
 
-**Chưa commit. Chưa build vào `dist/`, chưa thử trên game.** Người dùng yêu cầu từng việc. 698 → 699 test, 38 file; typecheck (cả cấu hình strict) và prettier sạch.
+**Commit `21464dd` (tài liệu `534f066`), đã push; lúc viết thì chưa commit. Chưa build vào `dist/`, chưa thử trên game.** Người dùng yêu cầu từng việc. 698 → 699 test, 38 file; typecheck (cả cấu hình strict) và prettier sạch.
 
 #### 1. Auto Wine: town ít rượu nhất gửi trước
 
@@ -2349,6 +2357,121 @@ Ba vòng điều chỉnh, ghi lại vì lỗi đầu đáng nhớ:
 **Không làm:** ghim hàng tên town khi cuộn dọc (người dùng chỉ nói cột đầu); header/footer của hộp thoại Empire Overview chỉ là tham khảo cho kiểu ghim.
 
 **Cần thử trên game:** nhiều town có queue → hộp thoại không rộng quá 1250px, có thanh cuộn ngang, cột các town không bị hẹp, "List Building" đứng yên khi cuộn; còn ít town thì như cũ.
+
+### 2.Z Ba lỗi nhỏ từ danh sách 💡 của review (22/10/2026)
+
+**Chưa commit. Có trong `dist/` build 22/10 (trên Linux, đã grep), chưa thử trên game.** Người dùng: "tiếp tục các việc có thể làm". Trong các mục 💡 còn lại (handover §7), đây là ba mục mà cách sửa chỉ có một hướng; các mục khác cần số đo hoặc cần người dùng chọn. 699 → 701 test, 38 file; typecheck (cả cấu hình strict) và prettier sạch trên mọi file đã sửa.
+
+| Lỗi | Sửa | Ở đâu |
+| --- | --- | ----- |
+| Poll trạng thái 3 s của mỗi công trình publish `BUILDINGS_UPDATED` với `([changes])`, thiếu city id. Handler của board là `updateChangesForCityBuilding(cityID, changes)` (`render.ts`) nên tìm town bằng một mảng, không thấy, không vẽ gì: ô **không tự chuyển** sang "có thể nâng" (hay ngược lại) | Publish `(this.city().getId, [changes])`, như `completeUpgrade` và `City` | `empire-overview/models/building.ts`, `startUpgradeTimer` |
+| `TaskRunner.start()` không xoá `pausedUntil`: Stop rồi Start trong 60 s nghỉ (sau một vòng toàn `defer`) thì không chạy gì tới hết lượt nghỉ | `start()` đặt `pausedUntil = 0` | `core/task-queue.ts` |
+| Logger đọc/ghi ô log bằng `innerHTML`: đọc lại thì `&`, `<`, `>` bị escape (`&amp;`), bản escape đó được lưu và vào Bug Report | Dùng `textContent` | `core/logger.ts` |
+
+**Test, đã thấy đỏ** (script Node bỏ đúng bản sửa, chạy file test, chép file gốc về; `md5sum -c` xác nhận cả ba đã khôi phục):
+
+- `building.test.ts`, "polls the building itself": city stub có id, subscriber nhận `(cityId, changes)` và kiểm id. Đỏ khi đưa `pub([changes])` trở lại. Bản cũ của test này kiểm đúng dạng sai (`seen[0][0]` là mảng changes).
+- `task-queue.test.ts` (+1): hai lệnh gửi `defer`, nghỉ 60 s, Stop, Start, một tick → có lần gọi handler. Đỏ khi bỏ dòng reset.
+- `app.test.ts`, nhóm "Bug Report" (+1): dòng log có `"A & B" <1>` vào file không bị escape. Đỏ khi đưa `innerHTML` trở lại. File này mock `logInfo`, nên test gọi bản thật qua `vi.importActual`; Bug Report đọc bản lưu trong storage. Không có `core/logger.test.ts`, không tạo file mới.
+
+**Đã biết, chưa làm:**
+
+- Dòng log lưu **trước** bản này vẫn ở dạng escape (`&amp;`) và giờ hiện nguyên như vậy, tới khi bị đẩy ra khỏi giới hạn 100.000 ký tự. Không chuyển đổi.
+- Sửa poll xong, mỗi thay đổi trạng thái của mọi công trình (poll 3 s) thật sự vẽ lại ô và gọi `database.SaveSoon` (cũng subscribe sự kiện này) — cùng đường với `completeUpgrade`. Chưa đo tải trên đế chế nhiều town.
+
+**Cần thử trên game:** town thiếu tài nguyên cho một nâng cấp → khi đủ, ô tab Build tự chuyển sang "có thể nâng" trong vài giây, không cần Scan; Stop Timer rồi Start Timer khi log panel đang ghi "pausing for 60s" → queue chạy ngay; town tên có `&` trong log, rồi Bug Report → file ghi `&`, không phải `&amp;`.
+
+### 2.AA Nút Crawl: dialog chọn việc crawl, thêm crawl Wine (22/10/2026)
+
+**Chưa commit. Có trong `dist/` build 22/10 (đã grep), chưa thử trên game.** Người dùng yêu cầu. 701 → 710 test, 38 file; typecheck (cả cấu hình strict) và prettier sạch trên mọi file đã sửa.
+
+**Người dùng muốn:** nút Crawl Building thành **Crawl**; bấm thì mở dialog có checkbox các việc sẽ crawl, crawl building cũ là một trong số đó; thêm checkbox **crawl wine**, kết quả dạng:
+
+```
+const csv = `
+account,town,stock,consume,maxSupply
+Smalldevil1, S-Nuithanh    , 0    , 194    , 65000
+`;
+```
+
+với `maxSupply` là số rượu town nguồn chuyển được.
+
+**Người dùng chọn** (bốn câu hỏi, mỗi câu có phương án):
+
+- Mỗi dòng là một **town nhận của Auto Wine**, bỏ town nguồn — đúng danh sách `planWineRun` chia rượu.
+- `maxSupply` = **tồn kho nguồn − 1 giờ tiêu thụ của chính nó** (`getSourceSupply`, chính `supply` Auto Wine dùng), giống nhau ở mọi dòng. Nhiều town nguồn được tick → popup chọn như nút Start.
+- **Scan trước rồi đọc** (như Start của Auto Wine); Scan từ chối (timer đang bật) thì không lưu gì.
+- **Lưu file** `ikariam-wine-<tài khoản>-<giờ UTC>.js`, nội dung đúng đoạn trên; khoảng trắng chép theo mẫu (bốn dấu cách trước dấu phẩy, một sau).
+
+**Chọn trong lúc làm:** tồn kho và tiêu thụ làm tròn tới đơn vị (`Math.round`); town chưa có số đo lấy Wine/h đã lưu và tồn kho 0, như `buildWineTowns` của Auto Wine; dấu `` ` ``, `\` và `${` trong tên town được escape để file vẫn là JavaScript hợp lệ (dấu phẩy trong tên thì không — sẽ thành thêm một cột CSV); tick cả hai thì Building lưu trước (Wine phải chờ Scan); hai ô mặc định không tick, không nhớ lựa chọn; dialog đóng khi bấm Crawl.
+
+| Thay đổi | Ở đâu |
+| -------- | ----- |
+| `buildWineCsv(fromTown, accountName)`; `hasReceiversFor` (phần kiểm town nhận và toast, tách ra từ `enqueueWineRun` để dùng chung); `escapeTemplateLiteral` | `send-resources/features/auto-wine.ts` |
+| `crawlWine` (kiểm town nhận → Scan → lưu file), `runCrawl`; action `crawl.open`, `crawl.run`, `crawl.wineFrom`; bỏ `buildingHelp.save` | `send-resources/app.ts` |
+| `openCrawlDialog`, `readCrawlChoice` (`#ikaCrawlBuilding`, `#ikaCrawlWine`) | `send-resources/ui/dialogs.ts` |
+| `downloadText(filename, text, mimeType)` (`downloadJson` đi qua nó); `timestampedFilename(…, extension = "json")` | `send-resources/ui/data-transfer-ui.ts` |
+| `PANEL.crawl` ("Crawl") thay `crawlBuildingHelp`; `CRAWL_DIALOG`; câu `BUILDING_CRAWL.noDialog` chỉ đường mới | `send-resources/messages.ts`, `ui/panel.ts`, `features/building-help-crawler.ts` |
+
+**Test, đã thấy đỏ** (script `break-fix.mjs` ở scratchpad: bỏ đúng một phần, chạy một file test, chép file gốc về; `md5sum -c` OK cho cả bốn file nguồn):
+
+- `auto-wine.test.ts`, `buildWineCsv` (+2): đúng từng ký tự với hai town nhận khi town nguồn cũng nằm trong danh sách nhận — đỏ khi không bỏ town nguồn; dấu `` ` `` trong tên — đỏ khi bỏ escape.
+- `app.test.ts`, "Crawl with Wine ticked" (+3, đặt trong nhóm "Auto Wine" để dùng lại board và dropdown): Scan rồi lưu đúng file (tên, kiểu, nội dung đọc từ board mà mock Scan vẽ); Scan từ chối → không lưu; không có town nhận → không Scan, không lưu. Hai test đầu đỏ khi bỏ bước chờ Scan.
+- `app.test.ts`, "the Crawl dialog" (+3): nút panel ghi Crawl và dialog có đủ hai ô — đỏ khi nút còn action cũ; không tick gì → toast, không crawl — đỏ khi bỏ điều kiện; tick Building → lưu trang Help — đỏ khi bỏ dòng đó.
+- `data-transfer-ui.test.ts` (+1): đuôi file khác — đỏ khi cố định `.json`.
+
+**Chưa kiểm chứng:**
+
+- **Mở dialog Crawl có đóng trang Help của game không.** Dialog đi qua `createPopup` của game như mọi dialog Settings; `#buildingDetail` chỉ được đọc sau khi bấm Crawl. Nếu lúc đó trang Help đã mất, Building báo toast "Open Help … first" — khi đó cần đọc trang Help trước khi mở dialog.
+- Scan kiểu đi bộ (khi không đọc được model) kết thúc bằng `backToCity`, có thể tải lại trang; khi đó file không được lưu — cùng giới hạn với Start của Auto Wine (§2.K).
+
+**Cần thử trên game:** mở Help > building details ở một công trình → Crawl → chọn Building → Crawl: file JSON như trước. Rồi Crawl → chọn Wine → Crawl (timer tắt): toast "Sync finished", rồi file `ikariam-wine-….js` có một dòng cho mỗi town nhận; so tồn kho và tiêu thụ với board.
+
+**Đổi cùng ngày, theo yêu cầu người dùng — mỗi lần một việc crawl, danh sách dễ mở rộng:**
+
+- **Radio thay checkbox** ("tránh checkbox gọi nhiều crawl gây lỗi"): một nhóm (`name="ikaCrawlKind"`), mặc định không chọn gì; bấm Crawl khi chưa chọn → "Pick what to crawl.". Các lựa chọn riêng của bản checkbox ở trên (tick cả hai thì Building trước, ô mặc định không tick) không còn. Người dùng cho chọn radio hoặc dropdown; chọn radio (hai mục, thấy cả hai cùng lúc).
+- **Mỗi loại crawl khai báo một lần.** Nhãn là một key của `CRAWL_DIALOG.kinds` (`messages.ts`) — dialog vẽ một radio cho mỗi key theo thứ tự đó, id `ikaCrawl_<kind>` (`crawlRadioId`), `CrawlKind = keyof typeof CRAWL_DIALOG.kinds`. Việc chạy là một mục của `CRAWLS: Record<CrawlKind, () => void>` trong `app.ts`; `runCrawl` gọi `CRAWLS[kind]()`. **Thêm loại crawl mới = một nhãn + một hàm chạy**; có nhãn mà thiếu hàm thì không biên dịch được.
+- **Đã thấy đỏ:** thêm key thứ ba vào `kinds` mà không có hàm chạy → `error TS2741: Property 'army' is missing …` (`app.ts:369`); nối `building` vào hàm rỗng → test Building đỏ; đưa input về checkbox → test radio đỏ (test giờ duyệt mọi key của `CRAWL_DIALOG.kinds`).
+- Bảng ở trên: id ô giờ là `#ikaCrawl_building`, `#ikaCrawl_wine` (không còn `#ikaCrawlBuilding`, `#ikaCrawlWine`).
+
+**Sửa cùng ngày — file rượu thiếu town.** Người dùng báo: Scan có vẻ không lấy town cuối của board, file xuất không có town cuối, Auto Wine Settings phải bấm Load. Đã kiểm:
+
+- **Scan đi đủ mọi town** (đọc code, chưa đo trên game): `syncAllTowns` duyệt mọi `ownCity` trong `relatedCityData`. Một test tạm với board 3 town và 3 response Scan ghi đúng rượu của từng town và vẽ đủ 3 hàng Resource; test này không giữ trong repo.
+- **Nguyên nhân là lựa chọn của chính đợt này:** Crawl Wine lấy town nhận đã lưu (`loadReceivers`), còn Start của Auto Wine đo lại sau Scan (`saveMeasuredReceivers`, tức Load + Save). Town chưa từng Load vào Auto Wine Settings (Wine/h 0 hoặc trống) bị bỏ khỏi file dù Scan vừa đo. Crawl còn kiểm town nhận **trước** Scan, nên cấu hình chưa có town nhận thì từ chối luôn.
+- **Sửa, người dùng chọn ("làm giống Start, Load + Save rồi xuất file"):** `crawlWine` giờ Scan → `saveMeasuredReceivers()` → kiểm town nhận → lưu file. Như Start, nó ghi đè Wine/h đã lưu bằng số đo — nên Auto Wine Settings hiện số mới mà không cần Load. Town nguồn (tick Sender) vẫn không có dòng, theo lựa chọn trước của người dùng — nhiều khả năng là lý do town đầu board cũng vắng.
+- **Test** (`app.test.ts`, "Crawl with Wine picked", viết lại): REGRESSION — chưa lưu town nhận nào, Scan đo M-Corinth, file có dòng của nó và town nhận được lưu; Scan từ chối → không lưu file, không đổi cấu hình; không town nào uống → vẫn Scan, có toast "No town is set to receive wine", không có file. Đỏ khi bỏ `saveMeasuredReceivers()`, và đỏ khi đưa bước kiểm town nhận về trước Scan. 715 test.
+- **Chưa đo:** response Scan của mỗi town trên game có đúng là của town đó không; và `CurrentCityId` của board (`game-api.ts`) trả town đang chọn khi nền không phải city view — Scan từ đảo hoặc bản đồ có thể ghi tài nguyên của mọi town vào town đang chọn (đọc code, chưa thử).
+
+### 2.AB Panel Send Resources: thu gọn / mở từng nhóm (22/10/2026)
+
+**Chưa commit. Có trong `dist/` build 22/10 (đã grep), chưa thử trên game.** Người dùng yêu cầu. 710 → 715 test, 38 file; typecheck (cả cấu hình strict) và prettier sạch trên mọi file đã sửa.
+
+**Người dùng chọn** (hai câu hỏi có phương án): thu gọn **từng nhóm** trong panel (Wine / Transport / Build / Queue / Account / Data / Notifications), không phải cả cửa sổ hay hộp thoại Transport Settings; trạng thái **được nhớ** qua các lần tải trang.
+
+| Thay đổi | Ở đâu |
+| -------- | ----- |
+| `group(key, body)` nhận key của `PANEL.groups` (thay vì chữ tiêu đề): khối có `data-ika-group="<key>"`, tiêu đề `.ika-group-title`, nội dung bọc trong `.ika-group-body`; nhóm đã thu gọn mang class `ika-group-collapsed` ngay khi vẽ | `send-resources/ui/panel.ts` |
+| `watchGroupTitles`: bấm tiêu đề nhóm → bật/tắt class, lưu danh sách nhóm đang thu gọn ở `ikaPanelCollapsedGroups` trong store của tài khoản (cạnh vị trí và trạng thái mở/đóng của cửa sổ; key không được phân loại nên **không vào bản export**, như hai key đó). Nghe `click` trên nội dung cửa sổ, như `watchNotificationSwitches` | `panel.ts` |
+| `groupStyles`: tiêu đề có con trỏ tay, ▾ khi mở, ▸ khi thu gọn; nhóm thu gọn ẩn `.ika-group-body` (chỉ ẩn, không xoá — nút trong đó vẫn được tìm thấy, ví dụ nhãn Start Timer). Đặt trong `panel.ts` cạnh `menuEntryStyles`, không trong `styles.ts`: `styles.ts` import từ `panel.ts` sẽ thành vòng import | `panel.ts` |
+
+**Mặc định:** mọi nhóm mở. **Không làm:** thu cả cửa sổ; phím tắt; hiệu ứng trượt.
+
+**Test** (`ui/panel.test.ts`, +5), đã thấy **đỏ**: ban đầu mọi nhóm mở; bấm tiêu đề thu rồi mở lại, nhóm khác không đổi, nút trong nhóm thu gọn vẫn cập nhật được — đỏ khi bỏ `watchGroupTitles`; REGRESSION: thu gọn còn nguyên sau khi dựng lại panel — đỏ khi không lưu, và đỏ khi lúc vẽ bỏ qua giá trị đã lưu; CSS ẩn nội dung — đỏ khi bỏ rule; key không vào export (`classifyKey` trả `null`). (Lần làm hỏng đầu tiên cho phần "không lưu" sinh code sai cú pháp nên file test không chạy — lỗi của bước kiểm, đã làm lại bằng thay đổi hợp lệ.)
+
+**Chưa kiểm chứng:** hiển thị thật (▾/▸, cỡ chữ) trong cửa sổ trên game; giới hạn 10 hàng của queue (`capVisibleRows`) khi nhóm Queue đang thu gọn — khung chưa có layout thì giữ giới hạn cũ, mở lại thì lần vẽ kế tiếp đặt lại (cùng hành vi như khi panel đóng).
+
+**Cần thử trên game:** bấm tiêu đề từng nhóm → thu / mở; thu vài nhóm rồi tải lại trang → vẫn thu; Start Timer trong nhóm Transport đang thu → mở nhóm ra thấy nhãn đúng. Số test vẫn 710 (test dialog viết lại cho radio).
+
+**Thêm cùng ngày, người dùng yêu cầu — nút thu gọn cả cửa sổ:** trên thanh tiêu đề của cửa sổ Send Resources có nút **▾** (thu) / **▸** (mở), cạnh ✕. Thu gọn chỉ còn thanh tiêu đề (ẩn nội dung và footer), cửa sổ vẫn mở và kéo được; khác ✕ (đóng hẳn). **Nhớ** qua các lần tải trang, cùng cách với các nhóm (chọn ở đây, theo lựa chọn "nhớ" của người dùng cho nhóm).
+
+| Thay đổi | Ở đâu |
+| -------- | ----- |
+| Tùy chọn mới `collapsible` của `createWindow`: nút `.ika-window-collapse` trong header (▾ / ▸, tooltip `WINDOW_COLLAPSE_TITLE` / `WINDOW_EXPAND_TITLE`), class `ika-window-collapsed` trên cửa sổ ẩn `.ika-window-body` và `.ika-window-footer`. Có `store` thì nhớ ở `ikaWindowCollapsed_<id>` — key không phân loại, **không vào export**, như vị trí. Hai nút header bọc chung một `<span>` để `space-between` giữ tiêu đề trái, nút phải. Kéo cửa sổ bỏ qua cả hai nút (trước chỉ bỏ qua ✕) | `core/ui/window.ts`, `core/messages.ts` |
+| Panel bật `collapsible: true` | `send-resources/ui/panel.ts` |
+
+**Test** (`core/ui/window.test.ts` +5, `ui/panel.test.ts` +1), đã thấy **đỏ**: không có nút nếu không bật; bấm nút thu rồi mở, cửa sổ vẫn mở — đỏ khi click không đổi gì; còn thu sau khi dựng lại — đỏ khi không đọc giá trị đã lưu; CSS ẩn body và footer — đỏ khi bỏ rule; bấm nút không kéo cửa sổ — đỏ khi điều kiện chỉ còn ✕; panel có nút và nhớ — đỏ khi panel không bật `collapsible`. 715 → 721 test.
+
+**Cần thử trên game:** bấm ▾ → chỉ còn thanh tiêu đề; kéo thanh tiêu đề vẫn được; bấm ▸ → mở lại; thu rồi tải lại trang → vẫn thu.
 
 ---
 
@@ -2555,7 +2678,7 @@ Hiện trạng trước 01/10, đọc từ code ngày 29/09 (giữ lại để �
 - **Chi phí là bảng.** `Constant.BuildingData[tên].wood / glass / marble /
 sulfur / wine` (`empire-overview/constants.ts`, từ dòng 1285) là mảng số
   theo từng cấp, hoặc `0` cho loại không cần. `getUpgradeCost`
-  (`empire-overview/models/building.ts:114-194`) lấy phần tử ở
+  (`empire-overview/models/building.ts:114-194` lúc đó; 22/10 là dòng 149–217) lấy phần tử ở
   `level = _level + isUpgrading`; cấp vượt độ dài mảng thì `|| 0`, tức **chi
   phí 0, không báo gì**.
 - **Giảm giá cộng dồn rồi làm tròn:** nghiên cứu Pulley −2%, Geometry −4%,
@@ -2570,7 +2693,8 @@ sulfur / wine` (`empire-overview/constants.ts`, từ dòng 1285) là mảng số
   `render.ts`, `serverTyp`).
 - **Dùng ở ba chỗ:** tooltip của tab Build (`render.ts`,
   `getBuildingTooltip`), tô màu "đủ tài nguyên để nâng" (`isUpgradable`,
-  `render.ts:2785`), và trừ tài nguyên dự kiến khi bấm nâng
+  `render.ts:2785` lúc đó; 22/10 định nghĩa ở `models/building.ts:245`,
+  dùng ở `render.ts:3093` và `:3101`), và trừ tài nguyên dự kiến khi bấm nâng
   (`subtractUpgradeResourcesFromCity`). Send Resources và Auto Build không
   dùng.
 
@@ -2724,16 +2848,19 @@ thêm, phải áp giảm giá theo bảng này.
 ✅ 04/10     §2.U                   U: 704 cấp > 50 từ s303 (thời gian × 2, chi phí ÷ 0,86) — commit `c78b49e`
 ✅ 04/10 tối §2.V                   nút ▲: tải lại town sau khi nâng cấp thành công để ô chuyển sang đang nâng — commit `cefcc92`, có trong `dist/` 21:21
 ✅ 04/10 tối §2.W                   extension Chrome: pattern loại trừ diễn đàn chuyển sang `exclude_globs` (manifest bị Chrome từ chối từ `e551bb8`) — commit `9c363f7`, `dist/extension/` đã build lại
-✅ 05/10     §2.X                   review toàn bộ `src` (6 agent) và sửa 3 🔴 + 14 ⚠️: board chết âm thầm khi subscriber ném, vòng reload khi hết AP, "town hiện tại" bị fetch đổi, token trong Bug Report, import/XSS, rule 11, 3 file test mới — chưa commit, có trong `dist/` 05/10 02:03
+✅ 05/10     §2.X                   review toàn bộ `src` (6 agent) và sửa 3 🔴 + 14 ⚠️: board chết âm thầm khi subscriber ném, vòng reload khi hết AP, "town hiện tại" bị fetch đổi, token trong Bug Report, import/XSS, rule 11, 3 file test mới — commit `1baf274` (tài liệu `772a055`), có trong `dist/` 05/10 02:03
 
 ✅ ~~Chờ capture form gửi~~: §2.A — có từ Bug Report 03/10 23:04 (§2.O phần 4)
 ✅ ~~Chờ người dùng thử lại~~: §2.E lỗi 3–6, §2.F → §2.P, U/V — người dùng thử 04/10 với `dist/` 09:09: tạm ok (§2.Q)
 ✅ ~~Chờ log~~:            §2.O phần 1 — đổi town sang M-Eretria: người dùng báo tạm ok 04/10 (§2.Q); nguyên nhân gốc chưa từng được xác định
 ✅ ~~Chờ code của game~~: §2.D tham số `createPopup` — xong 03/10 (§2.N phần 2)
-⬜ Lượt review sau:        thử trên game thật các mục §2.D; chuỗi còn sót ngoài danh sách §2.D (§2.L phần 4)
-✅ 17/10     §2.Y                   Auto Wine gửi town ít giờ rượu nhất trước; hộp thoại Auto Build Settings rộng tối đa 1250px, cột "List Building" ghim, cột town cuộn ngang — chưa commit, chưa build
-⬜ Chờ người dùng thử:     §2.R → §2.Y trên game (cài lại cả hai userscript từ `dist/` 05/10 02:03); riêng E: một lần thành công (ô phải tự chuyển sang đang nâng), một lần bị từ chối, rồi Bug Report (file không còn token); danh sách thử của §2.X ở cuối mục đó
-⬜ Lượt sau của review:    các mục 💡 trong `sample/review-source/review-src-2026-10-04.md` (chưa làm)
+⬜ Lượt review sau:        thử trên game thật các mục §2.D (phần "chuỗi còn sót ngoài danh sách §2.D" của §2.L phần 4 đã làm ở §2.P)
+✅ 17/10     §2.Y                   Auto Wine gửi town ít giờ rượu nhất trước; hộp thoại Auto Build Settings rộng tối đa 1250px, cột "List Building" ghim, cột town cuộn ngang — commit `21464dd` (tài liệu `534f066`), chưa build
+✅ 22/10     §2.Z                   ba mục 💡 của review: poll trạng thái gửi city id, Start xoá lượt nghỉ cũ, log lưu dạng chữ — chưa commit, có trong `dist/` 22/10
+✅ 22/10     §2.AA                  nút Crawl: dialog chọn Building / Wine; crawl Wine Scan rồi lưu `const csv` của các town nhận — chưa commit, có trong `dist/` 22/10
+✅ 22/10     §2.AB                  panel Send Resources thu gọn / mở từng nhóm và cả cửa sổ, nhớ qua tải trang — chưa commit, có trong `dist/` 22/10
+⬜ Chờ người dùng thử:     §2.R → §2.AB trên game (cài lại cả hai userscript từ `dist/` build 22/10 — bản 05/10 02:03 không có §2.Y trở đi); riêng E: một lần thành công (ô phải tự chuyển sang đang nâng), một lần bị từ chối, rồi Bug Report (file không còn token); danh sách thử của §2.X ở cuối mục đó
+⬜ Lượt sau của review:    các mục 💡 trong `sample/review-source/review-src-2026-10-04.md` (22/10: ba mục đã sửa ở §2.Z; còn lại cần số đo hoặc người dùng chọn — handover §7)
 ⬜ Chờ người dùng thử:     §2.W — load lại `dist/extension` trong Chrome (tắt hai userscript trước); bản extension chưa từng chạy trên game
 ✅ ~~Chờ câu hỏi 2~~:      trả lời 04/10 — 2.6 ✅, 2.8 ✅ (rút gọn); ⏸ 2.7 chỉ khi có lỗi cụ thể
 ✅ ~~Chờ câu hỏi 3~~:      trả lời 04/10 — E, J, K ✅; R ◐; O chưa cần; F, G, I, M, N, Q không làm lúc này
