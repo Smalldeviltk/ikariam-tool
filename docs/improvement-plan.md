@@ -2,7 +2,9 @@
 
 > Trạng thái: **đang thực hiện.** Cập nhật 26/10/2026.
 >
-> **Mới nhất (§2.AB — 22/10, commit `e7f2acb` (tài liệu `455047d`), có trong `dist/` build 22/10, chưa thử trên game):** panel Send Resources **thu gọn / mở từng nhóm** bằng cách bấm tiêu đề nhóm, và **nút ▾/▸ thu gọn cả cửa sổ** về thanh tiêu đề; cả hai được nhớ qua các lần tải trang. 710 → 721 test.
+> **Mới nhất (§2.AC — 26/10, commit `fac13d6`, có trong `dist/` build 26/10 13:56, chưa thử trên game):** hai bug report. Empire Overview hết lỗi `reading 'apply'` sau nút nâng cấp của game; shipment có lần đổi town chưa tới nơi được **hoãn** thay vì bị bỏ; log ghi đường đổi town và câu trả lời của server. **Lỗi của chính mình trong cùng lượt** — chờ 10 s sau khi bấm về town view làm một shipment bị gửi **8 lần** — đã gỡ, nên cuộc đua nó định sửa lại còn mở. Cửa sổ Send Resources **luôn hiện**: **Esc** và mục menu **thu / mở**, bỏ nút ×. 721 → 735 test.
+>
+> **§2.AB — 22/10, commit `e7f2acb` (tài liệu `455047d`), có trong `dist/` build 22/10, chưa thử trên game):** panel Send Resources **thu gọn / mở từng nhóm** bằng cách bấm tiêu đề nhóm, và **nút ▾/▸ thu gọn cả cửa sổ** về thanh tiêu đề; cả hai được nhớ qua các lần tải trang. 710 → 721 test.
 >
 > **§2.AA — 22/10, commit `e7f2acb` (tài liệu `455047d`), có trong `dist/` build 22/10, chưa thử trên game):** nút **Crawl Building** thành **Crawl**, mở dialog có **radio** cho từng việc crawl (bản đầu là checkbox, đổi theo yêu cầu; danh sách việc crawl khai báo một chỗ, dễ thêm loại mới): **Building** (crawl cũ) và **Wine** (mới — Scan rồi lưu file `const csv = \`…\`;` gồm `account, town, stock, consume, maxSupply` cho các town nhận của Auto Wine). 701 → 710 test.
 >
@@ -22,7 +24,7 @@
 > phần U còn thiếu số (§2.U phần 4) · R: kênh cập nhật riêng (chờ người
 > dùng). **Không làm lúc này** (người dùng chọn 04/10): F, G, I, M, N, O, Q.
 >
-> Git (26/10, đã kiểm lại): `origin/refactor` ở `455047d` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Z, §2.AA, §2.AB đã commit (`e7f2acb` code, `455047d` tài liệu). Checkout trên Linux giờ có `node_modules/` và `dist/` (build 22/10 16:37, có §2.R → §2.AB — đã grep 26/10, handover §1); vẫn không có `sample/`, `tools/output/`. Ghi chú 22/10, giữ để tra: `origin/refactor` ở `534f066` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Y đã commit (`21464dd` code, `534f066` tài liệu). Checkout 22/10 chạy trên Linux, không có `node_modules/`, `dist/`, `sample/`, `tools/output/` (handover §1). Ghi chú 17/10, giữ để tra: `origin/refactor` ở `772a055` = `HEAD`, **không còn commit nào chưa push**; §2.X đã commit (`1baf274` code, `772a055` tài liệu). Chưa commit: §2.Y (`auto-wine.ts`, `auto-wine.test.ts`, `styles.ts`) và hai tài liệu này. Đoạn sau là danh sách commit cũ (05/10), giữ để tra; lúc viết nó ghi `origin/refactor` ở `066eb44` và 17 commit chưa push —
+> Git (26/10, sau §2.AC): `origin/refactor` vẫn ở `455047d`; `HEAD` là `fac13d6`, `git rev-list --count origin/refactor..HEAD` = 2 (`3dff502` tài liệu, `fac13d6` §2.AC) — **chưa push**; phần ghi §2.AC vào hai tài liệu này chưa commit lúc viết. `dist/` hiện tại build 26/10 13:56 (không build trong phiên — có lẽ người dùng build), có toàn bộ §2.AC (đã grep, handover §1). Git (26/10, đã kiểm lại): `origin/refactor` ở `455047d` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Z, §2.AA, §2.AB đã commit (`e7f2acb` code, `455047d` tài liệu). Checkout trên Linux giờ có `node_modules/` và `dist/` (build 22/10 16:37, có §2.R → §2.AB — đã grep 26/10, handover §1); vẫn không có `sample/`, `tools/output/`. Ghi chú 22/10, giữ để tra: `origin/refactor` ở `534f066` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Y đã commit (`21464dd` code, `534f066` tài liệu). Checkout 22/10 chạy trên Linux, không có `node_modules/`, `dist/`, `sample/`, `tools/output/` (handover §1). Ghi chú 17/10, giữ để tra: `origin/refactor` ở `772a055` = `HEAD`, **không còn commit nào chưa push**; §2.X đã commit (`1baf274` code, `772a055` tài liệu). Chưa commit: §2.Y (`auto-wine.ts`, `auto-wine.test.ts`, `styles.ts`) và hai tài liệu này. Đoạn sau là danh sách commit cũ (05/10), giữ để tra; lúc viết nó ghi `origin/refactor` ở `066eb44` và 17 commit chưa push —
 > `6ed66c6`, `c38dca4`, `b9f1d7a` (U + V), `4f9436c`, `3209964` (§2.K + §2.L),
 > `7ed3a85`, `b45f792` (§2.M), `32fe3ba`, `ec3fdc4` (§2.N → §2.R), `b2e9084`
 > (§2.S), `3f8a51b` (thay đổi `barbarian.ts` của người dùng, commit riêng
@@ -1357,7 +1359,8 @@ Empire Overview thì nhớ `settings.window.visible` và mở lại.
 | Panel bật cả hai: lần đầu **mở**; sau đó giữ trạng thái lần cuối                                                                                                                                                                                                                                  | `send-resources/ui/panel.ts` |
 
 **Người dùng chọn:** giữ cả **×**, **Esc**, **Space** và nút góc; mọi cách
-mở/đóng đều được lưu.
+mở/đóng đều được lưu. **Thay bằng §2.AC (26/10, người dùng chọn):** cửa sổ
+luôn hiện — bỏ ×, Esc và mục menu chỉ thu / mở.
 
 **Không dùng lại `isSendResourceHidden`** (key của bản gốc, có trong bảng
 export): CSS của Send Resources dùng chính cờ đó để ẩn **`#empireBoard`**
@@ -2474,6 +2477,51 @@ với `maxSupply` là số rượu town nguồn chuyển được.
 
 **Cần thử trên game:** bấm ▾ → chỉ còn thanh tiêu đề; kéo thanh tiêu đề vẫn được; bấm ▸ → mở lại; thu rồi tải lại trang → vẫn thu.
 
+### 2.AC Hai bug report, shipment mất và gửi lặp, Esc thu gọn cửa sổ (26/10/2026)
+
+**Commit `fac13d6` (code và test, 13 file trong `src/`); phần ghi vào tài liệu này chưa commit lúc viết. Có trong `dist/` build 26/10 13:56 (đã grep), chưa thử trên game.** Bản tiếng Anh, chi tiết hơn: handover §27. 721 → 735 test, 38 file; typecheck và prettier sạch trên mọi file đã sửa.
+
+#### 1. Bug report 24/10 (`SClone1`)
+
+File `sample/ikariam-bug-report-SClone1-2026-10-24-13-30-56.json` (gitignored).
+
+- **198 lần `reading 'apply'` ở Empire Overview.** Handler của board cho nút nâng cấp của game chỉ tạo `upgradeSuccessCheck` khi link có `function=upgradeBuilding`, nhưng luôn subscribe. Link thật của game là `?action=UpgradeExistingBuilding&actionRequest=…&cityId=…&position=…&level=N` — **không có `function`** (đo trong report) — nên subscribe `undefined`, và wrapper `isolatedSubscriber` của §2.X biến nó thành subscriber ném lỗi ở mọi response sau đó. `Callbacks.add` của jQuery bỏ qua thứ không phải hàm; wrapper thì không. **Sửa hai chỗ:** `events().sub` bỏ qua thứ không phải hàm (`empire-overview/events.ts`); `render.ts` chỉ subscribe trong nhánh tạo ra handler.
+- **Mất shipment.** Lần đổi sang town nguồn chưa tới nơi thì 30 s không gửi lại (`ika_pendingTownSwitch`, §2.L phần 5); trong lúc đó `gotoTown` ném lỗi, runner bỏ task sau 5 lần liên tiếp — mất 5 shipment từ M-Clone1. **Sửa, người dùng chọn (hoãn hay bỏ):** `gotoTown` ném `TownSwitchPendingError`, `handleSendResource` trả `defer` → task chờ lượt sau.
+- **Vì sao đổi sang M-Clone1 không tới nơi — vẫn mở.** Lần 20:29:37 giải thích được: `backToCity("shipment sent")` của shipment trước tải lại trang 1–3 s sau khi bấm, lệnh đổi town của task kế được gửi trong khoảng đó và bị lần tải lại cướp mất. Lần 20:30:39 chưa giải thích được. Người dùng còn báo queue tạo từ Transport Settings không gửi được, "bấm Scan rồi setting lại" thì được — **chưa giải thích**: Scan không tải lại trang, không đụng form đổi town.
+- Đo được trong cùng report: `backgroundData` của response nâng cấp là `""` (xác nhận suy luận ở §2.V); giá trị `queueETA` là chuỗi JSON `{version, items:[{timestamp, cityName}]}`; `provideFeedback` sau khi nâng cấp là `{"location":1,"text":"Your order has been carried out.","type":10}`; không lọt giá trị `actionRequest` nào (0). Report ghi jQuery của trang là 4.0.0 — chưa kiểm trên trang.
+
+#### 2. Log khi đổi town
+
+Để tìm ca còn mở ở trên: `gotoTown` ghi đường đã dùng (`Switch to "<town>" sent through the game's form | the board's town name | the dropdown`), và `watchTownSwitchResponses` (gọi trong `app.ts`) ghi câu trả lời của server cho mọi request `function=changeCurrentCity`: `Town switch answered: city id <id> -> [<tên các entry>] custom: <json>` hoặc `(no custom)`, đã che token (`redactTokens`, giờ export từ `core/ikariam/http.ts`), cắt ở 400 ký tự.
+
+Số đo đầu tiên (report 26/10 bên dưới): 12:44:58 đổi sang W-Athens → `custom: ["reload", {"link": "?view=city&cityId=…` và tới nơi; 12:44:20 một request đổi town (city id 297039) được trả `[updateGlobalData, changeView, …] (no custom)` — chưa biết ai gửi, nghĩa là gì.
+
+#### 3. Lỗi của chính mình: một shipment gửi 8 lần
+
+Để sửa cuộc đua lúc 20:29:37, cùng lượt đó cho `handleSendResource` **chờ 10 s** sau `backToCity("shipment sent")`. **Sai:** cú bấm tải lại trang trong 1–2 s, handler chết giữa lúc chờ, không trả `done`; runner chỉ xoá task khỏi queue đã lưu khi handler trả về → trang mới gửi lại đúng task đó. Report 26/10 của người dùng (`sample/ikariam-bug-report-Smalldevil-2026-10-26-05-46-39.json`): "W-Athens → C-Thebes 6.820 wine" gửi **8 lần** từ 12:45:04 đến 12:45:36 (7 × 6.820, rồi 5.411 khi W-Athens hết rượu) — khoảng 53.000 wine sang C-Thebes cho lệnh 6.820. Test viết kèm lại khẳng định việc chờ; game giả trong test không tải lại trang nên test xanh.
+
+**Đã gỡ:** handler trả kết quả ngay sau cú bấm như trước; test giờ yêu cầu nó resolve mà không chờ timer nào sau cú bấm. Đã thấy **đỏ** khi đưa lại `await sleep(10_000)` (`1 failed | 24 passed`). **Cuộc đua lại còn mở** — muốn sửa an toàn phải lưu kết quả task trước khi chờ trang rời đi, tức là sửa `TaskRunner`; chưa thiết kế.
+
+Đã nhắc người dùng kiểm queue xem còn task C-Thebes sót lại không; chưa biết đã kiểm chưa.
+
+#### 4. Esc thu / mở cửa sổ Send Resources
+
+Người dùng yêu cầu: Esc thu / mở cửa sổ thay vì tắt, cửa sổ lúc nào cũng hiện. **Người dùng chọn** (một câu hỏi có phương án): bỏ nút ×, mục menu (và nút dự phòng) cũng chỉ thu / mở, tải trang luôn hiện dù bản cũ đã lưu "đóng".
+
+| Thay đổi | Ở đâu |
+| -------- | ----- |
+| Tùy chọn mới `alwaysOpen` của `createWindow`: không có ×, mở ngay khi tạo (bỏ qua `rememberOpen` / `openByDefault`), `close()` và `toggle()` không làm gì, Esc gọi `toggleCollapsed()` thay vì `close()` (vẫn bỏ qua khi đang gõ) | `core/ui/window.ts` |
+| `GameWindow.toggleCollapsed()` — nút ▾/▸ cũng dùng nó — và tùy chọn `onCollapsedChange(collapsed)`, gọi sau mỗi lần thu / mở | `core/ui/window.ts` |
+| Panel bật `alwaysOpen: true`; `togglePanel` (mục menu) thu / mở; mở ra thì vẽ lại queue ngay (`onCollapsedChange`); nhịp cập nhật trạng thái chỉ vẽ lại khi đang mở | `send-resources/ui/panel.ts` |
+
+Key `ikaWindowOpen_<id>` của bản cũ vẫn nằm trong storage; cửa sổ này không đọc nữa, không xoá.
+
+**Test:** `core/ui/window.test.ts` +7; `ui/panel.test.ts`: 4 test cũ về mở / đóng viết lại thành thu / mở, +1 (Esc thu panel). Đã thấy **đỏ**: Esc trở lại `close()` → 3 failed; panel không có `alwaysOpen` → 2 failed. 727 → 735 test.
+
+**Chưa kiểm chứng:** Esc trên game có đụng popup của chính game không (vẫn nghe ở `document` như trước).
+
+**Cần thử trên game:** Esc → chỉ còn thanh tiêu đề, Esc lần nữa → mở; mục menu làm y vậy; tải lại trang → cửa sổ vẫn hiện, thu hay mở như lúc rời; không còn ×.
+
 ---
 
 ## 3. Phase 2 — UI
@@ -2883,7 +2931,11 @@ việc kế tiếp là **người dùng cài lại từ `dist/` 05/10 02:03 và 
 §2.X trên game** (E kèm Bug Report), và **load lại extension Chrome** (§2.W);
 P, L chờ capture; R chờ câu hỏi 5 ở §6; V chờ người dùng ghi chi tiết.
 **Cập nhật 26/10:** bản cần cài là `dist/` build 22/10 16:37 (có §2.R →
-§2.AB, đã grep — handover §1); bản 05/10 02:03 chỉ tới §2.X.
+§2.AB, đã grep — handover §1); bản 05/10 02:03 chỉ tới §2.X. **Cập nhật
+26/10, sau §2.AC:** bản cần cài là `dist/` build 26/10 13:56 (có §2.R →
+§2.AC); **không cài bản 12:28** (gửi lặp, §2.AC phần 3). Kiểm queue còn
+task C-Thebes sót không trước khi bật timer. Lần đổi town nào không tới
+nơi → bấm Bug Report ngay, để có các dòng `Town switch answered`.
 
 **Hai việc phát sinh** (việc thứ nhất xong 02/10, §2.L phần 3):
 
