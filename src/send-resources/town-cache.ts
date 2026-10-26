@@ -25,6 +25,7 @@ import {
   modelMaxResource,
   modelResource,
   modelWineConsumption,
+  modelWineProduction,
 } from "@core/ikariam/model";
 import type { Store } from "@core/storage";
 
@@ -43,6 +44,12 @@ export interface TownStats {
    * it was tracked, and whenever the model did not carry it.
    */
   capacity?: number;
+  /**
+   * Wine the town's island makes an hour, 0 off a wine island. Absent on
+   * snapshots recorded before it was tracked, and whenever the model did not
+   * carry it; read as 0 then.
+   */
+  production?: number;
   /** Epoch ms of the snapshot. */
   at: number;
 }
@@ -79,6 +86,8 @@ export function recordCurrentTown(store: Store): TownStats | null {
   const entry: TownStats = { stock, consume, at: Date.now() };
   const capacity = modelMaxResource("wine");
   if (capacity !== null && capacity > 0) entry.capacity = capacity;
+  const production = modelWineProduction();
+  if (production !== null) entry.production = production;
   stats[townName] = entry;
   saveTownStats(store, stats);
   return entry;
@@ -91,9 +100,11 @@ export function recordCurrentTown(store: Store): TownStats | null {
  * did. Projecting keeps a slightly old reading useful instead of discarding it;
  * the result is clamped at zero because a town cannot hold negative wine.
  *
- * Production is deliberately NOT modelled: `modelWineConsumption` is the net
- * drain for a consuming town, and wine-producing towns are the sources rather
- * than the receivers, so the projection is only ever applied where it holds.
+ * The drain is net of what the town's island makes (0 off a wine island, and
+ * on a snapshot from before production was recorded). A town making more than
+ * it drinks fills up instead, to its storage when that is known: a wine town
+ * that is Auto Wine's source, or one drinking more than it makes and levelled
+ * on the difference, would otherwise be projected too little.
  *
  * That used to say the game's `wineSpendings` was the net drain. It is not —
  * it is the tavern's gross draw, before the Wine Press. `modelWineConsumption`
@@ -110,13 +121,19 @@ export function projectedStats(
   const age = now - entry.at;
   if (age > MAX_AGE_MS) return null;
 
-  const drained = (entry.consume * age) / MS_PER_HOUR;
+  const netDrain = entry.consume - (entry.production ?? 0);
+  let stock = entry.stock - (netDrain * age) / MS_PER_HOUR;
+  if (entry.capacity !== undefined) {
+    // Production stops at a full store; never cut a stock already above it.
+    stock = Math.min(stock, Math.max(entry.stock, entry.capacity));
+  }
   const projected: TownStats = {
-    stock: Math.max(0, Math.round(entry.stock - drained)),
+    stock: Math.max(0, Math.round(stock)),
     consume: entry.consume,
     at: entry.at,
   };
   if (entry.capacity !== undefined) projected.capacity = entry.capacity;
+  if (entry.production !== undefined) projected.production = entry.production;
   return projected;
 }
 

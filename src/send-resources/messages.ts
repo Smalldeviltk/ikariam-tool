@@ -147,7 +147,11 @@ export const WINE_DIALOG = {
     "assuming zero stock.",
   previewPlan: "Preview plan",
   chooseSourceTitle: "Choose the wine source town",
-  noSourceTicked: "No town is ticked as a wine source!",
+  noSourceTicked:
+    "No town is ticked as a wine source, and no town's wine figures are " +
+    "known.\n\n" +
+    "Open the Empire Overview board or press Scan, then try again — or " +
+    "tick the source in Auto Wine Settings.",
 } as const;
 
 export const WINE_PREVIEW = {
@@ -184,8 +188,22 @@ export const AUTO_WINE = {
     "Pick a different source, or give another town a Wine/h figure.",
   noSpareWine: (reserve: number) =>
     `The source town has no spare wine (it must hold more than ${reserve}).`,
+  allMakeTheirOwn: (towns: readonly string[]) =>
+    "No town needs wine shipped. These make at least as much wine as they " +
+    `drink, so they get none: ${towns.join(", ")}.\n\n` +
+    "A town gets wine only when it drinks more than its island makes.",
   nothingToSend:
     "Every receiving town already has enough wine — nothing to send.",
+  sourcePicked: (town: string, perHour: number) =>
+    `No town was ticked as the wine source: ${town} makes the most wine ` +
+    `(${perHour}/h), so it is ticked now.`,
+  sourcePickedByStock: (town: string, stock: number, hours: number) =>
+    "No town was ticked as the wine source, and none is known to make " +
+    `wine: ${town} holds the most hours of it (${stock}, ` +
+    (Number.isFinite(hours)
+      ? `${Math.floor(hours)}h at its own consumption`
+      : "and drinks none") +
+    "), so it is ticked now.",
   noFigures:
     "No wine figures are available yet.\n\n" +
     "They come from the Empire Overview board, or from visiting a town " +

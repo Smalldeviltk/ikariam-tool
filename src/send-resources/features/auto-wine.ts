@@ -28,6 +28,7 @@ import {
   loadSenders,
   routeSeconds,
   saveReceivers,
+  saveSenders,
 } from "../state";
 import type { WineReceiver } from "../types";
 import { projectedStats } from "../town-cache";
@@ -52,6 +53,8 @@ export const FALLBACK_WINE_RESERVE = 500;
 interface WineBoardRow {
   stock: number;
   consume: number;
+  /** Wine the town's island makes an hour; 0 off a wine island. */
+  production: number;
 }
 
 /**
@@ -89,7 +92,12 @@ export function readWineBoard(): Map<string, WineBoardRow> {
     // and let the caller fall back.
     if (!consumeText || !consumeText.trim()) continue;
 
-    result.set(name, { stock, consume: Math.abs(parseAmount(consumeText)) });
+    result.set(name, {
+      stock,
+      consume: Math.abs(parseAmount(consumeText)),
+      // Blank off a wine island, and parsed as 0.
+      production: parseAmount(qs(SEL.resTabWineProduction, row)?.textContent),
+    });
   }
   return result;
 }
@@ -116,10 +124,27 @@ function townNameOf(townNumber: string): string {
 export function measuredStats(
   townName: string,
   board = readWineBoard(),
-): { stock: number; consume: number } | null {
-  return (
-    board.get(townName.trim()) ?? projectedStats(getState().account, townName)
-  );
+): WineBoardRow | null {
+  const measured =
+    board.get(townName.trim()) ?? projectedStats(getState().account, townName);
+  if (!measured) return null;
+  // A snapshot from before production was recorded counts as no vineyard.
+  const { stock, consume, production = 0 } = measured;
+  return { stock, consume, production };
+}
+
+/**
+ * Wine a receiver needs an hour: what it drinks less what its own island
+ * makes. Not above 0 — a town on a wine island that makes at least what it
+ * drinks — and it is no receiver at all. A town with no figure for its
+ * production counts as making none, as every town off a wine island does.
+ */
+function netWineNeed(
+  receiver: WineReceiver,
+  measured: WineBoardRow | null,
+): number {
+  const consume = measured?.consume || Number(receiver.winePerHour) || 0;
+  return consume - (measured?.production ?? 0);
 }
 
 /**
@@ -148,14 +173,19 @@ export function buildWineTowns(
 ): WineTown[] {
   const store = getState().account;
   const fromCityId = fromTown === undefined ? null : townCityId(fromTown);
-  return receivers.map((receiver) => {
+  const towns: WineTown[] = [];
+  for (const receiver of receivers) {
     const townName = townNameOf(receiver.townNumber);
     const measured = measuredStats(townName, board);
+    // Only a town that drinks more than its island makes gets wine, and it
+    // is levelled on the difference: the rest it makes itself.
+    const need = netWineNeed(receiver, measured);
+    if (need <= 0) continue;
     const town: WineTown = {
       townNumber: receiver.townNumber,
       townName,
       stock: measured?.stock ?? 0,
-      consume: measured?.consume || Number(receiver.winePerHour) || 0,
+      consume: need,
     };
     const capacity = projectedStats(store, townName)?.capacity;
     if (capacity !== undefined) town.capacity = capacity;
@@ -165,8 +195,94 @@ export function buildWineTowns(
         ? null
         : routeSeconds(fromCityId, toCityId);
     if (seconds !== null) town.transitHours = seconds / SECONDS_PER_HOUR;
-    return town;
-  });
+    towns.push(town);
+  }
+  return towns;
+}
+
+/** A town Auto Wine could ship from, with the figures that chose it. */
+interface WineSourceCandidate {
+  townNumber: string;
+  townName: string;
+  stock: number;
+  consume: number;
+  production: number;
+}
+
+/** How a source town nobody ticked was chosen. */
+export type WineSourceChoice = WineSourceCandidate & {
+  /** `production`: it makes the most wine; `hoursLeft`: no town makes any. */
+  by: "production" | "hoursLeft";
+};
+
+/** Hours its stock lasts at its own consumption; a town drinking none, forever. */
+function hoursOfWineLeft(town: WineSourceCandidate): number {
+  return town.consume > 0 ? town.stock / town.consume : Infinity;
+}
+
+/**
+ * The town to ship wine from when none is ticked, by the same figures Auto
+ * Wine plans with: the one that makes the most wine an hour. When no town is
+ * known to make any, the one whose stock lasts longest at its own
+ * consumption — a town that drinks none lasts forever, and among those the
+ * larger stock wins. A town holding no wine is never chosen that way. Ties
+ * go to the first in the town list; null when nothing qualifies.
+ */
+export function chooseWineSource(
+  board = readWineBoard(),
+): WineSourceChoice | null {
+  const towns: WineSourceCandidate[] = [];
+  for (const town of getTownList()) {
+    const measured = measuredStats(town.townName, board);
+    if (!measured) continue;
+    towns.push({
+      townNumber: town.townNumber.toString(),
+      townName: town.townName.trim(),
+      ...measured,
+    });
+  }
+
+  let maker: WineSourceCandidate | null = null;
+  for (const town of towns) {
+    if (town.production > (maker?.production ?? 0)) maker = town;
+  }
+  if (maker) return { ...maker, by: "production" };
+
+  let longest: WineSourceCandidate | null = null;
+  for (const town of towns) {
+    if (town.stock <= 0) continue;
+    if (
+      !longest ||
+      hoursOfWineLeft(town) > hoursOfWineLeft(longest) ||
+      (hoursOfWineLeft(town) === hoursOfWineLeft(longest) &&
+        town.stock > longest.stock)
+    ) {
+      longest = town;
+    }
+  }
+  return longest ? { ...longest, by: "hoursLeft" } : null;
+}
+
+/**
+ * With no town ticked as the source, tick the one `chooseWineSource` picks
+ * and return it, saying why in the log and a toast. Null, with nothing
+ * saved, when no town qualifies.
+ */
+export function pickWineSource(): string | null {
+  const choice = chooseWineSource();
+  if (!choice) return null;
+  saveSenders([choice.townNumber]);
+  const message =
+    choice.by === "production"
+      ? AUTO_WINE.sourcePicked(choice.townName, Math.round(choice.production))
+      : AUTO_WINE.sourcePickedByStock(
+          choice.townName,
+          Math.round(choice.stock),
+          hoursOfWineLeft(choice),
+        );
+  logInfo(`Auto Wine: ${message}`);
+  showToast(message);
+  return choice.townNumber;
 }
 
 /**
@@ -215,12 +331,56 @@ export function getSourceSupply(
 }
 
 /**
- * Whether any configured receiver is not the source town itself. When none
- * is, says why in a toast and returns false.
+ * The towns, other than the source and the ticked senders, whose island
+ * makes at least the wine they drink — so they get none.
  */
-export function hasReceiversFor(fromTown: string): boolean {
+function townsMakingTheirOwnWine(
+  fromTown: string,
+  board: Map<string, WineBoardRow>,
+): string[] {
+  const senders = loadSenders();
+  const names: string[] = [];
+  for (const town of getTownList()) {
+    const id = town.townNumber.toString();
+    if (id === fromTown || senders.includes(id)) continue;
+    const measured = measuredStats(town.townName, board);
+    if (
+      measured &&
+      measured.production > 0 &&
+      measured.production >= measured.consume
+    ) {
+      names.push(town.townName.trim());
+    }
+  }
+  return names;
+}
+
+/**
+ * Whether any configured receiver, other than the source town itself, needs
+ * wine: drinks more than its island makes. When none does, says why in a
+ * toast and returns false.
+ */
+export function hasReceiversFor(
+  fromTown: string,
+  board = readWineBoard(),
+): boolean {
   const configured = loadReceivers();
-  if (configured.some((r) => r.townNumber !== fromTown)) return true;
+  const others = configured.filter((r) => r.townNumber !== fromTown);
+  const needing = others.filter(
+    (receiver) =>
+      netWineNeed(
+        receiver,
+        measuredStats(townNameOf(receiver.townNumber), board),
+      ) > 0,
+  );
+  if (needing.length > 0) return true;
+  // Towns left out for making their own wine: the old messages blamed the
+  // Sender ticks or the source for what was the island's vineyard.
+  const selfSupplied = townsMakingTheirOwnWine(fromTown, board);
+  if (selfSupplied.length > 0) {
+    showToast(AUTO_WINE.allMakeTheirOwn(selfSupplied));
+    return false;
+  }
   // Two quite different situations reach this point, and "No receiving towns
   // configured for wine!" described neither well enough to act on. The
   // common one is ticking most towns as Sender: the tick and the Wine/h
@@ -231,7 +391,9 @@ export function hasReceiversFor(fromTown: string): boolean {
   showToast(
     configured.length === 0
       ? AUTO_WINE.noReceivers(senderCount, townCount)
-      : AUTO_WINE.onlyReceiverIsSource,
+      : others.length === 0
+        ? AUTO_WINE.onlyReceiverIsSource
+        : AUTO_WINE.nothingToSend,
   );
   return false;
 }
@@ -398,7 +560,8 @@ export function loadConsumedWine(): void {
  * Save the receivers that Load then Save in the settings dialog would save,
  * without the dialog: every town not ticked as a sender, with its measured
  * consumption, or its saved Wine/h when there is no measurement. A town ends
- * up a receiver when that figure is above 0.
+ * up a receiver when that figure is above what its island makes (0 off a wine
+ * island).
  */
 export function saveMeasuredReceivers(): void {
   const senders = loadSenders();
@@ -413,7 +576,7 @@ export function saveMeasuredReceivers(): void {
     const winePerHour = measured
       ? String(Math.round(measured.consume))
       : (saved.find((entry) => entry.townNumber === id)?.winePerHour ?? "0");
-    if (Number(winePerHour) > 0)
+    if (Number(winePerHour) > (measured?.production ?? 0))
       receivers.push({ townNumber: id, winePerHour });
   }
   saveReceivers(receivers);

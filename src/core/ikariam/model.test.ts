@@ -10,6 +10,7 @@ import {
   modelOwnCities,
   modelResource,
   modelWineConsumption,
+  modelWineProduction,
   winePressLevel,
 } from "./model";
 
@@ -207,6 +208,39 @@ describe("the Wine Press", () => {
     document.body.innerHTML = press(40);
     delete (window as any).ikariam;
     expect(modelWineConsumption()).toBeNull();
+  });
+});
+
+describe("wine production", () => {
+  // The fields as two bug reports (24/10, 26/10) carry them: a number for the
+  // trade good, and a rate per second.
+  it("is the island's rate an hour on a wine island", () => {
+    installModel({ producedTradegood: 1, tradegoodProduction: 0.168 });
+    expect(modelWineProduction()).toBeCloseTo(604.8, 6);
+  });
+
+  it("is 0 on an island that makes another good", () => {
+    installModel({ producedTradegood: 3, tradegoodProduction: 0.7564779 });
+    expect(modelWineProduction()).toBe(0);
+  });
+
+  it("reads a trade good written as a string", () => {
+    installModel({ producedTradegood: "1", tradegoodProduction: 0.5 });
+    expect(modelWineProduction()).toBe(1800);
+  });
+
+  it("is null when the model does not say which good the island makes", () => {
+    installModel();
+    expect(modelWineProduction()).toBeNull();
+  });
+
+  it("is null on a wine island whose rate is missing", () => {
+    installModel({ producedTradegood: 1 });
+    expect(modelWineProduction()).toBeNull();
+  });
+
+  it("is null when the model itself is missing", () => {
+    expect(modelWineProduction()).toBeNull();
   });
 });
 

@@ -17,6 +17,7 @@
  */
 
 import { qs } from "../dom";
+import { SECONDS_PER_HOUR } from "../format";
 import { pageWindow } from "./globals";
 import { SEL } from "./selectors";
 
@@ -211,6 +212,24 @@ export function modelWineConsumption(): number | null {
 
   const saving = reductionBuildingPercent(press);
   return (Math.abs(spendings) * (100 - saving)) / 100;
+}
+
+/**
+ * Wine the current town's island makes an hour: `tradegoodProduction` (a rate
+ * per second) when the town's trade good is wine, 0 when it is another good,
+ * and null when the model carries neither field.
+ *
+ * Measured in two bug reports (24/10 and 26/10): `producedTradegood` is a
+ * number, `1` on a wine island, and a wine town read
+ * `tradegoodProduction: 0.168` — 605 an hour, as the board shows it.
+ */
+export function modelWineProduction(): number | null {
+  const model = getModel();
+  const tradegood = numberOrNull(model?.producedTradegood);
+  if (tradegood === null) return null;
+  if (String(tradegood) !== MODEL_RESOURCE_KEY.wine) return 0;
+  const perSecond = numberOrNull(model?.tradegoodProduction);
+  return perSecond === null ? null : perSecond * SECONDS_PER_HOUR;
 }
 
 /** Numeric id of the town currently open. */

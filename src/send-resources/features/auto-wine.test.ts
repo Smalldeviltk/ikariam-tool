@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   AUTO_WINE_LABEL,
   getState,
@@ -9,10 +9,13 @@ import {
   saveSenders,
 } from "../state";
 import {
+  chooseWineSource,
   loadConsumedWine,
   measuredStats,
+  pickWineSource,
   saveMeasuredReceivers,
 } from "./auto-wine";
+import { loadSenders } from "../state";
 import { saveTownStats } from "../town-cache";
 import {
   buildWineCsv,
@@ -35,7 +38,14 @@ import {
  * Confirm against `tools/collect-dom-report.js` output (`resTabWine`) before
  * trusting these fixtures.
  */
-function boardRow(town: string, stock: string, consumption: string): string {
+function boardRow(
+  town: string,
+  stock: string,
+  consumption: string,
+  // Blank, as the board draws it for a town whose island makes another good;
+  // a wine town reads like "+605".
+  production = "",
+): string {
   return `<tr>
     <td class="city_name"><span class="clickable">${town}</span></td>
     <td class="resource wine">
@@ -44,7 +54,7 @@ function boardRow(town: string, stock: string, consumption: string): string {
       <span class="incoming"></span>
     </td>
     <td class="resource wine">
-      <span class="prodconssubsum production Green">+10</span>
+      <span class="prodconssubsum production Green">${production}</span>
       <span class="prodconssubsum consumption Red">${consumption}</span>
       <span class="emptytime Red"></span>
     </td>
@@ -60,6 +70,12 @@ function townDropdown(names: string[]): string {
   return `<div id="dropDown_js_citySelectContainer"><div class="bg"><ul>${items}</ul></div></div>`;
 }
 
+const { showToast } = vi.hoisted(() => ({ showToast: vi.fn() }));
+vi.mock("@core/ui/window", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@core/ui/window")>()),
+  showToast,
+}));
+
 const TOWNS = ["Athens", "Sparta", "Corinth"];
 
 beforeEach(() => {
@@ -67,6 +83,7 @@ beforeEach(() => {
   // account store, so state has to exist.
   localStorage.clear();
   initState("tester");
+  showToast.mockReset();
 });
 
 describe("readWineBoard", () => {
@@ -79,8 +96,16 @@ describe("readWineBoard", () => {
 
   it("reads stock and consumption keyed by town name", () => {
     const board = readWineBoard();
-    expect(board.get("Athens")).toEqual({ stock: 32495, consume: 525 });
-    expect(board.get("Sparta")).toEqual({ stock: 21657, consume: 350 });
+    expect(board.get("Athens")).toEqual({
+      stock: 32495,
+      consume: 525,
+      production: 0,
+    });
+    expect(board.get("Sparta")).toEqual({
+      stock: 21657,
+      consume: 350,
+      production: 0,
+    });
   });
 
   it("normalises the negative consumption the board renders", () => {
@@ -98,7 +123,11 @@ describe("readWineBoard", () => {
         boardRow("Sparta", "0.00", ""),
       ]);
       const board = readWineBoard();
-      expect(board.get("Athens")).toEqual({ stock: 28542, consume: 559 });
+      expect(board.get("Athens")).toEqual({
+        stock: 28542,
+        consume: 559,
+        production: 0,
+      });
       expect(board.has("Sparta")).toBe(false);
     },
   );
@@ -107,6 +136,19 @@ describe("readWineBoard", () => {
     document.body.innerHTML = "";
     expect(readWineBoard().size).toBe(0);
   });
+
+  it(
+    "reads what a wine island makes, as the board writes it, and a blank " +
+      "production cell as 0",
+    () => {
+      document.body.innerHTML = renderBoard([
+        boardRow("Athens", "32,495", "-525", "+1,605"),
+        boardRow("Sparta", "21,657", "-350", ""),
+      ]);
+      expect(readWineBoard().get("Athens")!.production).toBe(1605);
+      expect(readWineBoard().get("Sparta")!.production).toBe(0);
+    },
+  );
 });
 
 describe("buildWineTowns", () => {
@@ -261,7 +303,11 @@ describe("measuredStats", () => {
     saveTownStats(getState().account, {
       Athens: { stock: 1, consume: 1, at: Date.now() },
     });
-    expect(measuredStats("Athens")).toEqual({ stock: 5000, consume: 100 });
+    expect(measuredStats("Athens")).toEqual({
+      stock: 5000,
+      consume: 100,
+      production: 0,
+    });
   });
 
   it(
@@ -281,6 +327,323 @@ describe("measuredStats", () => {
 
   it("returns null when neither source knows the town", () => {
     expect(measuredStats("Athens")).toBeNull();
+  });
+
+  it("takes production from the town cache when the board lacks the town", () => {
+    saveTownStats(getState().account, {
+      Athens: { stock: 4_000, consume: 200, production: 605, at: Date.now() },
+    });
+    expect(measuredStats("Athens")).toMatchObject({ production: 605 });
+  });
+
+  it("reads a snapshot from before production was recorded as making none", () => {
+    saveTownStats(getState().account, {
+      Athens: { stock: 4_000, consume: 200, at: Date.now() },
+    });
+    expect(measuredStats("Athens")).toEqual({
+      stock: 4_000,
+      consume: 200,
+      production: 0,
+    });
+  });
+});
+
+describe("only a town drinking more than its island makes gets wine", () => {
+  beforeEach(() => {
+    document.body.innerHTML =
+      townDropdown(TOWNS) +
+      renderBoard([
+        // Athens: makes 605, drinks 300 — more than it drinks.
+        boardRow("Athens", "5,000", "-300", "+605"),
+        // Sparta: makes 500, drinks 800 — short by 300.
+        boardRow("Sparta", "3,000", "-800", "+500"),
+        // Corinth: another good's island, drinks 200.
+        boardRow("Corinth", "1,000", "-200", ""),
+      ]);
+  });
+
+  it("leaves out a town that makes at least what it drinks", () => {
+    const towns = buildWineTowns([
+      { townNumber: "0", winePerHour: "300" },
+      { townNumber: "2", winePerHour: "200" },
+    ]);
+    expect(towns.map((town) => town.townName)).toEqual(["Corinth"]);
+  });
+
+  it("leaves out a town that makes exactly what it drinks", () => {
+    document.body.innerHTML =
+      townDropdown(TOWNS) +
+      renderBoard([boardRow("Athens", "5,000", "-300", "+300")]);
+    expect(buildWineTowns([{ townNumber: "0", winePerHour: "300" }])).toEqual(
+      [],
+    );
+  });
+
+  it("levels a town on a wine island on what it is short by", () => {
+    const [sparta] = buildWineTowns([{ townNumber: "1", winePerHour: "800" }]);
+    expect(sparta).toMatchObject({ townName: "Sparta", consume: 300 });
+  });
+
+  it("leaves a town off a wine island levelled on all it drinks", () => {
+    const [corinth] = buildWineTowns([{ townNumber: "2", winePerHour: "0" }]);
+    expect(corinth).toMatchObject({ townName: "Corinth", consume: 200 });
+  });
+
+  it(
+    "counts a town with no figures as making none, and keeps its " +
+      "hand-entered rate",
+    () => {
+      document.body.innerHTML = townDropdown(TOWNS);
+      const [corinth] = buildWineTowns([
+        { townNumber: "2", winePerHour: "150" },
+      ]);
+      expect(corinth).toMatchObject({ townName: "Corinth", consume: 150 });
+    },
+  );
+
+  it("takes production from the town cache when there is no board", () => {
+    document.body.innerHTML = townDropdown(TOWNS);
+    saveTownStats(getState().account, {
+      Corinth: { stock: 900, consume: 250, production: 400, at: Date.now() },
+    });
+    expect(buildWineTowns([{ townNumber: "2", winePerHour: "250" }])).toEqual(
+      [],
+    );
+  });
+
+  it("queues nothing for a town that makes more than it drinks", () => {
+    saveReceivers([
+      { townNumber: "0", winePerHour: "300" },
+      { townNumber: "2", winePerHour: "200" },
+    ]);
+    // Sparta sends: 3,000 less its 800 reserve.
+    expect(enqueueWineRun("1")).toBe(1);
+    const queued = getState().queue.listOfType("sendResource");
+    expect(queued.map((task) => task.data.destination)).toEqual(["2"]);
+  });
+
+  it("writes no wine-crawl row for a town that makes more than it drinks", () => {
+    saveReceivers([
+      { townNumber: "0", winePerHour: "300" },
+      { townNumber: "2", winePerHour: "200" },
+    ]);
+    const { text, rows } = buildWineCsv("1", "tester");
+    expect(rows).toBe(1);
+    expect(text).toContain("tester, Corinth    ,");
+    expect(text).not.toContain("Athens");
+  });
+
+  it(
+    "says which towns make their own wine when they were the only " +
+      "receivers, and queues nothing",
+    () => {
+      // Athens makes 605 and drinks 300; Corinth is the source.
+      saveReceivers([{ townNumber: "0", winePerHour: "300" }]);
+
+      expect(enqueueWineRun("2")).toBe(0);
+
+      expect(getState().queue.length).toBe(0);
+      expect(showToast).toHaveBeenCalledTimes(1);
+      expect(showToast.mock.calls[0][0]).toContain(
+        "These make at least as much wine as they drink, so they get none: " +
+          "Athens.",
+      );
+    },
+  );
+
+  it(
+    "says which towns make their own wine when none is set to receive, " +
+      "leaving out the source and the ticked senders",
+    () => {
+      document.body.innerHTML =
+        townDropdown(TOWNS) +
+        renderBoard([
+          boardRow("Athens", "5,000", "-300", "+605"),
+          boardRow("Sparta", "5,000", "-100", "+605"),
+          boardRow("Corinth", "5,000", "-100", "+605"),
+        ]);
+      saveSenders(["1"]);
+      saveReceivers([]);
+
+      expect(enqueueWineRun("0")).toBe(0);
+
+      expect(showToast.mock.calls[0][0]).toContain("they get none: Corinth.");
+    },
+  );
+
+  it(
+    "keeps the old message when no town is set to receive and none makes " +
+      "its own wine",
+    () => {
+      document.body.innerHTML =
+        townDropdown(TOWNS) +
+        renderBoard([boardRow("Athens", "5,000", "-300", "+605")]);
+      saveReceivers([]);
+
+      expect(enqueueWineRun("0")).toBe(0);
+
+      expect(showToast.mock.calls[0][0]).toContain(
+        "No town is set to receive wine",
+      );
+    },
+  );
+
+  it("still counts a receiver it has no figures for, by its Wine/h", () => {
+    document.body.innerHTML =
+      townDropdown(TOWNS) +
+      renderBoard([
+        boardRow("Athens", "5,000", "-300", "+605"),
+        boardRow("Sparta", "3,000", "-100", "+605"),
+      ]);
+    saveReceivers([
+      { townNumber: "1", winePerHour: "100" },
+      { townNumber: "2", winePerHour: "150" },
+    ]);
+
+    expect(enqueueWineRun("0")).toBe(1);
+
+    const queued = getState().queue.listOfType("sendResource");
+    expect(queued.map((task) => task.data.destination)).toEqual(["2"]);
+  });
+
+  it("does not save a town that makes at least what it drinks as a receiver", () => {
+    saveSenders(["2"]);
+
+    saveMeasuredReceivers();
+
+    // Sparta drinks 800 and makes 500: saved, with what it drinks.
+    expect(loadReceivers()).toEqual([{ townNumber: "1", winePerHour: "800" }]);
+  });
+});
+
+describe("choosing a source when none is ticked", () => {
+  it("picks the town that makes the most wine", () => {
+    document.body.innerHTML =
+      townDropdown(TOWNS) +
+      renderBoard([
+        boardRow("Athens", "90,000", "-300", "+200"),
+        boardRow("Sparta", "1,000", "-800", "+605"),
+        boardRow("Corinth", "50,000", "-100", ""),
+      ]);
+    expect(chooseWineSource()).toMatchObject({
+      townNumber: "1",
+      townName: "Sparta",
+      by: "production",
+      production: 605,
+    });
+  });
+
+  it("gives a tie to the first town in the list", () => {
+    document.body.innerHTML =
+      townDropdown(TOWNS) +
+      renderBoard([
+        boardRow("Athens", "1,000", "-300", "+605"),
+        boardRow("Sparta", "9,000", "-300", "+605"),
+      ]);
+    expect(chooseWineSource()?.townName).toBe("Athens");
+  });
+
+  it("finds a wine island in the town cache when there is no board", () => {
+    document.body.innerHTML = townDropdown(TOWNS);
+    saveTownStats(getState().account, {
+      Athens: { stock: 9_000, consume: 300, production: 0, at: Date.now() },
+      Corinth: { stock: 100, consume: 100, production: 605, at: Date.now() },
+    });
+    expect(chooseWineSource()).toMatchObject({
+      townName: "Corinth",
+      by: "production",
+    });
+  });
+
+  it(
+    "with no town making wine, picks the one whose stock lasts longest at " +
+      "its own consumption, not the one holding the most",
+    () => {
+      document.body.innerHTML =
+        townDropdown(TOWNS) +
+        renderBoard([
+          // 20 hours.
+          boardRow("Athens", "10,000", "-500"),
+          // 60 hours, with less wine.
+          boardRow("Sparta", "6,000", "-100"),
+          // 5 hours.
+          boardRow("Corinth", "1,000", "-200"),
+        ]);
+      expect(chooseWineSource()).toMatchObject({
+        townNumber: "1",
+        townName: "Sparta",
+        by: "hoursLeft",
+      });
+    },
+  );
+
+  it(
+    "takes a town that drinks none as lasting forever, and the larger stock " +
+      "among those",
+    () => {
+      document.body.innerHTML =
+        townDropdown(TOWNS) +
+        renderBoard([
+          boardRow("Athens", "90,000", "-10"),
+          // The town list sorts by name, so Corinth comes first: the larger
+          // stock has to win over that order.
+          boardRow("Corinth", "500", "-0"),
+          boardRow("Sparta", "2,000", "-0"),
+        ]);
+      expect(chooseWineSource()?.townName).toBe("Sparta");
+    },
+  );
+
+  it("never picks a town holding no wine by its hours", () => {
+    document.body.innerHTML =
+      townDropdown(TOWNS) +
+      renderBoard([
+        boardRow("Athens", "0", "-0"),
+        boardRow("Sparta", "0", "-100"),
+      ]);
+    expect(chooseWineSource()).toBeNull();
+  });
+
+  it("finds nothing when no town's figures are known", () => {
+    document.body.innerHTML = townDropdown(TOWNS);
+    expect(chooseWineSource()).toBeNull();
+  });
+
+  it("ticks the town it picks as the source, and says so", () => {
+    document.body.innerHTML =
+      townDropdown(TOWNS) +
+      renderBoard([
+        boardRow("Athens", "1,000", "-300", ""),
+        boardRow("Sparta", "1,000", "-300", "+604.8"),
+      ]);
+
+    expect(pickWineSource()).toBe("1");
+
+    expect(loadSenders()).toEqual(["1"]);
+    expect(showToast).toHaveBeenCalledWith(
+      expect.stringContaining("Sparta makes the most wine (605/h)"),
+    );
+  });
+
+  it("says why when it picks by hours of wine left", () => {
+    document.body.innerHTML =
+      townDropdown(TOWNS) + renderBoard([boardRow("Athens", "6,000", "-100")]);
+
+    expect(pickWineSource()).toBe("0");
+
+    expect(showToast).toHaveBeenCalledWith(
+      expect.stringContaining("Athens holds the most hours of it (6000, 60h"),
+    );
+  });
+
+  it("ticks nothing when it finds nothing", () => {
+    document.body.innerHTML = townDropdown(TOWNS);
+    saveSenders([]);
+
+    expect(pickWineSource()).toBeNull();
+
+    expect(loadSenders()).toEqual([]);
+    expect(showToast).not.toHaveBeenCalled();
   });
 });
 

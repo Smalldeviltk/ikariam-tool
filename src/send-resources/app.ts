@@ -60,10 +60,12 @@ import {
 } from "./features/send-resources";
 import {
   buildWineCsv,
+  chooseWineSource,
   collectWineSettings,
   enqueueWineRun,
   hasReceiversFor,
   loadConsumedWine,
+  pickWineSource,
   saveMeasuredReceivers,
 } from "./features/auto-wine";
 import {
@@ -339,11 +341,19 @@ function queueWineRun(fromTown: string): boolean {
  * Auto Wine's Start: the whole routine in one press. Scan every town and wait
  * for it to finish, take each town's consumption as Load then Save would,
  * queue the run, then switch Transport's timer on.
+ *
+ * With no source town (`null`: none ticked), the source is picked after the
+ * scan, from the figures it has just measured (`pickWineSource`).
  */
-async function runAutoWine(fromTown: string): Promise<void> {
+async function runAutoWine(fromTown: string | null): Promise<void> {
   if (!(await scanBuildings(undefined, () => runner.isRunning))) return;
+  const source = fromTown ?? pickWineSource();
+  if (source === null) {
+    showToast(WINE_DIALOG.noSourceTicked);
+    return;
+  }
   saveMeasuredReceivers();
-  if (!queueWineRun(fromTown)) return;
+  if (!queueWineRun(source)) return;
   if (!isAutoStart()) toggleQueueRunner();
 }
 
@@ -395,7 +405,8 @@ function runCrawl(): void {
 
 /**
  * Run `run` with the wine source town: the only one ticked as Sender, or the
- * one the player picks from a popup whose buttons fire `chooseAction`.
+ * one the player picks from a popup whose buttons fire `chooseAction`. With
+ * none ticked, the one `pickWineSource` ticks from the figures known now.
  */
 function withWineSource(
   chooseAction: string,
@@ -403,7 +414,9 @@ function withWineSource(
 ): void {
   const senders = loadSenders();
   if (senders.length === 0) {
-    showToast(WINE_DIALOG.noSourceTicked);
+    const picked = pickWineSource();
+    if (picked === null) showToast(WINE_DIALOG.noSourceTicked);
+    else run(picked);
     return;
   }
   if (senders.length === 1) {
@@ -504,16 +517,24 @@ function registerUiActions(): void {
     },
     "wine.load": loadConsumedWine,
     "wine.preview": () => {
-      const senders = loadSenders();
-      if (senders.length === 0) {
+      // With several sources, preview against the first one. With none, the
+      // one a run would pick — not ticked here: the dialog's Save writes the
+      // ticks back from the form.
+      const source = loadSenders()[0] ?? chooseWineSource()?.townNumber;
+      if (source === undefined) {
         showToast(WINE_DIALOG.noSourceTicked);
         return;
       }
-      // With several sources, preview against the first one.
-      renderWinePlanPreview(senders[0]);
+      renderWinePlanPreview(source);
     },
-    "wine.autoRun": () =>
-      withWineSource("wine.autoRunFrom", (town) => void runAutoWine(town)),
+    "wine.autoRun": () => {
+      // None ticked: Start picks the source after its scan, from fresh figures.
+      if (loadSenders().length === 0) {
+        void runAutoWine(null);
+        return;
+      }
+      withWineSource("wine.autoRunFrom", (town) => void runAutoWine(town));
+    },
     "wine.autoRunFrom": (element) => {
       const town = element.dataset.ikaTown;
       if (!town) return;

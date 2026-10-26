@@ -100,6 +100,8 @@ export const SEL = {
   resTabTownName: "td.city_name > .clickable",
   resTabWineStock: "td.resource.wine span.current",
   resTabWineConsumption: "td.resource.wine span.consumption",
+  /** Blank on a town whose island makes another good. */
+  resTabWineProduction: "td.resource.wine span.production",
   /** Legacy selector: the first `span.Red` in the wine cell is the consumption one. */
   resTabWineConsumed: "td.resource.wine > span.Red",
 

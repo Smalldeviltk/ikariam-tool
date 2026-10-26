@@ -88,6 +88,39 @@ describe("recordCurrentTown", () => {
     });
   });
 
+  it("records what a wine island makes an hour", () => {
+    document.body.innerHTML = CITY_VIEW + `<div id="js_cityBread">W-Athens</div>`;
+    Object.assign(window, { ikariam: {
+      model: {
+        currentResources: { 1: 4321 },
+        wineSpendings: 111,
+        producedTradegood: 1,
+        tradegoodProduction: 0.168,
+      },
+    } });
+    expect(recordCurrentTown(store)?.production).toBeCloseTo(604.8, 6);
+    expect(loadTownStats(store)["W-Athens"].production).toBeCloseTo(604.8, 6);
+  });
+
+  it("records 0 production off a wine island", () => {
+    document.body.innerHTML = CITY_VIEW + `<div id="js_cityBread">M-Corinth</div>`;
+    Object.assign(window, { ikariam: {
+      model: {
+        currentResources: { 1: 900 },
+        wineSpendings: 166,
+        producedTradegood: 3,
+        tradegoodProduction: 0.7564779,
+      },
+    } });
+    expect(recordCurrentTown(store)?.production).toBe(0);
+  });
+
+  it("leaves production out when the model does not carry it", () => {
+    document.body.innerHTML = CITY_VIEW + `<div id="js_cityBread">W-Athens</div>`;
+    mockModel(1000, 100);
+    expect(recordCurrentTown(store)).not.toHaveProperty("production");
+  });
+
   it("leaves capacity out when the model does not carry it", () => {
     document.body.innerHTML = CITY_VIEW + `<div id="js_cityBread">W-Athens</div>`;
     mockModel(1000, 100);
@@ -142,6 +175,77 @@ describe("projectedStats", () => {
       "W-Athens": { stock: 5000, consume: 500, capacity: 80_000, at: now },
     });
     expect(projectedStats(store, "W-Athens", now)?.capacity).toBe(80_000);
+  });
+
+  it("drains a town on a wine island only by what it drinks beyond it", () => {
+    // Drinks 800, makes 500: 300/h net for 2 hours.
+    saveTownStats(store, {
+      "W-Athens": {
+        stock: 5000,
+        consume: 800,
+        production: 500,
+        at: now - 2 * 3_600_000,
+      },
+    });
+    expect(projectedStats(store, "W-Athens", now)?.stock).toBe(4400);
+  });
+
+  it("fills up a town that makes more than it drinks", () => {
+    // Makes 605, drinks 105: 500/h more for 2 hours.
+    saveTownStats(store, {
+      "W-Athens": {
+        stock: 5000,
+        consume: 105,
+        production: 605,
+        at: now - 2 * 3_600_000,
+      },
+    });
+    expect(projectedStats(store, "W-Athens", now)?.stock).toBe(6000);
+  });
+
+  it("stops filling up at the town's storage", () => {
+    saveTownStats(store, {
+      "W-Athens": {
+        stock: 5000,
+        consume: 105,
+        production: 605,
+        capacity: 5_600,
+        at: now - 2 * 3_600_000,
+      },
+    });
+    expect(projectedStats(store, "W-Athens", now)?.stock).toBe(5_600);
+  });
+
+  it("does not cut a stock already above its storage", () => {
+    saveTownStats(store, {
+      "W-Athens": {
+        stock: 7000,
+        consume: 105,
+        production: 605,
+        capacity: 5_600,
+        at: now - 2 * 3_600_000,
+      },
+    });
+    expect(projectedStats(store, "W-Athens", now)?.stock).toBe(7000);
+  });
+
+  it("caps nothing for a town that drains, whatever its storage", () => {
+    saveTownStats(store, {
+      "W-Athens": {
+        stock: 9000,
+        consume: 500,
+        capacity: 5_600,
+        at: now - 2 * 3_600_000,
+      },
+    });
+    expect(projectedStats(store, "W-Athens", now)?.stock).toBe(8000);
+  });
+
+  it("carries the recorded production through", () => {
+    saveTownStats(store, {
+      "W-Athens": { stock: 5000, consume: 500, production: 605, at: now },
+    });
+    expect(projectedStats(store, "W-Athens", now)?.production).toBe(605);
   });
 
   it("discards a snapshot past the age limit", () => {

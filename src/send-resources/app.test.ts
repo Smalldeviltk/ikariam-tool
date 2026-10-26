@@ -415,14 +415,34 @@ describe("the Transport settings dialog", () => {
 });
 
 describe("Auto Wine", () => {
-  /** A board row, as `auto-wine.test.ts` draws it. */
-  function boardRow(town: string, stock: string, consumption: string): string {
+  /**
+   * A board row, as `auto-wine.test.ts` draws it. Production is blank, as the
+   * board leaves it off a wine island, unless given ("+605").
+   */
+  function boardRow(
+    town: string,
+    stock: string,
+    consumption: string,
+    production = "",
+  ): string {
     return (
       `<tr><td class="city_name"><span class="clickable">${town}</span></td>` +
       `<td class="resource wine"><span class="current">${stock}</span></td>` +
       `<td class="resource wine">` +
+      `<span class="prodconssubsum production Green">${production}</span>` +
       `<span class="prodconssubsum consumption Red">${consumption}</span></td></tr>`
     );
+  }
+
+  /** Make the scan draw this board instead of `BOARD_AFTER_SCAN`. */
+  function scanDraws(rows: string[]): void {
+    scanBuildings.mockImplementation(async () => {
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<div id="ResTab"><table><tbody>${rows.join("")}</tbody></table></div>`,
+      );
+      return true;
+    });
   }
 
   /** The board as a scan leaves it: the source full, M-Corinth drinking 200/h. */
@@ -506,17 +526,128 @@ describe("Auto Wine", () => {
     expect(timers()).toBe(IDLE);
   });
 
-  it("Start says so, and does not scan, when no town is ticked as a source", async () => {
-    await startWithSource([]);
+  it(
+    "Start with no source ticked scans first, then ticks the town making the " +
+      "most wine from what the scan measured, and runs from it",
+    async () => {
+      // Nothing on the page before the scan: a pick made before it finds
+      // nothing to go by.
+      scanDraws([
+        boardRow("W-Athens", "10,000", "-100", "+605"),
+        boardRow("M-Corinth", "0", "-200"),
+      ]);
+      const state = await startWithSource([]);
 
-    await actions["wine.autoRun"](document.body);
-    await settle();
+      await actions["wine.autoRun"](document.body);
+      await settle();
 
-    expect(scanBuildings).not.toHaveBeenCalled();
-    expect(showToast).toHaveBeenCalledWith(
-      expect.stringContaining("No town is ticked"),
-    );
-  });
+      expect(scanBuildings).toHaveBeenCalledTimes(1);
+      expect(state.loadSenders()).toEqual(["0"]);
+      expect(state.loadReceivers()).toEqual([
+        { townNumber: "1", winePerHour: "200" },
+      ]);
+      expect(queuedWine(state)).toEqual(["0 -> 1: wine"]);
+      expect(state.isAutoStart()).toBe(true);
+      expect(timers()).toBe(RUNNING);
+      expect(showToast).toHaveBeenCalledWith(
+        expect.stringContaining("W-Athens makes the most wine (605/h)"),
+      );
+    },
+  );
+
+  it(
+    "Start with no source ticked and no town making wine runs from the town " +
+      "whose wine lasts longest, not the one holding the most",
+    async () => {
+      // W-Athens holds more but lasts 2 hours; M-Corinth lasts 60.
+      scanDraws([
+        boardRow("W-Athens", "10,000", "-5,000"),
+        boardRow("M-Corinth", "6,000", "-100"),
+      ]);
+      const state = await startWithSource([]);
+
+      await actions["wine.autoRun"](document.body);
+      await settle();
+
+      expect(state.loadSenders()).toEqual(["1"]);
+      expect(queuedWine(state)).toEqual(["1 -> 0: wine"]);
+      expect(state.isAutoStart()).toBe(true);
+    },
+  );
+
+  it(
+    "Start with no source ticked says so after the scan, and queues and " +
+      "ticks nothing, when no town's figures are known",
+    async () => {
+      scanDraws([]);
+      const state = await startWithSource([]);
+
+      await actions["wine.autoRun"](document.body);
+      await settle();
+
+      expect(scanBuildings).toHaveBeenCalledTimes(1);
+      expect(showToast).toHaveBeenCalledWith(
+        expect.stringContaining("No town is ticked"),
+      );
+      expect(state.loadSenders()).toEqual([]);
+      expect(queuedWine(state)).toEqual([]);
+      expect(state.isAutoStart()).toBe(false);
+      expect(timers()).toBe(IDLE);
+    },
+  );
+
+  it(
+    "Start sends nothing to a town whose island makes more wine than it " +
+      "drinks — it is no receiver",
+    async () => {
+      scanDraws([
+        boardRow("W-Athens", "10,000", "-100", "+605"),
+        // Another wine town: drinks 300, makes 500.
+        boardRow("M-Corinth", "0", "-300", "+500"),
+      ]);
+      const state = await startWithSource();
+
+      await actions["wine.autoRun"](document.body);
+      await settle();
+
+      expect(state.loadReceivers()).toEqual([]);
+      expect(queuedWine(state)).toEqual([]);
+      expect(state.isAutoStart()).toBe(false);
+      // Says why, naming the town — not the old "ticked as Sender" message.
+      expect(showToast).toHaveBeenLastCalledWith(
+        expect.stringContaining("so they get none: M-Corinth."),
+      );
+    },
+  );
+
+  it(
+    "Start ships a town on a wine island only what it is short by, levelled " +
+      "on that",
+    async () => {
+      scanDraws([
+        boardRow("W-Athens", "10,000", "-100", "+605"),
+        // Drinks 800, makes 500: short by 300 an hour.
+        boardRow("M-Corinth", "0", "-800", "+500"),
+      ]);
+      const state = await startWithSource();
+
+      await actions["wine.autoRun"](document.body);
+      await settle();
+
+      expect(state.loadReceivers()).toEqual([
+        { townNumber: "1", winePerHour: "800" },
+      ]);
+      const [task] = state.getState().queue.listOfType("sendResource");
+      // The source's 9,900 spare in whole ships of 500 is 9,500: one
+      // receiver takes all of it, whatever it drinks. What the net figure
+      // changes is the hours it reaches, so read the plan the run used.
+      expect(task.data).toMatchObject({ destination: "1", amount: 9_500 });
+      const { planWineRun } = await import("./features/auto-wine");
+      expect(planWineRun("0").allocations[0]).toMatchObject({
+        consume: 300,
+      });
+    },
+  );
 
   it("Start asks which source to use when several are ticked", async () => {
     const createPopup = vi.fn();
@@ -558,6 +689,55 @@ describe("Auto Wine", () => {
       expect(scanBuildings).not.toHaveBeenCalled();
       expect(state.isAutoStart()).toBe(false);
       expect(timers()).toBe(IDLE);
+    },
+  );
+
+  it(
+    "the settings dialog's Save with no source ticked ticks the town making " +
+      "the most wine, from the figures on the page, and queues the run",
+    async () => {
+      const state = await startWithSource([]);
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<div id="ResTab"><table><tbody>` +
+          boardRow("W-Athens", "10,000", "-100", "+605") +
+          boardRow("M-Corinth", "0", "-200") +
+          `</tbody></table></div>` +
+          `<table><tr class="txtWine"><td><input type="checkbox" id="cbSender_0"></td>` +
+          `<td><input type="text" id="txtWine_0" value="0"></td></tr>` +
+          `<tr class="txtWine"><td><input type="checkbox" id="cbSender_1"></td>` +
+          `<td><input type="text" id="txtWine_1" value="200"></td></tr></table>`,
+      );
+
+      await actions["wine.save"](document.body);
+
+      expect(scanBuildings).not.toHaveBeenCalled();
+      expect(state.loadSenders()).toEqual(["0"]);
+      expect(queuedWine(state)).toEqual(["0 -> 1: wine"]);
+      expect(state.isAutoStart()).toBe(false);
+    },
+  );
+
+  it(
+    "Preview with no source ticked previews from the town a run would pick, " +
+      "without ticking it — the dialog's Save writes the ticks back",
+    async () => {
+      const state = await startWithSource([]);
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<div id="ResTab"><table><tbody>` +
+          boardRow("W-Athens", "10,000", "-100", "+605") +
+          boardRow("M-Corinth", "0", "-200") +
+          `</tbody></table></div><div id="winePlanPreview"></div>`,
+      );
+      state.saveReceivers([{ townNumber: "1", winePerHour: "200" }]);
+
+      await actions["wine.preview"](document.body);
+
+      expect(state.loadSenders()).toEqual([]);
+      expect(document.querySelector("#winePlanPreview")!.textContent).toContain(
+        "M-Corinth",
+      );
     },
   );
 
@@ -614,6 +794,31 @@ describe("Auto Wine", () => {
           { townNumber: "1", winePerHour: "200" },
         ]);
         expect(document.querySelector("#ikaCrawl_wine")).toBeNull();
+      },
+    );
+
+    it(
+      "with no source ticked, ticks the town making the most wine and " +
+        "saves the file from it",
+      async () => {
+        const state = await startWithSource([]);
+        document.body.insertAdjacentHTML(
+          "beforeend",
+          `<div id="ResTab"><table><tbody>` +
+            boardRow("W-Athens", "10,000", "-100", "+605") +
+            `</tbody></table></div>`,
+        );
+        pickWineInCrawlDialog();
+
+        await actions["crawl.run"](document.body);
+        await settle();
+
+        expect(state.loadSenders()).toEqual(["0"]);
+        expect(scanBuildings).toHaveBeenCalledTimes(1);
+        expect(downloadText).toHaveBeenCalledTimes(1);
+        expect(downloadText.mock.calls[0][1]).toContain(
+          "tester, M-Corinth    , 0    , 200    , 9900",
+        );
       },
     );
 
