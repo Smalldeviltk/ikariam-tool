@@ -1,12 +1,12 @@
 # Kế hoạch cải thiện — UI và tính năng
 
-> Trạng thái: **đang thực hiện.** Cập nhật 22/10/2026.
+> Trạng thái: **đang thực hiện.** Cập nhật 26/10/2026.
 >
-> **Mới nhất (§2.AB — 22/10, chưa commit, có trong `dist/` build 22/10, chưa thử trên game):** panel Send Resources **thu gọn / mở từng nhóm** bằng cách bấm tiêu đề nhóm, và **nút ▾/▸ thu gọn cả cửa sổ** về thanh tiêu đề; cả hai được nhớ qua các lần tải trang. 710 → 721 test.
+> **Mới nhất (§2.AB — 22/10, commit `e7f2acb` (tài liệu `455047d`), có trong `dist/` build 22/10, chưa thử trên game):** panel Send Resources **thu gọn / mở từng nhóm** bằng cách bấm tiêu đề nhóm, và **nút ▾/▸ thu gọn cả cửa sổ** về thanh tiêu đề; cả hai được nhớ qua các lần tải trang. 710 → 721 test.
 >
-> **§2.AA — 22/10, chưa commit, có trong `dist/` build 22/10, chưa thử trên game):** nút **Crawl Building** thành **Crawl**, mở dialog có **radio** cho từng việc crawl (bản đầu là checkbox, đổi theo yêu cầu; danh sách việc crawl khai báo một chỗ, dễ thêm loại mới): **Building** (crawl cũ) và **Wine** (mới — Scan rồi lưu file `const csv = \`…\`;` gồm `account, town, stock, consume, maxSupply` cho các town nhận của Auto Wine). 701 → 710 test.
+> **§2.AA — 22/10, commit `e7f2acb` (tài liệu `455047d`), có trong `dist/` build 22/10, chưa thử trên game):** nút **Crawl Building** thành **Crawl**, mở dialog có **radio** cho từng việc crawl (bản đầu là checkbox, đổi theo yêu cầu; danh sách việc crawl khai báo một chỗ, dễ thêm loại mới): **Building** (crawl cũ) và **Wine** (mới — Scan rồi lưu file `const csv = \`…\`;` gồm `account, town, stock, consume, maxSupply` cho các town nhận của Auto Wine). 701 → 710 test.
 >
-> **§2.Z — 22/10, chưa commit, có trong `dist/` build 22/10 trên Linux, chưa thử trên game):** ba lỗi nhỏ trong danh sách 💡 của review 05/10 — ô công trình trên board **tự chuyển sang "có thể nâng"** (poll trạng thái gửi thiếu city id); **Stop rồi Start** runner chạy ngay thay vì chờ hết lượt nghỉ 60 s cũ; log lưu dạng **chữ thường**, không còn `&amp;`. 699 → 701 test.
+> **§2.Z — 22/10, commit `e7f2acb` (tài liệu `455047d`), có trong `dist/` build 22/10 trên Linux, chưa thử trên game):** ba lỗi nhỏ trong danh sách 💡 của review 05/10 — ô công trình trên board **tự chuyển sang "có thể nâng"** (poll trạng thái gửi thiếu city id); **Stop rồi Start** runner chạy ngay thay vì chờ hết lượt nghỉ 60 s cũ; log lưu dạng **chữ thường**, không còn `&amp;`. 699 → 701 test.
 >
 > **§2.Y — 17/10, commit `21464dd` (tài liệu `534f066`), đã push; chưa build vào `dist/`, chưa thử trên game):** hai chỉnh sửa người dùng yêu cầu — **Auto Wine gửi cho town còn ít giờ rượu nhất trước** (trước đó theo thứ tự cấu hình), và **hộp thoại Auto Build Settings rộng tối đa 1250px**, cột đầu "List Building" ghim bên trái, các cột town cuộn ngang. 698 → 699 test.
 >
@@ -22,7 +22,7 @@
 > phần U còn thiếu số (§2.U phần 4) · R: kênh cập nhật riêng (chờ người
 > dùng). **Không làm lúc này** (người dùng chọn 04/10): F, G, I, M, N, O, Q.
 >
-> Git (22/10, đã kiểm lại): `origin/refactor` ở `534f066` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Y đã commit (`21464dd` code, `534f066` tài liệu). Checkout 22/10 chạy trên Linux, không có `node_modules/`, `dist/`, `sample/`, `tools/output/` (handover §1). Ghi chú 17/10, giữ để tra: `origin/refactor` ở `772a055` = `HEAD`, **không còn commit nào chưa push**; §2.X đã commit (`1baf274` code, `772a055` tài liệu). Chưa commit: §2.Y (`auto-wine.ts`, `auto-wine.test.ts`, `styles.ts`) và hai tài liệu này. Đoạn sau là danh sách commit cũ (05/10), giữ để tra; lúc viết nó ghi `origin/refactor` ở `066eb44` và 17 commit chưa push —
+> Git (26/10, đã kiểm lại): `origin/refactor` ở `455047d` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Z, §2.AA, §2.AB đã commit (`e7f2acb` code, `455047d` tài liệu). Checkout trên Linux giờ có `node_modules/` và `dist/` (build 22/10 16:37, có §2.R → §2.AB — đã grep 26/10, handover §1); vẫn không có `sample/`, `tools/output/`. Ghi chú 22/10, giữ để tra: `origin/refactor` ở `534f066` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Y đã commit (`21464dd` code, `534f066` tài liệu). Checkout 22/10 chạy trên Linux, không có `node_modules/`, `dist/`, `sample/`, `tools/output/` (handover §1). Ghi chú 17/10, giữ để tra: `origin/refactor` ở `772a055` = `HEAD`, **không còn commit nào chưa push**; §2.X đã commit (`1baf274` code, `772a055` tài liệu). Chưa commit: §2.Y (`auto-wine.ts`, `auto-wine.test.ts`, `styles.ts`) và hai tài liệu này. Đoạn sau là danh sách commit cũ (05/10), giữ để tra; lúc viết nó ghi `origin/refactor` ở `066eb44` và 17 commit chưa push —
 > `6ed66c6`, `c38dca4`, `b9f1d7a` (U + V), `4f9436c`, `3209964` (§2.K + §2.L),
 > `7ed3a85`, `b45f792` (§2.M), `32fe3ba`, `ec3fdc4` (§2.N → §2.R), `b2e9084`
 > (§2.S), `3f8a51b` (thay đổi `barbarian.ts` của người dùng, commit riêng
@@ -2360,7 +2360,7 @@ Ba vòng điều chỉnh, ghi lại vì lỗi đầu đáng nhớ:
 
 ### 2.Z Ba lỗi nhỏ từ danh sách 💡 của review (22/10/2026)
 
-**Chưa commit. Có trong `dist/` build 22/10 (trên Linux, đã grep), chưa thử trên game.** Người dùng: "tiếp tục các việc có thể làm". Trong các mục 💡 còn lại (handover §7), đây là ba mục mà cách sửa chỉ có một hướng; các mục khác cần số đo hoặc cần người dùng chọn. 699 → 701 test, 38 file; typecheck (cả cấu hình strict) và prettier sạch trên mọi file đã sửa.
+**Commit `e7f2acb` (tài liệu `455047d`); lúc viết thì chưa commit. Có trong `dist/` build 22/10 (trên Linux, đã grep), chưa thử trên game.** Người dùng: "tiếp tục các việc có thể làm". Trong các mục 💡 còn lại (handover §7), đây là ba mục mà cách sửa chỉ có một hướng; các mục khác cần số đo hoặc cần người dùng chọn. 699 → 701 test, 38 file; typecheck (cả cấu hình strict) và prettier sạch trên mọi file đã sửa.
 
 | Lỗi | Sửa | Ở đâu |
 | --- | --- | ----- |
@@ -2383,7 +2383,7 @@ Ba vòng điều chỉnh, ghi lại vì lỗi đầu đáng nhớ:
 
 ### 2.AA Nút Crawl: dialog chọn việc crawl, thêm crawl Wine (22/10/2026)
 
-**Chưa commit. Có trong `dist/` build 22/10 (đã grep), chưa thử trên game.** Người dùng yêu cầu. 701 → 710 test, 38 file; typecheck (cả cấu hình strict) và prettier sạch trên mọi file đã sửa.
+**Commit `e7f2acb` (tài liệu `455047d`); lúc viết thì chưa commit. Có trong `dist/` build 22/10 (đã grep), chưa thử trên game.** Người dùng yêu cầu. 701 → 710 test, 38 file; typecheck (cả cấu hình strict) và prettier sạch trên mọi file đã sửa.
 
 **Người dùng muốn:** nút Crawl Building thành **Crawl**; bấm thì mở dialog có checkbox các việc sẽ crawl, crawl building cũ là một trong số đó; thêm checkbox **crawl wine**, kết quả dạng:
 
@@ -2433,6 +2433,7 @@ với `maxSupply` là số rượu town nguồn chuyển được.
 - **Mỗi loại crawl khai báo một lần.** Nhãn là một key của `CRAWL_DIALOG.kinds` (`messages.ts`) — dialog vẽ một radio cho mỗi key theo thứ tự đó, id `ikaCrawl_<kind>` (`crawlRadioId`), `CrawlKind = keyof typeof CRAWL_DIALOG.kinds`. Việc chạy là một mục của `CRAWLS: Record<CrawlKind, () => void>` trong `app.ts`; `runCrawl` gọi `CRAWLS[kind]()`. **Thêm loại crawl mới = một nhãn + một hàm chạy**; có nhãn mà thiếu hàm thì không biên dịch được.
 - **Đã thấy đỏ:** thêm key thứ ba vào `kinds` mà không có hàm chạy → `error TS2741: Property 'army' is missing …` (`app.ts:369`); nối `building` vào hàm rỗng → test Building đỏ; đưa input về checkbox → test radio đỏ (test giờ duyệt mọi key của `CRAWL_DIALOG.kinds`).
 - Bảng ở trên: id ô giờ là `#ikaCrawl_building`, `#ikaCrawl_wine` (không còn `#ikaCrawlBuilding`, `#ikaCrawlWine`).
+- Số test vẫn 710 (test dialog viết lại cho radio).
 
 **Sửa cùng ngày — file rượu thiếu town.** Người dùng báo: Scan có vẻ không lấy town cuối của board, file xuất không có town cuối, Auto Wine Settings phải bấm Load. Đã kiểm:
 
@@ -2444,7 +2445,7 @@ với `maxSupply` là số rượu town nguồn chuyển được.
 
 ### 2.AB Panel Send Resources: thu gọn / mở từng nhóm (22/10/2026)
 
-**Chưa commit. Có trong `dist/` build 22/10 (đã grep), chưa thử trên game.** Người dùng yêu cầu. 710 → 715 test, 38 file; typecheck (cả cấu hình strict) và prettier sạch trên mọi file đã sửa.
+**Commit `e7f2acb` (tài liệu `455047d`); lúc viết thì chưa commit. Có trong `dist/` build 22/10 (đã grep), chưa thử trên game.** Người dùng yêu cầu. 710 → 715 test, 38 file; typecheck (cả cấu hình strict) và prettier sạch trên mọi file đã sửa.
 
 **Người dùng chọn** (hai câu hỏi có phương án): thu gọn **từng nhóm** trong panel (Wine / Transport / Build / Queue / Account / Data / Notifications), không phải cả cửa sổ hay hộp thoại Transport Settings; trạng thái **được nhớ** qua các lần tải trang.
 
@@ -2460,7 +2461,7 @@ với `maxSupply` là số rượu town nguồn chuyển được.
 
 **Chưa kiểm chứng:** hiển thị thật (▾/▸, cỡ chữ) trong cửa sổ trên game; giới hạn 10 hàng của queue (`capVisibleRows`) khi nhóm Queue đang thu gọn — khung chưa có layout thì giữ giới hạn cũ, mở lại thì lần vẽ kế tiếp đặt lại (cùng hành vi như khi panel đóng).
 
-**Cần thử trên game:** bấm tiêu đề từng nhóm → thu / mở; thu vài nhóm rồi tải lại trang → vẫn thu; Start Timer trong nhóm Transport đang thu → mở nhóm ra thấy nhãn đúng. Số test vẫn 710 (test dialog viết lại cho radio).
+**Cần thử trên game:** bấm tiêu đề từng nhóm → thu / mở; thu vài nhóm rồi tải lại trang → vẫn thu; Start Timer trong nhóm Transport đang thu → mở nhóm ra thấy nhãn đúng.
 
 **Thêm cùng ngày, người dùng yêu cầu — nút thu gọn cả cửa sổ:** trên thanh tiêu đề của cửa sổ Send Resources có nút **▾** (thu) / **▸** (mở), cạnh ✕. Thu gọn chỉ còn thanh tiêu đề (ẩn nội dung và footer), cửa sổ vẫn mở và kéo được; khác ✕ (đóng hẳn). **Nhớ** qua các lần tải trang, cùng cách với các nhóm (chọn ở đây, theo lựa chọn "nhớ" của người dùng cho nhóm).
 
@@ -2856,9 +2857,9 @@ thêm, phải áp giảm giá theo bảng này.
 ✅ ~~Chờ code của game~~: §2.D tham số `createPopup` — xong 03/10 (§2.N phần 2)
 ⬜ Lượt review sau:        thử trên game thật các mục §2.D (phần "chuỗi còn sót ngoài danh sách §2.D" của §2.L phần 4 đã làm ở §2.P)
 ✅ 17/10     §2.Y                   Auto Wine gửi town ít giờ rượu nhất trước; hộp thoại Auto Build Settings rộng tối đa 1250px, cột "List Building" ghim, cột town cuộn ngang — commit `21464dd` (tài liệu `534f066`), chưa build
-✅ 22/10     §2.Z                   ba mục 💡 của review: poll trạng thái gửi city id, Start xoá lượt nghỉ cũ, log lưu dạng chữ — chưa commit, có trong `dist/` 22/10
-✅ 22/10     §2.AA                  nút Crawl: dialog chọn Building / Wine; crawl Wine Scan rồi lưu `const csv` của các town nhận — chưa commit, có trong `dist/` 22/10
-✅ 22/10     §2.AB                  panel Send Resources thu gọn / mở từng nhóm và cả cửa sổ, nhớ qua tải trang — chưa commit, có trong `dist/` 22/10
+✅ 22/10     §2.Z                   ba mục 💡 của review: poll trạng thái gửi city id, Start xoá lượt nghỉ cũ, log lưu dạng chữ — commit `e7f2acb` (tài liệu `455047d`), có trong `dist/` 22/10
+✅ 22/10     §2.AA                  nút Crawl: dialog chọn Building / Wine; crawl Wine Scan rồi lưu `const csv` của các town nhận — commit `e7f2acb` (tài liệu `455047d`), có trong `dist/` 22/10
+✅ 22/10     §2.AB                  panel Send Resources thu gọn / mở từng nhóm và cả cửa sổ, nhớ qua tải trang — commit `e7f2acb` (tài liệu `455047d`), có trong `dist/` 22/10
 ⬜ Chờ người dùng thử:     §2.R → §2.AB trên game (cài lại cả hai userscript từ `dist/` build 22/10 — bản 05/10 02:03 không có §2.Y trở đi); riêng E: một lần thành công (ô phải tự chuyển sang đang nâng), một lần bị từ chối, rồi Bug Report (file không còn token); danh sách thử của §2.X ở cuối mục đó
 ⬜ Lượt sau của review:    các mục 💡 trong `sample/review-source/review-src-2026-10-04.md` (22/10: ba mục đã sửa ở §2.Z; còn lại cần số đo hoặc người dùng chọn — handover §7)
 ⬜ Chờ người dùng thử:     §2.W — load lại `dist/extension` trong Chrome (tắt hai userscript trước); bản extension chưa từng chạy trên game
@@ -2881,6 +2882,8 @@ Không còn việc nào "làm được ngay, không phụ thuộc gì": 1.4 xong
 việc kế tiếp là **người dùng cài lại từ `dist/` 05/10 02:03 và thử §2.R →
 §2.X trên game** (E kèm Bug Report), và **load lại extension Chrome** (§2.W);
 P, L chờ capture; R chờ câu hỏi 5 ở §6; V chờ người dùng ghi chi tiết.
+**Cập nhật 26/10:** bản cần cài là `dist/` build 22/10 16:37 (có §2.R →
+§2.AB, đã grep — handover §1); bản 05/10 02:03 chỉ tới §2.X.
 
 **Hai việc phát sinh** (việc thứ nhất xong 02/10, §2.L phần 3):
 
