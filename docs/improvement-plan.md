@@ -2,7 +2,9 @@
 
 > Trạng thái: **đang thực hiện.** Cập nhật 26/10/2026.
 >
-> **Mới nhất (§2.AC — 26/10, commit `fac13d6`, có trong `dist/` build 26/10 13:56, chưa thử trên game):** hai bug report. Empire Overview hết lỗi `reading 'apply'` sau nút nâng cấp của game; shipment có lần đổi town chưa tới nơi được **hoãn** thay vì bị bỏ; log ghi đường đổi town và câu trả lời của server. **Lỗi của chính mình trong cùng lượt** — chờ 10 s sau khi bấm về town view làm một shipment bị gửi **8 lần** — đã gỡ, nên cuộc đua nó định sửa lại còn mở. Cửa sổ Send Resources **luôn hiện**: **Esc** và mục menu **thu / mở**, bỏ nút ×. 721 → 735 test.
+> **Mới nhất (§2.AD — 26/10 chiều, chưa commit, có trong `dist/` build 26/10 16:22, chưa thử trên game):** Auto Wine **tự chọn town nguồn** khi chưa tick Sender — town có **sản lượng wine cao nhất**, không town nào làm wine thì town có **nhiều giờ rượu còn lại nhất** — và tick luôn làm Sender. **Chỉ gửi cho town uống nhiều hơn đảo nó làm ra** (không biết sản lượng = 0), chia theo phần thiếu ròng. Town cache ghi thêm sản lượng và dự báo tồn kho theo mức ròng; toast nêu tên các town tự làm đủ rượu. 735 → 783 test.
+>
+> **§2.AC — 26/10, commit `fac13d6` (tài liệu `0baafe6`), có trong `dist/` build 26/10 13:56, chưa thử trên game):** hai bug report. Empire Overview hết lỗi `reading 'apply'` sau nút nâng cấp của game; shipment có lần đổi town chưa tới nơi được **hoãn** thay vì bị bỏ; log ghi đường đổi town và câu trả lời của server. **Lỗi của chính mình trong cùng lượt** — chờ 10 s sau khi bấm về town view làm một shipment bị gửi **8 lần** — đã gỡ, nên cuộc đua nó định sửa lại còn mở. Cửa sổ Send Resources **luôn hiện**: **Esc** và mục menu **thu / mở**, bỏ nút ×. 721 → 735 test.
 >
 > **§2.AB — 22/10, commit `e7f2acb` (tài liệu `455047d`), có trong `dist/` build 22/10, chưa thử trên game):** panel Send Resources **thu gọn / mở từng nhóm** bằng cách bấm tiêu đề nhóm, và **nút ▾/▸ thu gọn cả cửa sổ** về thanh tiêu đề; cả hai được nhớ qua các lần tải trang. 710 → 721 test.
 >
@@ -24,7 +26,7 @@
 > phần U còn thiếu số (§2.U phần 4) · R: kênh cập nhật riêng (chờ người
 > dùng). **Không làm lúc này** (người dùng chọn 04/10): F, G, I, M, N, O, Q.
 >
-> Git (26/10, sau §2.AC): `origin/refactor` vẫn ở `455047d`; `HEAD` là `fac13d6`, `git rev-list --count origin/refactor..HEAD` = 2 (`3dff502` tài liệu, `fac13d6` §2.AC) — **chưa push**; phần ghi §2.AC vào hai tài liệu này chưa commit lúc viết. `dist/` hiện tại build 26/10 13:56 (không build trong phiên — có lẽ người dùng build), có toàn bộ §2.AC (đã grep, handover §1). Git (26/10, đã kiểm lại): `origin/refactor` ở `455047d` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Z, §2.AA, §2.AB đã commit (`e7f2acb` code, `455047d` tài liệu). Checkout trên Linux giờ có `node_modules/` và `dist/` (build 22/10 16:37, có §2.R → §2.AB — đã grep 26/10, handover §1); vẫn không có `sample/`, `tools/output/`. Ghi chú 22/10, giữ để tra: `origin/refactor` ở `534f066` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Y đã commit (`21464dd` code, `534f066` tài liệu). Checkout 22/10 chạy trên Linux, không có `node_modules/`, `dist/`, `sample/`, `tools/output/` (handover §1). Ghi chú 17/10, giữ để tra: `origin/refactor` ở `772a055` = `HEAD`, **không còn commit nào chưa push**; §2.X đã commit (`1baf274` code, `772a055` tài liệu). Chưa commit: §2.Y (`auto-wine.ts`, `auto-wine.test.ts`, `styles.ts`) và hai tài liệu này. Đoạn sau là danh sách commit cũ (05/10), giữ để tra; lúc viết nó ghi `origin/refactor` ở `066eb44` và 17 commit chưa push —
+> Git (26/10 tối, đã kiểm): `origin/refactor` ở `0baafe6` = `HEAD` (người dùng đã push), `git rev-list --count origin/refactor..HEAD` = 0. **Chưa commit: §2.AD** — `src/core/ikariam/model.ts` (+ test), `selectors.ts`, `src/send-resources/app.ts` (+ test), `features/auto-wine.ts` (+ test), `messages.ts`, `town-cache.ts` (+ test) và hai tài liệu này. `dist/` hiện tại build 26/10 16:22 trong phiên, từ working tree, có §2.AD (đã grep, handover §1). Git (26/10, sau §2.AC): `origin/refactor` vẫn ở `455047d`; `HEAD` là `fac13d6`, `git rev-list --count origin/refactor..HEAD` = 2 (`3dff502` tài liệu, `fac13d6` §2.AC) — **chưa push**; phần ghi §2.AC vào hai tài liệu này chưa commit lúc viết. `dist/` hiện tại build 26/10 13:56 (không build trong phiên — có lẽ người dùng build), có toàn bộ §2.AC (đã grep, handover §1). Git (26/10, đã kiểm lại): `origin/refactor` ở `455047d` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Z, §2.AA, §2.AB đã commit (`e7f2acb` code, `455047d` tài liệu). Checkout trên Linux giờ có `node_modules/` và `dist/` (build 22/10 16:37, có §2.R → §2.AB — đã grep 26/10, handover §1); vẫn không có `sample/`, `tools/output/`. Ghi chú 22/10, giữ để tra: `origin/refactor` ở `534f066` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Y đã commit (`21464dd` code, `534f066` tài liệu). Checkout 22/10 chạy trên Linux, không có `node_modules/`, `dist/`, `sample/`, `tools/output/` (handover §1). Ghi chú 17/10, giữ để tra: `origin/refactor` ở `772a055` = `HEAD`, **không còn commit nào chưa push**; §2.X đã commit (`1baf274` code, `772a055` tài liệu). Chưa commit: §2.Y (`auto-wine.ts`, `auto-wine.test.ts`, `styles.ts`) và hai tài liệu này. Đoạn sau là danh sách commit cũ (05/10), giữ để tra; lúc viết nó ghi `origin/refactor` ở `066eb44` và 17 commit chưa push —
 > `6ed66c6`, `c38dca4`, `b9f1d7a` (U + V), `4f9436c`, `3209964` (§2.K + §2.L),
 > `7ed3a85`, `b45f792` (§2.M), `32fe3ba`, `ec3fdc4` (§2.N → §2.R), `b2e9084`
 > (§2.S), `3f8a51b` (thay đổi `barbarian.ts` của người dùng, commit riêng
@@ -1110,7 +1112,7 @@ queue) → Start Timer. Người dùng thấy nút Start thừa.
 
 | Cách dùng                    | Giờ làm gì                                                                                                                                                                                                                                                                                      | Ở đâu                                                                                                   |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Bấm **Start** trên panel     | Chưa tick town nguồn → báo "No town is ticked as a wine source!"; tick nhiều town → popup chọn. Rồi: **Scan** và chờ xong (toast "Sync finished …"), lấy lượng uống mỗi town như Load rồi lưu như Save (`saveMeasuredReceivers`), nạp queue, **bật Start Timer của Transport** (đã bật thì giữ) | `app.ts` (`wine.autoRun`, `wine.autoRunFrom`, `runAutoWine`, `withWineSource`), `features/auto-wine.ts` |
+| Bấm **Start** trên panel     | Chưa tick town nguồn → báo "No town is ticked as a wine source!" (**26/10, §2.AD:** giờ Scan rồi tự chọn và tick town nguồn; chỉ báo khi không có số liệu town nào); tick nhiều town → popup chọn. Rồi: **Scan** và chờ xong (toast "Sync finished …"), lấy lượng uống mỗi town như Load rồi lưu như Save (`saveMeasuredReceivers`), nạp queue, **bật Start Timer của Transport** (đã bật thì giữ) | `app.ts` (`wine.autoRun`, `wine.autoRunFrom`, `runAutoWine`, `withWineSource`), `features/auto-wine.ts` |
 | Làm từng bước trong Settings | Như cũ (Load, tick nguồn), nhưng **Save** giờ vừa lưu vừa **nạp queue** (nhiều nguồn → popup chọn). Start Timer người dùng tự bấm                                                                                                                                                               | `app.ts` (`wine.save`, `wine.queueFrom`)                                                                |
 
 - `scanBuildings` giờ trả `true` khi scan chạy xong, `false` khi từ chối (đang
@@ -2522,6 +2524,55 @@ Key `ikaWindowOpen_<id>` của bản cũ vẫn nằm trong storage; cửa sổ n
 
 **Cần thử trên game:** Esc → chỉ còn thanh tiêu đề, Esc lần nữa → mở; mục menu làm y vậy; tải lại trang → cửa sổ vẫn hiện, thu hay mở như lúc rời; không còn ×.
 
+### 2.AD Auto Wine tự chọn town nguồn, bỏ town tự làm đủ rượu (26/10/2026, chiều)
+
+**Chưa commit lúc viết. Có trong `dist/` build 26/10 16:22 (đã grep), chưa thử trên game.** Bản tiếng Anh, chi tiết hơn: handover §28. 735 → 783 test, 38 file; typecheck và prettier sạch trên mọi file đã sửa (`town-cache.test.ts` đã lệch format từ `HEAD`, không format lại).
+
+**Người dùng yêu cầu:** chưa tick town nguồn thì xem các town hiện có, town có **sản lượng wine cao nhất** làm nguồn; chỉ phân phối tới town có **lượng tiêu thụ nhiều hơn lượng khai thác** (mặc định khai thác = 0, để không nhầm các đảo không phải đảo nho). Thêm giữa lượt: **không town nào sản xuất dương** thì lấy town có **nhiều rượu nhất tính theo thời gian còn lại**. Lượt sau: làm nốt hai việc còn treo (phần 4).
+
+**Người dùng chọn** (bốn câu hỏi có phương án): town được chọn **lưu làm Sender** (tick sẵn), không chỉ dùng một lượt; sản lượng lấy từ **board + town cache** (cache bắt đầu ghi sản lượng); Start chọn **sau khi Scan**, Save và Crawl Wine chọn ngay từ số đang có; town ở đảo nho vẫn uống nhiều hơn mức làm ra thì chia theo **mức ròng** (uống 800, làm 500 → 300/h).
+
+#### 1. Sản lượng lấy từ đâu
+
+Đo trong hai bug report của §2.AC: `producedTradegood` là số, `1` là đảo nho (`2`–`4` là hàng khác); `tradegoodProduction` tính **theo giây** — một town đảo nho đọc `0.168`, tức 605/h. Board Empire Overview vẽ đúng số này ở `span.production` của ô wine (`getProduction * 3600`), và để **trống** khi town không ở đảo nho.
+
+| Thay đổi | Ở đâu |
+| -------- | ----- |
+| `modelWineProduction()`: `tradegoodProduction * 3600` khi đảo làm wine, 0 khi làm hàng khác, `null` khi model không có hai trường đó | `core/ikariam/model.ts` |
+| `TownStats.production` (tuỳ chọn): `recordCurrentTown` ghi mỗi khi model có số; snapshot cũ không có trường này đọc là 0 | `send-resources/town-cache.ts` |
+| `SEL.resTabWineProduction`; `readWineBoard` trả thêm `production` (trống → 0); `measuredStats` trả `{stock, consume, production}`, board trước rồi tới cache | `core/ikariam/selectors.ts`, `features/auto-wine.ts` |
+
+#### 2. Town nhận
+
+`buildWineTowns` chia theo nhu cầu ròng (uống — đo được, không có thì Wine/h — trừ sản lượng) và **bỏ town có nhu cầu không lớn hơn 0**. Mọi chỗ lập kế hoạch đều qua đây: `planWineRun` (Start, Save, Preview) và `buildWineCsv` (cột `consume` của Crawl Wine giờ là mức ròng). `saveMeasuredReceivers` chỉ lưu town uống nhiều hơn mức làm ra; vẫn lưu mức uống, kế hoạch tự trừ sản lượng.
+
+#### 3. Chọn town nguồn
+
+`chooseWineSource()`: town làm nhiều wine nhất; không town nào làm thì town có **nhiều giờ** rượu nhất theo mức uống của chính nó — **không phải** nhiều rượu nhất; town không uống coi như còn mãi, giữa các town đó town nhiều rượu hơn thắng; town không có rượu không bao giờ được chọn theo cách này. Hoà thì town đứng trước trong `getTownList()` (**xếp theo tên**). `pickWineSource()` lưu bằng `saveSenders`, ghi log và toast lý do; không ai đủ điều kiện → trả `null`, không lưu gì.
+
+| Chỗ gọi | Khi chưa tick Sender |
+| ------- | -------------------- |
+| Start (`wine.autoRun`) | `runAutoWine(null)`: Scan, rồi `pickWineSource()`, **trước** `saveMeasuredReceivers` (hàm này bỏ qua Sender); không ai đủ điều kiện → `noSourceTicked`, không nạp gì |
+| Save (`wine.save`), Crawl Wine | `withWineSource` gọi `pickWineSource()` ngay |
+| Preview (`wine.preview`) | xem trước theo `chooseWineSource()` **nhưng không tick** — Save của dialog ghi lại tick từ form |
+
+`noSourceTicked` viết lại: chỉ hiện khi không có số liệu town nào để chọn.
+
+#### 4. Hai việc còn treo, làm ở lượt sau (người dùng yêu cầu)
+
+- **Dự báo của town cache tính theo mức ròng.** `projectedStats` đổi tồn kho theo `consume − production` mỗi giờ: town làm dư thì tồn kho tăng, tới sức chứa (nếu biết) thì dừng; tồn kho đã cao hơn sức chứa thì giữ nguyên. Ghi chú cũ trong hàm ("cố ý không mô hình sản lượng" vì town làm wine chỉ là nguồn) không còn đúng. **"Kho đầy thì ngừng sản xuất" là giả định, chưa đo.**
+- **Toast khi không còn town nhận nêu tên các town tự làm đủ rượu.** `hasReceiversFor` chỉ tính town nhận có nhu cầu ròng > 0; không còn ai thì `AUTO_WINE.allMakeTheirOwn` liệt kê các town (trừ town nguồn và Sender) có sản lượng > 0 và ≥ mức uống. Không có town nào như vậy thì giữ câu cũ.
+
+#### 5. Test
+
+`model.test.ts` +6, `town-cache.test.ts` +9, `auto-wine.test.ts` +26, `app.test.ts` +8 và bỏ 1 ("Start báo lỗi và không Scan khi chưa tick nguồn" — chính hành vi người dùng yêu cầu thay): 735 + 48 = 783. Fixture board ở hai file trước đây cho **mọi** town sản lượng `+10`; giờ để trống như board thật khi không ở đảo nho. Test của `app.test.ts` chạy qua các action thật (Start, Save, Preview, Crawl Wine); test Start khi chưa có nguồn chỉ vẽ board **trong lúc Scan**, nên chọn trước Scan sẽ không thấy gì và test đỏ.
+
+**Đã thấy đỏ, gỡ từng chỗ một, 25 chỗ** (script trong scratchpad sửa một dòng, chạy các file liên quan rồi trả lại, `md5sum -c` sau đó) — danh sách ở handover §28. **Lỗi của chính mình:** test "hoà giờ thì nhiều rượu hơn thắng" vẫn xanh khi gỡ code — danh sách town xếp theo tên nên town đúng đã đứng đầu; đã đổi fixture, giờ đỏ.
+
+**Chưa kiểm chứng:** mọi thứ trên game; kho đầy có ngừng sản xuất không; board ở ngôn ngữ dùng dấu `.` ngăn hàng nghìn (`1.605` đọc thành 1,605 — vốn đã vậy với tồn kho và mức uống).
+
+**Cần thử trên game:** bỏ tick mọi Sender trong Auto Wine Settings, bấm Start → sau Scan, town làm nhiều wine nhất được tick (toast nói town nào, vì sao) và lượt chạy đi từ đó; town đảo nho làm dư không nhận gì; chỉ còn town như vậy thì toast nêu tên.
+
 ---
 
 ## 3. Phase 2 — UI
@@ -2936,6 +2987,8 @@ P, L chờ capture; R chờ câu hỏi 5 ở §6; V chờ người dùng ghi chi
 §2.AC); **không cài bản 12:28** (gửi lặp, §2.AC phần 3). Kiểm queue còn
 task C-Thebes sót không trước khi bật timer. Lần đổi town nào không tới
 nơi → bấm Bug Report ngay, để có các dòng `Town switch answered`.
+**Cập nhật 26/10, sau §2.AD:** bản cần cài là `dist/` build 26/10 16:22
+(có §2.R → §2.AD); thử §2.AD theo đoạn "Cần thử trên game" của nó.
 
 **Hai việc phát sinh** (việc thứ nhất xong 02/10, §2.L phần 3):
 

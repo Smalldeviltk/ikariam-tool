@@ -325,7 +325,20 @@ committed too (`e7f2acb` code, `455047d` docs), `origin/refactor` is at
 `455047d` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, and
 `git status --short` is empty. **Later on 26/10:** §27 is committed as
 `fac13d6` (code) after a docs-only commit `3dff502`; `origin/refactor` is
-still at `455047d`, two commits behind, not pushed.
+still at `455047d`, two commits behind, not pushed. **Checked again 26/10,
+evening:** §27's write-up is committed as `0baafe6`, and `origin/refactor`
+is at `0baafe6` = `HEAD` — pushed by the user, `git rev-list --count
+origin/refactor..HEAD` = 0. §28 is not committed.
+
+**26/10, later: Auto Wine picks its own source and skips towns that make
+their own wine — not committed; in the 26/10 16:22 `dist/`; not tried on
+the game** — see §28, and `improvement-plan.md` §2.AD. With no Sender
+ticked, Start (after its scan), Save and Crawl Wine tick the town making
+the most wine, or with none making any, the one whose stock lasts longest.
+A town gets wine only when it drinks more than its island makes, and is
+levelled on the difference. The town cache now records production and
+projects stock net of it, and a toast names the towns left out for making
+their own wine.
 
 **26/10: two bug reports, and Escape folds the window — committed as
 `fac13d6`; in the 26/10 13:56 `dist/`; not tried on the game** — see §27,
@@ -362,9 +375,9 @@ the city id, so a building cell turns upgradable by itself; a runner that
 is stopped and started again does not sit out an old rest; the log is
 stored as text, not HTML-escaped.
 
-**Next:** reinstall both userscripts from the 26/10 13:56 `dist/` (it holds
-§20–§27, grepped 26/10 — §1; the 26/10 12:28 build sends a shipment over
-and over, §27) and check the queue for a leftover C-Thebes task before
+**Next:** reinstall both userscripts from the 26/10 16:22 `dist/` (it holds
+§20–§28, grepped 26/10 — §1; the 26/10 12:28 build sends a shipment over
+and over, §27), try §28 as its last paragraph says, and check the queue for a leftover C-Thebes task before
 starting a timer. Then the user tries §17–§27 on the game, and after a
 town switch that does not land, presses Bug Report — the new
 `Town switch answered` lines are what §27's open case waits on. Earlier
@@ -391,14 +404,14 @@ working between loads) is
 | ----------- | ---------------------------------------------------------------- |
 | Branch      | `refactor`, tracking `origin/refactor`                            |
 | Checkout (22/10) | **26/10:** the Linux checkout now has `node_modules/` and `dist/` (built 22/10 16:37, §1 Build); `sample/` and `tools/output/` are still absent, so the review report and the bug report files are not available here. The 22/10 note, kept: The 22/10 session ran on Linux, in `/data/Projects/dump/ikariam-tool`, with Node v20.20.2 and npm 10.8.2. That checkout has no `node_modules/`, `dist/`, `sample/` or `tools/output/` (dependencies, build output and gitignored folders), so tests, the build, the bug report files and the review report were not available there. The PowerShell and CRLF traps in §4 come from the earlier Windows checkout (`D:\Working\Ika`) |
-| Pushed      | **Checked 26/10, later:** `origin/refactor` is at `455047d`; `HEAD` is `fac13d6`, `git rev-list --count origin/refactor..HEAD` = 2 (`3dff502` docs, `fac13d6` §27) — not pushed. **Checked 26/10: `origin/refactor` is at `455047d` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0.** **Checked 22/10: `origin/refactor` is at `534f066` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0.** **Checked 17/10: `origin/refactor` is at `772a055` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0 — everything below is pushed.** The rest is the 05/10 note, kept for the commit list: `origin/refactor` was at `066eb44` (the plan's §2.I–2.J docs), pushed by the user; §10's `1f7c0e7` and `4841fb9` are before it, so pushed too (checked with `git log origin/refactor..HEAD` on 02/10). **Seventeen local commits since, not pushed** (`git rev-list --count origin/refactor..HEAD` = 17 on 05/10, at `180fead`): §11 is `6ed66c6` + `c38dca4`, its docs `b9f1d7a`; §12 and §13 are one code commit, `4f9436c` (25 files in `src/`), and one docs commit, `3209964`; §14 is `7ed3a85` (15 files), its docs `b45f792`; §15–§17 are `32fe3ba`, their docs `ec3fdc4`; §18 is `b2e9084` and `3f8a51b` (the user's `barbarian.ts` change); §19 is `c78b49e` (32 files in `src/`, two of them new), its docs `0da427b`; §20 is `cefcc92`, §21 is `9c363f7`, their docs `e36516a`; the s303 crawl `180fead` |
+| Pushed      | **Checked 26/10, evening:** `origin/refactor` is at `0baafe6` = `HEAD` (pushed by the user), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 26/10, later:** `origin/refactor` is at `455047d`; `HEAD` is `fac13d6`, `git rev-list --count origin/refactor..HEAD` = 2 (`3dff502` docs, `fac13d6` §27) — not pushed. **Checked 26/10: `origin/refactor` is at `455047d` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0.** **Checked 22/10: `origin/refactor` is at `534f066` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0.** **Checked 17/10: `origin/refactor` is at `772a055` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0 — everything below is pushed.** The rest is the 05/10 note, kept for the commit list: `origin/refactor` was at `066eb44` (the plan's §2.I–2.J docs), pushed by the user; §10's `1f7c0e7` and `4841fb9` are before it, so pushed too (checked with `git log origin/refactor..HEAD` on 02/10). **Seventeen local commits since, not pushed** (`git rev-list --count origin/refactor..HEAD` = 17 on 05/10, at `180fead`): §11 is `6ed66c6` + `c38dca4`, its docs `b9f1d7a`; §12 and §13 are one code commit, `4f9436c` (25 files in `src/`), and one docs commit, `3209964`; §14 is `7ed3a85` (15 files), its docs `b45f792`; §15–§17 are `32fe3ba`, their docs `ec3fdc4`; §18 is `b2e9084` and `3f8a51b` (the user's `barbarian.ts` change); §19 is `c78b49e` (32 files in `src/`, two of them new), its docs `0da427b`; §20 is `cefcc92`, §21 is `9c363f7`, their docs `e36516a`; the s303 crawl `180fead` |
 | Committed 02/10 | At the user's request, in two commits as before: code and tests, then the two documents. The commit message went through a file (`git commit -F`): PowerShell 5.1 splits a here-string passed to a native command at its double quotes, and the first attempt failed with "pathspec did not match" — nothing was committed by it |
 | Committed 03/10 | §14, at the user's request, the same way: `7ed3a85` (code and tests), `b45f792` (the two documents), messages through `git commit -F`. `barbarian.ts` was left out (below) |
 | Committed 04/10 | At the user's request, each time asked for in that turn: §15–§17 as `32fe3ba` (code and tests) and `ec3fdc4` (the two documents); then §18 as `b2e9084`, and — the user asked for `barbarian.ts` to go in too — its change on its own as `3f8a51b`. Messages through `git commit -F`. The documents were not updated for §18 until the §19 round. §19 the same afternoon, again at the user's request: `c78b49e` (code and tests, `src/core/notifications.ts` and its test added) and `0da427b` (the two documents). In the evening, asked for in the turn after §21: `cefcc92` (§20, `render.ts` and its test), `9c363f7` (§21, `build/build-extension.mjs`), then the two documents |
-| Uncommitted | **26/10, later:** after `fac13d6`, `git status --short` was empty; this write-up of §27 in both documents is uncommitted when written. **26/10: nothing** (`git status --short` empty). §24–§26 and the files listed in the 22/10 note were committed as `e7f2acb` (code and tests, 19 files) and `455047d` (the two documents). The 22/10 note, kept for the file list: **22/10, after §26:** §26's `src/send-resources/ui/panel.ts` (+ test), `src/core/ui/window.ts` (+ test), `src/core/messages.ts`, and §24's files — `src/core/logger.ts`, `src/core/task-queue.ts` (+ test), `src/empire-overview/models/building.ts` (+ test) — and §25's — `src/send-resources/app.ts`, `features/auto-wine.ts` (+ test), `features/building-help-crawler.ts`, `messages.ts`, `ui/dialogs.ts`, `ui/panel.ts`, `ui/data-transfer-ui.ts` (+ test) — plus `src/send-resources/app.test.ts` (both rounds) and both documents. Before §24 the tree was clean (`git status --short` empty). §23 was committed after the 17/10 note below (`21464dd` code, `534f066` docs). The user's `.gitignore` change no longer differs from `HEAD`, and `docs/So_sanh_2_script_Ikariam.md` is not on disk in the 22/10 checkout; it is listed in `.gitignore`. The 17/10 note, kept for the file list: **§23** — `src/send-resources/features/auto-wine.ts`, `auto-wine.test.ts`, `src/send-resources/ui/styles.ts`, and both documents. **§22 was committed after the next sentence was written** (`1baf274` code, `772a055` docs). The 05/10 row, kept for the file list: §22 (05/10): 55 modified files — 52 in `src/`, `build/vite.empire-overview.ts`, `project-summary.md` and both documents — and three new test files the user agreed to (`src/core/dom.test.ts`, `src/send-resources/features/summary-account.test.ts`, `src/send-resources/ui/data-transfer-ui.test.ts`). **Modified or untracked and the user's, left out of every commit:** `.gitignore`, `docs/So_sanh_2_script_Ikariam.md`. `docs/wiki/s303/` (their crawl, the source of §19's levels past 50) was committed at the user's request on 04/10 evening as `180fead` |
-| Tests       | **38 files, 735 tests, all passing (26/10, after §27)**; 727 before §27's Escape change, 721 before §27; **38 files, 721 tests (22/10, after §26's window fold, on Linux)**; 715 before it; 710 after §25; 701 after §24; 699 after §23 (17/10, and again 22/10 before §24); 698 after §22; before it 35 files, 645 tests (645 after §20; 500 before §12, 515 after it, 537 after §13, 560 after §14, 567 after §15, 569 after §16's first round, 578 after §16, 583 after §17, 605 after §18 and §19's 2.6 and R, 608 after K, 627 after J, 640 after E, 641 after 2.8, 643 after the s303 levels). §11 added no test (see §11). Prettier: `core/ikariam/http.test.ts`, `send-resources/features/transport-buttons.test.ts` and `send-resources/town-cache.test.ts` are off its format at `HEAD` already — not reflowed; §19's tests appended to `http.test.ts` were formatted on their own and checked |
+| Uncommitted | **26/10, evening: §28** — `src/core/ikariam/model.ts` (+ test), `src/core/ikariam/selectors.ts`, `src/send-resources/app.ts` (+ test), `features/auto-wine.ts` (+ test), `messages.ts`, `town-cache.ts` (+ test), and both documents. **26/10, later:** after `fac13d6`, `git status --short` was empty; this write-up of §27 in both documents is uncommitted when written. **26/10: nothing** (`git status --short` empty). §24–§26 and the files listed in the 22/10 note were committed as `e7f2acb` (code and tests, 19 files) and `455047d` (the two documents). The 22/10 note, kept for the file list: **22/10, after §26:** §26's `src/send-resources/ui/panel.ts` (+ test), `src/core/ui/window.ts` (+ test), `src/core/messages.ts`, and §24's files — `src/core/logger.ts`, `src/core/task-queue.ts` (+ test), `src/empire-overview/models/building.ts` (+ test) — and §25's — `src/send-resources/app.ts`, `features/auto-wine.ts` (+ test), `features/building-help-crawler.ts`, `messages.ts`, `ui/dialogs.ts`, `ui/panel.ts`, `ui/data-transfer-ui.ts` (+ test) — plus `src/send-resources/app.test.ts` (both rounds) and both documents. Before §24 the tree was clean (`git status --short` empty). §23 was committed after the 17/10 note below (`21464dd` code, `534f066` docs). The user's `.gitignore` change no longer differs from `HEAD`, and `docs/So_sanh_2_script_Ikariam.md` is not on disk in the 22/10 checkout; it is listed in `.gitignore`. The 17/10 note, kept for the file list: **§23** — `src/send-resources/features/auto-wine.ts`, `auto-wine.test.ts`, `src/send-resources/ui/styles.ts`, and both documents. **§22 was committed after the next sentence was written** (`1baf274` code, `772a055` docs). The 05/10 row, kept for the file list: §22 (05/10): 55 modified files — 52 in `src/`, `build/vite.empire-overview.ts`, `project-summary.md` and both documents — and three new test files the user agreed to (`src/core/dom.test.ts`, `src/send-resources/features/summary-account.test.ts`, `src/send-resources/ui/data-transfer-ui.test.ts`). **Modified or untracked and the user's, left out of every commit:** `.gitignore`, `docs/So_sanh_2_script_Ikariam.md`. `docs/wiki/s303/` (their crawl, the source of §19's levels past 50) was committed at the user's request on 04/10 evening as `180fead` |
+| Tests       | **38 files, 783 tests, all passing (26/10, after §28)**; 774 before §28's two loose ends; **735 after §27**; 727 before §27's Escape change, 721 before §27; **38 files, 721 tests (22/10, after §26's window fold, on Linux)**; 715 before it; 710 after §25; 701 after §24; 699 after §23 (17/10, and again 22/10 before §24); 698 after §22; before it 35 files, 645 tests (645 after §20; 500 before §12, 515 after it, 537 after §13, 560 after §14, 567 after §15, 569 after §16's first round, 578 after §16, 583 after §17, 605 after §18 and §19's 2.6 and R, 608 after K, 627 after J, 640 after E, 641 after 2.8, 643 after the s303 levels). §11 added no test (see §11). Prettier: `core/ikariam/http.test.ts`, `send-resources/features/transport-buttons.test.ts` and `send-resources/town-cache.test.ts` are off its format at `HEAD` already — not reflowed; §19's tests appended to `http.test.ts` were formatted on their own and checked |
 | Typecheck   | Clean (`tsc --noEmit` and the strict config)                      |
-| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 01/10 at 02:23 and contains §11 (grepped: `Crawl Building` and `building-help-` in Send Resources; the new Academy figure `568954467` present and the old `582271779` gone, `winePressSavingPercent` and the time `12873600` in Empire Overview; `Math.min(50, …)` in Send Resources' `modelWineConsumption`). Earlier markers were checked in earlier builds: §2.I–2.J (`ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows`) and §10 (`ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save`, `capped`). **`dist/` was rebuilt by the user on 03/10 at 22:54 from the working tree and holds §12 to §15** (grepped in Send Resources: `wine.autoRun`, `ika-move`, `ika_pendingTownSwitch`, `to spare, less than one`, `ikaWindowOpen_`, `js-ika-build-time-buff`, `translateX(-146px)`, `ikariam-bug-report`, `then cleared them`, `createPopupSource`, and no `"???"` left; in Empire Overview: `listAccount` and `entry.length === 2 && typeof entry[0] === "string" && entry[1] === null`). It was built before §15 was committed, so it matches the working tree, not a commit. **The userscripts installed in the browser were older than that 22:54 `dist/`** (§2). **Rebuilt 04/10 at 09:09 with §16** (grepped: `?view=transport&destinationCityId=`, `shipment form to close`, `was sent `, `Move up`; Empire Overview writes the month as `month = 2592e3` — the minifier's form of 2592000) — the build the user tried on the game (§17). **Rebuilt again at 09:44 with §17** (grepped: `ika-queue-scroll`, `resourceTableScroll`, and the `dialog.close` button after `build.save`). **Rebuilt 04/10 at 13:11 from the working tree, with §18 and §19** (grepped: `ika-building-level` in Send Resources; `empire_quickUpgrade`, `stockTip_stock`, `empire_syncIndicator` and Academy level 51's time `15379200` in Empire Overview; `ikaNotifications` and `ikaQuickUpgradeTrace` in both). It matched the working tree at 13:11, not a commit. **Rebuilt 04/10 at 21:21, holding §20 and §21** (grepped: `quick upgrade refresh` in `Ikariam Empire Overview -VN-.user.js` and in `extension/page/empire-overview.js`; `dist/extension/manifest.json` has `exclude_globs`). `dist/extension/` was rebuilt in this session with `npm run build:extension`, which builds the extension only; the two userscripts carry 21:21 too, so the user built them. It matched `9c363f7`. **Rebuilt 05/10 at 02:03 with `npm run build` in this session, from the working tree, holding §22** (grepped: `event subscriber` and `quick upgrade refresh` in Empire Overview, `ika_oneOffRunTypes` in Send Resources, in both the userscripts and the extension; no `GM_xmlhttpRequest` left in Empire Overview's header). It matched the working tree then, not a commit. **Rebuilt 22/10 at 16:37 on Linux, holding §23–§26** (grepped 26/10 in Send Resources: `ika-window-collapse`, `ikaPanelCollapsedGroups`, `ikaCrawl_`, `ikariam-wine`, `1250px`, `pausedUntil`, `ika_oneOffRunTypes`; in Empire Overview: `quick upgrade refresh`, `event subscriber`; `dist/extension/manifest.json` has `exclude_globs`, and `extension/page/send-resources.js` has `ika-window-collapse`). That is the current `dist/`; `HEAD` (`e7f2acb` + docs `455047d`) was committed after it — the markers above are in both, but the build was not rebuilt from the commit or compared with it byte for byte. **The installed userscripts are older** — reinstall both before trying anything; the extension has never loaded before §21. **26/10: rebuilt three times.** 12:28 (in this session, with §27's 10 s wait — **sends a shipment over and over, do not install**), 12:49 (in this session, the wait removed), and **13:56, not built in this session — the user's, presumably — holding all of §27** (grepped in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: `alwaysOpen`, `onCollapsedChange`, `toggleCollapsed`, `Town switch answered`, `sent through`, and `backToCity("shipment sent");` followed directly by `if (remaining <= 0) return { status: "done" };`; in both Empire Overview bundles: `typeof handler !== "function") return`). That is the current `dist/`; not compared byte for byte with `fac13d6` |
+| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 01/10 at 02:23 and contains §11 (grepped: `Crawl Building` and `building-help-` in Send Resources; the new Academy figure `568954467` present and the old `582271779` gone, `winePressSavingPercent` and the time `12873600` in Empire Overview; `Math.min(50, …)` in Send Resources' `modelWineConsumption`). Earlier markers were checked in earlier builds: §2.I–2.J (`ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows`) and §10 (`ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save`, `capped`). **`dist/` was rebuilt by the user on 03/10 at 22:54 from the working tree and holds §12 to §15** (grepped in Send Resources: `wine.autoRun`, `ika-move`, `ika_pendingTownSwitch`, `to spare, less than one`, `ikaWindowOpen_`, `js-ika-build-time-buff`, `translateX(-146px)`, `ikariam-bug-report`, `then cleared them`, `createPopupSource`, and no `"???"` left; in Empire Overview: `listAccount` and `entry.length === 2 && typeof entry[0] === "string" && entry[1] === null`). It was built before §15 was committed, so it matches the working tree, not a commit. **The userscripts installed in the browser were older than that 22:54 `dist/`** (§2). **Rebuilt 04/10 at 09:09 with §16** (grepped: `?view=transport&destinationCityId=`, `shipment form to close`, `was sent `, `Move up`; Empire Overview writes the month as `month = 2592e3` — the minifier's form of 2592000) — the build the user tried on the game (§17). **Rebuilt again at 09:44 with §17** (grepped: `ika-queue-scroll`, `resourceTableScroll`, and the `dialog.close` button after `build.save`). **Rebuilt 04/10 at 13:11 from the working tree, with §18 and §19** (grepped: `ika-building-level` in Send Resources; `empire_quickUpgrade`, `stockTip_stock`, `empire_syncIndicator` and Academy level 51's time `15379200` in Empire Overview; `ikaNotifications` and `ikaQuickUpgradeTrace` in both). It matched the working tree at 13:11, not a commit. **Rebuilt 04/10 at 21:21, holding §20 and §21** (grepped: `quick upgrade refresh` in `Ikariam Empire Overview -VN-.user.js` and in `extension/page/empire-overview.js`; `dist/extension/manifest.json` has `exclude_globs`). `dist/extension/` was rebuilt in this session with `npm run build:extension`, which builds the extension only; the two userscripts carry 21:21 too, so the user built them. It matched `9c363f7`. **Rebuilt 05/10 at 02:03 with `npm run build` in this session, from the working tree, holding §22** (grepped: `event subscriber` and `quick upgrade refresh` in Empire Overview, `ika_oneOffRunTypes` in Send Resources, in both the userscripts and the extension; no `GM_xmlhttpRequest` left in Empire Overview's header). It matched the working tree then, not a commit. **Rebuilt 22/10 at 16:37 on Linux, holding §23–§26** (grepped 26/10 in Send Resources: `ika-window-collapse`, `ikaPanelCollapsedGroups`, `ikaCrawl_`, `ikariam-wine`, `1250px`, `pausedUntil`, `ika_oneOffRunTypes`; in Empire Overview: `quick upgrade refresh`, `event subscriber`; `dist/extension/manifest.json` has `exclude_globs`, and `extension/page/send-resources.js` has `ika-window-collapse`). That is the current `dist/`; `HEAD` (`e7f2acb` + docs `455047d`) was committed after it — the markers above are in both, but the build was not rebuilt from the commit or compared with it byte for byte. **The installed userscripts are older** — reinstall both before trying anything; the extension has never loaded before §21. **26/10: rebuilt three times.** 12:28 (in this session, with §27's 10 s wait — **sends a shipment over and over, do not install**), 12:49 (in this session, the wait removed), and **13:56, not built in this session — the user's, presumably — holding all of §27** (grepped in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: `alwaysOpen`, `onCollapsedChange`, `toggleCollapsed`, `Town switch answered`, `sent through`, and `backToCity("shipment sent");` followed directly by `if (remaining <= 0) return { status: "done" };`; in both Empire Overview bundles: `typeof handler !== "function") return`). That was the `dist/` until 16:10. **Rebuilt 26/10 at 16:10 and again at 16:22 with `npm run build` in this session, from the working tree, holding §28** (grepped in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: `makes the most wine`, `holds the most hours of it`, `so they get none`, `td.resource.wine span.production`, `Math.max(entry.stock, entry.capacity)`, `entry.consume - (entry.production`; and still `alwaysOpen`, `Town switch answered`; in Empire Overview `event subscriber`, `quick upgrade refresh`, `typeof handler !== "function") return`). It matches the working tree, not a commit. **Smaller than the 13:56 build and not explained:** Send Resources 177,252 → 165,546 bytes, Empire Overview 542,909 → 504,847 — every marker grepped is present; how the 13:56 build was made is not known |
 
 What landed: the AJAX transport layer, the shared window widget, the rewritten
 panel, four features (sync-towns, transport-buttons, queue-view, wine-warning),
@@ -1504,6 +1517,17 @@ Added 05/10, each chosen by the user unless marked (§22):
 - **Left as they are, on purpose:** the two safe JSON storage wrappers
   (`notifications.ts`, `http.ts`) — they catch what `Store` does not; the
   `autoUpdates` settings key (§19).
+
+Added 26/10 (§28), each chosen by the user:
+
+- **With no Sender ticked, Auto Wine picks the source and ticks it** — the
+  town making the most wine; with none making any, the one whose stock
+  lasts longest at its own consumption. Start picks after its scan; Save
+  and Crawl Wine pick at once; Preview picks without ticking.
+- **Production comes from the board, then the town cache**; unknown counts
+  as 0, so a town off a wine island is never taken for one.
+- **Only a town drinking more than its island makes gets wine, levelled on
+  the difference** (drinks 800, makes 500 → 300/h).
 
 ---
 
@@ -3192,3 +3216,129 @@ popups (the listener is on `document`, as before).
 **What to try on the game:** Escape folds the panel to its title bar and
 opens it again; the menu entry does the same; reload — the panel is there,
 folded or not as left; no ×.
+
+## 28. 26/10, later: Auto Wine picks its own source and skips towns that make their own wine
+
+**Not committed when written. In the 26/10 16:22 `dist/` (grepped, §1
+Build); not tried on the game.** The plan's write-up, in Vietnamese, is
+§2.AD. 735 → 783 tests, 38 files; typecheck and prettier clean on every
+file touched (`town-cache.test.ts` was already off prettier's format at
+`HEAD` and was not reflowed).
+
+**Asked for by the user:** with no source town ticked, Auto Wine takes the
+town making the most wine; and it only ships to a town that drinks more
+than its island makes, production counting as 0 where it is not known, so
+a town off a wine island is never mistaken for one. Added mid-round: with
+no town making any wine, the source is the town whose stock lasts longest
+at its own consumption. Then, asked for in the next turn, the two loose
+ends of the first round (below).
+
+**Chosen by the user** (four questions with options): the picked source is
+**saved as the Sender** (ticked), not used for one run only; production
+comes from **the board and the town cache** (the cache records it from now
+on); Start picks **after its scan**, Save and Crawl Wine pick at once from
+the figures on the page; a town on a wine island that still drinks more
+than it makes is levelled on **the net figure** (drinks 800, makes 500 →
+300/h).
+
+### Where production comes from
+
+Measured in the two bug reports of §27 (`producedTradegood`,
+`tradegoodProduction` in the model the reports carry):
+`producedTradegood` is a number, `1` on a wine island (`2`–`4` the other
+goods); `tradegoodProduction` is a rate **per second** — a wine town read
+`0.168`, 605 an hour. Empire Overview's board draws the same figure in the
+wine cell's `span.production` (`currentResource.getProduction * 3600`,
+`render.ts`), and leaves it **blank** off a wine island.
+
+| What | Where |
+| ---- | ----- |
+| `modelWineProduction()`: `tradegoodProduction * 3600` when `producedTradegood` is wine (compared through `MODEL_RESOURCE_KEY.wine`, so `"1"` reads too), 0 for another good, null when the model carries neither | `core/ikariam/model.ts` |
+| `TownStats.production` (optional): recorded by `recordCurrentTown` whenever the model answers; a snapshot without it reads as 0 | `send-resources/town-cache.ts` |
+| `SEL.resTabWineProduction` = `td.resource.wine span.production`; `readWineBoard` returns `production` (blank → 0); `measuredStats` returns `{stock, consume, production}`, board first, then the cache | `core/ikariam/selectors.ts`, `features/auto-wine.ts` |
+
+### Receivers
+
+`buildWineTowns` levels each receiver on `netWineNeed` — what it drinks
+(measured, else its Wine/h) less what its island makes — and **drops a
+town whose need is not above 0**. Everything that plans goes through it:
+`planWineRun` (Start, Save, Preview) and `buildWineCsv` (Crawl Wine's
+`consume` column is the net figure now). `saveMeasuredReceivers` saves a
+town only when what it drinks is above what it makes; it still saves what
+the town drinks, and the plan subtracts production.
+
+### Choosing the source
+
+`chooseWineSource()`: among the towns with figures, the one making the
+most wine (`by: "production"`); when none makes any, the one with the most
+hours of stock at its own consumption (`by: "hoursLeft"`) — **not** the
+largest stock; a town drinking none lasts forever, and among those the
+larger stock wins; a town holding no wine is never picked that way. Ties
+go to the first in `getTownList()`, **which sorts by name**.
+`pickWineSource()` saves the pick with `saveSenders([town])` and says why
+in the log and a toast (`AUTO_WINE.sourcePicked` /
+`sourcePickedByStock`); null, with nothing saved, when nothing qualifies.
+
+| Entry point | With no Sender ticked |
+| ----------- | --------------------- |
+| Start (`wine.autoRun`) | `runAutoWine(null)`: scans, then `pickWineSource()`, **before** `saveMeasuredReceivers` (which skips senders); nothing qualifies → `WINE_DIALOG.noSourceTicked`, nothing queued |
+| Save (`wine.save`), Crawl Wine | `withWineSource` calls `pickWineSource()` at once |
+| Preview (`wine.preview`) | previews from `chooseWineSource()` **without ticking it** — the dialog's Save writes the ticks back from the form |
+
+`WINE_DIALOG.noSourceTicked` now reads "No town is ticked as a wine source,
+and no town's wine figures are known" with what to do, since it is only
+shown when there was nothing to pick from.
+
+### The two loose ends, done in the next turn
+
+- **The cache's projection is net of production.** `projectedStats` moves
+  the stock by `consume − production` an hour: a town making more than it
+  drinks fills up, to its storage when known; a stock already above its
+  storage is never cut. The earlier note in that function said production
+  was "deliberately not modelled" because wine towns were only sources —
+  no longer true now that one drinking more than it makes is a receiver.
+  That production stops at a full store is assumed, not measured.
+- **The no-receiver toast names the towns that make their own wine.**
+  `hasReceiversFor` counts a receiver only when its net need is above 0.
+  With none left, `AUTO_WINE.allMakeTheirOwn` lists the towns (not the
+  source, not a ticked Sender) whose island makes at least what they
+  drink, both above 0; with none of those, the old messages
+  (`noReceivers`, `onlyReceiverIsSource`, else `nothingToSend`).
+
+### Tests
+
+`core/ikariam/model.test.ts` +6, `town-cache.test.ts` +9,
+`features/auto-wine.test.ts` +26, `app.test.ts` +8 and one removed
+("Start says so, and does not scan, when no town is ticked" — the
+behaviour the user asked to replace): 735 + 48 = 783. The board fixtures in both files
+used to give every town a production of `+10`; they now leave it blank, as
+the board does off a wine island, and take a figure where a test needs
+one. The app tests drive Start, Save, Preview and Crawl Wine through the
+registered actions; the no-source Start test draws the board **only in the
+scan**, so a pick made before the scan finds nothing.
+
+**Seen red, one break at a time, 25 in all** (a scratchpad script that
+patches one line, runs the affected files and restores, `md5sum -c` after):
+Start picking before its scan; Save/Crawl not picking; Preview not
+picking; the board's production not read; an old snapshot's production
+left undefined; the receiver filter off; levelling on the gross figure;
+saved receivers not filtered; a tie going to the last town; no hours
+fallback; most stock instead of most hours; no larger-stock tiebreak;
+an empty town pickable; the pick not saved; the cache not recording
+production; the projection dropping it; any island counting as wine; the
+projection draining the whole consumption; no stop at storage; a stock
+above storage cut; receivers that make their own wine still counted; no
+new toast; senders listed; the source listed; a town drinking and making
+none listed. **My own mistake:** the tiebreak test passed with its code
+removed — the town list sorts by name, so the expected town came first
+anyway; the fixture was changed and it went red.
+
+**Not measured:** anything on the game; whether production stops at a
+full store; a board in a language whose thousands separator is `.`
+(`1.605` reads as 1.605 — already so for stock and consumption).
+
+**What to try on the game:** untick every Sender in Auto Wine Settings,
+press Start — after the scan, the town making the most wine is ticked (a
+toast says which and why) and the run goes from it; a town on a wine
+island making more than it drinks gets nothing; with only such towns left,
+the toast names them.
