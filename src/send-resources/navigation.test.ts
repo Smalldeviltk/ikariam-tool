@@ -9,6 +9,7 @@ import {
   gotoTown,
   openShipmentForm,
   townHasPort,
+  watchTownSwitchResponses,
 } from "./navigation";
 
 /**
@@ -233,6 +234,99 @@ describe("openShipmentForm", () => {
     await expect(openShipmentForm(2)).rejects.toThrow(/No city id/);
     expect(calls).toEqual([]);
   });
+});
+
+describe("what the log says about a town switch", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    delete (window as { jQuery?: unknown }).jQuery;
+  });
+
+  /** Every line `logInfo` wrote, read from its console copy. */
+  const loggedLines = (log: { mock: { calls: unknown[][] } }) =>
+    log.mock.calls.map((call) => String(call[0]));
+
+  it("names the route a switch was sent through", async () => {
+    document.body.innerHTML =
+      townDropdown(["W-Athens", "C-Thebes"]) +
+      `<div id="js_cityBread">W-Athens</div>`;
+    document
+      .querySelectorAll("#dropDown_js_citySelectContainer a")
+      .forEach((a) =>
+        a.addEventListener("click", () => {
+          document.getElementById("js_cityBread")!.textContent =
+            a.getAttribute("title") ?? "";
+        }),
+      );
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    await gotoTown(1);
+
+    expect(loggedLines(log)).toContainEqual(
+      expect.stringContaining('Switch to "C-Thebes" sent through the dropdown'),
+    );
+  });
+
+  it(
+    "logs the server's answer to a town switch, tokens out, and nothing for " +
+      "other requests - switches that did not land left no trace of it",
+    () => {
+      let handler: ((...args: unknown[]) => void) | undefined;
+      const on = vi.fn((_event: string, h: (...args: unknown[]) => void) => {
+        handler = h;
+      });
+      (window as { jQuery?: unknown }).jQuery = vi.fn(() => ({ on }));
+      const log = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      watchTownSwitchResponses();
+      expect(on).toHaveBeenCalledWith("ajaxComplete", expect.any(Function));
+
+      handler!(
+        {},
+        { responseText: '[["updateGlobalData",{"actionRequest":"secret1"}]]' },
+        { url: "/index.php", data: "action=transportOperations&cityId=5" },
+      );
+      expect(loggedLines(log)).toEqual([]);
+
+      handler!(
+        {},
+        {
+          responseText: JSON.stringify([
+            [
+              "custom",
+              [
+                "reload",
+                { link: "?view=city&cityId=78039&currentCityId=78039" },
+              ],
+            ],
+            ["popupData", null],
+          ]),
+        },
+        {
+          url: "/index.php",
+          data:
+            "action=header&function=changeCurrentCity&actionRequest=secret2" +
+            "&oldView=city&cityId=78039",
+        },
+      );
+      handler!(
+        {},
+        { responseText: "<html>login</html>" },
+        { url: "/index.php?action=header&function=changeCurrentCity&cityId=7" },
+      );
+
+      const lines = loggedLines(log);
+      expect(lines).toHaveLength(2);
+      expect(lines[0]).toContain(
+        "Town switch answered: city id 78039 -> [custom, popupData] custom: " +
+          '["reload",{"link":"?view=city&cityId=78039&currentCityId=78039"}]',
+      );
+      expect(lines[1]).toContain(
+        "Town switch answered: city id 7 -> not a response array",
+      );
+      expect(lines.join("\n")).not.toContain("secret");
+    },
+  );
 });
 
 describe("gotoTown town switching", () => {

@@ -46,7 +46,12 @@ import {
   setFlag,
 } from "./state";
 
-import { backToCity, openSpyBuilding, sendAllArmy } from "./navigation";
+import {
+  backToCity,
+  openSpyBuilding,
+  sendAllArmy,
+  watchTownSwitchResponses,
+} from "./navigation";
 
 import {
   describeCurrentTransfer,
@@ -664,7 +669,8 @@ function registerUiActions(): void {
  * Hotkeys — the original's bindings, less Space. The original also toggled
  * this window on Space, and so does Empire Overview its board, so one press
  * toggled both; Space is Empire Overview's alone now (the user's choice).
- * This window opens from its menu entry, and closes with × or Escape.
+ * This window is always on screen; its menu entry and Escape fold it to its
+ * title bar and back.
  */
 function registerHotkeys(): void {
   document.addEventListener("keydown", (event) => {
@@ -711,6 +717,7 @@ export function start(): void {
   startBarbarianObserver();
   startTransportButtonObserver();
   startBuildingLevelObserver();
+  watchTownSwitchResponses();
 
   const moved = migrateLegacyQueues();
   if (moved > 0) {

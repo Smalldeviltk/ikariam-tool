@@ -7,7 +7,8 @@
  * game at some window sizes, could not be moved, and grouped nothing.
  *
  * Modelled on IkaEasy's `js/helper/win.js` and `tpl/helper-win.ejs`: a header
- * that drags, a scrolling body, Escape to close, and the game's own CSS classes
+ * that drags, a scrolling body, Escape to close (or, on a window that is
+ * always open, to fold and unfold), and the game's own CSS classes
  * so it does not look bolted on. Rewritten rather than ported — that one needs
  * jQuery UI, and Send Resources runs in page context with no jQuery of its own.
  *
@@ -52,7 +53,15 @@ export interface WindowOptions {
    * back. With `store`, the folded state is remembered across page loads.
    */
   collapsible?: boolean;
+  /**
+   * Never hide: no close button, open on every load whatever was stored, and
+   * Escape folds and unfolds the window instead of closing it. Pair it with
+   * `collapsible`, or Escape has nothing to do.
+   */
+  alwaysOpen?: boolean;
   onClose?: () => void;
+  /** After the window folds (`true`) or unfolds (`false`), however it was asked. */
+  onCollapsedChange?: (collapsed: boolean) => void;
 }
 
 export interface GameWindow {
@@ -63,6 +72,8 @@ export interface GameWindow {
   close(): void;
   toggle(): void;
   isOpen(): boolean;
+  /** Fold down to the title bar, or back. Does nothing unless `collapsible`. */
+  toggleCollapsed(): void;
   setTitle(title: string): void;
   /** Remove it from the page entirely. */
   destroy(): void;
@@ -238,9 +249,10 @@ export function createWindow(options: WindowOptions): GameWindow {
   const openKey = `ikaWindowOpen_${options.id}`;
   const openStore = options.rememberOpen ? options.store : undefined;
   const startsOpen =
-    openStore?.getJSON<boolean>(openKey, options.openByDefault ?? false) ??
-    options.openByDefault ??
-    false;
+    options.alwaysOpen ||
+    (openStore?.getJSON<boolean>(openKey, options.openByDefault ?? false) ??
+      options.openByDefault ??
+      false);
 
   const root = document.createElement("div");
   root.id = options.id;
@@ -253,10 +265,13 @@ export function createWindow(options: WindowOptions): GameWindow {
   const collapseButton = options.collapsible
     ? `<span class="${WINDOW_COLLAPSE_CLASS}"></span>`
     : "";
+  const closeButton = options.alwaysOpen
+    ? ""
+    : `<span class="ika-window-close" title="${WINDOW_CLOSE_TITLE}">&#10005;</span>`;
   root.innerHTML = `
     <div class="ika-window-header">
       <span class="ika-window-title"></span>
-      <span>${collapseButton}<span class="ika-window-close" title="${WINDOW_CLOSE_TITLE}">&#10005;</span></span>
+      <span>${collapseButton}${closeButton}</span>
     </div>
     <div class="ika-window-body"></div>
     <div class="ika-window-footer"></div>`;
@@ -276,10 +291,21 @@ export function createWindow(options: WindowOptions): GameWindow {
   applyMaxHeight();
   window.addEventListener("resize", applyMaxHeight);
 
-  const closeOnEscape = (event: KeyboardEvent) => {
+  const onEscape = (event: KeyboardEvent) => {
     // Not while typing: every settings dialog here is full of text inputs.
     if (isTypingTarget(event.target)) return;
-    if (event.key === "Escape" && !root.hidden) api.close();
+    if (event.key !== "Escape" || root.hidden) return;
+    if (options.alwaysOpen) api.toggleCollapsed();
+    else api.close();
+  };
+
+  const collapse = root.querySelector<HTMLElement>(`.${WINDOW_COLLAPSE_CLASS}`);
+  const collapsedKey = `ikaWindowCollapsed_${options.id}`;
+  const showCollapsed = (collapsed: boolean) => {
+    if (!collapse) return;
+    root.classList.toggle(WINDOW_COLLAPSED_CLASS, collapsed);
+    collapse.textContent = collapsed ? "▸" : "▾";
+    collapse.title = collapsed ? WINDOW_EXPAND_TITLE : WINDOW_COLLAPSE_TITLE;
   };
 
   makeDraggable(root, header, (moved) => {
@@ -304,7 +330,7 @@ export function createWindow(options: WindowOptions): GameWindow {
       openStore?.setJSON(openKey, true);
     },
     close() {
-      if (root.hidden) return;
+      if (root.hidden || options.alwaysOpen) return;
       root.hidden = true;
       openStore?.setJSON(openKey, false);
       options.onClose?.();
@@ -313,40 +339,36 @@ export function createWindow(options: WindowOptions): GameWindow {
       if (root.hidden) api.open();
       else api.close();
     },
+    toggleCollapsed() {
+      if (!collapse) return;
+      const collapsed = !root.classList.contains(WINDOW_COLLAPSED_CLASS);
+      showCollapsed(collapsed);
+      // Kept like the position: per machine, so out of the data export.
+      options.store?.setJSON(collapsedKey, collapsed);
+      options.onCollapsedChange?.(collapsed);
+    },
     setTitle(text: string) {
       title.textContent = text;
     },
     destroy() {
       window.removeEventListener("resize", applyMaxHeight);
-      document.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("keydown", onEscape);
       root.remove();
     },
   };
 
   root
-    .querySelector<HTMLElement>(".ika-window-close")!
-    .addEventListener("click", () => api.close());
+    .querySelector<HTMLElement>(".ika-window-close")
+    ?.addEventListener("click", () => api.close());
 
-  const collapse = root.querySelector<HTMLElement>(`.${WINDOW_COLLAPSE_CLASS}`);
   if (collapse) {
-    const collapsedKey = `ikaWindowCollapsed_${options.id}`;
-    const showCollapsed = (collapsed: boolean) => {
-      root.classList.toggle(WINDOW_COLLAPSED_CLASS, collapsed);
-      collapse.textContent = collapsed ? "▸" : "▾";
-      collapse.title = collapsed ? WINDOW_EXPAND_TITLE : WINDOW_COLLAPSE_TITLE;
-    };
     showCollapsed(
       options.store?.getJSON<boolean>(collapsedKey, false) ?? false,
     );
-    collapse.addEventListener("click", () => {
-      const collapsed = !root.classList.contains(WINDOW_COLLAPSED_CLASS);
-      showCollapsed(collapsed);
-      // Kept like the position: per machine, so out of the data export.
-      options.store?.setJSON(collapsedKey, collapsed);
-    });
+    collapse.addEventListener("click", () => api.toggleCollapsed());
   }
 
-  document.addEventListener("keydown", closeOnEscape);
+  document.addEventListener("keydown", onEscape);
 
   if (startsOpen) api.open();
 

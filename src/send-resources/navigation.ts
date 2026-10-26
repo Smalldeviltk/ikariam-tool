@@ -12,6 +12,7 @@ import {
   pageWindow,
   readTownName,
 } from "@core/ikariam/globals";
+import { redactTokens } from "@core/ikariam/http";
 import { modelCityName } from "@core/ikariam/model";
 import { SEL } from "@core/ikariam/selectors";
 import { logInfo } from "@core/logger";
@@ -154,6 +155,14 @@ interface PendingSwitch {
   sentAt: number;
 }
 
+/**
+ * Thrown by `gotoTown` when the same switch was sent within
+ * `SWITCH_LANDING_WINDOW_MS` and the page is still in another town. A caller
+ * that would lose its task to the runner's give-up (after a few throws in a
+ * row, well inside the window) can catch it and wait its turn instead.
+ */
+export class TownSwitchPendingError extends Error {}
+
 function readPendingSwitch(): PendingSwitch | null {
   try {
     const raw = sessionStorage.getItem(PENDING_SWITCH_KEY);
@@ -220,7 +229,7 @@ export async function gotoTown(townNumber: number | string): Promise<void> {
     // made one fault fill all 50 records (03/10).
     const secondsAgo = Math.round((Date.now() - pending.sentAt) / 1000);
     logInfo(`The switch to "${target}" was sent ${secondsAgo}s ago`);
-    throw new Error(
+    throw new TownSwitchPendingError(
       `The switch to "${target}" did not land ` +
         `(now in "${getCurrentTownName()}") - not sending it again`,
     );
@@ -228,14 +237,20 @@ export async function gotoTown(townNumber: number | string): Promise<void> {
 
   const sent: PendingSwitch = { target, sentAt: Date.now() };
   sessionStorage.setItem(PENDING_SWITCH_KEY, JSON.stringify(sent));
-  if (
-    !submitChangeCityForm(townNumber) &&
-    !clickBoardTownName(target) &&
-    !clickDropdownTown(townNumber)
-  ) {
+  const route = submitChangeCityForm(townNumber)
+    ? "the game's form"
+    : clickBoardTownName(target)
+      ? "the board's town name"
+      : clickDropdownTown(townNumber)
+        ? "the dropdown"
+        : null;
+  if (!route) {
     forgetPendingSwitch();
     throw new Error(`No way to switch to "${target}" on this page`);
   }
+  // With the server's answer (`watchTownSwitchResponses`), the log says what
+  // happened to a switch that did not land.
+  logInfo(`Switch to "${target}" sent through ${route}`);
 
   await waitFor(() => getCurrentTownName() === target, {
     intervalMs: 100,
@@ -271,6 +286,97 @@ function submitChangeCityForm(townNumber: number | string): boolean {
   cityInput.value = cityId;
   submitForm(form);
   return true;
+}
+
+/** The game's request that changes town (`action=header&function=…`). */
+const CHANGE_CITY_FUNCTION = "function=changeCurrentCity";
+
+/** How much of the server's answer goes into one log line. */
+const SWITCH_ANSWER_MAX_CHARS = 400;
+
+let watchingTownSwitches = false;
+
+/**
+ * Log the server's answer to every town switch sent from this page.
+ *
+ * Switches that did not land came back in the old town (a bug report of
+ * 24/10, once with no other navigation in between), and nothing recorded what
+ * the server had said. A switch that lands is answered with `["custom",
+ * ["reload", {link: "?view=city&cityId=<target>…"}]]` (measured 02/10). This
+ * writes the city id asked for, the answer's entry names and its `custom`
+ * entry to the log, which Bug Report carries — tokens taken out.
+ *
+ * The switch goes through the game's own ajax, so it is seen through the page
+ * jQuery's global ajax events, as Empire Overview watches responses. Nothing
+ * here throws; without the page's jQuery it does nothing.
+ */
+export function watchTownSwitchResponses(): void {
+  if (watchingTownSwitches) return;
+  const pageJQuery = (pageWindow as { jQuery?: unknown }).jQuery;
+  if (typeof pageJQuery !== "function") return;
+  const wrapped = (
+    pageJQuery as (target: Document) => {
+      on?: (event: string, handler: (...args: never[]) => void) => unknown;
+    }
+  )(pageWindow.document);
+  if (typeof wrapped?.on !== "function") return;
+  watchingTownSwitches = true;
+  wrapped.on(
+    "ajaxComplete",
+    (
+      _event: unknown,
+      xhr: { responseText?: unknown } | undefined,
+      settings: { url?: unknown; data?: unknown } | undefined,
+    ) => {
+      try {
+        const request = ajaxRequestText(settings);
+        if (!request.includes(CHANGE_CITY_FUNCTION)) return;
+        logInfo(
+          `Town switch answered: ${describeSwitchAnswer(request, xhr?.responseText)}`,
+        );
+      } catch {
+        // A diagnostic must never get in the way of the game's own request.
+      }
+    },
+  );
+}
+
+/** The URL and body of a jQuery ajax request, as one searchable string. */
+function ajaxRequestText(
+  settings: { url?: unknown; data?: unknown } | undefined,
+): string {
+  const url = typeof settings?.url === "string" ? settings.url : "";
+  const data = settings?.data;
+  const body =
+    typeof data === "string"
+      ? data
+      : data && typeof data === "object"
+        ? new URLSearchParams(data as Record<string, string>).toString()
+        : "";
+  return `${url}&${body}`;
+}
+
+/** One line on what the server said to a town switch. */
+function describeSwitchAnswer(request: string, responseText: unknown): string {
+  const askedFor = /(?:^|[?&])cityId=(\d+)/.exec(request)?.[1] ?? "?";
+  let answer: string;
+  try {
+    const entries = JSON.parse(String(responseText)) as unknown;
+    if (!Array.isArray(entries)) throw new Error("not a response array");
+    const names = entries.map((entry) =>
+      Array.isArray(entry) ? String(entry[0]) : typeof entry,
+    );
+    const custom = entries.find(
+      (entry) => Array.isArray(entry) && entry[0] === "custom",
+    ) as unknown[] | undefined;
+    answer =
+      `[${names.join(", ")}]` +
+      (custom ? ` custom: ${JSON.stringify(custom[1])}` : " (no custom)");
+  } catch {
+    answer = `not a response array: ${String(responseText).slice(0, 80)}`;
+  }
+  const line = `city id ${askedFor} -> ${answer}`;
+  return redactTokens(line, new Set()).slice(0, SWITCH_ANSWER_MAX_CHARS);
 }
 
 /**

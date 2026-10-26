@@ -403,7 +403,10 @@ export const TOKEN_PLACEHOLDER = "<actionRequest>";
  * and so is any value still written as `"actionRequest":"…"` or
  * `actionRequest=…`, in case the game sent one this run never read.
  */
-function redactTokens(text: string, tokens: ReadonlySet<string>): string {
+export function redactTokens(
+  text: string,
+  tokens: ReadonlySet<string>,
+): string {
   let redacted = text;
   for (const token of tokens) {
     if (token) redacted = redacted.split(token).join(TOKEN_PLACEHOLDER);

@@ -75,6 +75,8 @@ function installGame(options: {
     sentWine: "",
     sentTo: "",
     ajaxCalls: [] as string[],
+    /** When the town-view link was last clicked (fake-timer clock). */
+    cityLinkClickedAt: 0,
   };
   let destination = "";
 
@@ -129,7 +131,10 @@ function installGame(options: {
     });
     document
       .querySelector("#js_cityLink > a")
-      ?.addEventListener("click", () => render("town"));
+      ?.addEventListener("click", () => {
+        state.cityLinkClickedAt = Date.now();
+        render("town");
+      });
   }
 
   Object.assign(window, {
@@ -224,6 +229,55 @@ describe("handleSendResource", () => {
         status: "defer",
         reason: expect.stringContaining("submit"),
       });
+    },
+  );
+
+  it(
+    "REGRESSION: defers, sending nothing, when the switch to the source was " +
+      "sent moments ago and did not land - thrown, the runner dropped every " +
+      "shipment from that town within the 30 s the switch is not re-sent",
+    async () => {
+      const game = installGame({ afterSubmit: "town" });
+      game.render("town");
+      sessionStorage.setItem(
+        "ika_pendingTownSwitch",
+        JSON.stringify({ target: "M-Corinth", sentAt: Date.now() - 2000 }),
+      );
+      try {
+        await expect(
+          run(shipment(1000, { origin: "1", destination: "0" })),
+        ).resolves.toMatchObject({
+          status: "defer",
+          reason: expect.stringContaining("did not land"),
+        });
+        expect(game.state.ajaxCalls).toEqual([]);
+        expect(game.state.submitted).toBe(0);
+      } finally {
+        sessionStorage.clear();
+      }
+    },
+  );
+
+  it(
+    "REGRESSION: reports done as soon as it goes back to the town view - " +
+      "that click reloads the page within a second or two, the runner drops " +
+      "the task only once this returns, and a wait here sent the same cargo " +
+      "eight times (a bug report of 26/10)",
+    async () => {
+      const game = installGame({ afterSubmit: "elsewhere" });
+      game.render("town");
+
+      let resolvedAt = 0;
+      const promise = handleSendResource(shipment(1000)).then((result) => {
+        resolvedAt = Date.now();
+        return result;
+      });
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      await expect(promise).resolves.toEqual({ status: "done" });
+      expect(game.state.cityLinkClickedAt).toBeGreaterThan(0);
+      // Nothing between the click and the result may wait on a timer.
+      expect(resolvedAt - game.state.cityLinkClickedAt).toBe(0);
     },
   );
 

@@ -28,6 +28,7 @@ import {
   createWindow,
   setWindowFooter,
   showToast,
+  WINDOW_COLLAPSED_CLASS,
   type GameWindow,
 } from "@core/ui/window";
 import {
@@ -268,9 +269,15 @@ export function buildPanel(): void {
     id: WINDOW_ID,
     title: PANEL.title,
     store: getState().account,
-    rememberOpen: true,
-    openByDefault: true,
+    // Always on screen; Escape and the menu entry fold it to its title bar.
+    alwaysOpen: true,
     collapsible: true,
+    // Unfolding redraws the queue at once: its ten-row cap can only be
+    // measured on screen, and a queue that grew while the window was folded
+    // otherwise showed uncapped until the next status tick.
+    onCollapsedChange: (collapsed) => {
+      if (!collapsed) refreshQueueView();
+    },
   });
   panelWindow.content.innerHTML = windowContent();
   watchNotificationSwitches(panelWindow.content);
@@ -350,7 +357,7 @@ export function refreshWineWarning(): void {
 export function setTransferInfo(text: string): void {
   if (!panelWindow) return;
   // Only worth redrawing while someone is looking at it.
-  if (panelWindow.isOpen()) {
+  if (!panelWindow.root.classList.contains(WINDOW_COLLAPSED_CLASS)) {
     refreshQueueView();
     refreshWineWarning();
   }
@@ -364,14 +371,10 @@ export function setTransferInfo(text: string): void {
 }
 
 /**
- * Show or hide the window — what the menu entry (or the fallback button)
- * does. No hotkey: Space belongs to the Empire Overview board.
- *
- * Opening redraws the queue at once: its ten-row cap can only be measured
- * on screen, and a queue that grew while the window was closed otherwise
- * showed uncapped until the next status tick.
+ * Fold the window to its title bar or unfold it — what the menu entry (or the
+ * fallback button) does, as Escape does. The window itself never hides. No
+ * other hotkey: Space belongs to the Empire Overview board.
  */
 export function togglePanel(): void {
-  panelWindow?.toggle();
-  if (panelWindow?.isOpen()) refreshQueueView();
+  panelWindow?.toggleCollapsed();
 }

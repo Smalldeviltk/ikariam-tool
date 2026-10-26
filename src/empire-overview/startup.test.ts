@@ -839,6 +839,25 @@ describe("Empire Overview startup", () => {
     );
 
     it(
+      "REGRESSION: subscribing something that is not a function is " +
+        "skipped, as jQuery's Callbacks did - the isolating wrapper made " +
+        "it throw on every publish",
+      async () => {
+        await boot();
+        const { events } = await import("./events");
+        const seen: unknown[] = [];
+        events("nonFunctionProbe").sub(undefined);
+        events("nonFunctionProbe").sub((value: unknown) => seen.push(value));
+
+        events("nonFunctionProbe").pub(1);
+        events("nonFunctionProbe").pub(2);
+
+        expect(seen).toEqual([1, 2]);
+        expect(bugReports()).not.toContain("event subscriber");
+      },
+    );
+
+    it(
       "REGRESSION: a fetched Palace view - the quick upgrade on a Palace " +
         "cell - neither stops the board recording nor blanks the form of " +
         "government",
@@ -933,6 +952,27 @@ describe("Empire Overview startup", () => {
           report.contexts?.some((context) => context.topic === "ajaxResponse"),
         );
         expect(fromResponses).toEqual([]);
+      },
+    );
+
+    it(
+      "REGRESSION: the game's real upgrade link does not make every later " +
+        "response throw - it carries no `function` (measured 24/10), and the " +
+        "click handler subscribed `undefined`",
+      async () => {
+        await boot();
+        const { events } = await import("./events");
+        document.body.insertAdjacentHTML(
+          "beforeend",
+          '<a id="js_buildingUpgradeButton" ' +
+            'href="?action=UpgradeExistingBuilding&cityId=297034&position=5&level=9">up</a>',
+        );
+        document.getElementById("js_buildingUpgradeButton")!.click();
+
+        events("ajaxResponse").pub([townData(297034)]);
+        events("ajaxResponse").pub([townData(297034)]);
+
+        expect(bugReports()).not.toContain("event subscriber");
       },
     );
   });

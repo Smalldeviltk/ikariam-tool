@@ -201,6 +201,16 @@ describe("folding down to the title bar", () => {
     );
   });
 
+  it("tells its owner when it folds or unfolds, from the button or the API", () => {
+    const onCollapsedChange = vi.fn();
+    const win = createWindow({ ...options(), onCollapsedChange });
+
+    foldButton(win)!.click();
+    win.toggleCollapsed();
+
+    expect(onCollapsedChange.mock.calls).toEqual([[true], [false]]);
+  });
+
   it("does not start a drag when the fold button is pressed", () => {
     const win = createWindow(options());
     const before = [win.root.style.left, win.root.style.top];
@@ -208,6 +218,79 @@ describe("folding down to the title bar", () => {
     drag(foldButton(win)!, [10, 10], [200, 200]);
 
     expect([win.root.style.left, win.root.style.top]).toEqual(before);
+  });
+});
+
+describe("a window that is always open", () => {
+  const options = (store = accountStore("tester")) => ({
+    id: "test-window",
+    title: "Test",
+    store,
+    collapsible: true,
+    alwaysOpen: true,
+  });
+
+  const folded = (win: { root: HTMLElement }) =>
+    win.root.classList.contains(WINDOW_COLLAPSED_CLASS);
+
+  it("opens on creation and has no close button", () => {
+    const win = createWindow(options());
+    expect(win.isOpen()).toBe(true);
+    expect(win.root.querySelector(".ika-window-close")).toBeNull();
+  });
+
+  it("folds on Escape and unfolds on the next, staying open", () => {
+    const win = createWindow(options());
+
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(win.isOpen()).toBe(true);
+    expect(folded(win)).toBe(true);
+
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(win.isOpen()).toBe(true);
+    expect(folded(win)).toBe(false);
+  });
+
+  it("ignores Escape while a field has focus", () => {
+    const win = createWindow(options());
+    win.content.innerHTML = `<input id="field"/>`;
+
+    win.content
+      .querySelector("#field")!
+      .dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+
+    expect(folded(win)).toBe(false);
+  });
+
+  it("cannot be closed, by close() or toggle()", () => {
+    const onClose = vi.fn();
+    const win = createWindow({ ...options(), onClose });
+
+    win.close();
+    win.toggle();
+
+    expect(win.isOpen()).toBe(true);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("opens on the next load whatever was stored as its open state", () => {
+    const store = accountStore("tester");
+    store.setJSON("ikaWindowOpen_test-window", false);
+
+    expect(
+      createWindow({ ...options(store), rememberOpen: true }).isOpen(),
+    ).toBe(true);
+  });
+
+  it("stays folded on the next load when Escape folded it", () => {
+    const store = accountStore("tester");
+    createWindow(options(store));
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+
+    document.body.innerHTML = `<div id="container"></div>`;
+    expect(folded(createWindow(options(store)))).toBe(true);
   });
 });
 

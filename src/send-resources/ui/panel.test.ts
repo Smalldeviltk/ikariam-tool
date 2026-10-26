@@ -52,17 +52,32 @@ describe("buildPanel", () => {
     expect(win.hidden).toBe(false);
   });
 
-  it("keeps the window closed on the next load when it was left closed", () => {
+  it(
+    "shows the window on every load, even one stored as closed by a build " +
+      "that could close it — it is always on screen now, folded or not",
+    () => {
+      getState().account.setJSON(`ikaWindowOpen_${WINDOW_ID}`, false);
+      document.body.innerHTML += GAME_MENU;
+      buildPanel();
+
+      const win = document.querySelector<HTMLElement>(`#${WINDOW_ID}`)!;
+      expect(win.hidden).toBe(false);
+      expect(win.querySelector(".ika-window-close")).toBeNull();
+    },
+  );
+
+  it("folds on Escape and unfolds on the next, never hiding", () => {
     document.body.innerHTML += GAME_MENU;
     buildPanel();
-    togglePanel();
+    const win = document.querySelector<HTMLElement>(`#${WINDOW_ID}`)!;
 
-    document.body.innerHTML = `<div id="container"></div><div id="footer"></div>`;
-    buildPanel();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(win.hidden).toBe(false);
+    expect(win.classList.contains("ika-window-collapsed")).toBe(true);
 
-    expect(document.querySelector<HTMLElement>(`#${WINDOW_ID}`)!.hidden).toBe(
-      true,
-    );
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(win.hidden).toBe(false);
+    expect(win.classList.contains("ika-window-collapsed")).toBe(false);
   });
 
   it("is idempotent — a second call does not build a second window", () => {
@@ -119,7 +134,7 @@ describe("buildPanel", () => {
     },
   );
 
-  it("opens and closes from the menu entry", () => {
+  it("folds and unfolds from the menu entry, never hiding", () => {
     document.body.innerHTML += GAME_MENU;
     buildPanel();
 
@@ -129,12 +144,13 @@ describe("buildPanel", () => {
     )!;
 
     entry.click();
-    expect(win.hidden).toBe(true);
-    entry.click();
     expect(win.hidden).toBe(false);
+    expect(win.classList.contains("ika-window-collapsed")).toBe(true);
+    entry.click();
+    expect(win.classList.contains("ika-window-collapsed")).toBe(false);
   });
 
-  it("opens and closes from the launcher", () => {
+  it("folds and unfolds from the launcher, never hiding", () => {
     document.body.innerHTML += GAME_MENU;
     buildPanel();
 
@@ -142,10 +158,11 @@ describe("buildPanel", () => {
     const launcher = document.querySelector<HTMLElement>(`.${LAUNCHER_CLASS}`)!;
 
     launcher.click();
-    expect(win.hidden).toBe(true);
+    expect(win.hidden).toBe(false);
+    expect(win.classList.contains("ika-window-collapsed")).toBe(true);
 
     launcher.click();
-    expect(win.hidden).toBe(false);
+    expect(win.classList.contains("ika-window-collapsed")).toBe(false);
   });
 
   it("keeps every control, grouped by feature rather than in one row", () => {
@@ -271,11 +288,12 @@ describe("live state", () => {
     },
   );
 
-  it("toggles through togglePanel, as the menu entry does", () => {
+  it("folds through togglePanel, as the menu entry does", () => {
     const win = document.querySelector<HTMLElement>(`#${WINDOW_ID}`)!;
-    expect(win.hidden).toBe(false);
+    expect(win.classList.contains("ika-window-collapsed")).toBe(false);
     togglePanel();
-    expect(win.hidden).toBe(true);
+    expect(win.hidden).toBe(false);
+    expect(win.classList.contains("ika-window-collapsed")).toBe(true);
   });
 });
 
@@ -286,10 +304,10 @@ describe("the queue group", () => {
   });
 
   it(
-    "is redrawn the moment the window opens — its ten-row cap can only be " +
+    "is redrawn the moment the window unfolds — its ten-row cap can only be " +
       "measured on screen, and it waited for the next status tick",
     () => {
-      togglePanel(); // closed
+      togglePanel(); // folded
       getState().queue.push({
         type: "sendResource",
         data: { origin: "0", destination: "1", resource: "wine", amount: 7 },
@@ -298,7 +316,7 @@ describe("the queue group", () => {
         "queue is empty",
       );
 
-      togglePanel(); // open again
+      togglePanel(); // unfolded again
 
       expect(
         document.querySelector("#ikaQueueList")!.textContent,
@@ -322,14 +340,14 @@ describe("the queue group", () => {
     );
   });
 
-  it("redraws on the status tick, but only while the window is open", () => {
+  it("redraws on the status tick, but only while the window is unfolded", () => {
     togglePanel();
     getState().queue.push({
       type: "sendResource",
       data: { origin: "0", destination: "1", resource: "wine", amount: 7 },
     });
 
-    // Closed: the tick must not spend work redrawing what nobody sees.
+    // Folded: the tick must not spend work redrawing what nobody sees.
     setTransferInfo("x");
     expect(document.querySelector("#ikaQueueList")!.textContent).toContain(
       "queue is empty",

@@ -44,6 +44,11 @@ export const events: any = (function () {
       topic = {
         pub: callbacks.fire,
         sub: function (handler) {
+          // jQuery's `Callbacks.add` skips anything that is not a function.
+          // The wrapper would turn it into one that throws on every publish
+          // (seen in a bug report of 24/10: the board's handler for the
+          // game's upgrade button subscribed `undefined`).
+          if (typeof handler !== "function") return;
           let wrapped = wrappers.get(handler);
           if (!wrapped) {
             wrapped = isolatedSubscriber(String(id), handler);

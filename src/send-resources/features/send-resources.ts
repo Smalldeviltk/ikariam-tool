@@ -28,6 +28,7 @@ import {
   townCityId,
   townHasBuiltPort,
   townHasPort,
+  TownSwitchPendingError,
 } from "../navigation";
 import { getActionPoints, getFreeShips, readCurrentStock } from "../game-state";
 import { getFreighterCapacity, getPerShipCapacity } from "../ship-capacity";
@@ -116,7 +117,19 @@ export async function handleSendResource(
       `${getTownNameFromList(origin)} to ${getTownNameFromList(destination)}`,
   );
 
-  await gotoTown(origin);
+  try {
+    await gotoTown(origin);
+  } catch (error) {
+    // A switch to the source that did not land is not sent again for 30 s,
+    // and the runner gives up on a task after five throws in a row: thrown,
+    // every shipment from that town queued in those 30 s was dropped (a bug
+    // report of 24/10 lost five). Waiting its turn keeps the order; by the
+    // time it comes round again the switch may be sent once more.
+    if (error instanceof TownSwitchPendingError) {
+      return { status: "defer", reason: error.message };
+    }
+    throw error;
+  }
 
   // From here on the page has (most likely) been reloaded into `origin`, so a
   // `retry` is the wrong answer to anything specific to this town: it blocks
@@ -278,7 +291,11 @@ export async function handleSendResource(
   );
 
   const remaining = amount - sentAmount;
-  // Leave the page where the next shipment expects to find it.
+  // Leave the page where the next shipment expects to find it — and return
+  // at once. The click reloads the page within a second or two, and the
+  // runner removes the task from the stored queue only when this returns:
+  // a wait here (tried 26/10) died with the page, the task stayed queued, and
+  // the next page sent the same cargo again, eight times in a row.
   backToCity("shipment sent");
 
   if (remaining <= 0) return { status: "done" };

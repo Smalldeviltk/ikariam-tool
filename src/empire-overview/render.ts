@@ -3313,8 +3313,11 @@ export const render: any = {
               events("ajaxResponse").unsub(upgradeSuccessCheck);
             };
           })();
+          // FIX (not in the original): subscribed only when it was built.
+          // The game's link reads `?action=UpgradeExistingBuilding&…` with
+          // no `function` (measured 24/10), so this subscribed `undefined`.
+          events("ajaxResponse").sub(upgradeSuccessCheck);
         }
-        events("ajaxResponse").sub(upgradeSuccessCheck);
       }
     });
     render.mainContentBox
