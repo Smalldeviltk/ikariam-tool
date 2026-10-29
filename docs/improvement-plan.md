@@ -1,8 +1,10 @@
 # Kế hoạch cải thiện — UI và tính năng
 
-> Trạng thái: **đang thực hiện.** Cập nhật 26/10/2026.
+> Trạng thái: **đang thực hiện.** Cập nhật 29/10/2026.
 >
-> **Mới nhất (§2.AD — 26/10 chiều, chưa commit, có trong `dist/` build 26/10 16:22, chưa thử trên game):** Auto Wine **tự chọn town nguồn** khi chưa tick Sender — town có **sản lượng wine cao nhất**, không town nào làm wine thì town có **nhiều giờ rượu còn lại nhất** — và tick luôn làm Sender. **Chỉ gửi cho town uống nhiều hơn đảo nó làm ra** (không biết sản lượng = 0), chia theo phần thiếu ròng. Town cache ghi thêm sản lượng và dự báo tồn kho theo mức ròng; toast nêu tên các town tự làm đủ rượu. 735 → 783 test.
+> **Mới nhất (§2.AE — 29/10, chưa commit, có trong `dist/` build 29/10 18:32 — người dùng build, đã grep — chưa thử trên game):** queue (transport người chơi tạo + danh sách Auto Build) được **chép vào sổ ghi chú của game** (`view=avatarNotes` / `saveAvatarNotes`), định dạng gọn ≤ 200 ký tự, để máy khác cùng tài khoản chạy tiếp. Gộp ba chiều theo **mốc** lần sync trước: máy 1 tải trang sẽ bỏ các lệnh máy 2 đã chạy, trước task đầu tiên; **giữ chỗ** trong note ngay trước khi gửi hàng / bấm Upgrade; **khoá** trong note để hai máy không cùng chạy. Sync lúc tải trang, sau Scan, sau mỗi thay đổi. 783 → 880 test, 46 chỗ đã thấy đỏ.
+>
+> **§2.AD — 26/10 chiều, commit `1c41ce8` (tài liệu `1f631d4`), có trong `dist/` build 26/10 16:22, chưa thử trên game):** Auto Wine **tự chọn town nguồn** khi chưa tick Sender — town có **sản lượng wine cao nhất**, không town nào làm wine thì town có **nhiều giờ rượu còn lại nhất** — và tick luôn làm Sender. **Chỉ gửi cho town uống nhiều hơn đảo nó làm ra** (không biết sản lượng = 0), chia theo phần thiếu ròng. Town cache ghi thêm sản lượng và dự báo tồn kho theo mức ròng; toast nêu tên các town tự làm đủ rượu. 735 → 783 test.
 >
 > **§2.AC — 26/10, commit `fac13d6` (tài liệu `0baafe6`), có trong `dist/` build 26/10 13:56, chưa thử trên game):** hai bug report. Empire Overview hết lỗi `reading 'apply'` sau nút nâng cấp của game; shipment có lần đổi town chưa tới nơi được **hoãn** thay vì bị bỏ; log ghi đường đổi town và câu trả lời của server. **Lỗi của chính mình trong cùng lượt** — chờ 10 s sau khi bấm về town view làm một shipment bị gửi **8 lần** — đã gỡ, nên cuộc đua nó định sửa lại còn mở. Cửa sổ Send Resources **luôn hiện**: **Esc** và mục menu **thu / mở**, bỏ nút ×. 721 → 735 test.
 >
@@ -26,7 +28,7 @@
 > phần U còn thiếu số (§2.U phần 4) · R: kênh cập nhật riêng (chờ người
 > dùng). **Không làm lúc này** (người dùng chọn 04/10): F, G, I, M, N, O, Q.
 >
-> Git (26/10 tối, đã kiểm): `origin/refactor` ở `0baafe6` = `HEAD` (người dùng đã push), `git rev-list --count origin/refactor..HEAD` = 0. **Chưa commit: §2.AD** — `src/core/ikariam/model.ts` (+ test), `selectors.ts`, `src/send-resources/app.ts` (+ test), `features/auto-wine.ts` (+ test), `messages.ts`, `town-cache.ts` (+ test) và hai tài liệu này. `dist/` hiện tại build 26/10 16:22 trong phiên, từ working tree, có §2.AD (đã grep, handover §1). Git (26/10, sau §2.AC): `origin/refactor` vẫn ở `455047d`; `HEAD` là `fac13d6`, `git rev-list --count origin/refactor..HEAD` = 2 (`3dff502` tài liệu, `fac13d6` §2.AC) — **chưa push**; phần ghi §2.AC vào hai tài liệu này chưa commit lúc viết. `dist/` hiện tại build 26/10 13:56 (không build trong phiên — có lẽ người dùng build), có toàn bộ §2.AC (đã grep, handover §1). Git (26/10, đã kiểm lại): `origin/refactor` ở `455047d` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Z, §2.AA, §2.AB đã commit (`e7f2acb` code, `455047d` tài liệu). Checkout trên Linux giờ có `node_modules/` và `dist/` (build 22/10 16:37, có §2.R → §2.AB — đã grep 26/10, handover §1); vẫn không có `sample/`, `tools/output/`. Ghi chú 22/10, giữ để tra: `origin/refactor` ở `534f066` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Y đã commit (`21464dd` code, `534f066` tài liệu). Checkout 22/10 chạy trên Linux, không có `node_modules/`, `dist/`, `sample/`, `tools/output/` (handover §1). Ghi chú 17/10, giữ để tra: `origin/refactor` ở `772a055` = `HEAD`, **không còn commit nào chưa push**; §2.X đã commit (`1baf274` code, `772a055` tài liệu). Chưa commit: §2.Y (`auto-wine.ts`, `auto-wine.test.ts`, `styles.ts`) và hai tài liệu này. Đoạn sau là danh sách commit cũ (05/10), giữ để tra; lúc viết nó ghi `origin/refactor` ở `066eb44` và 17 commit chưa push —
+> Git (29/10, đã kiểm): `origin/refactor` ở `1f631d4` = `HEAD` (người dùng đã push §2.AD), `git rev-list --count origin/refactor..HEAD` = 0. **Chưa commit: §2.AE** — `src/core/ikariam/http.ts` (+ test), `src/core/task-queue.ts`, `src/core/data-transfer.ts` (+ test), `src/send-resources/app.ts` (+ test), `state.ts`, `messages.ts`, `features/send-resources.ts` (+ test), `features/auto-build.ts` (+ test), hai file mới `src/send-resources/queue-note.ts` và `queue-note.test.ts`, và hai tài liệu này. `dist/` hiện tại build 29/10 18:32 (không build trong phiên — người dùng build, sau lần sửa nguồn cuối lúc 18:23), có §2.AE (đã grep `saveAvatarNotes`, `ikaQueueNoteBase`, `watchLease(true)` trong `Ikariam Send Resources.user.js`, `saveAvatarNotes` trong `dist/extension/page/send-resources.js`). Git (26/10 tối, đã kiểm): `origin/refactor` ở `0baafe6` = `HEAD` (người dùng đã push), `git rev-list --count origin/refactor..HEAD` = 0. **Lúc đó chưa commit: §2.AD** (sau đó commit `1c41ce8` code, `1f631d4` tài liệu) — `src/core/ikariam/model.ts` (+ test), `selectors.ts`, `src/send-resources/app.ts` (+ test), `features/auto-wine.ts` (+ test), `messages.ts`, `town-cache.ts` (+ test) và hai tài liệu này. `dist/` hiện tại build 26/10 16:22 trong phiên, từ working tree, có §2.AD (đã grep, handover §1). Git (26/10, sau §2.AC): `origin/refactor` vẫn ở `455047d`; `HEAD` là `fac13d6`, `git rev-list --count origin/refactor..HEAD` = 2 (`3dff502` tài liệu, `fac13d6` §2.AC) — **chưa push**; phần ghi §2.AC vào hai tài liệu này chưa commit lúc viết. `dist/` hiện tại build 26/10 13:56 (không build trong phiên — có lẽ người dùng build), có toàn bộ §2.AC (đã grep, handover §1). Git (26/10, đã kiểm lại): `origin/refactor` ở `455047d` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Z, §2.AA, §2.AB đã commit (`e7f2acb` code, `455047d` tài liệu). Checkout trên Linux giờ có `node_modules/` và `dist/` (build 22/10 16:37, có §2.R → §2.AB — đã grep 26/10, handover §1); vẫn không có `sample/`, `tools/output/`. Ghi chú 22/10, giữ để tra: `origin/refactor` ở `534f066` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Y đã commit (`21464dd` code, `534f066` tài liệu). Checkout 22/10 chạy trên Linux, không có `node_modules/`, `dist/`, `sample/`, `tools/output/` (handover §1). Ghi chú 17/10, giữ để tra: `origin/refactor` ở `772a055` = `HEAD`, **không còn commit nào chưa push**; §2.X đã commit (`1baf274` code, `772a055` tài liệu). Chưa commit: §2.Y (`auto-wine.ts`, `auto-wine.test.ts`, `styles.ts`) và hai tài liệu này. Đoạn sau là danh sách commit cũ (05/10), giữ để tra; lúc viết nó ghi `origin/refactor` ở `066eb44` và 17 commit chưa push —
 > `6ed66c6`, `c38dca4`, `b9f1d7a` (U + V), `4f9436c`, `3209964` (§2.K + §2.L),
 > `7ed3a85`, `b45f792` (§2.M), `32fe3ba`, `ec3fdc4` (§2.N → §2.R), `b2e9084`
 > (§2.S), `3f8a51b` (thay đổi `barbarian.ts` của người dùng, commit riêng
@@ -2526,7 +2528,7 @@ Key `ikaWindowOpen_<id>` của bản cũ vẫn nằm trong storage; cửa sổ n
 
 ### 2.AD Auto Wine tự chọn town nguồn, bỏ town tự làm đủ rượu (26/10/2026, chiều)
 
-**Chưa commit lúc viết. Có trong `dist/` build 26/10 16:22 (đã grep), chưa thử trên game.** Bản tiếng Anh, chi tiết hơn: handover §28. 735 → 783 test, 38 file; typecheck và prettier sạch trên mọi file đã sửa (`town-cache.test.ts` đã lệch format từ `HEAD`, không format lại).
+**Commit `1c41ce8` (tài liệu `1f631d4`), đã push (kiểm 29/10); lúc viết chưa commit. Có trong `dist/` build 26/10 16:22 (đã grep), chưa thử trên game.** Bản tiếng Anh, chi tiết hơn: handover §28. 735 → 783 test, 38 file; typecheck và prettier sạch trên mọi file đã sửa (`town-cache.test.ts` đã lệch format từ `HEAD`, không format lại).
 
 **Người dùng yêu cầu:** chưa tick town nguồn thì xem các town hiện có, town có **sản lượng wine cao nhất** làm nguồn; chỉ phân phối tới town có **lượng tiêu thụ nhiều hơn lượng khai thác** (mặc định khai thác = 0, để không nhầm các đảo không phải đảo nho). Thêm giữa lượt: **không town nào sản xuất dương** thì lấy town có **nhiều rượu nhất tính theo thời gian còn lại**. Lượt sau: làm nốt hai việc còn treo (phần 4).
 
@@ -2572,6 +2574,145 @@ Key `ikaWindowOpen_<id>` của bản cũ vẫn nằm trong storage; cửa sổ n
 **Chưa kiểm chứng:** mọi thứ trên game; kho đầy có ngừng sản xuất không; board ở ngôn ngữ dùng dấu `.` ngăn hàng nghìn (`1.605` đọc thành 1,605 — vốn đã vậy với tồn kho và mức uống).
 
 **Cần thử trên game:** bỏ tick mọi Sender trong Auto Wine Settings, bấm Start → sau Scan, town làm nhiều wine nhất được tick (toast nói town nào, vì sao) và lượt chạy đi từ đó; town đảo nho làm dư không nhận gì; chỉ còn town như vậy thì toast nêu tên.
+
+### 2.AE Đồng bộ queue qua sổ ghi chú của game (29/10/2026)
+
+**Đã code, chưa commit lúc viết. Có trong `dist/` build 29/10 18:32 (người dùng build; đã grep), chưa thử trên game.** Bản tiếng Anh: handover §29. Plan viết trước khi code, cập nhật lại theo code sau khi làm xong. 783 → 880 test, 39 file; typecheck sạch (`tsc` cả hai cấu hình); prettier sạch trên mọi file đã sửa, trừ ba file đã lệch từ `HEAD` (`http.test.ts` có sửa — phần thêm vào đã đối chiếu với bản prettier, không format lại cả file).
+
+Không phải mục O ở §4.2 (O là sổ ghi chú riêng của tool, lưu IndexedDB); ở đây dùng **sổ ghi chú có sẵn của game** làm chỗ chứa queue dùng chung giữa các máy.
+
+**Người dùng yêu cầu:** ghi queue (transport + building) vào note của game để sang máy khác queue vẫn chạy. Tạo queue thì ghi luôn vào note, queue chạy xong thì xoá khỏi note; nút Scan thêm việc sync note vào queue; note giới hạn **200 ký tự** (theo người dùng, chưa đo) nên ghi gọn nhất có thể; xử lý xung đột: máy 1 tạo queue, máy 2 chạy vài mục, quay lại máy 1 thì máy 1 phải biết các mục đó đã chạy. Thêm giữa lượt: "update chi tiết plan, và nhớ tạo test đầy đủ".
+
+**Người dùng chọn** (bốn câu hỏi có phương án): đọc note **khi Scan và mỗi lần tải trang**, trước khi runner chạy task đầu tiên; **khoá trong note** để hai máy không cùng chạy; script **chiếm cả note**; **không ghi Auto Wine**, hết chỗ thì mục dư chỉ nằm ở máy local, kèm cảnh báo.
+
+#### 1. API của sổ ghi chú (capture của người dùng, 29/10, s303-en)
+
+| Việc | Request | Response |
+| ---- | ------- | -------- |
+| Đọc | `GET ?view=avatarNotes&…&ajax=1&actionRequest=…` (các tham số khác là vị trí khung của game) | **Chưa thấy thân response.** Ô ghi chú trên trang là `#js_notesMessages` (class `notesTextBox`), `maxLength` = -1 — HTML không giới hạn; ký tự `\|;>.@` lưu rồi mở lại vẫn nguyên |
+| Ghi | `POST ?action=Diplomacy&function=saveAvatarNotes`, form `notes=<nội dung>&ajax=1&actionRequest=<token>` | `{"dataForJSCallback":[],"actionRequest":"<token mới>"}` — **object, không phải mảng**, không trả lại nội dung note; token đổi sau mỗi lần ghi |
+
+Đã làm trong `core/ikariam/http.ts`:
+
+- `ikariamRequest` chỉ gửi GET và ném lỗi khi JSON không phải mảng → tách phần chờ khoảng cách giữa request (`waitForRequestSlot`) và phần gửi + parse (`fetchJson`) ra dùng chung; thêm **`postIkariamForm`** gửi POST form, nhận response object, lấy `actionRequest` ở cấp ngoài cùng làm token mới nhất. Response của POST **không** phát qua `onResponse` (subscriber chờ dạng mảng).
+- **`readAvatarNotes`**: `ikariamRequest({view: "avatarNotes"})`, rồi `findNotesText` tìm trong **mọi chuỗi** của response (thân response chưa capture được) chuỗi HTML có `js_notesMessages`, parse bằng `DOMParser` (không chạy script), lấy chữ của ô đó (entity HTML được giải). Chuỗi chỉ nhắc tên id mà không có phần tử → không tính. Không tìm thấy ô → **ném lỗi**, không trả chuỗi rỗng: coi nhầm là note rỗng sẽ xoá queue của máy khác.
+- **`saveAvatarNotes(text)`**: `postIkariamForm({action: "Diplomacy", function: "saveAvatarNotes"}, {notes: text})`.
+- **Đổi so với plan ban đầu:** **không** ghi token mới vào `ikariam.model.actionRequest`. Module này cố ý không áp response vào game (ghi chú đầu file), và `upgradeBuildingNow` (§2.T phần 6) đã gửi action bằng token của riêng ta mà không đụng model. Game có từ chối token cũ sau khi ta ghi note không: **chưa đo** — xem phần 4 về chỗ đặt "giữ chỗ" để tránh rủi ro này.
+
+#### 2. Cách ghi gọn
+
+```
+Q1<fp><máy><phút>|<mục>;<mục>;…
+```
+
+| Phần | Độ dài | Nghĩa |
+| ---- | ------ | ----- |
+| `Q1` | 2 | dấu nhận + phiên bản; note không rỗng mà không đúng định dạng này là **của người dùng** (`foreign`) |
+| `fp` | 2 | dấu vân tay danh sách town: băm city id theo thứ tự dropdown, mod 36² (`townFingerprint`). Khác máy local → số thứ tự town trong note **không dùng được** (lập town mới, đổi tên làm dịch thứ tự) → không sync. Hai danh sách khác nhau trùng dấu: 1/1296 |
+| `máy` + `phút` | 2 + 3 | khoá: mã máy đang chạy queue (2 ký tự hệ 36, `00` = không ai giữ) và phút ghi khoá (phút Unix mod 36³ ≈ 32 ngày, tuổi tính theo modulo) |
+| Transport | 6 + lượng | `<id 2><từ 1><tới 1><hàng 1><lượng hệ 36>` — `k735w99c` = mục `k7`, town 3 → 5, gỗ, 12000. Hàng: `w` gỗ, `v` rượu, `m` cẩm thạch, `g` thuỷ tinh, `s` lưu huỳnh |
+| Building | 4–5 | `@<town 1><ô 1><cấp hệ 36>` — `@38l` = town 3, ô 8, nâng tới cấp 21 |
+
+Town và ô ghi một ký tự hệ 36 (tối đa 36 town, ô 0–35), cấp 1–1295. Header 10 ký tự; transport 12000 là 8 ký tự + `;` → **21 transport** trong 200 ký tự (đo bằng test, `encodeNote`); building 4–5 ký tự + `;` → khoảng 35.
+
+- Mục nào định dạng không chở được (town ≥ 36, lượng không nguyên, cấp ngoài khoảng) thì **không ghi**, nằm yên ở local (`isWritable`).
+- Một mục hỏng trong note → **cả note** là `foreign`: bỏ riêng mục hỏng sẽ bị đọc thành "máy khác đã chạy" và xoá ở local.
+- Transport có **id riêng** (`noteId`, 2 ký tự, thêm vào `SendResourceTaskData`), gán lúc sync đầu tiên, tránh id đã có trong mốc và trong note. Hai máy tự gán id độc lập nên có thể trùng: id local chưa có trong mốc mà note có cùng id với tuyến / hàng khác → local đổi id mới, giữ cả hai (`assignShipmentIds`). Building nhận diện bằng **(town, ô, cấp)**.
+- Tên công trình **không ghi**. Mục building nhận từ note có tên tạm `Position <ô> <cấp>` (`QUEUE_NOTE.placeholderBuilding`); handler chỉ dùng `positionId`, tên để hiển thị và để `levelOf` đọc cấp.
+- Town trong note là **số thứ tự dropdown** (như queue hiện tại), đổi sang tên town khi đưa vào `listAutoBuild`.
+
+#### 3. Gộp ba chiều: mốc / local / note (`mergeEntries`, hàm thuần)
+
+Mỗi máy lưu **mốc** = danh sách mục lần cuối hai bên khớp nhau (`ikaQueueNoteBase`, theo tài khoản, nhóm `runtime` khi export). Với mỗi mục:
+
+| Mốc | Local | Note | Kết quả |
+| :-: | :---: | :--: | ------- |
+| có | có | có | giữ; lượng transport: bên nào khác mốc thì lấy bên đó, cả hai khác (hoặc không có mốc) thì lấy **nhỏ hơn** (lượng chỉ giảm) |
+| có | có | không | máy khác đã chạy / xoá → **xoá ở local** (kể cả task `upgradeBuilding` của lượt build đang chờ) |
+| có | không | có | local đã chạy / xoá → **xoá khỏi note** |
+| không | có | — | local mới thêm (hoặc lần ghi trước chưa tới) → **thêm vào note** |
+| không | không | có | máy khác mới thêm → **thêm vào local** (transport nối cuối queue, building nối cuối danh sách của town) |
+
+- **Thứ tự:** note giữ thứ tự của note, mục mới từ local nối cuối; local giữ thứ tự local, mục mới từ note nối cuối. **Đổi thứ tự không đồng bộ** giữa các máy.
+- **Ghi:** chỉ khi chữ mới khác chữ đang có. Thành công → mốc = những mục đã ghi. Lỗi → mốc = note vừa đọc (test "after a write that failed, still drops what the other computer then ran": giữ mốc cũ thì một mục máy khác thêm rồi chạy sẽ **sống lại**).
+- **Hết chỗ:** mục không vừa **không vào note và không vào mốc** → lần sync sau thử lại.
+- **Note rỗng → mốc bỏ đi** (coi như mới): note bị xoá tay, hay chưa từng ghi, không được hiểu là "mọi lệnh đã chạy ở máy khác". Hệ quả: **không xoá được queue bằng cách xoá note** — xoá trong tool.
+- Task không thuộc note (Auto Wine, task `upgradeBuilding` của lượt build) và mục không ghi được thì sync không đụng tới.
+
+Ví dụ của người dùng (test "settles the player's case end to end"): máy 1 tạo A, B, C (mốc = note = A,B,C). Máy 2 sync → nhận A, B, C; chạy A, B → note = C. Máy 1 tải trang: A, B có trong mốc, có ở local, không có trong note → xoá ở local, **trước khi runner chạy task đầu tiên**.
+
+#### 4. Khi nào đọc / ghi
+
+| Lúc | Việc | Ở đâu |
+| --- | ---- | ----- |
+| Tải trang | đọc → gộp → ghi nếu khác. Runner **chờ** lần sync này xong (`canRun` = khoá tab **và** `queueNoteAllowsRunning`); đọc lỗi / note của người dùng → runner chạy như trước khi có tính năng này, chỉ log | `startQueueNoteSync`, cuối `start()` |
+| Nút Scan | sau một Scan **đã chạy** (Scan từ chối thì không): sync. Note của người dùng hoặc khác `fp` → `confirm` **ghi đè note bằng queue máy này**; toast kết quả (số mục, số mục dư, lỗi) | `syncQueueNoteFromScan`, action `build.scan` |
+| Sau mỗi thay đổi local | mọi lần ghi queue (`TaskQueue` có callback mới) và mọi lần `saveAutoBuild` → sync sau **2 s** (gom nhiều thay đổi liền nhau). Bỏ qua khi phần được copy của local không đổi từ lần sync trước (ví dụ chỉ task Auto Wine / lượt build đổi), và khi chính module đang ghi | `queueChanged`, `setQueueChangeListener` |
+| Bật Start Timer (runner chạy) | sync để lấy khoá ngay (trước lần sync lúc tải trang thì để lần đó lấy) | `queueRunnerStarted`, `startRunner` |
+| **Ngay trước hành động không lui được** | **giữ chỗ**: đọc note, ghi trạng thái **sau** hành động; queue local giữ nguyên tới khi handler trả kết quả | `claimShipment`, `claimUpgrade` |
+
+Kết quả giữ chỗ và handler làm gì:
+
+| Kết quả | Khi nào | Shipment | Upgrade |
+| ------- | ------- | -------- | ------- |
+| `go` | bình thường; cả khi đọc / ghi note lỗi, note của người dùng, task không thuộc note (Auto Wine) | gửi tiếp | bấm tiếp |
+| `gone` | mục có trong mốc mà không còn trong note: máy khác chạy / xoá rồi; local xoá theo | `done`, không mở form | `done`, không bấm |
+| `changed` | máy khác đã gửi một phần: lượng sau gộp khác lượng local | `progress` với lượng mới, không mở form | — |
+| `blocked` | khoá của máy khác còn mới | `defer`, không mở form | hết lượt town, không bấm |
+
+- **Shipment:** giữ chỗ **sau** các kiểm tra town (action point, đủ hàng, có cảng), **trước** khi mở form. Lượng ghi = `min(sức chở tàu đang rảnh, lượng gửi được)`; form đọc lại số tàu, lệch thì lần sync sau sửa (lượng local khác mốc → lấy local). Đặt trước form vì form của game mang token của chính nó: ghi note **sau** khi form đã hiện có thể làm token đó cũ (chưa đo), và handler coi mọi lần bấm submit là đã gửi → nếu bị từ chối thì mất lệnh.
+- **Upgrade:** giữ chỗ **ngay trước khi bấm nút Upgrade** (đổi so với plan: "trước khi mở công trình"), trước lần kiểm tra "town đang xây" cuối. Lý do: town thiếu tài nguyên thì hết lượt ở bước tìm nút — giữ chỗ sớm hơn sẽ thêm hai lần ghi note mỗi lượt (xoá rồi ghi lại) cho mỗi town như vậy. Rủi ro đổi lại: nút mang token của game, nếu game từ chối token cũ sau khi ta ghi note thì lần nâng này không bắt đầu — lệnh **không mất** (handler đã giữ mục khi không thấy công trường), lần sync sau ghi lại.
+
+Vì sao cần giữ chỗ: gửi hàng xong là trang tải lại ngay (`backToCity`, §2.AC: chờ ở đây từng làm một shipment gửi 8 lần). Một lần ghi note sau khi gửi sẽ chết theo trang; máy 1 tắt luôn thì máy 2 thấy mục còn trong note và **gửi lại**. Ghi trước: hành động không xảy ra thì task vẫn ở local, khác mốc → lần sync sau ghi lại vào note (test "puts a shipment back in the notepad when the action did not happen").
+
+Mọi lần đọc / ghi note (sync và giữ chỗ) chạy **lần lượt** (`oneAtATime`), không chồng nhau.
+
+#### 5. Khoá hai máy
+
+- Mã máy: 2 ký tự ngẫu nhiên, không bao giờ `00`, ở `localStorage` key `ikaQueueNoteMachine` — **không thuộc tài khoản và không vào file export** (`classifyKey` trả `null`; import sang máy khác sẽ làm hai máy trùng mã).
+- Lúc sync, nếu runner đang được muốn chạy (Transport / Build timer, hoặc lượt build một lần — `runnerWanted`): khoá trống, của máy khác đã **≥ 10 phút**, hoặc của mình đã **≥ 3 phút** → ghi khoá mình. Giữ chỗ luôn coi là muốn chạy.
+- Khoá của máy khác còn mới → `queueNoteAllowsRunning()` = false, runner không chạy task nào (kể cả drain); sync lại mỗi **2 phút** cho tới khi hết hạn rồi tự lấy khoá. Giữ chỗ gặp khoá của máy khác cũng bật vòng kiểm tra lại này.
+- Không nhả khoá khi chạy xong (trang tải lại ngay sau đó, lần ghi sẽ chết theo) → máy kia chờ tối đa 10 phút.
+
+#### 6. Note có chữ khác, khác danh sách town, hết chỗ
+
+- Note rỗng → queue rỗng của tool, mốc bỏ đi (phần 3).
+- Chữ của người dùng / `fp` khác: lúc tải trang → chỉ log; sau thay đổi → không ghi, log, **toast một lần mỗi trang** (`QUEUE_NOTE.foreign`, chỉ cách bấm Scan). Chỉ Scan hỏi ghi đè.
+- Hết chỗ: sau thay đổi → toast một lần mỗi trang nêu số mục dư (`QUEUE_NOTE.overflow`); lúc tải trang chỉ log (trang tải lại liên tục khi automation chạy); Scan luôn nói.
+
+#### 7. Thay đổi
+
+| Thay đổi | Ở đâu |
+| -------- | ----- |
+| `postIkariamForm`, `findNotesText`, `readAvatarNotes`, `saveAvatarNotes`, `NOTES_BOX_ID`; tách `waitForRequestSlot` / `fetchJson` / `requireToken` khỏi `ikariamRequest` (hành vi giữ nguyên, 29 test cũ xanh) | `core/ikariam/http.ts` |
+| Định dạng, `fp`, khoá, gộp ba chiều, sync, giữ chỗ, nối vào trang (**file mới**, người dùng yêu cầu test → file test mới) | `send-resources/queue-note.ts`, `queue-note.test.ts` |
+| `SendResourceTaskData.noteId`; `TaskQueue` nhận callback `onChange` gọi sau mỗi lần ghi; `replaceAll` | `core/task-queue.ts` |
+| `setQueueChangeListener`; `saveAutoBuild` gọi listener; `KEY.queueNoteBase` | `send-resources/state.ts` |
+| Giữ chỗ trước khi mở form gửi / trước khi bấm Upgrade | `features/send-resources.ts`, `features/auto-build.ts` |
+| `mayRunQueue` (khoá tab + note), `runnerWanted`, sync lúc tải trang, sau Scan, khi bật runner, listener thay đổi | `send-resources/app.ts` |
+| `QUEUE_NOTE` (toast, `confirm`, tên tạm của building) | `send-resources/messages.ts` |
+| `ikaQueueNoteBase: "runtime"` | `core/data-transfer.ts` |
+
+#### 8. Test
+
+783 → 880 (+97): `queue-note.test.ts` **71** (mới), `http.test.ts` +9, `send-resources.test.ts` +6, `auto-build.test.ts` +4, `app.test.ts` +6, `data-transfer.test.ts` +1.
+
+- **Định dạng:** từng loại mục, chữ cái từng loại hàng, đọc lại ở biên hệ 36, chữ không bao giờ viết ra bị từ chối, `isWritable`, header, khoá `00`, đọc lại cả note, note rỗng / của người dùng / phiên bản khác / mục hỏng / mục rỗng, dừng ở mục đầu tiên không vừa, vừa khít giới hạn, `fp` theo id và thứ tự.
+- **Khoá:** trống / của mình, của máy khác tới đúng 10 phút, quay vòng phút, không muốn chạy, lấy khi trống / hết hạn / của mình đã cũ, không ghi lại khi còn mới, không lấy của máy khác, mã máy.
+- **Gộp:** từng dòng của bảng phần 3, lượng (một bên / hai bên / không mốc), mỗi cấp building là một mục, ví dụ máy 1 / máy 2.
+- **Sync** (note giả qua mock `readAvatarNotes` / `saveAvatarNotes`, dropdown và storage thật): copy vào note rỗng (Auto Wine không vào), không ghi khi không đổi, nhận mục từ máy khác, ví dụ máy 1 / máy 2 đầu-cuối (đổi `localStorage` giữa hai "máy"), trừ lượng gửi ở máy khác, bỏ building + task lượt build, không đụng task ngoài note, đọc lỗi, không có dropdown, note của người dùng, `fp` khác, lập town mới, ghi đè khi được phép, note bị xoá, ghi lỗi (hai test), hết chỗ rồi có chỗ, trùng id, lấy / không lấy khoá.
+- **Giữ chỗ:** trừ lượng, xoá khi gửi hết, `gone`, `changed`, `blocked` + kiểm tra lại, đọc lỗi, note của người dùng, Auto Wine không hỏi gì, lệnh chưa từng sync, ghi lại khi hành động không xảy ra, khớp khi đã xảy ra, upgrade `go` / `gone`.
+- **Trên trang:** runner chờ sync lúc tải trang (kể cả lỗi), chờ khoá máy khác rồi tự lấy và thôi kiểm tra, gom thay đổi, không sync vì chính mình / vì thay đổi ngoài note, toast một lần (note của người dùng, hết chỗ), Scan hỏi / không ghi khi từ chối, Scan báo lỗi.
+- **Handler:** shipment giữ chỗ trước form với sức chở tàu rảnh, không quá lượng lệnh, `gone` / `changed` / `blocked`, không giữ chỗ khi dừng trước cảng; upgrade giữ chỗ trước khi bấm, `gone` / `blocked`, không giữ chỗ khi không có nút.
+- **App** (`queue-note` mock): sync lúc tải trang với đúng `runnerWanted`, runner không chạy (kể cả drain) khi note chưa cho, listener nghe queue và build list, Scan chỉ sync khi đã chạy, bật Start Timer báo lấy khoá. `app.test.ts` đếm timer, nên module thật (timer 2 s) được mock ở file này.
+- **HTTP:** POST đúng URL / method / body / token, token mới ở cấp ngoài, response không phải object, HTTP 500, đọc qua `view=avatarNotes`, entity HTML, ô nằm sâu trong response, note rỗng, không có ô → lỗi (kể cả chuỗi chỉ nhắc tên id).
+- **Export:** `ikaQueueNoteBase` được phân loại; mã máy không bao giờ.
+
+**Đã thấy đỏ, gỡ từng chỗ một, 46 chỗ** (script `break-note.mjs` trong scratchpad sửa một dòng, chạy file test tương ứng rồi trả lại; `md5sum -c` sau đó: 0 file lệch): 28 chỗ trong `queue-note.ts` (mỗi dòng gộp, lượng, mục hỏng, note rỗng, giới hạn, Auto Wine, `fp`, hạn khoá, quay vòng, làm mới khoá, mốc khi ghi lỗi, giữ chỗ không đụng local, `gone`, `blocked`, kiểm tra lại sau `blocked`, trùng id, task lượt build, cờ tự ghi, bỏ qua khi không đổi, toast một lần, chờ sync lúc tải trang, `queueNoteAllowsRunning`, vòng kiểm tra khoá, `confirm` của Scan, nhận transport từ note, mốc khi hết chỗ), 4 trong `http.ts`, 4 trong handler gửi, 2 trong handler nâng cấp, 5 trong `app.ts`, 1 mỗi file `state.ts`, `task-queue.ts`, `data-transfer.ts`. **Lỗi của chính mình:** test ghi lỗi đầu tiên vẫn xanh khi gỡ "mốc = note vừa đọc" — trong kịch bản đó mốc cũ trùng với note; đã thêm test đúng trường hợp (máy khác thêm rồi chạy giữa hai lần sync), giờ đỏ.
+
+**Chưa kiểm chứng:** mọi thứ trên game; thân response của `view=avatarNotes` (đọc theo id của ô, chưa thấy response thật); giới hạn 200 ký tự (theo người dùng); game có từ chối `actionRequest` cũ sau khi ta ghi note không; đăng nhập máy 2 có đá phiên máy 1 không; tần suất request note (mỗi lần tải trang một lần đọc, mỗi lệnh chạy thêm một lần đọc + một lần ghi) có bị game để ý không.
+
+**Cần thử trên game (`dist/` 29/10 18:32):** máy 1 tạo 2–3 transport + vài building → mở sổ ghi chú thấy dòng `Q1…`; máy 2 bấm Scan → queue hiện đủ; máy 2 chạy một lệnh → note bớt một mục; máy 1 tải lại trang → lệnh đó biến khỏi queue máy 1 trước khi chạy; mở cả hai máy cùng bật Start Timer → máy sau log "another computer runs the queue".
 
 ---
 
@@ -2959,6 +3100,9 @@ thêm, phải áp giảm giá theo bảng này.
 ✅ 22/10     §2.Z                   ba mục 💡 của review: poll trạng thái gửi city id, Start xoá lượt nghỉ cũ, log lưu dạng chữ — commit `e7f2acb` (tài liệu `455047d`), có trong `dist/` 22/10
 ✅ 22/10     §2.AA                  nút Crawl: dialog chọn Building / Wine; crawl Wine Scan rồi lưu `const csv` của các town nhận — commit `e7f2acb` (tài liệu `455047d`), có trong `dist/` 22/10
 ✅ 22/10     §2.AB                  panel Send Resources thu gọn / mở từng nhóm và cả cửa sổ, nhớ qua tải trang — commit `e7f2acb` (tài liệu `455047d`), có trong `dist/` 22/10
+✅ 26/10     §2.AC                  hai bug report: EO hết lỗi `apply`, shipment đổi town chưa tới được hoãn, log đổi town; Esc thu / mở cửa sổ — commit `fac13d6` (tài liệu `3dff502`, `0baafe6`)
+✅ 26/10     §2.AD                  Auto Wine tự chọn town nguồn, bỏ town tự làm đủ rượu — commit `1c41ce8` (tài liệu `1f631d4`), có trong `dist/` 26/10 16:22
+◐ 29/10     §2.AE                  queue chép vào sổ ghi chú của game, sync giữa các máy, giữ chỗ, khoá — chưa commit, có trong `dist/` 29/10 18:32, chưa thử trên game
 ⬜ Chờ người dùng thử:     §2.R → §2.AB trên game (cài lại cả hai userscript từ `dist/` build 22/10 — bản 05/10 02:03 không có §2.Y trở đi); riêng E: một lần thành công (ô phải tự chuyển sang đang nâng), một lần bị từ chối, rồi Bug Report (file không còn token); danh sách thử của §2.X ở cuối mục đó
 ⬜ Lượt sau của review:    các mục 💡 trong `sample/review-source/review-src-2026-10-04.md` (22/10: ba mục đã sửa ở §2.Z; còn lại cần số đo hoặc người dùng chọn — handover §7)
 ⬜ Chờ người dùng thử:     §2.W — load lại `dist/extension` trong Chrome (tắt hai userscript trước); bản extension chưa từng chạy trên game
@@ -2989,6 +3133,9 @@ task C-Thebes sót không trước khi bật timer. Lần đổi town nào khôn
 nơi → bấm Bug Report ngay, để có các dòng `Town switch answered`.
 **Cập nhật 26/10, sau §2.AD:** bản cần cài là `dist/` build 26/10 16:22
 (có §2.R → §2.AD); thử §2.AD theo đoạn "Cần thử trên game" của nó.
+**Cập nhật 29/10, sau §2.AE:** bản cần cài là `dist/` build 29/10 18:32
+(có §2.R → §2.AE, đã grep); thử §2.AE theo đoạn "Cần thử trên game" của
+nó — cần hai máy (hoặc hai trình duyệt) đăng nhập cùng tài khoản.
 
 **Hai việc phát sinh** (việc thứ nhất xong 02/10, §2.L phần 3):
 
