@@ -2,7 +2,9 @@
 
 > Trạng thái: **đang thực hiện.** Cập nhật 29/10/2026.
 >
-> **Mới nhất (§2.AE — 29/10, chưa commit, có trong `dist/` build 29/10 18:32 — người dùng build, đã grep — chưa thử trên game):** queue (transport người chơi tạo + danh sách Auto Build) được **chép vào sổ ghi chú của game** (`view=avatarNotes` / `saveAvatarNotes`), định dạng gọn ≤ 200 ký tự, để máy khác cùng tài khoản chạy tiếp. Gộp ba chiều theo **mốc** lần sync trước: máy 1 tải trang sẽ bỏ các lệnh máy 2 đã chạy, trước task đầu tiên; **giữ chỗ** trong note ngay trước khi gửi hàng / bấm Upgrade; **khoá** trong note để hai máy không cùng chạy. Sync lúc tải trang, sau Scan, sau mỗi thay đổi. 783 → 880 test, 46 chỗ đã thấy đỏ.
+> **Mới nhất (§2.AF — 29/10 tối, chưa commit, chưa build — `dist/` 18:32 không có, chưa thử trên game):** bug report của máy 2 — Auto Build bấm Upgrade 10 vòng liền mà game không nhận: lần ghi note ngay trước cú bấm đổi `actionRequest` của phiên, nút mang mã cũ. Giờ ghi note **trước khi mở công trình**. **Bỏ khoá hai máy** (người dùng: game không cho đăng nhập hai máy cùng lúc); note ghi `Q2`, vẫn đọc `Q1`. 880 → 864 test, 40 chỗ đã thấy đỏ.
+>
+> **§2.AE — 29/10, commit `6d0c0a0` (tài liệu `b033eae`), đã push; có trong `dist/` build 29/10 18:32 (bản đó có lỗi nâng cấp của §2.AF), chưa thử trên game; khoá và định dạng `Q1` đã thay ở §2.AF:** queue (transport người chơi tạo + danh sách Auto Build) được **chép vào sổ ghi chú của game** (`view=avatarNotes` / `saveAvatarNotes`), định dạng gọn ≤ 200 ký tự, để máy khác cùng tài khoản chạy tiếp. Gộp ba chiều theo **mốc** lần sync trước: máy 1 tải trang sẽ bỏ các lệnh máy 2 đã chạy, trước task đầu tiên; **giữ chỗ** trong note ngay trước khi gửi hàng / bấm Upgrade; **khoá** trong note để hai máy không cùng chạy. Sync lúc tải trang, sau Scan, sau mỗi thay đổi. 783 → 880 test, 46 chỗ đã thấy đỏ.
 >
 > **§2.AD — 26/10 chiều, commit `1c41ce8` (tài liệu `1f631d4`), có trong `dist/` build 26/10 16:22, chưa thử trên game):** Auto Wine **tự chọn town nguồn** khi chưa tick Sender — town có **sản lượng wine cao nhất**, không town nào làm wine thì town có **nhiều giờ rượu còn lại nhất** — và tick luôn làm Sender. **Chỉ gửi cho town uống nhiều hơn đảo nó làm ra** (không biết sản lượng = 0), chia theo phần thiếu ròng. Town cache ghi thêm sản lượng và dự báo tồn kho theo mức ròng; toast nêu tên các town tự làm đủ rượu. 735 → 783 test.
 >
@@ -28,7 +30,7 @@
 > phần U còn thiếu số (§2.U phần 4) · R: kênh cập nhật riêng (chờ người
 > dùng). **Không làm lúc này** (người dùng chọn 04/10): F, G, I, M, N, O, Q.
 >
-> Git (29/10, đã kiểm): `origin/refactor` ở `1f631d4` = `HEAD` (người dùng đã push §2.AD), `git rev-list --count origin/refactor..HEAD` = 0. **Chưa commit: §2.AE** — `src/core/ikariam/http.ts` (+ test), `src/core/task-queue.ts`, `src/core/data-transfer.ts` (+ test), `src/send-resources/app.ts` (+ test), `state.ts`, `messages.ts`, `features/send-resources.ts` (+ test), `features/auto-build.ts` (+ test), hai file mới `src/send-resources/queue-note.ts` và `queue-note.test.ts`, và hai tài liệu này. `dist/` hiện tại build 29/10 18:32 (không build trong phiên — người dùng build, sau lần sửa nguồn cuối lúc 18:23), có §2.AE (đã grep `saveAvatarNotes`, `ikaQueueNoteBase`, `watchLease(true)` trong `Ikariam Send Resources.user.js`, `saveAvatarNotes` trong `dist/extension/page/send-resources.js`). Git (26/10 tối, đã kiểm): `origin/refactor` ở `0baafe6` = `HEAD` (người dùng đã push), `git rev-list --count origin/refactor..HEAD` = 0. **Lúc đó chưa commit: §2.AD** (sau đó commit `1c41ce8` code, `1f631d4` tài liệu) — `src/core/ikariam/model.ts` (+ test), `selectors.ts`, `src/send-resources/app.ts` (+ test), `features/auto-wine.ts` (+ test), `messages.ts`, `town-cache.ts` (+ test) và hai tài liệu này. `dist/` hiện tại build 26/10 16:22 trong phiên, từ working tree, có §2.AD (đã grep, handover §1). Git (26/10, sau §2.AC): `origin/refactor` vẫn ở `455047d`; `HEAD` là `fac13d6`, `git rev-list --count origin/refactor..HEAD` = 2 (`3dff502` tài liệu, `fac13d6` §2.AC) — **chưa push**; phần ghi §2.AC vào hai tài liệu này chưa commit lúc viết. `dist/` hiện tại build 26/10 13:56 (không build trong phiên — có lẽ người dùng build), có toàn bộ §2.AC (đã grep, handover §1). Git (26/10, đã kiểm lại): `origin/refactor` ở `455047d` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Z, §2.AA, §2.AB đã commit (`e7f2acb` code, `455047d` tài liệu). Checkout trên Linux giờ có `node_modules/` và `dist/` (build 22/10 16:37, có §2.R → §2.AB — đã grep 26/10, handover §1); vẫn không có `sample/`, `tools/output/`. Ghi chú 22/10, giữ để tra: `origin/refactor` ở `534f066` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Y đã commit (`21464dd` code, `534f066` tài liệu). Checkout 22/10 chạy trên Linux, không có `node_modules/`, `dist/`, `sample/`, `tools/output/` (handover §1). Ghi chú 17/10, giữ để tra: `origin/refactor` ở `772a055` = `HEAD`, **không còn commit nào chưa push**; §2.X đã commit (`1baf274` code, `772a055` tài liệu). Chưa commit: §2.Y (`auto-wine.ts`, `auto-wine.test.ts`, `styles.ts`) và hai tài liệu này. Đoạn sau là danh sách commit cũ (05/10), giữ để tra; lúc viết nó ghi `origin/refactor` ở `066eb44` và 17 commit chưa push —
+> Git (29/10 tối, đã kiểm): `origin/refactor` ở `b033eae` = `HEAD` (đã push §2.AE: `6d0c0a0` code, `b033eae` tài liệu), `git rev-list --count origin/refactor..HEAD` = 0. **Chưa commit: §2.AF** — `src/send-resources/queue-note.ts` (+ test), `app.ts` (+ test), `features/auto-build.ts` (+ test), `features/send-resources.ts` (+ test), `src/core/data-transfer.test.ts`, và hai tài liệu này. `dist/` vẫn build 29/10 18:32, **không có §2.AF** (grep `FORMAT_ONE` / `Q2`: 0) — đừng dùng bản đó cho Auto Build. Git (29/10, đã kiểm): `origin/refactor` ở `1f631d4` = `HEAD` (người dùng đã push §2.AD), `git rev-list --count origin/refactor..HEAD` = 0. **Chưa commit: §2.AE** — `src/core/ikariam/http.ts` (+ test), `src/core/task-queue.ts`, `src/core/data-transfer.ts` (+ test), `src/send-resources/app.ts` (+ test), `state.ts`, `messages.ts`, `features/send-resources.ts` (+ test), `features/auto-build.ts` (+ test), hai file mới `src/send-resources/queue-note.ts` và `queue-note.test.ts`, và hai tài liệu này. `dist/` hiện tại build 29/10 18:32 (không build trong phiên — người dùng build, sau lần sửa nguồn cuối lúc 18:23), có §2.AE (đã grep `saveAvatarNotes`, `ikaQueueNoteBase`, `watchLease(true)` trong `Ikariam Send Resources.user.js`, `saveAvatarNotes` trong `dist/extension/page/send-resources.js`). Git (26/10 tối, đã kiểm): `origin/refactor` ở `0baafe6` = `HEAD` (người dùng đã push), `git rev-list --count origin/refactor..HEAD` = 0. **Lúc đó chưa commit: §2.AD** (sau đó commit `1c41ce8` code, `1f631d4` tài liệu) — `src/core/ikariam/model.ts` (+ test), `selectors.ts`, `src/send-resources/app.ts` (+ test), `features/auto-wine.ts` (+ test), `messages.ts`, `town-cache.ts` (+ test) và hai tài liệu này. `dist/` hiện tại build 26/10 16:22 trong phiên, từ working tree, có §2.AD (đã grep, handover §1). Git (26/10, sau §2.AC): `origin/refactor` vẫn ở `455047d`; `HEAD` là `fac13d6`, `git rev-list --count origin/refactor..HEAD` = 2 (`3dff502` tài liệu, `fac13d6` §2.AC) — **chưa push**; phần ghi §2.AC vào hai tài liệu này chưa commit lúc viết. `dist/` hiện tại build 26/10 13:56 (không build trong phiên — có lẽ người dùng build), có toàn bộ §2.AC (đã grep, handover §1). Git (26/10, đã kiểm lại): `origin/refactor` ở `455047d` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Z, §2.AA, §2.AB đã commit (`e7f2acb` code, `455047d` tài liệu). Checkout trên Linux giờ có `node_modules/` và `dist/` (build 22/10 16:37, có §2.R → §2.AB — đã grep 26/10, handover §1); vẫn không có `sample/`, `tools/output/`. Ghi chú 22/10, giữ để tra: `origin/refactor` ở `534f066` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Y đã commit (`21464dd` code, `534f066` tài liệu). Checkout 22/10 chạy trên Linux, không có `node_modules/`, `dist/`, `sample/`, `tools/output/` (handover §1). Ghi chú 17/10, giữ để tra: `origin/refactor` ở `772a055` = `HEAD`, **không còn commit nào chưa push**; §2.X đã commit (`1baf274` code, `772a055` tài liệu). Chưa commit: §2.Y (`auto-wine.ts`, `auto-wine.test.ts`, `styles.ts`) và hai tài liệu này. Đoạn sau là danh sách commit cũ (05/10), giữ để tra; lúc viết nó ghi `origin/refactor` ở `066eb44` và 17 commit chưa push —
 > `6ed66c6`, `c38dca4`, `b9f1d7a` (U + V), `4f9436c`, `3209964` (§2.K + §2.L),
 > `7ed3a85`, `b45f792` (§2.M), `32fe3ba`, `ec3fdc4` (§2.N → §2.R), `b2e9084`
 > (§2.S), `3f8a51b` (thay đổi `barbarian.ts` của người dùng, commit riêng
@@ -2577,7 +2579,7 @@ Key `ikaWindowOpen_<id>` của bản cũ vẫn nằm trong storage; cửa sổ n
 
 ### 2.AE Đồng bộ queue qua sổ ghi chú của game (29/10/2026)
 
-**Đã code, chưa commit lúc viết. Có trong `dist/` build 29/10 18:32 (người dùng build; đã grep), chưa thử trên game.** Bản tiếng Anh: handover §29. Plan viết trước khi code, cập nhật lại theo code sau khi làm xong. 783 → 880 test, 39 file; typecheck sạch (`tsc` cả hai cấu hình); prettier sạch trên mọi file đã sửa, trừ ba file đã lệch từ `HEAD` (`http.test.ts` có sửa — phần thêm vào đã đối chiếu với bản prettier, không format lại cả file).
+**Commit `6d0c0a0` (tài liệu `b033eae`), đã push (kiểm 29/10 tối); lúc viết chưa commit. Có trong `dist/` build 29/10 18:32 (người dùng build; đã grep), chưa thử trên game.** **Thay một phần ở §2.AF (29/10 tối):** bỏ khoá (phần 5, và `máy` + `phút` trong header ở phần 2), định dạng ghi giờ là `Q2<fp>|…` (vẫn đọc `Q1`), nâng cấp giữ chỗ **trước khi mở công trình** chứ không còn ngay trước nút Upgrade (phần 4) — cách cũ làm game từ chối cú bấm. Bản tiếng Anh: handover §29. Plan viết trước khi code, cập nhật lại theo code sau khi làm xong. 783 → 880 test, 39 file; typecheck sạch (`tsc` cả hai cấu hình); prettier sạch trên mọi file đã sửa, trừ ba file đã lệch từ `HEAD` (`http.test.ts` có sửa — phần thêm vào đã đối chiếu với bản prettier, không format lại cả file).
 
 Không phải mục O ở §4.2 (O là sổ ghi chú riêng của tool, lưu IndexedDB); ở đây dùng **sổ ghi chú có sẵn của game** làm chỗ chứa queue dùng chung giữa các máy.
 
@@ -2712,7 +2714,56 @@ Mọi lần đọc / ghi note (sync và giữ chỗ) chạy **lần lượt** (`
 
 **Chưa kiểm chứng:** mọi thứ trên game; thân response của `view=avatarNotes` (đọc theo id của ô, chưa thấy response thật); giới hạn 200 ký tự (theo người dùng); game có từ chối `actionRequest` cũ sau khi ta ghi note không; đăng nhập máy 2 có đá phiên máy 1 không; tần suất request note (mỗi lần tải trang một lần đọc, mỗi lệnh chạy thêm một lần đọc + một lần ghi) có bị game để ý không.
 
-**Cần thử trên game (`dist/` 29/10 18:32):** máy 1 tạo 2–3 transport + vài building → mở sổ ghi chú thấy dòng `Q1…`; máy 2 bấm Scan → queue hiện đủ; máy 2 chạy một lệnh → note bớt một mục; máy 1 tải lại trang → lệnh đó biến khỏi queue máy 1 trước khi chạy; mở cả hai máy cùng bật Start Timer → máy sau log "another computer runs the queue".
+**Cần thử trên game (`dist/` 29/10 18:32 — có lỗi nâng cấp, xem §2.AF; thử theo §2.AF sau khi build lại):** máy 1 tạo 2–3 transport + vài building → mở sổ ghi chú thấy dòng `Q1…`; máy 2 bấm Scan → queue hiện đủ; máy 2 chạy một lệnh → note bớt một mục; máy 1 tải lại trang → lệnh đó biến khỏi queue máy 1 trước khi chạy; mở cả hai máy cùng bật Start Timer → máy sau log "another computer runs the queue".
+
+
+### 2.AF Bug report máy 2: Auto Build bấm Upgrade không được; bỏ khoá hai máy (29/10/2026, tối)
+
+**Chưa commit lúc viết. Chưa build — `dist/` 29/10 18:32 không có phần này (grep `FORMAT_ONE` / `Q2`: 0), và chính bản đó có lỗi dưới đây. Chưa thử trên game.** Bản tiếng Anh: handover §30. 880 → 864 test, 39 file; typecheck sạch; prettier sạch trên mọi file đã sửa.
+
+#### 1. Bug report
+
+`ikariam-bug-report-Smalldevil-2026-10-29-13-10-32.json` (người dùng gửi qua chat; 200 dòng log, 19:37:40 → 20:10:22 giờ máy). Người dùng: tạo queue trên **máy 1**, thao tác trên **máy 2** — report là của máy 2 (tên tạm `Position 6 20` chỉ có ở máy nhận lệnh từ note).
+
+- Sync chạy: mỗi lần tải trang "Notepad on page load: 2 entries in it". Một lần "Failed to fetch" (20:10:19) — trang đang tải lại (keep-alive) đúng lúc đó; lần sau đọc được.
+- **Lỗi:** 19:38–19:48 "M-Eretria is already building" (đúng); từ 19:50, **10 vòng liền** "Position 6 20 in M-Eretria: clicked Upgrade but no building site appeared". Ô 6 của M-Eretria (297042) là Tavern (trace ▲ ngày 28/10). Hai bug report cũ (24/10, 26/10): 0 lần dòng này.
+- 19:37:40–43: đổi town sang M-Eretria không tới nơi, task nâng cấp bị bỏ sau 5 lần ném trong 4 s — lỗi đổi town còn mở từ §2.AC; mục vẫn còn trong cấu hình, không mất.
+- Lỗi Empire Overview trong report (ResizeObserver 151 lần, `maxSci`, `reading '0'`, `infoBox`) đều trước 29/10, **chưa phân tích**.
+
+#### 2. Nguyên nhân
+
+Người dùng cho biết: **`actionRequest` theo phiên đăng nhập, game không cho đăng nhập cùng lúc ở hai máy.** Vậy trong lúc máy 2 chạy, không gì ngoài chính phiên máy 2 làm mã của nó cũ đi. Bước giữ chỗ của nâng cấp (§2.AE phần 4) ghi note **ngay trước cú bấm**: response của `saveAvatarNotes` mang mã mới, còn link nút Upgrade (`?action=UpgradeExistingBuilding&actionRequest=…`, đo ở §2.AC) mang mã lúc công trình vừa mở → game từ chối. Log không có "Notepad not updated before acting", nên lần ghi đã đi. **Suy luận từ log, không có response của game làm bằng chứng** — bug report không lưu phản hồi sau cú bấm.
+
+Ban đầu người dùng nghĩ mã ở hai máy khác nhau gây lỗi; không thể, vì hai máy không cùng đăng nhập. Cùng thông tin đó làm **khoá hai máy vô ích** (không có hai máy chạy cùng lúc) và **có hại** (máy vừa chuyển sang phải chờ tới 10 phút; mỗi lần ghi khoá ~3 phút một lần làm mã của trang cũ đi).
+
+#### 3. Người dùng chọn (hai câu hỏi có phương án)
+
+- **Giữ chỗ trước khi mở công trình** (không chọn "đưa mã mới vào trang game"): mở công trình sau lần ghi thì game vẽ nút với mã mới. Đổi lại: mỗi town thiếu tài nguyên tốn thêm một lần ghi note mỗi vòng (ghi — rồi lần sync sau ghi lại), và mã của trang vẫn cũ đi sau mỗi lần tool ghi note.
+- **Bỏ khoá.**
+
+#### 4. Thay đổi
+
+| Thay đổi | Ở đâu |
+| -------- | ----- |
+| `claimUpgrade` gọi ngay sau kiểm tra "town đang xây" lúc tới town, **trước khi bấm mở công trình** (trước là ngay trước nút Upgrade); bỏ nhánh `blocked`. Comment dẫn bug report này | `features/auto-build.ts` |
+| Bỏ khoá: `NoteLease`, `minuteStamp`, `leaseAgeMinutes`, `leaseHeldByOther`, `nextLease`, `LEASE_*`, `machineId` / `ikaQueueNoteMachine`, `ClaimResult` `blocked`, `SyncOptions.wantLease`, `SyncResult.leaseHeldByOther`, vòng kiểm tra lại, `queueRunnerStarted`. `queueNoteAllowsRunning()` = sync lúc tải trang đã xong | `queue-note.ts` |
+| **Định dạng 2:** `Q2<fp 2>\|<mục>;…` (header 5 ký tự thay vì 10). **Vẫn đọc định dạng 1** `Q1<fp><máy 2><phút 3>\|…`, bỏ qua phần khoá; lần sync đầu ghi lại thành `Q2` với đúng các lệnh cũ. Kiểm header: đúng độ dài, toàn ký tự hệ 36 | `queue-note.ts` |
+| Bỏ nhánh `blocked` | `features/send-resources.ts` |
+| Bỏ `queueRunnerStarted` trong `startRunner`; `startQueueNoteSync()` không còn tham số; `runnerWanted` (tách ra ở §2.AE chỉ cho khoá) trả lại thành biểu thức cũ trong `syncRunnerToFlags` | `app.ts` |
+
+Key `ikaQueueNoteMachine` còn trong `localStorage` hai máy; không đọc nữa, không xoá.
+
+#### 5. Test
+
+880 → 864 (−16): `queue-note.test.ts` 71 → 60 (bỏ 7 test của khoá, 5 test sync / giữ chỗ / trên trang về khoá, 1 test header `00` gộp vào test header; thêm 2: đọc định dạng 1, ghi đè định dạng 1 thành 2 giữ lệnh; ca header sai độ dài / không hệ 36 ở cả hai định dạng thêm vào test `foreign` có sẵn), `send-resources.test.ts` 31 → 30, `auto-build.test.ts` 25 → 24 (đổi thành **REGRESSION: giữ chỗ trước khi mở công trình**, đếm số lần mở công trình lúc giữ chỗ; `gone` không mở cũng không bấm; town đang xây không giữ chỗ), `app.test.ts` 68 → 66, `data-transfer.test.ts` 34 → 33 (test mã máy không export).
+
+**Đã thấy đỏ, 40 chỗ** (`break-note.mjs` trong scratchpad, bỏ 9 chỗ của khoá, thêm 3: không đọc định dạng 1, không kiểm header, mở công trình trước khi giữ chỗ; `md5sum -c` sau đó: 0 file lệch).
+
+**Lỗi của chính mình:** test "ghi đè định dạng 1" lúc đầu mong *không* ghi gì khi lệnh không đổi — sai, chữ `Q2` khác chữ `Q1` nên tool ghi ngay, và thế là đúng; đã sửa kỳ vọng. Một chỗ gọi `noteText(…, null, "zz")` theo chữ ký cũ vẫn xanh vì lý do sai (dấu vân tay thành `null`); typecheck bắt được, đã sửa.
+
+**Rủi ro còn lại (theo lựa chọn ở phần 3), chưa đo:** sau mỗi lần tool ghi note (giữ chỗ, sync sau thay đổi), mã của trang game vẫn cũ đi — một cú bấm tay ngay sau đó có thể bị từ chối. Shipment giữ chỗ trước khi mở form (§2.AE) chỉ đúng nếu game vẫn mở form khi trang đang giữ mã cũ — chưa đo; nâng cấp giờ cũng dựa vào đúng điều đó (mở công trình khi trang giữ mã cũ). `saveAvatarNotes` vẫn coi mọi response object là ghi được.
+
+**Cần thử trên game (sau khi build lại):** trên một máy có lệnh nâng cấp trong note, để Auto Build chạy một vòng ở town đủ tài nguyên → log "Finished upgrading", ô thành công trường; note bớt mục đó. Gửi một shipment → tới nơi, note trừ lượng. Chuyển sang máy kia, đăng nhập → queue chạy ngay, không chờ. Note cũ dạng `Q1…` → sau lần tải trang đầu thành `Q2…` với đúng các lệnh.
 
 ---
 
@@ -3102,7 +3153,8 @@ thêm, phải áp giảm giá theo bảng này.
 ✅ 22/10     §2.AB                  panel Send Resources thu gọn / mở từng nhóm và cả cửa sổ, nhớ qua tải trang — commit `e7f2acb` (tài liệu `455047d`), có trong `dist/` 22/10
 ✅ 26/10     §2.AC                  hai bug report: EO hết lỗi `apply`, shipment đổi town chưa tới được hoãn, log đổi town; Esc thu / mở cửa sổ — commit `fac13d6` (tài liệu `3dff502`, `0baafe6`)
 ✅ 26/10     §2.AD                  Auto Wine tự chọn town nguồn, bỏ town tự làm đủ rượu — commit `1c41ce8` (tài liệu `1f631d4`), có trong `dist/` 26/10 16:22
-◐ 29/10     §2.AE                  queue chép vào sổ ghi chú của game, sync giữa các máy, giữ chỗ, khoá — chưa commit, có trong `dist/` 29/10 18:32, chưa thử trên game
+✅ 29/10     §2.AE                  queue chép vào sổ ghi chú của game, sync giữa các máy, giữ chỗ, khoá — commit `6d0c0a0` (tài liệu `b033eae`), có trong `dist/` 29/10 18:32 (có lỗi nâng cấp)
+◐ 29/10 tối §2.AF                  bug report máy 2: giữ chỗ nâng cấp trước khi mở công trình; bỏ khoá; định dạng `Q2` — chưa commit, chưa build, chưa thử trên game
 ⬜ Chờ người dùng thử:     §2.R → §2.AB trên game (cài lại cả hai userscript từ `dist/` build 22/10 — bản 05/10 02:03 không có §2.Y trở đi); riêng E: một lần thành công (ô phải tự chuyển sang đang nâng), một lần bị từ chối, rồi Bug Report (file không còn token); danh sách thử của §2.X ở cuối mục đó
 ⬜ Lượt sau của review:    các mục 💡 trong `sample/review-source/review-src-2026-10-04.md` (22/10: ba mục đã sửa ở §2.Z; còn lại cần số đo hoặc người dùng chọn — handover §7)
 ⬜ Chờ người dùng thử:     §2.W — load lại `dist/extension` trong Chrome (tắt hai userscript trước); bản extension chưa từng chạy trên game
@@ -3136,6 +3188,9 @@ nơi → bấm Bug Report ngay, để có các dòng `Town switch answered`.
 **Cập nhật 29/10, sau §2.AE:** bản cần cài là `dist/` build 29/10 18:32
 (có §2.R → §2.AE, đã grep); thử §2.AE theo đoạn "Cần thử trên game" của
 nó — cần hai máy (hoặc hai trình duyệt) đăng nhập cùng tài khoản.
+**Cập nhật 29/10 tối, sau §2.AF:** bản 18:32 làm Auto Build bấm Upgrade
+mà game không nhận (§2.AF) — cần **build lại** từ working tree có §2.AF
+rồi thử theo đoạn "Cần thử trên game" của §2.AF.
 
 **Hai việc phát sinh** (việc thứ nhất xong 02/10, §2.L phần 3):
 
