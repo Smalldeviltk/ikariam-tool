@@ -51,8 +51,7 @@ vi.mock("./features/auto-build", async (importOriginal) => ({
 const queueNote = vi.hoisted(() => ({
   allowsRunning: true,
   queueChanged: vi.fn(),
-  queueRunnerStarted: vi.fn(),
-  startQueueNoteSync: vi.fn(async (_wantLease: () => boolean) => ({
+  startQueueNoteSync: vi.fn(async () => ({
     status: "failed" as const,
     reason: "not in tests",
   })),
@@ -64,7 +63,6 @@ const queueNote = vi.hoisted(() => ({
 vi.mock("./queue-note", () => ({
   queueChanged: queueNote.queueChanged,
   queueNoteAllowsRunning: () => queueNote.allowsRunning,
-  queueRunnerStarted: queueNote.queueRunnerStarted,
   startQueueNoteSync: queueNote.startQueueNoteSync,
   syncQueueNoteFromScan: queueNote.syncQueueNoteFromScan,
 }));
@@ -131,7 +129,6 @@ beforeEach(() => {
   vi.clearAllTimers();
   queueNote.allowsRunning = true;
   queueNote.queueChanged.mockClear();
-  queueNote.queueRunnerStarted.mockClear();
   queueNote.startQueueNoteSync.mockClear();
   queueNote.syncQueueNoteFromScan.mockClear();
   localStorage.clear();
@@ -1650,20 +1647,9 @@ describe("hotkeys", () => {
 });
 
 describe("the game's notepad", () => {
-  it("is synced on page load, told whether the runner is wanted", async () => {
+  it("is synced once on page load", async () => {
     await startWith({ transport: true });
     expect(queueNote.startQueueNoteSync).toHaveBeenCalledTimes(1);
-    const wantLease = queueNote.startQueueNoteSync.mock.calls[0][0];
-    expect(wantLease()).toBe(true);
-
-    await actions["queue.toggle"](document.body);
-    expect(wantLease()).toBe(false);
-  });
-
-  it("is told nobody wants the runner when neither switch is on", async () => {
-    await startWith({});
-    const wantLease = queueNote.startQueueNoteSync.mock.calls[0][0];
-    expect(wantLease()).toBe(false);
   });
 
   it("holds the runner back until it allows running - nothing runs, not even the drain", async () => {
@@ -1717,13 +1703,5 @@ describe("the game's notepad", () => {
     actions["build.scan"](document.body);
     await vi.advanceTimersByTimeAsync(0);
     expect(queueNote.syncQueueNoteFromScan).toHaveBeenCalledTimes(1);
-  });
-
-  it("is told when a Start Timer switches the runner on, to take the lease", async () => {
-    await startWith({});
-    expect(queueNote.queueRunnerStarted).not.toHaveBeenCalled();
-
-    await actions["queue.toggle"](document.body);
-    expect(queueNote.queueRunnerStarted).toHaveBeenCalledTimes(1);
   });
 });

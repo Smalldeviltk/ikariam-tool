@@ -38,9 +38,7 @@ const { claimUpgrade } = vi.hoisted(() => ({
       _townName: string,
       _positionId: string,
       _buildingName: string,
-    ): Promise<
-      { status: "go" } | { status: "gone" } | { status: "blocked" }
-    > => ({
+    ): Promise<{ status: "go" } | { status: "gone" }> => ({
       status: "go",
     }),
   ),
@@ -278,13 +276,20 @@ describe("handleUpgradeBuilding", () => {
 });
 
 describe("handleUpgradeBuilding and the game's notepad", () => {
-  /** A town whose slot 5 starts building when its button is clicked. */
-  function readyTown(): { clicks: () => number } {
+  /**
+   * A town whose slot 5 starts building when its button is clicked. Counts
+   * how often the building was opened and its Upgrade button clicked.
+   */
+  function readyTown(): { opens: () => number; clicks: () => number } {
     document.body.innerHTML = townView(
       "W-Athens",
       "?action=UpgradeExistingBuilding&cityId=297034&position=5&level=25",
     );
+    let opens = 0;
     let clicks = 0;
+    document
+      .getElementById("js_CityPosition5Link")!
+      .addEventListener("click", () => void opens++);
     document
       .getElementById("js_buildingUpgradeButton")!
       .addEventListener("click", () => {
@@ -292,7 +297,7 @@ describe("handleUpgradeBuilding and the game's notepad", () => {
         document.getElementById("position5")!.className =
           "position5 building constructionSite animated";
       });
-    return { clicks: () => clicks };
+    return { opens: () => opens, clicks: () => clicks };
   }
 
   async function run(): Promise<{ status: string; reason?: string }> {
@@ -301,42 +306,45 @@ describe("handleUpgradeBuilding and the game's notepad", () => {
     return promise;
   }
 
-  it("claims the upgrade before its button is clicked", async () => {
-    const town = readyTown();
-    let clicksAtClaim = -1;
-    claimUpgrade.mockImplementationOnce(async () => {
-      clicksAtClaim = town.clicks();
-      return { status: "go" };
-    });
+  it(
+    "REGRESSION: claims the upgrade before its building is opened - claimed " +
+      "just before the click, the notepad's save made the button's " +
+      "actionRequest stale and the game refused it, ten laps in a row",
+    async () => {
+      const town = readyTown();
+      let opensAtClaim = -1;
+      claimUpgrade.mockImplementationOnce(async () => {
+        opensAtClaim = town.opens();
+        return { status: "go" };
+      });
 
-    expect((await run()).status).toBe("done");
-    expect(claimUpgrade).toHaveBeenCalledWith(
-      "W-Athens",
-      "js_CityPosition5Link",
-      "Warehouse 26",
-    );
-    expect(clicksAtClaim).toBe(0);
-    expect(town.clicks()).toBe(1);
-  });
+      expect((await run()).status).toBe("done");
+      expect(claimUpgrade).toHaveBeenCalledWith(
+        "W-Athens",
+        "js_CityPosition5Link",
+        "Warehouse 26",
+      );
+      expect(opensAtClaim).toBe(0);
+      expect(town.opens()).toBe(1);
+      expect(town.clicks()).toBe(1);
+    },
+  );
 
-  it("does not click an upgrade another computer already started", async () => {
+  it("neither opens nor clicks an upgrade another computer already started", async () => {
     const town = readyTown();
     claimUpgrade.mockResolvedValueOnce({ status: "gone" });
 
     expect((await run()).status).toBe("done");
+    expect(town.opens()).toBe(0);
     expect(town.clicks()).toBe(0);
   });
 
-  it("ends the town's turn without clicking while another computer runs the queue", async () => {
-    const town = readyTown();
-    claimUpgrade.mockResolvedValueOnce({ status: "blocked" });
-
-    expect((await run()).status).toBe("done");
-    expect(town.clicks()).toBe(0);
-  });
-
-  it("claims nothing when no upgrade button comes", async () => {
-    document.body.innerHTML = townView("W-Athens", null);
+  it("claims nothing for a town that is already building", async () => {
+    readyTown();
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="position8" class="position8 building constructionSite animated"></div>`,
+    );
 
     await run();
 

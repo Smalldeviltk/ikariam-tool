@@ -22,7 +22,6 @@ const { claimShipment } = vi.hoisted(() => ({
     ): Promise<
       | { status: "go" }
       | { status: "gone" }
-      | { status: "blocked" }
       | { status: "changed"; amount: number }
     > => ({ status: "go" }),
   ),
@@ -562,18 +561,6 @@ describe("handleSendResource and the game's notepad", () => {
 
     expect(result).toMatchObject({ status: "progress" });
     expect((result as any).task.data.amount).toBe(300);
-    expect(game.state.ajaxCalls).toEqual([]);
-  });
-
-  it("defers, opening nothing, while another computer runs the queue", async () => {
-    const game = installGame({ afterSubmit: "town" });
-    game.render("town");
-    claimShipment.mockResolvedValueOnce({ status: "blocked" });
-
-    await expect(run(shipment(1000))).resolves.toMatchObject({
-      status: "defer",
-      reason: expect.stringContaining("Another computer"),
-    });
     expect(game.state.ajaxCalls).toEqual([]);
   });
 

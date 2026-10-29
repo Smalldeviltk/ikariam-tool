@@ -106,7 +106,6 @@ import { notifyLowWine } from "./features/wine-warning";
 import {
   queueChanged,
   queueNoteAllowsRunning,
-  queueRunnerStarted,
   startQueueNoteSync,
   syncQueueNoteFromScan,
 } from "./queue-note";
@@ -186,8 +185,6 @@ let waitingForTabLogged = false;
 function startRunner(): void {
   tabLock.acquire();
   runner.start();
-  // Take the notepad's lease now, not at the next page load.
-  queueRunnerStarted();
 }
 
 /** Stop the runner and let another tab of this account take over. */
@@ -253,7 +250,10 @@ function isUiReady(): boolean {
  * own task type run, so Build's timer passes queued shipments over.
  */
 function syncRunnerToFlags(): void {
-  const wanted = runnerWanted();
+  const wanted =
+    isAutoStart() ||
+    isFlagTrue(FLAG.isAutoBuildStart) ||
+    oneOffRunTypes.size > 0;
   if (wanted && !runner.isRunning) startRunner();
   else if (!wanted && runner.isRunning) stopRunner();
 }
@@ -312,15 +312,6 @@ function restoreOneOffRunTypes(): void {
     }
   }
   saveOneOffRunTypes();
-}
-
-/** Whether either switch, or a one-off run, wants the runner up. */
-function runnerWanted(): boolean {
-  return (
-    isAutoStart() ||
-    isFlagTrue(FLAG.isAutoBuildStart) ||
-    oneOffRunTypes.size > 0
-  );
 }
 
 /** The runner's `allowsType`: a task type runs while its own switch is on. */
@@ -860,5 +851,5 @@ export function start(): void {
   restoreOneOffRunTypes();
   syncRunnerToFlags();
   // What other computers ran or added, before this page's first task.
-  void startQueueNoteSync(runnerWanted);
+  void startQueueNoteSync();
 }

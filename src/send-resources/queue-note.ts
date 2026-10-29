@@ -7,7 +7,7 @@
  * tasks queued from it. The notepad is the game's own (`view=avatarNotes`),
  * measured to hold 200 characters, so the copy is a compact text:
  *
- *   Q1<fingerprint 2><machine 2><minute 3>|<entry>;<entry>;...
+ *   Q2<fingerprint 2>|<entry>;<entry>;...
  *
  *   - shipment: `<id 2><from 1><to 1><resource 1><amount>`
  *   - upgrade:  `@<town 1><slot 1><level>`
@@ -28,10 +28,12 @@
  * entry just before acting: the notepad is written as it will be once the
  * action is done, and an entry already gone from it is not acted on.
  *
- * ── Two computers at once ───────────────────────────────────────────────────
- * The header carries a lease: which computer runs the queue, and since when.
- * Another computer's lease younger than `LEASE_TTL_MINUTES` keeps this one's
- * runner idle.
+ * Two computers never run the queue at once: the game does not let one
+ * account be logged in on two (the player's word, 29/10). The first version
+ * kept a lease in the header for that; it only made a computer wait up to ten
+ * minutes after a switch, and its writes made the session's token stale.
+ * Format 1 (`Q1`, with the lease) is still read, so a notepad written by it
+ * carries over.
  *
  * Plan: `docs/improvement-plan.md` §2.AE.
  */
@@ -62,30 +64,22 @@ import type { AutoBuildAccount, ResourceId } from "./types";
 /** The notepad's limit, as the player measured it. */
 export const NOTE_MAX_CHARS = 200;
 
-/** Marks the notepad as this tool's queue, format version 1. */
-const NOTE_TAG = "Q1";
+/** Marks the notepad as this tool's queue, format version 2. */
+const NOTE_TAG = "Q2";
+/**
+ * Format 1, still read: its header also carried a lease, two characters of
+ * computer id and three of minute stamp, which are skipped.
+ */
+const FORMAT_ONE_TAG = "Q1";
+const FORMAT_ONE_LEASE_WIDTH = 5;
 const RADIX = 36;
 const FINGERPRINT_WIDTH = 2;
-const MACHINE_WIDTH = 2;
-const MINUTE_WIDTH = 3;
-const HEADER_LENGTH =
-  NOTE_TAG.length + FINGERPRINT_WIDTH + MACHINE_WIDTH + MINUTE_WIDTH;
 const HEADER_END = "|";
 const ENTRY_SEPARATOR = ";";
 const UPGRADE_MARK = "@";
 const SHIPMENT_ID_WIDTH = 2;
-/** The machine field of a header no computer holds a lease in. */
-const NO_MACHINE = "00";
-/** Lease minutes wrap at three base-36 digits, about 32 days. */
-const MINUTE_WRAP = RADIX ** MINUTE_WIDTH;
-const MS_PER_MINUTE = 60_000;
 /** The largest level two base-36 digits hold. */
 const MAX_LEVEL = RADIX ** 2 - 1;
-
-/** Another computer's lease younger than this keeps the runner here idle. */
-export const LEASE_TTL_MINUTES = 10;
-/** Our own lease is written again once it is this old. */
-export const LEASE_REFRESH_MINUTES = 3;
 
 const RESOURCE_CODE: Record<ResourceId, string> = {
   wood: "w",
@@ -122,15 +116,8 @@ export interface NoteUpgrade {
 
 export type NoteEntry = NoteShipment | NoteUpgrade;
 
-export interface NoteLease {
-  machine: string;
-  /** Minute stamp, see `minuteStamp`. */
-  minute: number;
-}
-
 export interface QueueNote {
   fingerprint: string;
-  lease: NoteLease | null;
   entries: NoteEntry[];
 }
 
@@ -240,22 +227,28 @@ export function parseEntry(text: string): NoteEntry | null {
 export function parseNote(text: string): ParsedNote {
   const trimmed = text.trim();
   if (trimmed === "") return { kind: "empty" };
+  let headerLength: number;
+  if (trimmed.startsWith(NOTE_TAG)) {
+    headerLength = NOTE_TAG.length + FINGERPRINT_WIDTH;
+  } else if (trimmed.startsWith(FORMAT_ONE_TAG)) {
+    headerLength =
+      FORMAT_ONE_TAG.length + FINGERPRINT_WIDTH + FORMAT_ONE_LEASE_WIDTH;
+  } else {
+    return { kind: "foreign" };
+  }
+  // The tag of either format is as long as the other's.
+  const fingerprint = trimmed.slice(
+    NOTE_TAG.length,
+    NOTE_TAG.length + FINGERPRINT_WIDTH,
+  );
   if (
-    !trimmed.startsWith(NOTE_TAG) ||
-    trimmed.indexOf(HEADER_END) !== HEADER_LENGTH
+    trimmed.indexOf(HEADER_END) !== headerLength ||
+    !BASE36.test(trimmed.slice(NOTE_TAG.length, headerLength))
   ) {
     return { kind: "foreign" };
   }
 
-  let at = NOTE_TAG.length;
-  const fingerprint = trimmed.slice(at, (at += FINGERPRINT_WIDTH));
-  const machine = trimmed.slice(at, (at += MACHINE_WIDTH));
-  const minute = readNumber(trimmed.slice(at, (at += MINUTE_WIDTH)));
-  if (!BASE36.test(fingerprint) || !BASE36.test(machine) || minute === null) {
-    return { kind: "foreign" };
-  }
-
-  const body = trimmed.slice(HEADER_LENGTH + HEADER_END.length);
+  const body = trimmed.slice(headerLength + HEADER_END.length);
   const entries: NoteEntry[] = [];
   if (body !== "") {
     for (const piece of body.split(ENTRY_SEPARATOR)) {
@@ -267,11 +260,7 @@ export function parseNote(text: string): ParsedNote {
 
   return {
     kind: "queue",
-    note: {
-      fingerprint,
-      lease: machine === NO_MACHINE ? null : { machine, minute },
-      entries,
-    },
+    note: { fingerprint, entries },
   };
 }
 
@@ -285,10 +274,7 @@ export function encodeNote(
   note: QueueNote,
   maxChars = NOTE_MAX_CHARS,
 ): { text: string; written: NoteEntry[] } {
-  const lease = note.lease
-    ? note.lease.machine + padded(note.lease.minute, MINUTE_WIDTH)
-    : NO_MACHINE + padded(0, MINUTE_WIDTH);
-  let text = NOTE_TAG + note.fingerprint + lease + HEADER_END;
+  let text = NOTE_TAG + note.fingerprint + HEADER_END;
   const written: NoteEntry[] = [];
   for (const entry of note.entries) {
     const piece =
@@ -314,53 +300,6 @@ export function townFingerprint(cityIds: readonly string[]): string {
     hash = (hash * 31 + char.charCodeAt(0)) % modulus;
   }
   return padded(hash, FINGERPRINT_WIDTH);
-}
-
-/* ──────────────────────────────── Lease ────────────────────────────────── */
-
-/** The minute a lease is written in, wrapped to three base-36 digits. */
-export function minuteStamp(nowMs: number): number {
-  return Math.floor(nowMs / MS_PER_MINUTE) % MINUTE_WRAP;
-}
-
-/** Minutes since the lease was written, across the wrap. */
-export function leaseAgeMinutes(lease: NoteLease, nowMs: number): number {
-  return (minuteStamp(nowMs) - lease.minute + MINUTE_WRAP) % MINUTE_WRAP;
-}
-
-/** Whether another computer runs this account's queue right now. */
-export function leaseHeldByOther(
-  lease: NoteLease | null,
-  machine: string,
-  nowMs: number,
-): boolean {
-  return (
-    lease !== null &&
-    lease.machine !== machine &&
-    leaseAgeMinutes(lease, nowMs) < LEASE_TTL_MINUTES
-  );
-}
-
-/**
- * The lease to write: ours when we want to run the queue and nobody else
- * holds it, renewed only once it is `LEASE_REFRESH_MINUTES` old so that not
- * every page load costs a write; otherwise the notepad's, untouched.
- */
-export function nextLease(
-  lease: NoteLease | null,
-  machine: string,
-  nowMs: number,
-  wanted: boolean,
-): NoteLease | null {
-  if (!wanted || leaseHeldByOther(lease, machine, nowMs)) return lease;
-  if (
-    lease !== null &&
-    lease.machine === machine &&
-    leaseAgeMinutes(lease, nowMs) < LEASE_REFRESH_MINUTES
-  ) {
-    return lease;
-  }
-  return { machine, minute: minuteStamp(nowMs) };
 }
 
 /* ─────────────────────────────── Merging ───────────────────────────────── */
@@ -741,27 +680,6 @@ function applyLocal(
 
 /* ──────────────────────────────── Storage ──────────────────────────────── */
 
-/**
- * This computer's id in the lease. In `localStorage` with no account prefix
- * and left out of the data export on purpose: imported on another computer,
- * it would make the two the same computer.
- */
-export const MACHINE_ID_KEY = "ikaQueueNoteMachine";
-
-export function machineId(): string {
-  try {
-    const saved = localStorage.getItem(MACHINE_ID_KEY);
-    if (saved && saved.length === MACHINE_WIDTH && BASE36.test(saved)) {
-      if (saved !== NO_MACHINE) return saved;
-    }
-    const fresh = randomTwoDigitId(new Set([NO_MACHINE]));
-    localStorage.setItem(MACHINE_ID_KEY, fresh);
-    return fresh;
-  } catch {
-    return randomTwoDigitId(new Set([NO_MACHINE]));
-  }
-}
-
 function loadBase(): NoteEntry[] {
   return getState().account.getJSON<NoteEntry[]>(KEY.queueNoteBase, []);
 }
@@ -792,30 +710,25 @@ export type SyncResult =
       written: number;
       /** Entries that did not fit and stay on this computer only. */
       overflow: number;
-      leaseHeldByOther: boolean;
     }
   /** The notepad holds other text, or a queue for another town list. */
   | { status: "foreign" }
   | { status: "failed"; reason: string };
 
 export interface SyncOptions {
-  /** Whether this computer wants to run the queue, and so the lease. */
-  wantLease: boolean;
   /** Replace a foreign notepad with this computer's queue (Scan, confirmed). */
   takeOver?: boolean;
 }
 
-/** Whether another computer held the lease at the last look. */
-let otherMachineRunning = false;
 /** Whether the sync made on page load has finished, however it went. */
 let firstSyncDone = false;
 
 /**
  * Whether the runner may work: not before the page-load sync has merged in
- * what other computers did, and not while another computer holds the lease.
+ * what other computers did.
  */
 export function queueNoteAllowsRunning(): boolean {
-  return firstSyncDone && !otherMachineRunning;
+  return firstSyncDone;
 }
 
 /** One exchange with the notepad at a time, claims included. */
@@ -830,7 +743,7 @@ function oneAtATime<T>(work: () => Promise<T>): Promise<T> {
 /** The notepad's queue when this computer can use it, or `null`. */
 function usableNote(parsed: ParsedNote, fingerprint: string): QueueNote | null {
   if (parsed.kind === "empty") {
-    return { fingerprint, lease: null, entries: [] };
+    return { fingerprint, entries: [] };
   }
   if (parsed.kind === "queue" && parsed.note.fingerprint === fingerprint) {
     return parsed.note;
@@ -876,7 +789,7 @@ async function readForExchange(
   return {
     kind: "read",
     text,
-    note: { fingerprint, lease: null, entries: [] },
+    note: { fingerprint, entries: [] },
     base: [],
   };
 }
@@ -906,7 +819,7 @@ async function writeExchange(
 }
 
 /** Read the notepad, merge it with this computer's queue, write it back. */
-export function syncQueueNote(options: SyncOptions): Promise<SyncResult> {
+export function syncQueueNote(options: SyncOptions = {}): Promise<SyncResult> {
   return oneAtATime(async () => {
     const read = await readForExchange(options.takeOver ?? false);
     if (read.kind === "stopped") return read.result;
@@ -921,14 +834,8 @@ export function syncQueueNote(options: SyncOptions): Promise<SyncResult> {
     );
     applyLocal(forLocal, snapshot);
 
-    const now = Date.now();
-    const me = machineId();
-    const lease = nextLease(note.lease, me, now, options.wantLease);
-    otherMachineRunning = leaseHeldByOther(lease, me, now);
-
     const outcome = await writeExchange(text, {
       fingerprint: note.fingerprint,
-      lease,
       entries: forNote,
     });
     if (outcome.kind === "notWritten") {
@@ -940,7 +847,6 @@ export function syncQueueNote(options: SyncOptions): Promise<SyncResult> {
       status: "synced",
       written: outcome.written.length,
       overflow: forNote.length - outcome.written.length,
-      leaseHeldByOther: otherMachineRunning,
     };
   });
 }
@@ -953,9 +859,7 @@ export type ClaimResult =
   /** Already run or deleted on another computer; dropped here too. */
   | { status: "gone" }
   /** Another computer shipped part of it; this is what is left. */
-  | { status: "changed"; amount: number }
-  /** Another computer runs this account's queue. */
-  | { status: "blocked" };
+  | { status: "changed"; amount: number };
 
 /**
  * Write the notepad as it will be once an action is done, just before doing
@@ -984,14 +888,6 @@ function claim(
     if (!target) return { status: "go" };
     const key = entryKey(target);
 
-    const now = Date.now();
-    const me = machineId();
-    if (leaseHeldByOther(note.lease, me, now)) {
-      otherMachineRunning = true;
-      watchLease(true);
-      return { status: "blocked" };
-    }
-
     const baseEntry = byKey(base).get(key);
     const remoteEntry = byKey(note.entries).get(key);
 
@@ -1008,7 +904,6 @@ function claim(
       applyLocal(merged.forLocal, snapshot);
       const outcome = await writeExchange(text, {
         fingerprint: note.fingerprint,
-        lease: nextLease(note.lease, me, now, true),
         entries: merged.forNote,
       });
       if (outcome.kind === "notWritten") saveBase(note.entries);
@@ -1027,7 +922,6 @@ function claim(
     applyLocal(forLocal, snapshot, key);
     const outcome = await writeExchange(text, {
       fingerprint: note.fingerprint,
-      lease: nextLease(note.lease, me, now, true),
       entries: forNote,
     });
     if (outcome.kind === "notWritten") {
@@ -1064,7 +958,7 @@ export function claimShipment(
   );
 }
 
-/** Claim a saved upgrade, before its Upgrade button is clicked. */
+/** Claim a saved upgrade, before its building is opened. */
 export function claimUpgrade(
   townName: string,
   positionId: string,
@@ -1091,12 +985,8 @@ export function claimUpgrade(
 
 /** Pause after a change before syncing, so a burst of edits is one write. */
 export const CHANGE_SYNC_DELAY_MS = 2000;
-/** How often to look again while another computer holds the lease. */
-export const LEASE_RECHECK_MS = 2 * MS_PER_MINUTE;
 
 let changeTimer: number | null = null;
-let leaseRecheckTimer: number | null = null;
-let wantsLease: () => boolean = () => false;
 /** The local queue as of the last sync, to skip syncs that change nothing. */
 let lastSyncedSignature: string | null = null;
 /** Toasts already shown on this page, by kind. */
@@ -1136,10 +1026,7 @@ function report(result: SyncResult, when: string, toast: boolean): void {
     case "synced":
       logInfo(
         `Notepad ${when}: ${result.written} entries in it` +
-          (result.overflow > 0 ? `, ${result.overflow} did not fit` : "") +
-          (result.leaseHeldByOther
-            ? " - another computer runs the queue, waiting"
-            : ""),
+          (result.overflow > 0 ? `, ${result.overflow} did not fit` : ""),
       );
       if (toast && result.overflow > 0) {
         toastOnce("overflow", QUEUE_NOTE.overflow(result.overflow));
@@ -1156,57 +1043,18 @@ function report(result: SyncResult, when: string, toast: boolean): void {
 }
 
 /**
- * Look again every `LEASE_RECHECK_MS` while another computer holds the
- * lease, and stop looking once it does not.
- */
-function watchLease(blocked: boolean): void {
-  if (blocked && leaseRecheckTimer === null) {
-    leaseRecheckTimer = window.setInterval(() => {
-      void syncQueueNote({ wantLease: wantsLease() }).then((next) => {
-        report(next, "recheck", false);
-        watchLease(leaseBlocks(next));
-      });
-    }, LEASE_RECHECK_MS);
-  } else if (!blocked && leaseRecheckTimer !== null) {
-    window.clearInterval(leaseRecheckTimer);
-    leaseRecheckTimer = null;
-  }
-}
-
-/** Whether a sync found another computer holding the lease. */
-function leaseBlocks(result: SyncResult): boolean {
-  return result.status === "synced" && result.leaseHeldByOther;
-}
-
-/**
  * The sync on page load, before the runner's first task. The runner waits
  * for it (`queueNoteAllowsRunning`) however it ends: a notepad that cannot be
  * read leaves the queue running as it did before the notepad was used.
  */
-export async function startQueueNoteSync(
-  wantLease: () => boolean,
-): Promise<SyncResult> {
-  wantsLease = wantLease;
+export async function startQueueNoteSync(): Promise<SyncResult> {
   try {
-    const result = await syncQueueNote({ wantLease: wantLease() });
+    const result = await syncQueueNote();
     report(result, "on page load", false);
-    watchLease(leaseBlocks(result));
     return result;
   } finally {
     firstSyncDone = true;
   }
-}
-
-/**
- * The runner was switched on: take the lease now rather than at the next
- * page load. Before the page-load sync is done, that sync takes it.
- */
-export function queueRunnerStarted(): void {
-  if (!firstSyncDone) return;
-  void syncQueueNote({ wantLease: true }).then((result) => {
-    report(result, "on Start", false);
-    watchLease(leaseBlocks(result));
-  });
 }
 
 /** Sync a little after the queue or the build list changed. */
@@ -1216,9 +1064,8 @@ export function queueChanged(): void {
   changeTimer = window.setTimeout(() => {
     changeTimer = null;
     if (localSignature() === lastSyncedSignature) return;
-    void syncQueueNote({ wantLease: wantsLease() }).then((result) => {
+    void syncQueueNote().then((result) => {
       report(result, "after a change", true);
-      watchLease(leaseBlocks(result));
     });
   }, CHANGE_SYNC_DELAY_MS);
 }
@@ -1228,12 +1075,11 @@ export function queueChanged(): void {
  * Every outcome is told.
  */
 export async function syncQueueNoteFromScan(): Promise<SyncResult> {
-  let result = await syncQueueNote({ wantLease: wantsLease() });
+  let result = await syncQueueNote();
   if (result.status === "foreign" && confirm(QUEUE_NOTE.confirmTakeOver)) {
-    result = await syncQueueNote({ wantLease: wantsLease(), takeOver: true });
+    result = await syncQueueNote({ takeOver: true });
   }
   report(result, "after Scan", false);
-  watchLease(leaseBlocks(result));
   if (result.status === "synced") {
     showToast(
       QUEUE_NOTE.synced(result.written) +
@@ -1250,13 +1096,9 @@ export async function syncQueueNoteFromScan(): Promise<SyncResult> {
 /** Forget this page's state. For tests. */
 export function resetQueueNoteState(): void {
   if (changeTimer !== null) window.clearTimeout(changeTimer);
-  if (leaseRecheckTimer !== null) window.clearInterval(leaseRecheckTimer);
   changeTimer = null;
-  leaseRecheckTimer = null;
-  otherMachineRunning = false;
   firstSyncDone = false;
   applying = false;
-  wantsLease = () => false;
   lastSyncedSignature = null;
   toastsShown.clear();
   inFlight = Promise.resolve();

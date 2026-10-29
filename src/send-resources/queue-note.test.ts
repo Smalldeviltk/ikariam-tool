@@ -16,16 +16,7 @@ import {
   encodeEntry,
   encodeNote,
   isWritable,
-  LEASE_RECHECK_MS,
-  LEASE_REFRESH_MINUTES,
-  LEASE_TTL_MINUTES,
-  leaseAgeMinutes,
-  leaseHeldByOther,
-  MACHINE_ID_KEY,
-  machineId,
   mergeEntries,
-  minuteStamp,
-  nextLease,
   NOTE_MAX_CHARS,
   type NoteEntry,
   type NoteShipment,
@@ -91,9 +82,8 @@ function townDropdown(names: string[], firstId = 78038): string {
 const TOWNS = ["T-Athens", "T-Sparta", "T-Corinth", "T-Argos"];
 const TOWN_IDS = TOWNS.map((_, i) => String(78038 + i));
 const FINGERPRINT = townFingerprint(TOWN_IDS);
-/** Fixed for the lease tests: 2026-10-29 10:00 UTC. */
+/** A fixed clock: 2026-10-29 10:00 UTC. */
 const NOW = new Date("2026-10-29T10:00:00Z").getTime();
-const MINUTE = 60_000;
 
 function shipment(
   id: string,
@@ -110,12 +100,8 @@ function upgrade(town: number, slot: number, level: number): NoteUpgrade {
 }
 
 /** The notepad text another computer would have written. */
-function noteText(
-  entries: NoteEntry[],
-  lease: { machine: string; minute: number } | null = null,
-  fingerprint = FINGERPRINT,
-): string {
-  return encodeNote({ fingerprint, lease, entries }).text;
+function noteText(entries: NoteEntry[], fingerprint = FINGERPRINT): string {
+  return encodeNote({ fingerprint, entries }).text;
 }
 
 type ShipmentTask = Extract<Task, { type: "sendResource" }>;
@@ -264,34 +250,38 @@ describe("the notepad's format", () => {
     expect(isWritable(upgrade(0, 1, Number.NaN))).toBe(false);
   });
 
-  it("starts with the tag, fingerprint and lease, then the entries", () => {
+  it("starts with the tag and the fingerprint, then the entries", () => {
     const { text } = encodeNote({
       fingerprint: "a1",
-      lease: { machine: "m4", minute: 37 },
       entries: [shipment("k7", 12000, 3, 5), upgrade(3, 8, 21)],
     });
-    expect(text).toBe("Q1a1m4011|k735w99c;@38l");
-  });
-
-  it("writes no lease as machine 00", () => {
-    const { text } = encodeNote({
-      fingerprint: "a1",
-      lease: null,
-      entries: [],
-    });
-    expect(text).toBe("Q1a100000|");
+    expect(text).toBe("Q2a1|k735w99c;@38l");
+    expect(encodeNote({ fingerprint: "a1", entries: [] }).text).toBe("Q2a1|");
   });
 
   it("reads back a whole notepad", () => {
     const note = {
       fingerprint: "a1",
-      lease: { machine: "m4", minute: 46655 },
       entries: [shipment("k7", 12000, 3, 5), upgrade(3, 8, 21)],
     };
     expect(parseNote(encodeNote(note).text)).toEqual({ kind: "queue", note });
-    expect(parseNote(" Q1a100000|\n")).toEqual({
+    expect(parseNote(" Q2a1|\n")).toEqual({
       kind: "queue",
-      note: { fingerprint: "a1", lease: null, entries: [] },
+      note: { fingerprint: "a1", entries: [] },
+    });
+  });
+
+  it("still reads the first format, whose header carried a lease", () => {
+    expect(parseNote("Q1a1m4011|k735w99c;@38l")).toEqual({
+      kind: "queue",
+      note: {
+        fingerprint: "a1",
+        entries: [shipment("k7", 12000, 3, 5), upgrade(3, 8, 21)],
+      },
+    });
+    expect(parseNote("Q1a100000|")).toEqual({
+      kind: "queue",
+      note: { fingerprint: "a1", entries: [] },
     });
   });
 
@@ -300,11 +290,14 @@ describe("the notepad's format", () => {
     expect(parseNote("  \n")).toEqual({ kind: "empty" });
     for (const text of [
       "buy wine for Sparta",
-      "Q2a100000|", // another version
-      "Q1a10000|", // header one character short
-      "Q1A100000|", // fingerprint not base 36
-      "Q1a100000|k735w99c;oops", // one bad entry spoils it all
-      "Q1a100000|k735w99c;", // empty entry
+      "Q3a1|", // another version
+      "Q2a10|", // header one character long
+      "Q2a|", // header one character short
+      "Q2A1|", // fingerprint not base 36
+      "Q1a10000|", // a first-format header one character short
+      "Q1a1M4011|", // a first-format lease not base 36
+      "Q2a1|k735w99c;oops", // one bad entry spoils it all
+      "Q2a1|k735w99c;", // empty entry
     ]) {
       expect(parseNote(text).kind, text).toBe("foreign");
     }
@@ -315,33 +308,30 @@ describe("the notepad's format", () => {
       shipment(i.toString(36).padStart(2, "0"), 12000, 0, 1),
     );
     const { text, written } = encodeNote(
-      { fingerprint: "a1", lease: null, entries },
+      { fingerprint: "a1", entries },
       NOTE_MAX_CHARS,
     );
     expect(text.length).toBeLessThanOrEqual(NOTE_MAX_CHARS);
-    // 10 for the header, 8 for the first entry, 9 with a separator after it.
-    expect(written).toHaveLength(Math.floor((NOTE_MAX_CHARS - 10 + 1) / 9));
+    // 5 for the header, 8 for the first entry, 9 with a separator after it.
+    expect(written).toHaveLength(Math.floor((NOTE_MAX_CHARS - 5 + 1) / 9));
     expect(written).toEqual(entries.slice(0, written.length));
   });
 
   it("fills the notepad to exactly its limit", () => {
-    // 10 header + 8 + 9 * 20 = 198; two short upgrades after that fit 200 only once.
+    // 5 header + 8 + 9 * 20 = 193; an upgrade of 4 and its separator make 198,
+    // and a second one would make 203.
     const entries: NoteEntry[] = Array.from({ length: 21 }, (_, i) =>
       shipment(i.toString(36).padStart(2, "0"), 12000, 0, 1),
     );
-    entries.push(upgrade(1, 2, 3));
-    const { text, written } = encodeNote({
-      fingerprint: "a1",
-      lease: null,
-      entries,
-    });
+    entries.push(upgrade(1, 2, 3), upgrade(1, 2, 4));
+    const { text, written } = encodeNote({ fingerprint: "a1", entries });
     expect(text.length).toBe(198);
-    expect(written).toHaveLength(21);
+    expect(written).toHaveLength(22);
     const roomy = encodeNote(
-      { fingerprint: "a1", lease: null, entries: [upgrade(1, 2, 3)] },
-      14,
+      { fingerprint: "a1", entries: [upgrade(1, 2, 3)] },
+      9,
     );
-    expect(roomy.text.length).toBe(14);
+    expect(roomy.text.length).toBe(9);
     expect(roomy.written).toHaveLength(1);
   });
 
@@ -354,81 +344,6 @@ describe("the notepad's format", () => {
     expect(townFingerprint(["78038", "78039", "78040", "78041"])).not.toBe(
       print,
     );
-  });
-});
-
-/* ──────────────────────────────── Lease ────────────────────────────────── */
-
-describe("the lease", () => {
-  const now = minuteStamp(NOW);
-
-  it("is nobody's when absent or our own", () => {
-    expect(leaseHeldByOther(null, "m1", NOW)).toBe(false);
-    expect(leaseHeldByOther({ machine: "m1", minute: now }, "m1", NOW)).toBe(
-      false,
-    );
-  });
-
-  it("is another computer's until it is ten minutes old", () => {
-    const at = (age: number) => ({ machine: "m2", minute: now - age });
-    expect(leaseHeldByOther(at(0), "m1", NOW)).toBe(true);
-    expect(leaseHeldByOther(at(LEASE_TTL_MINUTES - 1), "m1", NOW)).toBe(true);
-    expect(leaseHeldByOther(at(LEASE_TTL_MINUTES), "m1", NOW)).toBe(false);
-  });
-
-  it("counts its age across the wrap of the minute stamp", () => {
-    const wrap = 36 ** 3;
-    const justBeforeWrap =
-      Math.ceil(NOW / MINUTE / wrap) * wrap * MINUTE - MINUTE;
-    const lease = { machine: "m2", minute: minuteStamp(justBeforeWrap) };
-    expect(lease.minute).toBe(wrap - 1);
-    expect(minuteStamp(justBeforeWrap + 3 * MINUTE)).toBe(2);
-    expect(leaseAgeMinutes(lease, justBeforeWrap + 3 * MINUTE)).toBe(3);
-  });
-
-  it("is left alone when this computer does not want to run", () => {
-    const theirs = { machine: "m2", minute: now - 30 };
-    expect(nextLease(theirs, "m1", NOW, false)).toBe(theirs);
-    expect(nextLease(null, "m1", NOW, false)).toBeNull();
-  });
-
-  it("is taken when free, expired, or our own and old", () => {
-    const mine = { machine: "m1", minute: now };
-    expect(nextLease(null, "m1", NOW, true)).toEqual(mine);
-    expect(
-      nextLease(
-        { machine: "m2", minute: now - LEASE_TTL_MINUTES },
-        "m1",
-        NOW,
-        true,
-      ),
-    ).toEqual(mine);
-    expect(
-      nextLease(
-        { machine: "m1", minute: now - LEASE_REFRESH_MINUTES },
-        "m1",
-        NOW,
-        true,
-      ),
-    ).toEqual(mine);
-  });
-
-  it("is not written again while our own is young, nor taken from another", () => {
-    const young = { machine: "m1", minute: now - (LEASE_REFRESH_MINUTES - 1) };
-    expect(nextLease(young, "m1", NOW, true)).toBe(young);
-    const theirs = { machine: "m2", minute: now - 1 };
-    expect(nextLease(theirs, "m1", NOW, true)).toBe(theirs);
-  });
-
-  it("names this computer with two characters, never 00, the same every time", () => {
-    const id = machineId();
-    expect(id).toMatch(/^[0-9a-z]{2}$/);
-    expect(id).not.toBe("00");
-    expect(machineId()).toBe(id);
-    expect(localStorage.getItem(MACHINE_ID_KEY)).toBe(id);
-
-    localStorage.setItem(MACHINE_ID_KEY, "00");
-    expect(machineId()).not.toBe("00");
   });
 });
 
@@ -524,14 +439,9 @@ describe("syncing with the notepad", () => {
     queueShipment({ resource: "wine", amount: 800, label: AUTO_WINE_LABEL });
     saveUpgrades({ "T-Sparta": [["js_CityPosition8Link", "Warehouse 21"]] });
 
-    const result = await syncQueueNote({ wantLease: false });
+    const result = await syncQueueNote();
 
-    expect(result).toEqual({
-      status: "synced",
-      written: 2,
-      overflow: 0,
-      leaseHeldByOther: false,
-    });
+    expect(result).toEqual({ status: "synced", written: 2, overflow: 0 });
     const [player, autoWine] = shipmentTasks();
     expect(player.data.noteId).toMatch(/^[0-9a-z]{2}$/);
     expect(autoWine.data.noteId).toBeUndefined();
@@ -544,10 +454,10 @@ describe("syncing with the notepad", () => {
 
   it("writes nothing when nothing changed", async () => {
     queueShipment();
-    await syncQueueNote({ wantLease: false });
+    await syncQueueNote();
     expect(notepad.saves).toHaveLength(1);
 
-    await syncQueueNote({ wantLease: false });
+    await syncQueueNote();
     expect(notepad.saves).toHaveLength(1);
   });
 
@@ -557,7 +467,7 @@ describe("syncing with the notepad", () => {
       upgrade(2, 5, 7),
     ]);
 
-    await syncQueueNote({ wantLease: false });
+    await syncQueueNote();
 
     expect(shipmentTasks().map((task) => task.data)).toEqual([
       {
@@ -580,19 +490,19 @@ describe("syncing with the notepad", () => {
       queueShipment({ destination: "2" }),
       queueShipment({ destination: "3" }),
     ];
-    await syncQueueNote({ wantLease: false });
+    await syncQueueNote();
     const computerOne = { ...localStorage };
 
     // Computer 2: the same account, nothing stored yet.
     localStorage.clear();
     initState("tester");
-    await syncQueueNote({ wantLease: false });
+    await syncQueueNote();
     expect(shipmentTasks()).toHaveLength(3);
     // It runs the first two.
     const [first, second] = shipmentTasks();
     getState().queue.removeById(first.id);
     getState().queue.removeById(second.id);
-    await syncQueueNote({ wantLease: false });
+    await syncQueueNote();
     expect(noteEntries()).toHaveLength(1);
 
     // Back on computer 1, with all three still queued.
@@ -602,7 +512,7 @@ describe("syncing with the notepad", () => {
     }
     initState("tester");
     expect(shipmentTasks()).toHaveLength(3);
-    await syncQueueNote({ wantLease: false });
+    await syncQueueNote();
 
     expect(shipmentTasks().map((task) => task.id)).toEqual([tasks[2].id]);
     expect(noteEntries()).toHaveLength(1);
@@ -610,11 +520,11 @@ describe("syncing with the notepad", () => {
 
   it("takes a part shipped elsewhere off the amount here", async () => {
     const task = queueShipment({ amount: 9000 });
-    await syncQueueNote({ wantLease: false });
+    await syncQueueNote();
     const id = shipmentTasks()[0].data.noteId!;
     notepad.text = noteText([shipment(id, 4000)]);
 
-    await syncQueueNote({ wantLease: false });
+    await syncQueueNote();
 
     expect(shipmentTasks()).toHaveLength(1);
     expect(shipmentTasks()[0].id).toBe(task.id);
@@ -636,10 +546,10 @@ describe("syncing with the notepad", () => {
         buildingName: "Warehouse 21",
       },
     });
-    await syncQueueNote({ wantLease: false });
+    await syncQueueNote();
     notepad.text = noteText([upgrade(1, 8, 22)]);
 
-    await syncQueueNote({ wantLease: false });
+    await syncQueueNote();
 
     expect(savedUpgrades()).toEqual({
       "T-Sparta": ["js_CityPosition8Link|Warehouse 22"],
@@ -653,7 +563,7 @@ describe("syncing with the notepad", () => {
     notepad.text = noteText([]);
     getState().account.setJSON(KEY.queueNoteBase, [shipment("zz")]);
 
-    await syncQueueNote({ wantLease: false });
+    await syncQueueNote();
 
     expect(shipmentTasks()).toHaveLength(2);
     expect(noteEntries()).toEqual([]);
@@ -664,7 +574,7 @@ describe("syncing with the notepad", () => {
     getState().account.setJSON(KEY.queueNoteBase, [shipment("zz")]);
     notepad.readError = new Error("timed out");
 
-    const result = await syncQueueNote({ wantLease: true });
+    const result = await syncQueueNote();
 
     expect(result).toEqual({ status: "failed", reason: "timed out" });
     expect(shipmentTasks()).toHaveLength(1);
@@ -676,7 +586,7 @@ describe("syncing with the notepad", () => {
     document.body.innerHTML = "";
     queueShipment();
 
-    const result = await syncQueueNote({ wantLease: false });
+    const result = await syncQueueNote();
 
     expect(result.status).toBe("failed");
     expect(notepad.reads).toBe(0);
@@ -686,7 +596,7 @@ describe("syncing with the notepad", () => {
     queueShipment();
     notepad.text = "buy wine for Sparta";
 
-    const result = await syncQueueNote({ wantLease: true });
+    const result = await syncQueueNote();
 
     expect(result).toEqual({ status: "foreign" });
     expect(notepad.saves).toEqual([]);
@@ -695,10 +605,10 @@ describe("syncing with the notepad", () => {
 
   it("does not use a queue written for another town list", async () => {
     queueShipment();
-    notepad.text = noteText([shipment("k7")], null, "zz");
+    notepad.text = noteText([shipment("k7")], "zz");
     expect(FINGERPRINT).not.toBe("zz");
 
-    const result = await syncQueueNote({ wantLease: false });
+    const result = await syncQueueNote();
 
     expect(result).toEqual({ status: "foreign" });
     expect(shipmentTasks()).toHaveLength(1);
@@ -706,17 +616,17 @@ describe("syncing with the notepad", () => {
   });
 
   it("sees the town list change when a town is founded", async () => {
-    await syncQueueNote({ wantLease: false });
+    await syncQueueNote();
     document.body.innerHTML = townDropdown([...TOWNS, "T-Delphi"]);
 
-    expect((await syncQueueNote({ wantLease: false })).status).toBe("foreign");
+    expect((await syncQueueNote()).status).toBe("foreign");
   });
 
   it("replaces another text with this computer's queue when told to take over", async () => {
     queueShipment({ amount: 700 });
     notepad.text = "buy wine for Sparta";
 
-    const result = await syncQueueNote({ wantLease: false, takeOver: true });
+    const result = await syncQueueNote({ takeOver: true });
 
     expect(result.status).toBe("synced");
     expect(noteEntries()).toEqual([
@@ -726,10 +636,10 @@ describe("syncing with the notepad", () => {
 
   it("takes an emptied notepad as a fresh start, not as every order run", async () => {
     queueShipment();
-    await syncQueueNote({ wantLease: false });
+    await syncQueueNote();
     notepad.text = "";
 
-    await syncQueueNote({ wantLease: false });
+    await syncQueueNote();
 
     expect(shipmentTasks()).toHaveLength(1);
     expect(noteEntries()).toHaveLength(1);
@@ -737,34 +647,34 @@ describe("syncing with the notepad", () => {
 
   it("copies its changes again after a write that failed", async () => {
     notepad.text = noteText([shipment("k7")]);
-    await syncQueueNote({ wantLease: false });
+    await syncQueueNote();
     queueShipment({ destination: "3" });
     notepad.saveError = new Error("HTTP 500");
 
-    const failed = await syncQueueNote({ wantLease: false });
+    const failed = await syncQueueNote();
 
     expect(failed).toEqual({ status: "failed", reason: "HTTP 500" });
     expect(base()).toEqual([shipment("k7")]);
 
     notepad.saveError = null;
-    await syncQueueNote({ wantLease: false });
+    await syncQueueNote();
     expect(noteEntries()).toHaveLength(2);
   });
 
   it("after a write that failed, still drops what the other computer then ran", async () => {
     notepad.text = noteText([shipment("k7")]);
-    await syncQueueNote({ wantLease: false });
+    await syncQueueNote();
     // Another computer adds m2; this one adds a shipment and cannot write.
     notepad.text = noteText([shipment("k7"), shipment("m2", 500, 2, 3)]);
     queueShipment({ destination: "3" });
     notepad.saveError = new Error("HTTP 500");
-    await syncQueueNote({ wantLease: false });
+    await syncQueueNote();
     expect(shipmentTasks().map((task) => task.data.noteId)).toContain("m2");
 
     // The other computer runs m2.
     notepad.saveError = null;
     notepad.text = noteText([shipment("k7")]);
-    await syncQueueNote({ wantLease: false });
+    await syncQueueNote();
 
     expect(shipmentTasks().map((task) => task.data.noteId)).not.toContain("m2");
     expect(
@@ -775,7 +685,7 @@ describe("syncing with the notepad", () => {
   it("keeps on this computer what does not fit, and writes it once there is room", async () => {
     for (let i = 0; i < 25; i++) queueShipment({ amount: 12000 });
 
-    const result = await syncQueueNote({ wantLease: false });
+    const result = await syncQueueNote();
 
     expect(result.status === "synced" && result.overflow).toBe(4);
     expect(noteEntries()).toHaveLength(21);
@@ -786,7 +696,7 @@ describe("syncing with the notepad", () => {
     for (const task of [first, second, third, fourth]) {
       getState().queue.removeById(task.id);
     }
-    await syncQueueNote({ wantLease: false });
+    await syncQueueNote();
     expect(noteEntries()).toHaveLength(21);
     expect(noteEntries().map((entry) => (entry as NoteShipment).id)).toEqual(
       shipmentTasks().map((task) => task.data.noteId),
@@ -797,7 +707,7 @@ describe("syncing with the notepad", () => {
     queueShipment({ destination: "2", noteId: "k7" });
     notepad.text = noteText([shipment("k7", 1000, 0, 3)]);
 
-    await syncQueueNote({ wantLease: false });
+    await syncQueueNote();
 
     const ids = shipmentTasks().map((task) => task.data.noteId);
     expect(ids).toHaveLength(2);
@@ -806,26 +716,13 @@ describe("syncing with the notepad", () => {
     expect(noteEntries()).toHaveLength(2);
   });
 
-  it("takes the lease when it wants to run and nobody holds it", async () => {
-    const result = await syncQueueNote({ wantLease: true });
+  it("writes the second format over a notepad of the first, keeping its orders", async () => {
+    notepad.text = "Q1" + FINGERPRINT + "m4011|k735w99c";
 
-    expect(result.status === "synced" && result.leaseHeldByOther).toBe(false);
-    const parsed = parseNote(notepad.text);
-    expect(parsed.kind === "queue" && parsed.note.lease).toEqual({
-      machine: machineId(),
-      minute: minuteStamp(NOW),
-    });
-  });
+    await syncQueueNote();
 
-  it("does not take another computer's fresh lease, and says so", async () => {
-    const theirs = { machine: "zz", minute: minuteStamp(NOW) - 2 };
-    notepad.text = noteText([], theirs);
-
-    const result = await syncQueueNote({ wantLease: true });
-
-    expect(result.status === "synced" && result.leaseHeldByOther).toBe(true);
-    const parsed = parseNote(notepad.text);
-    expect(parsed.kind === "queue" && parsed.note.lease).toEqual(theirs);
+    expect(shipmentTasks().map((task) => task.data.noteId)).toEqual(["k7"]);
+    expect(notepad.saves).toEqual(["Q2" + FINGERPRINT + "|k735w99c"]);
   });
 });
 
@@ -834,7 +731,7 @@ describe("syncing with the notepad", () => {
 describe("claiming before acting", () => {
   async function syncedShipment(amount = 9000): Promise<ShipmentTask> {
     queueShipment({ amount });
-    await syncQueueNote({ wantLease: true });
+    await syncQueueNote();
     return shipmentTasks()[0];
   }
 
@@ -877,37 +774,6 @@ describe("claiming before acting", () => {
     expect(shipmentTasks()[0].data.amount).toBe(3000);
   });
 
-  it("does not act while another computer holds the lease", async () => {
-    const task = await syncedShipment();
-    const id = task.data.noteId!;
-    notepad.text = noteText([shipment(id, 9000)], {
-      machine: "zz",
-      minute: minuteStamp(NOW),
-    });
-    const saves = notepad.saves.length;
-
-    expect(await claimShipment(task, 2000)).toEqual({
-      status: "blocked",
-    });
-    expect(notepad.saves).toHaveLength(saves);
-  });
-
-  it("holds the runner back after a claim finds another computer's lease, and looks again", async () => {
-    const task = await syncedShipment();
-    await startQueueNoteSync(() => true);
-    notepad.text = noteText([shipment(task.data.noteId!, 9000)], {
-      machine: "zz",
-      minute: minuteStamp(NOW),
-    });
-
-    expect((await claimShipment(task, 2000)).status).toBe("blocked");
-    expect(queueNoteAllowsRunning()).toBe(false);
-    const reads = notepad.reads;
-
-    await vi.advanceTimersByTimeAsync(LEASE_RECHECK_MS);
-    expect(notepad.reads).toBe(reads + 1);
-  });
-
   it("goes ahead as before when the notepad cannot be read", async () => {
     const task = await syncedShipment();
     notepad.readError = new Error("offline");
@@ -947,7 +813,7 @@ describe("claiming before acting", () => {
     expect(noteEntries()).toEqual([]);
 
     // The send failed: the task is still queued in full.
-    await syncQueueNote({ wantLease: true });
+    await syncQueueNote();
 
     expect(noteEntries()).toEqual([shipment(task.data.noteId!, 9000)]);
   });
@@ -961,7 +827,7 @@ describe("claiming before acting", () => {
     });
     const saves = notepad.saves.length;
 
-    await syncQueueNote({ wantLease: true });
+    await syncQueueNote();
 
     expect(noteEntries()).toEqual([shipment(task.data.noteId!, 5000)]);
     expect(notepad.saves).toHaveLength(saves);
@@ -969,7 +835,7 @@ describe("claiming before acting", () => {
 
   it("takes an upgrade off the notepad before its button is clicked", async () => {
     saveUpgrades({ "T-Sparta": [["js_CityPosition8Link", "Warehouse 21"]] });
-    await syncQueueNote({ wantLease: true });
+    await syncQueueNote();
 
     const result = await claimUpgrade(
       "T-Sparta",
@@ -986,7 +852,7 @@ describe("claiming before acting", () => {
 
   it("does not start an upgrade already run on another computer", async () => {
     saveUpgrades({ "T-Sparta": [["js_CityPosition8Link", "Warehouse 21"]] });
-    await syncQueueNote({ wantLease: true });
+    await syncQueueNote();
     notepad.text = noteText([]);
 
     const result = await claimUpgrade(
@@ -1007,41 +873,16 @@ describe("on the page", () => {
     notepad.readError = new Error("offline");
     expect(queueNoteAllowsRunning()).toBe(false);
 
-    const pending = startQueueNoteSync(() => false);
+    const pending = startQueueNoteSync();
     expect(queueNoteAllowsRunning()).toBe(false);
     await pending;
 
     expect(queueNoteAllowsRunning()).toBe(true);
   });
 
-  it("keeps the runner idle while another computer holds the lease, and looks again", async () => {
-    notepad.text = noteText([], { machine: "zz", minute: minuteStamp(NOW) });
-
-    await startQueueNoteSync(() => true);
-    expect(queueNoteAllowsRunning()).toBe(false);
-    const reads = notepad.reads;
-
-    await vi.advanceTimersByTimeAsync(LEASE_RECHECK_MS);
-    expect(notepad.reads).toBe(reads + 1);
-    expect(queueNoteAllowsRunning()).toBe(false);
-
-    // Ten minutes on, the lease has run out and is ours.
-    await vi.advanceTimersByTimeAsync(4 * LEASE_RECHECK_MS);
-    expect(queueNoteAllowsRunning()).toBe(true);
-    const parsed = parseNote(notepad.text);
-    expect(parsed.kind === "queue" && parsed.note.lease?.machine).toBe(
-      machineId(),
-    );
-
-    // And stops looking.
-    const settled = notepad.reads;
-    await vi.advanceTimersByTimeAsync(3 * LEASE_RECHECK_MS);
-    expect(notepad.reads).toBe(settled);
-  });
-
   it("syncs once, a little after a burst of changes", async () => {
     setQueueChangeListener(queueChanged);
-    await startQueueNoteSync(() => false);
+    await startQueueNoteSync();
     const reads = notepad.reads;
 
     queueShipment();
@@ -1057,7 +898,7 @@ describe("on the page", () => {
   it("does not sync again for its own writes, nor for a change that changes nothing copied", async () => {
     setQueueChangeListener(queueChanged);
     notepad.text = noteText([shipment("k7")]);
-    await startQueueNoteSync(() => false);
+    await startQueueNoteSync();
     expect(shipmentTasks()).toHaveLength(1);
     expect(vi.getTimerCount()).toBe(0);
     const reads = notepad.reads;
@@ -1072,7 +913,7 @@ describe("on the page", () => {
   it("tells the player once a page when the notepad holds other text", async () => {
     setQueueChangeListener(queueChanged);
     notepad.text = "my own notes";
-    await startQueueNoteSync(() => false);
+    await startQueueNoteSync();
     expect(showToast).not.toHaveBeenCalled();
 
     queueShipment();
@@ -1085,7 +926,7 @@ describe("on the page", () => {
 
   it("tells the player once a page when entries do not fit", async () => {
     setQueueChangeListener(queueChanged);
-    await startQueueNoteSync(() => false);
+    await startQueueNoteSync();
     for (let i = 0; i < 22; i++) queueShipment({ amount: 12000 });
     await vi.advanceTimersByTimeAsync(CHANGE_SYNC_DELAY_MS);
     queueShipment({ amount: 12000 });

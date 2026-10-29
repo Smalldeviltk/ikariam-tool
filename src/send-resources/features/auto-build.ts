@@ -368,6 +368,22 @@ export async function handleUpgradeBuilding(
     return endTownTurn(`${townName} is already building`);
   }
 
+  // Tell the game's notepad before the building is opened, for the reason
+  // given in `handleSendResource`. An upgrade already started from another
+  // computer is not started again; the saved entry went with the sync.
+  //
+  // Not just before the click on Upgrade: that button's link carries the
+  // session's `actionRequest` as it was when the building opened, and the
+  // notepad's save hands out a new one, so the game refused the click. A bug
+  // report of 29/10 shows it ten laps in a row ("clicked Upgrade but no
+  // building site appeared"). Opened after the save, the building's view
+  // comes with the token the game now expects.
+  const claimed = await claimUpgrade(townName, positionId, buildingName);
+  if (claimed.status === "gone") {
+    logInfo(`${buildingName} in ${townName}: already run on another computer`);
+    return { status: "done" };
+  }
+
   logInfo(`Start upgrading ${buildingName}`);
   await sleep(BUILDING_CLICK_PAUSE_MS);
   // `getElementById` takes a literal id. Interpolating into a `#...`
@@ -423,18 +439,6 @@ export async function handleUpgradeBuilding(
     return endTownTurn(
       `${buildingName}: upgrade button unavailable (not enough resources?)`,
     );
-  }
-
-  // Tell the game's notepad before clicking, for the reason given in
-  // `handleSendResource`. An upgrade already started from another computer
-  // is not started again; the saved entry went with the sync.
-  const claimed = await claimUpgrade(townName, positionId, buildingName);
-  if (claimed.status === "gone") {
-    logInfo(`${buildingName} in ${townName}: already run on another computer`);
-    return { status: "done" };
-  }
-  if (claimed.status === "blocked") {
-    return endTownTurn("Another computer runs this account's queue");
   }
 
   // Last look before committing. Opening the building took a round trip, and

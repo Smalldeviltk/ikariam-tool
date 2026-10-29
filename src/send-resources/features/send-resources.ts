@@ -226,13 +226,6 @@ export async function handleSendResource(
       task: { ...task, data: { ...task.data, amount: claimed.amount } },
     };
   }
-  if (claimed.status === "blocked") {
-    return {
-      status: "defer",
-      reason: "Another computer runs this account's queue",
-    };
-  }
-
   // Straight to the form for this destination, the way the game's transport
   // panel opens it. It replaces clicking the port and then the destination in
   // a town list the game no longer draws (improvement-plan.md §2.A).
