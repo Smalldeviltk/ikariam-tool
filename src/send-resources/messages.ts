@@ -236,6 +236,27 @@ export const SCAN = {
     (failed ? `, failed: ${failed}` : ""),
 } as const;
 
+/** The queue copy kept in the game's notepad, shared between computers. */
+export const QUEUE_NOTE = {
+  synced: (entries: number) =>
+    `Queue synced with the game's notepad: ${entries} entries.`,
+  confirmTakeOver:
+    "The game's notepad holds text that is not this tool's queue, or a queue " +
+    "written for a different town list.\n\n" +
+    "Replace the notepad with this computer's queue? Its current text is lost.",
+  foreign:
+    "The game's notepad holds other text, so the queue is not copied there. " +
+    "Press Scan to replace it with the queue.",
+  overflow: (left: number) =>
+    `The game's notepad is full: ${left} queued entries stay on this ` +
+    "computer only.",
+  failed: (reason: string) =>
+    `Could not sync the queue with the game's notepad: ${reason}`,
+  /** Name of an upgrade received from the notepad, which carries no names. */
+  placeholderBuilding: (slot: number, level: number) =>
+    `Position ${slot} ${level}`,
+} as const;
+
 /** Tooltips of the quick-amount buttons on the game's shipment form. */
 export const TRANSPORT_BUTTONS = {
   step: (adding: boolean, count: number, freighter: boolean) =>

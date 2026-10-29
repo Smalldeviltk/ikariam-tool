@@ -11,6 +11,7 @@ import {
 } from "./data-transfer";
 import { FLAG, KEY } from "../send-resources/state";
 import { TOWN_STATS_KEY } from "../send-resources/town-cache";
+import { MACHINE_ID_KEY } from "../send-resources/queue-note";
 import { BUG_REPORT_STORAGE_KEY } from "./bug-report";
 import { LOGGER_STORAGE_KEY } from "./logger";
 import { QUICK_UPGRADE_TRACE_KEY } from "./ikariam/http";
@@ -330,6 +331,7 @@ describe("every key the scripts write is classified", () => {
       KEY.listReceiver,
       KEY.globalTaskQueue,
       KEY.routeTimes,
+      KEY.queueNoteBase,
       TOWN_STATS_KEY,
     ];
     for (const key of accountKeys) {
@@ -339,6 +341,14 @@ describe("every key the scripts write is classified", () => {
       });
     }
   });
+
+  it(
+    "never exports this computer's id in the notepad's lease - imported on " +
+      "another computer, the two would share it",
+    () => {
+      expect(classifyKey(MACHINE_ID_KEY)).toBeNull();
+    },
+  );
 
   it("covers the core modules' own keys", () => {
     for (const key of [

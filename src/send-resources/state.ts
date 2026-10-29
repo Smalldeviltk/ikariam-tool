@@ -33,6 +33,8 @@ export const KEY = {
   globalTaskQueue: "ikaGlobalTaskQueue",
   /** Seconds a shipment takes, per route — see `recordRouteSeconds`. */
   routeTimes: "ikaRouteTimes",
+  /** The queue as last agreed with the game's notepad — see `queue-note.ts`. */
+  queueNoteBase: "ikaQueueNoteBase",
 } as const;
 
 /** Flat keys with no account prefix — the old code read/wrote `localStorage.x`. */
@@ -74,6 +76,17 @@ export interface AppState {
 
 let state: AppState | null = null;
 
+/** Told whenever the shipment queue or the saved build list is written. */
+let queueChangeListener: (() => void) | null = null;
+
+/**
+ * Be told about every write to the queue and to the build list, the two
+ * things the game's notepad keeps a copy of. One listener; `null` removes it.
+ */
+export function setQueueChangeListener(listener: (() => void) | null): void {
+  queueChangeListener = listener;
+}
+
 export function initState(accountName: string): AppState {
   const account = accountStore(accountName);
   state = {
@@ -82,7 +95,9 @@ export function initState(accountName: string): AppState {
     global: globalStore,
     // Account-scoped: the shipment queue always was per account, and town
     // indices only mean anything within one account.
-    queue: new TaskQueue(account, KEY.globalTaskQueue),
+    queue: new TaskQueue(account, KEY.globalTaskQueue, () =>
+      queueChangeListener?.(),
+    ),
   };
   return state;
 }
@@ -165,6 +180,7 @@ export function loadAutoBuild(): AutoBuildAccount[] {
 
 export function saveAutoBuild(list: AutoBuildAccount[]): void {
   getState().global.setJSON(KEY.listAutoBuild, list);
+  queueChangeListener?.();
 }
 
 /* ─────────────────────────────── Migration ─────────────────────────────── */

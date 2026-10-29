@@ -3,11 +3,15 @@ import {
   actionRequestToken,
   clearResponseHandlers,
   fetchTown,
+  findNotesText,
   findUpgradeLink,
   ikariamRequest,
   onResponse,
+  postIkariamForm,
   quickUpgradeTraces,
+  readAvatarNotes,
   resetHttpState,
+  saveAvatarNotes,
   TOKEN_PLACEHOLDER,
   responseFeedback,
   SUCCESS_FEEDBACK_TYPE,
@@ -519,5 +523,102 @@ describe("quick upgrade", () => {
       "5",
       "6",
     ]);
+  });
+});
+
+describe("the game's notepad", () => {
+  /** What the notepad's save answered on s303-en, 29/10. */
+  const SAVE_ANSWER = {
+    dataForJSCallback: [],
+    actionRequest: "token-after-save",
+  };
+
+  /** A notepad view: the box sits in the HTML of a changeView entry. */
+  function notesView(boxHtml: string): unknown[] {
+    return [
+      ["updateGlobalData", { actionRequest: "token-from-view" }],
+      ["changeView", ["avatarNotes", `<div class="notes">${boxHtml}</div>`]],
+    ];
+  }
+
+  it("saves with a form POST to the action the game uses", async () => {
+    const fetchMock = mockFetch(SAVE_ANSWER);
+    await saveAvatarNotes("|;>.@", { minGapMs: 0 });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe(
+      "/index.php?action=Diplomacy&function=saveAvatarNotes",
+    );
+    expect(init?.method).toBe("POST");
+    expect(init?.credentials).toBe("same-origin");
+    const body = new URLSearchParams(String(init?.body));
+    expect(body.get("notes")).toBe("|;>.@");
+    expect(body.get("ajax")).toBe("1");
+    expect(body.get("actionRequest")).toBe("token-from-model");
+  });
+
+  it("takes the new token from the top of the save's answer", async () => {
+    mockFetch(SAVE_ANSWER);
+    await saveAvatarNotes("x", { minGapMs: 0 });
+    expect(actionRequestToken()).toBe("token-after-save");
+  });
+
+  it("refuses an answer that is not an object", async () => {
+    mockFetch(TOWN_RESPONSE);
+    await expect(
+      postIkariamForm({ action: "x" }, {}, { minGapMs: 0 }),
+    ).rejects.toThrow(/not a response object/);
+    mockFetch("<html>login</html>");
+    await expect(saveAvatarNotes("x", { minGapMs: 0 })).rejects.toThrow(
+      /not JSON/,
+    );
+  });
+
+  it("fails a save the server answered with an error status", async () => {
+    mockFetch(SAVE_ANSWER, { status: 500 });
+    await expect(saveAvatarNotes("x", { minGapMs: 0 })).rejects.toThrow(
+      /HTTP 500/,
+    );
+  });
+
+  it("reads the notepad through view=avatarNotes", async () => {
+    const fetchMock = mockFetch(
+      notesView(
+        `<textarea id="js_notesMessages" class="notesTextBox">Q1a100000|</textarea>`,
+      ),
+    );
+    await expect(readAvatarNotes({ minGapMs: 0 })).resolves.toBe("Q1a100000|");
+    expect(String(fetchMock.mock.calls[0][0])).toContain("view=avatarNotes");
+  });
+
+  it("reads the box's text with the HTML entities decoded", () => {
+    expect(
+      findNotesText(
+        notesView(
+          `<textarea id="js_notesMessages">|;&gt;.@ &amp; &lt;b&gt;</textarea>`,
+        ),
+      ),
+    ).toBe("|;>.@ & <b>");
+  });
+
+  it("finds the box wherever the response puts it", () => {
+    const html = `<div id="js_notesMessages">deep</div>`;
+    expect(findNotesText({ a: [1, { b: ["x", html] }] })).toBe("deep");
+  });
+
+  it("reads an empty notepad as empty", () => {
+    expect(
+      findNotesText(notesView(`<textarea id="js_notesMessages"></textarea>`)),
+    ).toBe("");
+  });
+
+  it("fails a read with no notepad box, rather than call the notepad empty", async () => {
+    expect(findNotesText(TOWN_RESPONSE)).toBeNull();
+    // The id named in a script is not the box.
+    expect(findNotesText(["var box = 'js_notesMessages';"])).toBeNull();
+    mockFetch(TOWN_RESPONSE);
+    await expect(readAvatarNotes({ minGapMs: 0 })).rejects.toThrow(
+      /no notepad text box/,
+    );
   });
 });

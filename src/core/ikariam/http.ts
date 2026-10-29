@@ -178,34 +178,24 @@ function absorbToken(entries: unknown[]): void {
 }
 
 /**
- * One request to the game, returning the parsed response array.
+ * Wait out the gap since the previous request, then claim the slot.
  *
- * Throws when the game is not loaded, the request fails, or the body is not a
- * JSON array — a caller that gets a value back can rely on it being one.
+ * Spacing requests out is deliberate. This is game automation; a burst is
+ * more conspicuous than clicking, and there is nothing to gain from it.
  */
-export async function ikariamRequest(
-  params: Record<string, string | number>,
-  options: RequestOptions = {},
-): Promise<unknown[]> {
-  const token = actionRequestToken();
-  if (!token) {
-    throw new Error("No actionRequest available - the game has not loaded");
-  }
-
-  // Spacing requests out is deliberate. This is game automation; a burst is
-  // more conspicuous than clicking, and there is nothing to gain from it.
+async function waitForRequestSlot(options: RequestOptions): Promise<void> {
   const gap = options.minGapMs ?? DEFAULT_MIN_GAP_MS;
   const since = Date.now() - lastRequestAt;
   if (lastRequestAt !== 0 && since < gap) await sleep(gap - since);
   lastRequestAt = Date.now();
+}
 
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    query.set(key, String(value));
-  }
-  query.set("actionRequest", token);
-  query.set("ajax", "1");
-
+/** Send one request and parse its body as JSON, within the timeout. */
+async function fetchJson(
+  url: string,
+  init: RequestInit,
+  options: RequestOptions,
+): Promise<unknown> {
   const controller = new AbortController();
   const timeout = setTimeout(
     () => controller.abort(),
@@ -214,7 +204,8 @@ export async function ikariamRequest(
 
   let text: string;
   try {
-    const response = await fetch("/index.php?" + query.toString(), {
+    const response = await fetch(url, {
+      ...init,
       credentials: "same-origin",
       signal: controller.signal,
     });
@@ -228,16 +219,46 @@ export async function ikariamRequest(
     clearTimeout(timeout);
   }
 
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(text);
+    return JSON.parse(text);
   } catch {
     throw new Error(
       `Ikariam returned ${text.length} bytes that are not JSON - ` +
         `session expired, or this is a login page`,
     );
   }
+}
 
+/** The token to send, or a throw when the game has not loaded. */
+function requireToken(): string {
+  const token = actionRequestToken();
+  if (!token) {
+    throw new Error("No actionRequest available - the game has not loaded");
+  }
+  return token;
+}
+
+/**
+ * One request to the game, returning the parsed response array.
+ *
+ * Throws when the game is not loaded, the request fails, or the body is not a
+ * JSON array — a caller that gets a value back can rely on it being one.
+ */
+export async function ikariamRequest(
+  params: Record<string, string | number>,
+  options: RequestOptions = {},
+): Promise<unknown[]> {
+  const token = requireToken();
+  await waitForRequestSlot(options);
+
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    query.set(key, String(value));
+  }
+  query.set("actionRequest", token);
+  query.set("ajax", "1");
+
+  const parsed = await fetchJson("/index.php?" + query.toString(), {}, options);
   if (!Array.isArray(parsed)) {
     throw new Error("Ikariam returned JSON that is not a response array");
   }
@@ -247,6 +268,105 @@ export async function ikariamRequest(
   publishResponse(parsed);
 
   return parsed;
+}
+
+/**
+ * One form POST to the game, returning the parsed response object.
+ *
+ * For the actions the game sends as a form rather than a link. Measured on
+ * the notepad's save (29/10): the answer is an OBJECT,
+ * `{"dataForJSCallback":[],"actionRequest":"<new token>"}`, not the usual
+ * array, with the new token at its top level. `ikariamRequest` would throw on
+ * it, and its token would be missed.
+ *
+ * Not announced through `onResponse`: subscribers expect the array shape.
+ */
+export async function postIkariamForm(
+  query: Record<string, string>,
+  form: Record<string, string>,
+  options: RequestOptions = {},
+): Promise<Record<string, unknown>> {
+  const token = requireToken();
+  await waitForRequestSlot(options);
+
+  const body = new URLSearchParams(form);
+  body.set("ajax", "1");
+  body.set("actionRequest", token);
+
+  const parsed = await fetchJson(
+    "/index.php?" + new URLSearchParams(query).toString(),
+    { method: "POST", body },
+    options,
+  );
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Ikariam returned JSON that is not a response object");
+  }
+  const answer = parsed as Record<string, unknown>;
+  if (typeof answer.actionRequest === "string") {
+    latestToken = answer.actionRequest;
+  }
+  return answer;
+}
+
+/** Id of the text box of the game's notepad (`view=avatarNotes`). */
+export const NOTES_BOX_ID = "js_notesMessages";
+
+/**
+ * The notepad's text inside a response, or `null` when no part of it holds
+ * the notepad's box.
+ *
+ * Measured (29/10): the box is `#js_notesMessages`, and opening the notepad
+ * sends `view=avatarNotes`. The response body itself was not captured, so
+ * every string in it is searched for the box rather than one known entry.
+ */
+export function findNotesText(value: unknown): string | null {
+  if (typeof value === "string") {
+    if (!value.includes(NOTES_BOX_ID)) return null;
+    const doc = new DOMParser().parseFromString(value, "text/html");
+    const box = doc.getElementById(NOTES_BOX_ID);
+    return box ? (box.textContent ?? "") : null;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findNotesText(item);
+      if (found !== null) return found;
+    }
+    return null;
+  }
+  if (value !== null && typeof value === "object") {
+    return findNotesText(Object.values(value));
+  }
+  return null;
+}
+
+/**
+ * The text of the player's notepad.
+ *
+ * Throws when the response has no notepad in it: an empty string is a real
+ * answer (an empty notepad), and mistaking a failed read for one would have
+ * the queue sync delete every task another computer put there.
+ */
+export async function readAvatarNotes(
+  options?: RequestOptions,
+): Promise<string> {
+  const entries = await ikariamRequest({ view: "avatarNotes" }, options);
+  const text = findNotesText(entries);
+  if (text === null) {
+    throw new Error("The notepad response has no notepad text box");
+  }
+  return text;
+}
+
+/** Replace the text of the player's notepad. */
+export async function saveAvatarNotes(
+  text: string,
+  options?: RequestOptions,
+): Promise<void> {
+  await postIkariamForm(
+    { action: "Diplomacy", function: "saveAvatarNotes" },
+    { notes: text },
+    options,
+  );
 }
 
 /**

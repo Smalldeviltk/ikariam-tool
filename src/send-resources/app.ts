@@ -44,6 +44,7 @@ import {
   saveSenders,
   setAutoStart,
   setFlag,
+  setQueueChangeListener,
 } from "./state";
 
 import {
@@ -102,6 +103,13 @@ import {
   summariseBugs,
 } from "./diagnostics";
 import { notifyLowWine } from "./features/wine-warning";
+import {
+  queueChanged,
+  queueNoteAllowsRunning,
+  queueRunnerStarted,
+  startQueueNoteSync,
+  syncQueueNoteFromScan,
+} from "./queue-note";
 import { pruneTownStats, recordCurrentTown } from "./town-cache";
 import { calibrateShipCapacity } from "./ship-capacity";
 
@@ -178,6 +186,8 @@ let waitingForTabLogged = false;
 function startRunner(): void {
   tabLock.acquire();
   runner.start();
+  // Take the notepad's lease now, not at the next page load.
+  queueRunnerStarted();
 }
 
 /** Stop the runner and let another tab of this account take over. */
@@ -186,7 +196,14 @@ function stopRunner(): void {
   tabLock.release();
 }
 
-/** The runner's `canRun`: only the tab holding the lock drives the queue. */
+/**
+ * The runner's `canRun`: only the tab holding the lock drives the queue, and
+ * only once the notepad has said what other computers did (`queue-note.ts`).
+ */
+function mayRunQueue(): boolean {
+  return holdsTabLock() && queueNoteAllowsRunning();
+}
+
 function holdsTabLock(): boolean {
   if (tabLock.isHeld) {
     waitingForTabLogged = false;
@@ -236,10 +253,7 @@ function isUiReady(): boolean {
  * own task type run, so Build's timer passes queued shipments over.
  */
 function syncRunnerToFlags(): void {
-  const wanted =
-    isAutoStart() ||
-    isFlagTrue(FLAG.isAutoBuildStart) ||
-    oneOffRunTypes.size > 0;
+  const wanted = runnerWanted();
   if (wanted && !runner.isRunning) startRunner();
   else if (!wanted && runner.isRunning) stopRunner();
 }
@@ -298,6 +312,15 @@ function restoreOneOffRunTypes(): void {
     }
   }
   saveOneOffRunTypes();
+}
+
+/** Whether either switch, or a one-off run, wants the runner up. */
+function runnerWanted(): boolean {
+  return (
+    isAutoStart() ||
+    isFlagTrue(FLAG.isAutoBuildStart) ||
+    oneOffRunTypes.size > 0
+  );
 }
 
 /** The runner's `allowsType`: a task type runs while its own switch is on. */
@@ -588,7 +611,11 @@ function registerUiActions(): void {
       refreshQueueView();
     },
     // The runner navigates too, so the scan needs to know whether it is live.
-    "build.scan": () => void scanBuildings(undefined, () => runner.isRunning),
+    // Scan also syncs the queue with the game's notepad.
+    "build.scan": () =>
+      void scanBuildings(undefined, () => runner.isRunning).then((scanned) => {
+        if (scanned) void syncQueueNoteFromScan();
+      }),
 
     /* ── Quick amounts on the game's shipment form ── */
     "transport.add": (element) => {
@@ -727,6 +754,8 @@ export function start(): void {
   sessionStorage.removeItem("ikaReloadedOnce");
 
   initState(accountName);
+  // Every change to the queue or the build list is copied to the notepad.
+  setQueueChangeListener(queueChanged);
   buildPanel();
   initLogger(accountName);
   // Installed early so failures during the rest of startup are still captured.
@@ -758,7 +787,7 @@ export function start(): void {
   });
   runner = new TaskRunner(getState().queue, {
     intervalMs: QUEUE_INTERVAL_MS,
-    canRun: holdsTabLock,
+    canRun: mayRunQueue,
     allowsType: allowsTaskType,
     isUiReady,
     onDrain: () => {
@@ -830,4 +859,6 @@ export function start(): void {
   if (autoBuildStart && !loadedAfterRun && !lapInProgress) enqueueAutoBuild();
   restoreOneOffRunTypes();
   syncRunnerToFlags();
+  // What other computers ran or added, before this page's first task.
+  void startQueueNoteSync(runnerWanted);
 }

@@ -46,6 +46,29 @@ vi.mock("./features/auto-build", async (importOriginal) => ({
   scanBuildings,
 }));
 
+// The notepad copy is tested in `queue-note.test.ts`; here only how the app
+// drives it. Its debounce timer would also throw off the timer counts below.
+const queueNote = vi.hoisted(() => ({
+  allowsRunning: true,
+  queueChanged: vi.fn(),
+  queueRunnerStarted: vi.fn(),
+  startQueueNoteSync: vi.fn(async (_wantLease: () => boolean) => ({
+    status: "failed" as const,
+    reason: "not in tests",
+  })),
+  syncQueueNoteFromScan: vi.fn(async () => ({
+    status: "failed" as const,
+    reason: "not in tests",
+  })),
+}));
+vi.mock("./queue-note", () => ({
+  queueChanged: queueNote.queueChanged,
+  queueNoteAllowsRunning: () => queueNote.allowsRunning,
+  queueRunnerStarted: queueNote.queueRunnerStarted,
+  startQueueNoteSync: queueNote.startQueueNoteSync,
+  syncQueueNoteFromScan: queueNote.syncQueueNoteFromScan,
+}));
+
 /**
  * The action handlers, captured as `start()` registers them.
  *
@@ -106,6 +129,11 @@ async function startWith(flags: {
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllTimers();
+  queueNote.allowsRunning = true;
+  queueNote.queueChanged.mockClear();
+  queueNote.queueRunnerStarted.mockClear();
+  queueNote.startQueueNoteSync.mockClear();
+  queueNote.syncQueueNoteFromScan.mockClear();
   localStorage.clear();
   sessionStorage.clear();
   for (const key of Object.keys(actions)) delete actions[key];
@@ -1619,4 +1647,83 @@ describe("hotkeys", () => {
       expect(win.hidden).toBe(before);
     },
   );
+});
+
+describe("the game's notepad", () => {
+  it("is synced on page load, told whether the runner is wanted", async () => {
+    await startWith({ transport: true });
+    expect(queueNote.startQueueNoteSync).toHaveBeenCalledTimes(1);
+    const wantLease = queueNote.startQueueNoteSync.mock.calls[0][0];
+    expect(wantLease()).toBe(true);
+
+    await actions["queue.toggle"](document.body);
+    expect(wantLease()).toBe(false);
+  });
+
+  it("is told nobody wants the runner when neither switch is on", async () => {
+    await startWith({});
+    const wantLease = queueNote.startQueueNoteSync.mock.calls[0][0];
+    expect(wantLease()).toBe(false);
+  });
+
+  it("holds the runner back until it allows running - nothing runs, not even the drain", async () => {
+    vi.useFakeTimers({ now: new Date("2026-09-26T10:01:00Z") });
+    let reloads = 0;
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="js_cityLink"><a href="#"></a></div>`,
+    );
+    document
+      .querySelector("#js_cityLink > a")!
+      .addEventListener("click", (event) => {
+        event.preventDefault();
+        reloads++;
+      });
+    queueNote.allowsRunning = false;
+
+    await startWith({ build: true });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(reloads).toBe(0);
+
+    queueNote.allowsRunning = true;
+    await vi.advanceTimersByTimeAsync(1_100);
+    expect(reloads).toBe(1);
+  });
+
+  it("hears of every write to the queue and to the build list", async () => {
+    await startWith({});
+    const state = await appState();
+    queueNote.queueChanged.mockClear();
+
+    state.getState().queue.push({
+      type: "sendResource",
+      data: { origin: "0", destination: "1", resource: "wood", amount: 500 },
+    });
+    expect(queueNote.queueChanged).toHaveBeenCalledTimes(1);
+
+    state.saveAutoBuild([]);
+    expect(queueNote.queueChanged).toHaveBeenCalledTimes(2);
+  });
+
+  it("is synced after a Scan that ran, and not after one that refused", async () => {
+    await startWith({});
+
+    scanBuildings.mockResolvedValueOnce(false);
+    actions["build.scan"](document.body);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(queueNote.syncQueueNoteFromScan).not.toHaveBeenCalled();
+
+    scanBuildings.mockResolvedValueOnce(true);
+    actions["build.scan"](document.body);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(queueNote.syncQueueNoteFromScan).toHaveBeenCalledTimes(1);
+  });
+
+  it("is told when a Start Timer switches the runner on, to take the lease", async () => {
+    await startWith({});
+    expect(queueNote.queueRunnerStarted).not.toHaveBeenCalled();
+
+    await actions["queue.toggle"](document.body);
+    expect(queueNote.queueRunnerStarted).toHaveBeenCalledTimes(1);
+  });
 });

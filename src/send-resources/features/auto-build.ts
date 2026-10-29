@@ -45,6 +45,7 @@ import {
   saveAccounts,
   saveAutoBuild,
 } from "../state";
+import { claimUpgrade } from "../queue-note";
 import { recordCurrentTown } from "../town-cache";
 import { ownTownIds, syncAllTowns } from "./sync-towns";
 import type { AutoBuildAccount, AutoBuildTown } from "../types";
@@ -422,6 +423,18 @@ export async function handleUpgradeBuilding(
     return endTownTurn(
       `${buildingName}: upgrade button unavailable (not enough resources?)`,
     );
+  }
+
+  // Tell the game's notepad before clicking, for the reason given in
+  // `handleSendResource`. An upgrade already started from another computer
+  // is not started again; the saved entry went with the sync.
+  const claimed = await claimUpgrade(townName, positionId, buildingName);
+  if (claimed.status === "gone") {
+    logInfo(`${buildingName} in ${townName}: already run on another computer`);
+    return { status: "done" };
+  }
+  if (claimed.status === "blocked") {
+    return endTownTurn("Another computer runs this account's queue");
   }
 
   // Last look before committing. Opening the building took a round trip, and

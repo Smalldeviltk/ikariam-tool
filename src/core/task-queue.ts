@@ -44,6 +44,12 @@ export interface SendResourceTaskData {
   reserve?: number;
   /** Tag shown in the log, e.g. `"Auto Wine"`. Also used to group tasks. */
   label?: string;
+  /**
+   * The order's id in the game's notepad, shared with every computer that
+   * syncs this account's queue (`send-resources/queue-note.ts`). Absent until
+   * the order is first synced.
+   */
+  noteId?: string;
 }
 
 export interface UpgradeBuildingTaskData {
@@ -135,6 +141,8 @@ export class TaskQueue {
      * never looks.
      */
     private readonly key: string,
+    /** Called after every write, e.g. to copy the queue to the notepad. */
+    private readonly onChange?: () => void,
   ) {}
 
   list(): Task[] {
@@ -143,6 +151,7 @@ export class TaskQueue {
 
   private write(tasks: Task[]): void {
     this.store.setJSON(this.key, tasks);
+    this.onChange?.();
   }
 
   get length(): number {
@@ -245,6 +254,11 @@ export class TaskQueue {
 
   clear(): void {
     this.write([]);
+  }
+
+  /** Replace the whole queue, e.g. with the copy merged from the notepad. */
+  replaceAll(tasks: Task[]): void {
+    this.write(tasks);
   }
 }
 

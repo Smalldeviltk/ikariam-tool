@@ -30,6 +30,23 @@ vi.mock("@core/ui/window", async (importOriginal) => ({
   showToast,
 }));
 
+// The notepad's own behaviour is tested in `queue-note.test.ts`; here, when
+// the handler claims and what it does with each answer.
+const { claimUpgrade } = vi.hoisted(() => ({
+  claimUpgrade: vi.fn(
+    async (
+      _townName: string,
+      _positionId: string,
+      _buildingName: string,
+    ): Promise<
+      { status: "go" } | { status: "gone" } | { status: "blocked" }
+    > => ({
+      status: "go",
+    }),
+  ),
+}));
+vi.mock("../queue-note", () => ({ claimUpgrade }));
+
 function upgradeTask(
   positionId: string,
 ): Extract<Task, { type: "upgradeBuilding" }> {
@@ -64,6 +81,7 @@ beforeEach(() => {
   localStorage.clear();
   initState("Smalldevil");
   vi.useFakeTimers();
+  claimUpgrade.mockClear();
 });
 
 describe("handleUpgradeBuilding", () => {
@@ -257,6 +275,73 @@ describe("handleUpgradeBuilding", () => {
       expect(getTownQueue("W-Athens")).toHaveLength(1);
     },
   );
+});
+
+describe("handleUpgradeBuilding and the game's notepad", () => {
+  /** A town whose slot 5 starts building when its button is clicked. */
+  function readyTown(): { clicks: () => number } {
+    document.body.innerHTML = townView(
+      "W-Athens",
+      "?action=UpgradeExistingBuilding&cityId=297034&position=5&level=25",
+    );
+    let clicks = 0;
+    document
+      .getElementById("js_buildingUpgradeButton")!
+      .addEventListener("click", () => {
+        clicks++;
+        document.getElementById("position5")!.className =
+          "position5 building constructionSite animated";
+      });
+    return { clicks: () => clicks };
+  }
+
+  async function run(): Promise<{ status: string; reason?: string }> {
+    const promise = handleUpgradeBuilding(upgradeTask("js_CityPosition5Link"));
+    await vi.advanceTimersByTimeAsync(20_000);
+    return promise;
+  }
+
+  it("claims the upgrade before its button is clicked", async () => {
+    const town = readyTown();
+    let clicksAtClaim = -1;
+    claimUpgrade.mockImplementationOnce(async () => {
+      clicksAtClaim = town.clicks();
+      return { status: "go" };
+    });
+
+    expect((await run()).status).toBe("done");
+    expect(claimUpgrade).toHaveBeenCalledWith(
+      "W-Athens",
+      "js_CityPosition5Link",
+      "Warehouse 26",
+    );
+    expect(clicksAtClaim).toBe(0);
+    expect(town.clicks()).toBe(1);
+  });
+
+  it("does not click an upgrade another computer already started", async () => {
+    const town = readyTown();
+    claimUpgrade.mockResolvedValueOnce({ status: "gone" });
+
+    expect((await run()).status).toBe("done");
+    expect(town.clicks()).toBe(0);
+  });
+
+  it("ends the town's turn without clicking while another computer runs the queue", async () => {
+    const town = readyTown();
+    claimUpgrade.mockResolvedValueOnce({ status: "blocked" });
+
+    expect((await run()).status).toBe("done");
+    expect(town.clicks()).toBe(0);
+  });
+
+  it("claims nothing when no upgrade button comes", async () => {
+    document.body.innerHTML = townView("W-Athens", null);
+
+    await run();
+
+    expect(claimUpgrade).not.toHaveBeenCalled();
+  });
 });
 
 describe("enqueueAutoBuild", () => {

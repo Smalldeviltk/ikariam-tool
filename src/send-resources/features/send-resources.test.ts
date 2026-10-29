@@ -12,6 +12,23 @@ vi.mock("@core/logger", async (importOriginal) => ({
   initLogger: () => {},
 }));
 
+// The notepad's own behaviour is tested in `queue-note.test.ts`; here, when
+// the handler claims and what it does with each answer.
+const { claimShipment } = vi.hoisted(() => ({
+  claimShipment: vi.fn(
+    async (
+      _task: unknown,
+      _sending: number,
+    ): Promise<
+      | { status: "go" }
+      | { status: "gone" }
+      | { status: "blocked" }
+      | { status: "changed"; amount: number }
+    > => ({ status: "go" }),
+  ),
+}));
+vi.mock("../queue-note", () => ({ claimShipment }));
+
 const TOWNS = ["W-Athens", "M-Corinth"];
 
 function shipment(amount: number, extra: Record<string, unknown> = {}) {
@@ -160,6 +177,7 @@ beforeEach(() => {
   localStorage.clear();
   initState("tester");
   vi.useFakeTimers();
+  claimShipment.mockClear();
 });
 
 afterEach(() => {
@@ -493,6 +511,79 @@ describe("handleSendResource", () => {
     const failed = expect(sending).rejects.toThrow(/timed out/);
     await vi.advanceTimersByTimeAsync(60_000);
     await failed;
+  });
+});
+
+describe("handleSendResource and the game's notepad", () => {
+  it("claims the idle ships' cargo before the form opens", async () => {
+    const game = installGame({ afterSubmit: "town" });
+    game.render("town");
+    let formsOpenedAtClaim = -1;
+    claimShipment.mockImplementationOnce(async () => {
+      formsOpenedAtClaim = game.state.ajaxCalls.length;
+      return { status: "go" };
+    });
+
+    // 10 merchants at the 500 uncalibrated base = 5000 per convoy.
+    const task = shipment(10_000);
+    await run(task);
+
+    expect(claimShipment).toHaveBeenCalledTimes(1);
+    expect(claimShipment).toHaveBeenCalledWith(task, 5000);
+    expect(formsOpenedAtClaim).toBe(0);
+    expect(game.state.submitted).toBe(1);
+  });
+
+  it("claims no more than the order when the ships could carry more", async () => {
+    const game = installGame({ afterSubmit: "town" });
+    game.render("town");
+
+    await run(shipment(1000));
+
+    expect(claimShipment.mock.calls[0][1]).toBe(1000);
+  });
+
+  it("sends nothing, and calls the order done, when another computer already ran it", async () => {
+    const game = installGame({ afterSubmit: "town" });
+    game.render("town");
+    claimShipment.mockResolvedValueOnce({ status: "gone" });
+
+    await expect(run(shipment(1000))).resolves.toEqual({ status: "done" });
+    expect(game.state.ajaxCalls).toEqual([]);
+    expect(game.state.submitted).toBe(0);
+  });
+
+  it("sends nothing and takes the notepad's amount when part was sent elsewhere", async () => {
+    const game = installGame({ afterSubmit: "town" });
+    game.render("town");
+    claimShipment.mockResolvedValueOnce({ status: "changed", amount: 300 });
+
+    const result = await run(shipment(1000));
+
+    expect(result).toMatchObject({ status: "progress" });
+    expect((result as any).task.data.amount).toBe(300);
+    expect(game.state.ajaxCalls).toEqual([]);
+  });
+
+  it("defers, opening nothing, while another computer runs the queue", async () => {
+    const game = installGame({ afterSubmit: "town" });
+    game.render("town");
+    claimShipment.mockResolvedValueOnce({ status: "blocked" });
+
+    await expect(run(shipment(1000))).resolves.toMatchObject({
+      status: "defer",
+      reason: expect.stringContaining("Another computer"),
+    });
+    expect(game.state.ajaxCalls).toEqual([]);
+  });
+
+  it("claims nothing for a shipment that stops before the port", async () => {
+    installGame({ afterSubmit: "town", noPort: true }).render("town");
+    await run(shipment(1000));
+    installGame({ afterSubmit: "town", actionPoints: 0 }).render("town");
+    await run(shipment(1000));
+
+    expect(claimShipment).not.toHaveBeenCalled();
   });
 });
 

@@ -32,6 +32,7 @@ import {
 } from "../navigation";
 import { getActionPoints, getFreeShips, readCurrentStock } from "../game-state";
 import { getFreighterCapacity, getPerShipCapacity } from "../ship-capacity";
+import { claimShipment } from "../queue-note";
 import { getState, recordRouteSeconds } from "../state";
 import { TRANSFER_STATUS } from "../messages";
 import { describeTask } from "../ui/queue-view";
@@ -199,6 +200,36 @@ export async function handleSendResource(
     return {
       status: "defer",
       reason: `${getTownNameFromList(origin)} has no port`,
+    };
+  }
+
+  // Tell the game's notepad before the form opens: once the goods leave, the
+  // page reloads and a later write would die with it, leaving another
+  // computer to send them again. The cargo is the ships idle now; the form
+  // re-reads them, and a different count is put right by the next sync.
+  const idle = getFreeShips();
+  const idleCapacity =
+    idle.merchants > 0
+      ? getPerShipCapacity() * idle.merchants
+      : getFreighterCapacity() * idle.freighters;
+  const claimed = await claimShipment(task, Math.min(idleCapacity, sendable));
+  if (claimed.status === "gone") {
+    logInfo("Shipment already run or deleted on another computer - skipped");
+    return { status: "done" };
+  }
+  if (claimed.status === "changed") {
+    logInfo(
+      `Part of this shipment was sent from another computer; ${claimed.amount} left`,
+    );
+    return {
+      status: "progress",
+      task: { ...task, data: { ...task.data, amount: claimed.amount } },
+    };
+  }
+  if (claimed.status === "blocked") {
+    return {
+      status: "defer",
+      reason: "Another computer runs this account's queue",
     };
   }
 
