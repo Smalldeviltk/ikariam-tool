@@ -1,8 +1,10 @@
 # Kế hoạch cải thiện — UI và tính năng
 
-> Trạng thái: **đang thực hiện.** Cập nhật 29/10/2026.
+> Trạng thái: **đang thực hiện.** Cập nhật 30/10/2026.
 >
-> **Mới nhất (§2.AF — 29/10 tối, chưa commit, chưa build — `dist/` 18:32 không có, chưa thử trên game):** bug report của máy 2 — Auto Build bấm Upgrade 10 vòng liền mà game không nhận: lần ghi note ngay trước cú bấm đổi `actionRequest` của phiên, nút mang mã cũ. Giờ ghi note **trước khi mở công trình**. **Bỏ khoá hai máy** (người dùng: game không cho đăng nhập hai máy cùng lúc); note ghi `Q2`, vẫn đọc `Q1`. 880 → 864 test, 40 chỗ đã thấy đỏ.
+> **Mới nhất (§2.AG — 30/10, chưa commit; có trong `dist/` build 30/10 10:26 (không build trong phiên, đã grep), chưa thử trên game):** hộp thoại **Transport Settings** hiện **tồn kho** của town From bên phải ô nhập của từng tài nguyên, trừ đi các dòng queue gửi từ town đó: `1,234 (1,834-500-100)`. Số tồn kho lấy từ dữ liệu Empire Overview lưu (`***<tài khoản>***cities`), Scan làm mới. 864 → 871 test, 9 chỗ đã thấy đỏ. **Town board biết nhưng chưa có số sẽ hiện `0`, không phải `—`** (đọc code, phần 5).
+>
+> **§2.AF — 29/10 tối, commit `94d359e` (tài liệu `71d5379`), đã push; có trong `dist/` build 30/10 10:26 (đã grep), chưa thử trên game:** bug report của máy 2 — Auto Build bấm Upgrade 10 vòng liền mà game không nhận: lần ghi note ngay trước cú bấm đổi `actionRequest` của phiên, nút mang mã cũ. Giờ ghi note **trước khi mở công trình**. **Bỏ khoá hai máy** (người dùng: game không cho đăng nhập hai máy cùng lúc); note ghi `Q2`, vẫn đọc `Q1`. 880 → 864 test, 40 chỗ đã thấy đỏ.
 >
 > **§2.AE — 29/10, commit `6d0c0a0` (tài liệu `b033eae`), đã push; có trong `dist/` build 29/10 18:32 (bản đó có lỗi nâng cấp của §2.AF), chưa thử trên game; khoá và định dạng `Q1` đã thay ở §2.AF:** queue (transport người chơi tạo + danh sách Auto Build) được **chép vào sổ ghi chú của game** (`view=avatarNotes` / `saveAvatarNotes`), định dạng gọn ≤ 200 ký tự, để máy khác cùng tài khoản chạy tiếp. Gộp ba chiều theo **mốc** lần sync trước: máy 1 tải trang sẽ bỏ các lệnh máy 2 đã chạy, trước task đầu tiên; **giữ chỗ** trong note ngay trước khi gửi hàng / bấm Upgrade; **khoá** trong note để hai máy không cùng chạy. Sync lúc tải trang, sau Scan, sau mỗi thay đổi. 783 → 880 test, 46 chỗ đã thấy đỏ.
 >
@@ -30,7 +32,7 @@
 > phần U còn thiếu số (§2.U phần 4) · R: kênh cập nhật riêng (chờ người
 > dùng). **Không làm lúc này** (người dùng chọn 04/10): F, G, I, M, N, O, Q.
 >
-> Git (29/10 tối, đã kiểm): `origin/refactor` ở `b033eae` = `HEAD` (đã push §2.AE: `6d0c0a0` code, `b033eae` tài liệu), `git rev-list --count origin/refactor..HEAD` = 0. **Chưa commit: §2.AF** — `src/send-resources/queue-note.ts` (+ test), `app.ts` (+ test), `features/auto-build.ts` (+ test), `features/send-resources.ts` (+ test), `src/core/data-transfer.test.ts`, và hai tài liệu này. `dist/` vẫn build 29/10 18:32, **không có §2.AF** (grep `FORMAT_ONE` / `Q2`: 0) — đừng dùng bản đó cho Auto Build. Git (29/10, đã kiểm): `origin/refactor` ở `1f631d4` = `HEAD` (người dùng đã push §2.AD), `git rev-list --count origin/refactor..HEAD` = 0. **Chưa commit: §2.AE** — `src/core/ikariam/http.ts` (+ test), `src/core/task-queue.ts`, `src/core/data-transfer.ts` (+ test), `src/send-resources/app.ts` (+ test), `state.ts`, `messages.ts`, `features/send-resources.ts` (+ test), `features/auto-build.ts` (+ test), hai file mới `src/send-resources/queue-note.ts` và `queue-note.test.ts`, và hai tài liệu này. `dist/` hiện tại build 29/10 18:32 (không build trong phiên — người dùng build, sau lần sửa nguồn cuối lúc 18:23), có §2.AE (đã grep `saveAvatarNotes`, `ikaQueueNoteBase`, `watchLease(true)` trong `Ikariam Send Resources.user.js`, `saveAvatarNotes` trong `dist/extension/page/send-resources.js`). Git (26/10 tối, đã kiểm): `origin/refactor` ở `0baafe6` = `HEAD` (người dùng đã push), `git rev-list --count origin/refactor..HEAD` = 0. **Lúc đó chưa commit: §2.AD** (sau đó commit `1c41ce8` code, `1f631d4` tài liệu) — `src/core/ikariam/model.ts` (+ test), `selectors.ts`, `src/send-resources/app.ts` (+ test), `features/auto-wine.ts` (+ test), `messages.ts`, `town-cache.ts` (+ test) và hai tài liệu này. `dist/` hiện tại build 26/10 16:22 trong phiên, từ working tree, có §2.AD (đã grep, handover §1). Git (26/10, sau §2.AC): `origin/refactor` vẫn ở `455047d`; `HEAD` là `fac13d6`, `git rev-list --count origin/refactor..HEAD` = 2 (`3dff502` tài liệu, `fac13d6` §2.AC) — **chưa push**; phần ghi §2.AC vào hai tài liệu này chưa commit lúc viết. `dist/` hiện tại build 26/10 13:56 (không build trong phiên — có lẽ người dùng build), có toàn bộ §2.AC (đã grep, handover §1). Git (26/10, đã kiểm lại): `origin/refactor` ở `455047d` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Z, §2.AA, §2.AB đã commit (`e7f2acb` code, `455047d` tài liệu). Checkout trên Linux giờ có `node_modules/` và `dist/` (build 22/10 16:37, có §2.R → §2.AB — đã grep 26/10, handover §1); vẫn không có `sample/`, `tools/output/`. Ghi chú 22/10, giữ để tra: `origin/refactor` ở `534f066` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Y đã commit (`21464dd` code, `534f066` tài liệu). Checkout 22/10 chạy trên Linux, không có `node_modules/`, `dist/`, `sample/`, `tools/output/` (handover §1). Ghi chú 17/10, giữ để tra: `origin/refactor` ở `772a055` = `HEAD`, **không còn commit nào chưa push**; §2.X đã commit (`1baf274` code, `772a055` tài liệu). Chưa commit: §2.Y (`auto-wine.ts`, `auto-wine.test.ts`, `styles.ts`) và hai tài liệu này. Đoạn sau là danh sách commit cũ (05/10), giữ để tra; lúc viết nó ghi `origin/refactor` ở `066eb44` và 17 commit chưa push —
+> Git (30/10, đã kiểm): `origin/refactor` ở `71d5379` = `HEAD` (đã push §2.AF: `94d359e` code, `71d5379` tài liệu). **Chưa commit: §2.AG** — `src/send-resources/game-state.ts` (+ test), `ui/dialogs.ts`, `messages.ts`, `app.test.ts`, và hai tài liệu này. `dist/` hiện tại build 30/10 10:26 (không build trong phiên; sau lần sửa nguồn cuối lúc 10:12), có §2.AF và §2.AG (grep trong `Ikariam Send Resources.user.js`: `FORMAT_ONE` 2, `transporterSendStock` 1, `ikaQueueNoteMachine` 0, `leaseHeldByOther` 0; `transporterSendStock` có trong `dist/extension/page/send-resources.js`). Chưa so với một bản build mới từng byte. Git (29/10 tối, đã kiểm): `origin/refactor` ở `b033eae` = `HEAD` (đã push §2.AE: `6d0c0a0` code, `b033eae` tài liệu), `git rev-list --count origin/refactor..HEAD` = 0. **Chưa commit: §2.AF** — `src/send-resources/queue-note.ts` (+ test), `app.ts` (+ test), `features/auto-build.ts` (+ test), `features/send-resources.ts` (+ test), `src/core/data-transfer.test.ts`, và hai tài liệu này. `dist/` vẫn build 29/10 18:32, **không có §2.AF** (grep `FORMAT_ONE` / `Q2`: 0) — đừng dùng bản đó cho Auto Build. Git (29/10, đã kiểm): `origin/refactor` ở `1f631d4` = `HEAD` (người dùng đã push §2.AD), `git rev-list --count origin/refactor..HEAD` = 0. **Chưa commit: §2.AE** — `src/core/ikariam/http.ts` (+ test), `src/core/task-queue.ts`, `src/core/data-transfer.ts` (+ test), `src/send-resources/app.ts` (+ test), `state.ts`, `messages.ts`, `features/send-resources.ts` (+ test), `features/auto-build.ts` (+ test), hai file mới `src/send-resources/queue-note.ts` và `queue-note.test.ts`, và hai tài liệu này. `dist/` hiện tại build 29/10 18:32 (không build trong phiên — người dùng build, sau lần sửa nguồn cuối lúc 18:23), có §2.AE (đã grep `saveAvatarNotes`, `ikaQueueNoteBase`, `watchLease(true)` trong `Ikariam Send Resources.user.js`, `saveAvatarNotes` trong `dist/extension/page/send-resources.js`). Git (26/10 tối, đã kiểm): `origin/refactor` ở `0baafe6` = `HEAD` (người dùng đã push), `git rev-list --count origin/refactor..HEAD` = 0. **Lúc đó chưa commit: §2.AD** (sau đó commit `1c41ce8` code, `1f631d4` tài liệu) — `src/core/ikariam/model.ts` (+ test), `selectors.ts`, `src/send-resources/app.ts` (+ test), `features/auto-wine.ts` (+ test), `messages.ts`, `town-cache.ts` (+ test) và hai tài liệu này. `dist/` hiện tại build 26/10 16:22 trong phiên, từ working tree, có §2.AD (đã grep, handover §1). Git (26/10, sau §2.AC): `origin/refactor` vẫn ở `455047d`; `HEAD` là `fac13d6`, `git rev-list --count origin/refactor..HEAD` = 2 (`3dff502` tài liệu, `fac13d6` §2.AC) — **chưa push**; phần ghi §2.AC vào hai tài liệu này chưa commit lúc viết. `dist/` hiện tại build 26/10 13:56 (không build trong phiên — có lẽ người dùng build), có toàn bộ §2.AC (đã grep, handover §1). Git (26/10, đã kiểm lại): `origin/refactor` ở `455047d` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Z, §2.AA, §2.AB đã commit (`e7f2acb` code, `455047d` tài liệu). Checkout trên Linux giờ có `node_modules/` và `dist/` (build 22/10 16:37, có §2.R → §2.AB — đã grep 26/10, handover §1); vẫn không có `sample/`, `tools/output/`. Ghi chú 22/10, giữ để tra: `origin/refactor` ở `534f066` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Y đã commit (`21464dd` code, `534f066` tài liệu). Checkout 22/10 chạy trên Linux, không có `node_modules/`, `dist/`, `sample/`, `tools/output/` (handover §1). Ghi chú 17/10, giữ để tra: `origin/refactor` ở `772a055` = `HEAD`, **không còn commit nào chưa push**; §2.X đã commit (`1baf274` code, `772a055` tài liệu). Chưa commit: §2.Y (`auto-wine.ts`, `auto-wine.test.ts`, `styles.ts`) và hai tài liệu này. Đoạn sau là danh sách commit cũ (05/10), giữ để tra; lúc viết nó ghi `origin/refactor` ở `066eb44` và 17 commit chưa push —
 > `6ed66c6`, `c38dca4`, `b9f1d7a` (U + V), `4f9436c`, `3209964` (§2.K + §2.L),
 > `7ed3a85`, `b45f792` (§2.M), `32fe3ba`, `ec3fdc4` (§2.N → §2.R), `b2e9084`
 > (§2.S), `3f8a51b` (thay đổi `barbarian.ts` của người dùng, commit riêng
@@ -2719,7 +2721,7 @@ Mọi lần đọc / ghi note (sync và giữ chỗ) chạy **lần lượt** (`
 
 ### 2.AF Bug report máy 2: Auto Build bấm Upgrade không được; bỏ khoá hai máy (29/10/2026, tối)
 
-**Chưa commit lúc viết. Chưa build — `dist/` 29/10 18:32 không có phần này (grep `FORMAT_ONE` / `Q2`: 0), và chính bản đó có lỗi dưới đây. Chưa thử trên game.** Bản tiếng Anh: handover §30. 880 → 864 test, 39 file; typecheck sạch; prettier sạch trên mọi file đã sửa.
+**Lúc viết chưa commit; sau đó commit `94d359e` (tài liệu `71d5379`), đã push (kiểm 30/10). Lúc viết chưa build — `dist/` 29/10 18:32 không có phần này (grep `FORMAT_ONE` / `Q2`: 0), và chính bản đó có lỗi dưới đây; bản 30/10 10:26 có (grep `FORMAT_ONE`: 2, `ikaQueueNoteMachine`: 0). Chưa thử trên game.** Bản tiếng Anh: handover §30. 880 → 864 test, 39 file; typecheck sạch; prettier sạch trên mọi file đã sửa.
 
 #### 1. Bug report
 
@@ -2764,6 +2766,59 @@ Key `ikaQueueNoteMachine` còn trong `localStorage` hai máy; không đọc nữ
 **Rủi ro còn lại (theo lựa chọn ở phần 3), chưa đo:** sau mỗi lần tool ghi note (giữ chỗ, sync sau thay đổi), mã của trang game vẫn cũ đi — một cú bấm tay ngay sau đó có thể bị từ chối. Shipment giữ chỗ trước khi mở form (§2.AE) chỉ đúng nếu game vẫn mở form khi trang đang giữ mã cũ — chưa đo; nâng cấp giờ cũng dựa vào đúng điều đó (mở công trình khi trang giữ mã cũ). `saveAvatarNotes` vẫn coi mọi response object là ghi được.
 
 **Cần thử trên game (sau khi build lại):** trên một máy có lệnh nâng cấp trong note, để Auto Build chạy một vòng ở town đủ tài nguyên → log "Finished upgrading", ô thành công trường; note bớt mục đó. Gửi một shipment → tới nơi, note trừ lượng. Chuyển sang máy kia, đăng nhập → queue chạy ngay, không chờ. Note cũ dạng `Q1…` → sau lần tải trang đầu thành `Q2…` với đúng các lệnh.
+
+### 2.AG Transport Settings: tồn kho của town From cạnh ô nhập (30/10/2026)
+
+**Chưa commit lúc viết. Có trong `dist/` build 30/10 10:26 — không build trong phiên, sau lần sửa nguồn cuối lúc 10:12 (grep `transporterSendStock` trong `Ikariam Send Resources.user.js` và `dist/extension/page/send-resources.js`). Chưa thử trên game.** Bản tiếng Anh: handover §31. 864 → 871 test, 39 file; typecheck sạch; prettier sạch trên mọi file đã sửa.
+
+**Người dùng yêu cầu:** trong hộp thoại Transport Settings, khi chọn town From thì hiện tồn kho của từng tài nguyên bên cạnh ô nhập. Khi đã có dòng trong queue thì hiện tồn kho trừ đi các dòng đó, kèm từng số — ví dụ tồn kho 1834, hai dòng 500 và 100: `1234 (1834-500-100)`. Số tồn kho lấy từ storage (số lưu sau khi Scan).
+
+#### 1. Số tồn kho lấy từ đâu
+
+Town cache của Send Resources (`town-cache.ts`) chỉ giữ **rượu**, và đường Scan nhanh không ghi tồn kho các loại khác. Số của đủ 5 loại, cho mọi town, chỉ có ở **dữ liệu Empire Overview lưu**: `localStorage` `***<tài khoản>***cities` (`empireKeyPrefix`, `src/core/storage.ts:84`), khoá theo city id, mỗi town có `_resources.<wood|wine|marble|glass|sulfur>._current`. Hook response của board ghi lại mọi town Scan tải về (`empire-overview/game-api.ts` ~550–565, `updateGlobalData` → `updateCityData`), rồi `database.Save()` ghi cả bảng (`empire-overview/database.ts:189`). Hai script không dùng chung module, chỉ chung `localStorage` — `readStoredStock` đọc thẳng key đó, `JSON.parse` trong `try`.
+
+**Số đó là gì, đọc code (chưa đo trên game):** `Resource.project()` (`empire-overview/models/resource.ts:39`) chạy lúc board khởi động và mỗi giây (`models/city.ts:115`), cộng sản lượng / trừ tiêu thụ theo thời gian vào `_current`. Vậy số lưu là **ước tính của board tại lần Save cuối**, không đúng bằng số lúc Scan. Tool **không** tự cộng thêm sản lượng từ lúc đó tới giờ.
+
+#### 2. Hiển thị
+
+- Mỗi hàng nhập có thêm ô thứ 3 `<span class="ika-send-stock" id="transporterSendStock_<loại>">` (`ui/dialogs.ts:196`); lưới đổi `65px 1fr` → `65px 150px auto`, hộp `width: 260px` → `min-width: 260px; width: max-content`.
+- **Không có dòng nào** từ town đó, loại đó: chỉ tồn kho — `1,834`.
+- **Có dòng:** `<còn lại> (<tồn kho>-<dòng 1>-<dòng 2>…)` — `1,234 (1,834-500-100)` (`SEND_DIALOG.stockLeft`, `messages.ts:131`). Số định dạng bằng `formatInteger` (dấu phẩy hàng nghìn), như các số khác trong hộp thoại. Còn lại có thể âm nếu queue gửi nhiều hơn tồn kho.
+- **Không có số:** `—` (`SEND_DIALOG.stockUnknown`) — khi không có key (board chưa từng chạy cho tài khoản này), town không có trong bảng, hoặc dữ liệu hỏng / không phải số.
+- Rê chuột: `stockTitle` giải thích số này.
+
+**Trừ dòng nào:** mọi task `sendResource` trong queue có `origin` = town From và `resource` = loại đó, **kể cả dòng Auto Wine** (cũng lấy hàng từ town đó). Lượng là `amount` hiện tại của dòng — dòng đã gửi một phần thì trừ phần còn lại.
+
+**Cập nhật khi:** đổi town From (listener `change` trên `#transporterSendFromTown`, `ui/dialogs.ts:220`); mỗi lần `renderResourceTable` vẽ lại bảng (`ui/dialogs.ts:111`) — Add, Remove First / Last, đổi thứ tự dòng. **Không** tự cập nhật khi runner gửi hàng trong lúc hộp thoại đang mở.
+
+#### 3. Thay đổi
+
+| Thay đổi | Ở đâu |
+| -------- | ----- |
+| `readStoredStock(accountName, cityId, resource)` — số nguyên (làm tròn xuống) hoặc `null`; `EMPIRE_CITIES_KEY = "cities"`; comment giải thích vì sao đọc dữ liệu board | `game-state.ts:121` |
+| `renderSendStock()` (export), `stockFieldId()`, ô thứ 3, CSS `.ika-send-stock`, listener `change`, gọi trong `renderResourceTable` | `ui/dialogs.ts` |
+| `stockUnknown`, `stockLeft`, `stockTitle` trong `SEND_DIALOG` | `messages.ts:129–135` |
+
+#### 4. Test
+
+864 → 871 (+7):
+
+- `game-state.test.ts` 8 → 11 (`describe("readStoredStock")`, dòng 93): đọc theo city id và làm tròn xuống; `null` cho town / loại / tài khoản không có; dữ liệu hỏng hoặc lạ → `null`, không ném.
+- `app.test.ts` 66 → 70 (`describe("stock beside each amount")`, dòng 280, trong "the Transport settings dialog"): hiện tồn kho và `—` khi không có; theo town From (mở với town đầu theo tên); trừ các dòng cùng town, cùng loại, hiện từng dòng; cập nhật khi Add / Remove Last.
+
+**Đã thấy đỏ, 9 chỗ** (`break-stock.mjs` trong scratchpad): bỏ làm tròn, bỏ kiểm kiểu số, đọc tài khoản cố định, không lọc town, không lọc loại, bỏ listener `change`, `renderResourceTable` không gọi `renderSendStock`, ô trống thay cho `—`, luôn hiện dạng có ngoặc. `md5sum -c` sau đó: `game-state.ts: OK`, `ui/dialogs.ts: OK`. Chạy lại 30/10: `39 passed (39)`, `871 passed (871)`, `9/9 red`.
+
+**Lỗi của chính mình:** 3 test lúc đầu đỏ vì tưởng hộp thoại mở với W-Athens; `getTownList()` xếp theo tên nên town đầu là M-Corinth. Sửa test chọn town rõ ràng (`pickFrom("0")`), không đổi code. Trong `break-stock.mjs`, chuỗi patch `tableSilent` lúc đầu không khớp (vẫn xanh vì không sửa gì) — sửa chuỗi, giờ đỏ. **Báo cáo đầu tiên cho người dùng nói "`—` khi chưa Scan" — chưa đúng hết**, xem phần 5.
+
+#### 5. Rủi ro còn lại, chưa đo
+
+- **Town có trong bảng nhưng chưa có số → hiện `0`, không phải `—`.** `FetchAllTowns` (`empire-overview/game-api.ts:1715`) tạo mọi town của mình từ `relatedCityData` của trang với `new Resource(...)` có `_current = 0` (`models/resource.ts:12`), trước khi Scan tải gì. Town chưa từng được Scan / ghé sau khi cài board sẽ lưu `0` và hộp thoại hiện `0`. Không phân biệt được với kho rỗng thật từ dữ liệu đã lưu (`_currentChangedDate` cũng đặt lúc tạo). Đọc code, chưa đo. **Chưa sửa — chờ người dùng quyết.**
+- Chữ `stockTitle` ("as saved at the last Scan") nói chưa đúng hết: số là ước tính của board ở lần Save cuối (phần 1).
+- Bố cục (cột thứ 3, độ rộng hộp) chưa xem trong popup thật — happy-dom không có layout.
+- Chưa đo trên game rằng `***<tài khoản>***cities` có đủ 5 loại cho mọi town sau Scan; chỉ lần theo code.
+- Người dùng tắt board Empire Overview: mọi ô `—` (hoặc số cũ nếu key còn từ trước).
+
+**Cần thử trên game:** Scan → mở Transport Settings → mỗi ô bên phải là tồn kho của town From (so với board). Đổi From → số đổi. Add hai dòng 500 và 100 wood từ cùng town → ô wood thành `<tồn kho − 600> (<tồn kho>-500-100)`. Remove Last → còn một dòng. Xem hộp có bị tràn / xuống dòng không.
 
 ---
 
@@ -3154,7 +3209,8 @@ thêm, phải áp giảm giá theo bảng này.
 ✅ 26/10     §2.AC                  hai bug report: EO hết lỗi `apply`, shipment đổi town chưa tới được hoãn, log đổi town; Esc thu / mở cửa sổ — commit `fac13d6` (tài liệu `3dff502`, `0baafe6`)
 ✅ 26/10     §2.AD                  Auto Wine tự chọn town nguồn, bỏ town tự làm đủ rượu — commit `1c41ce8` (tài liệu `1f631d4`), có trong `dist/` 26/10 16:22
 ✅ 29/10     §2.AE                  queue chép vào sổ ghi chú của game, sync giữa các máy, giữ chỗ, khoá — commit `6d0c0a0` (tài liệu `b033eae`), có trong `dist/` 29/10 18:32 (có lỗi nâng cấp)
-◐ 29/10 tối §2.AF                  bug report máy 2: giữ chỗ nâng cấp trước khi mở công trình; bỏ khoá; định dạng `Q2` — chưa commit, chưa build, chưa thử trên game
+✅ 29/10 tối §2.AF                  bug report máy 2: giữ chỗ nâng cấp trước khi mở công trình; bỏ khoá; định dạng `Q2` — commit `94d359e` (tài liệu `71d5379`), có trong `dist/` 30/10 10:26, chưa thử trên game
+◐ 30/10     §2.AG                  Transport Settings: tồn kho town From (dữ liệu Empire Overview) cạnh ô nhập, trừ các dòng queue — chưa commit, có trong `dist/` 30/10 10:26, chưa thử trên game; town chưa có số hiện `0` (chờ người dùng)
 ⬜ Chờ người dùng thử:     §2.R → §2.AB trên game (cài lại cả hai userscript từ `dist/` build 22/10 — bản 05/10 02:03 không có §2.Y trở đi); riêng E: một lần thành công (ô phải tự chuyển sang đang nâng), một lần bị từ chối, rồi Bug Report (file không còn token); danh sách thử của §2.X ở cuối mục đó
 ⬜ Lượt sau của review:    các mục 💡 trong `sample/review-source/review-src-2026-10-04.md` (22/10: ba mục đã sửa ở §2.Z; còn lại cần số đo hoặc người dùng chọn — handover §7)
 ⬜ Chờ người dùng thử:     §2.W — load lại `dist/extension` trong Chrome (tắt hai userscript trước); bản extension chưa từng chạy trên game
@@ -3191,6 +3247,9 @@ nó — cần hai máy (hoặc hai trình duyệt) đăng nhập cùng tài kho�
 **Cập nhật 29/10 tối, sau §2.AF:** bản 18:32 làm Auto Build bấm Upgrade
 mà game không nhận (§2.AF) — cần **build lại** từ working tree có §2.AF
 rồi thử theo đoạn "Cần thử trên game" của §2.AF.
+**Cập nhật 30/10, sau §2.AG:** bản cần cài là `dist/` build 30/10 10:26
+(có §2.AF và §2.AG, đã grep); thử §2.AF rồi §2.AG theo đoạn "Cần thử trên
+game" của từng mục.
 
 **Hai việc phát sinh** (việc thứ nhất xong 02/10, §2.L phần 3):
 

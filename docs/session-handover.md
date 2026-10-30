@@ -10,7 +10,7 @@ It deliberately does **not** repeat the feature status. That lives in
 second. [project-summary.md](../project-summary.md) covers what the TypeScript
 port changed and what is still unverified.
 
-Last updated: 29/10/2026.
+Last updated: 30/10/2026.
 
 ---
 
@@ -333,12 +333,25 @@ origin/refactor..HEAD` = 0. **Checked 29/10:** §28 is committed
 `HEAD` — pushed by the user, `git rev-list --count origin/refactor..HEAD`
 = 0. **Checked 29/10, evening:** §29 is committed (`6d0c0a0` code,
 `b033eae` docs) and pushed — `origin/refactor` is at `b033eae` = `HEAD`.
-§30 is not committed.
+§30 is not committed. **Checked 30/10:** §30 is committed (`94d359e`
+code, `71d5379` docs) and pushed — `origin/refactor` is at `71d5379` =
+`HEAD`. §31 is not committed (`game-state.ts` + test, `ui/dialogs.ts`,
+`messages.ts`, `app.test.ts`, and these two documents).
+
+**30/10: Transport Settings shows the From town's stock beside each
+amount — not committed; in the 30/10 10:26 `dist/` (not built in this
+session, grepped); not tried on the game** — see §31, and
+`improvement-plan.md` §2.AG. Each resource's stock, as Empire Overview
+saved it (`***<account>***cities`, refreshed by Scan), less what the
+queue already ships of it from that town: `1,234 (1,834-500-100)`. A
+town the board lists but has no figure for shows `0`, not `—` (read
+from the code; waiting on the user).
 
 **29/10, evening: computer 2's bug report — Auto Build clicked Upgrade
-ten laps in a row and the game refused it; the lease removed — not
-committed; not built (the 18:32 `dist/` has the bug); not tried on the
-game** — see §30, and `improvement-plan.md` §2.AF. The notepad write just
+ten laps in a row and the game refused it; the lease removed — committed
+since as `94d359e` (docs `71d5379`), pushed; not built when written (the
+18:32 `dist/` has the bug), in the 30/10 10:26 `dist/` (grepped); not
+tried on the game** — see §30, and `improvement-plan.md` §2.AF. The notepad write just
 before the click gave the session a new `actionRequest`, and the button
 still carried the old one. The claim now comes before the building is
 opened. The game does not allow two computers logged in at once (the
@@ -404,7 +417,10 @@ the city id, so a building cell turns upgradable by itself; a runner that
 is stopped and started again does not sit out an old rest; the log is
 stored as text, not HTML-escaped.
 
-**Next (29/10, evening):** rebuild `dist/` from a tree holding §30 — the
+**Next (30/10):** reinstall both userscripts from the 30/10 10:26
+`dist/` (it holds §30 and §31, grepped — §1), try §30 as its last
+paragraph says, then §31. **Next (29/10, evening), done by the 30/10
+build:** rebuild `dist/` from a tree holding §30 — the
 18:32 build makes Auto Build click Upgrade in vain (§30) — reinstall, and
 try §30 as its last paragraph says. **Next (29/10), superseded:** reinstall both userscripts from the 29/10 18:32 `dist/`
 (it holds §29, grepped — §1) and try §29 as its last paragraph says; it
@@ -443,9 +459,9 @@ working between loads) is
 | Committed 03/10 | §14, at the user's request, the same way: `7ed3a85` (code and tests), `b45f792` (the two documents), messages through `git commit -F`. `barbarian.ts` was left out (below) |
 | Committed 04/10 | At the user's request, each time asked for in that turn: §15–§17 as `32fe3ba` (code and tests) and `ec3fdc4` (the two documents); then §18 as `b2e9084`, and — the user asked for `barbarian.ts` to go in too — its change on its own as `3f8a51b`. Messages through `git commit -F`. The documents were not updated for §18 until the §19 round. §19 the same afternoon, again at the user's request: `c78b49e` (code and tests, `src/core/notifications.ts` and its test added) and `0da427b` (the two documents). In the evening, asked for in the turn after §21: `cefcc92` (§20, `render.ts` and its test), `9c363f7` (§21, `build/build-extension.mjs`), then the two documents |
 | Uncommitted | **29/10, evening: §30** — `src/send-resources/queue-note.ts` (+ test), `app.ts` (+ test), `features/auto-build.ts` (+ test), `features/send-resources.ts` (+ test), `src/core/data-transfer.test.ts`, and both documents. **29/10: §29** (committed since as `6d0c0a0` / `b033eae`) — `src/core/ikariam/http.ts` (+ test), `src/core/task-queue.ts`, `src/core/data-transfer.ts` (+ test), `src/send-resources/app.ts` (+ test), `state.ts`, `messages.ts`, `features/send-resources.ts` (+ test), `features/auto-build.ts` (+ test), two new files (`src/send-resources/queue-note.ts`, `queue-note.test.ts` — the user asked for full tests), and both documents. Before §29 the tree was clean. **26/10, evening: §28** (committed since as `1c41ce8` / `1f631d4`) — `src/core/ikariam/model.ts` (+ test), `src/core/ikariam/selectors.ts`, `src/send-resources/app.ts` (+ test), `features/auto-wine.ts` (+ test), `messages.ts`, `town-cache.ts` (+ test), and both documents. **26/10, later:** after `fac13d6`, `git status --short` was empty; this write-up of §27 in both documents is uncommitted when written. **26/10: nothing** (`git status --short` empty). §24–§26 and the files listed in the 22/10 note were committed as `e7f2acb` (code and tests, 19 files) and `455047d` (the two documents). The 22/10 note, kept for the file list: **22/10, after §26:** §26's `src/send-resources/ui/panel.ts` (+ test), `src/core/ui/window.ts` (+ test), `src/core/messages.ts`, and §24's files — `src/core/logger.ts`, `src/core/task-queue.ts` (+ test), `src/empire-overview/models/building.ts` (+ test) — and §25's — `src/send-resources/app.ts`, `features/auto-wine.ts` (+ test), `features/building-help-crawler.ts`, `messages.ts`, `ui/dialogs.ts`, `ui/panel.ts`, `ui/data-transfer-ui.ts` (+ test) — plus `src/send-resources/app.test.ts` (both rounds) and both documents. Before §24 the tree was clean (`git status --short` empty). §23 was committed after the 17/10 note below (`21464dd` code, `534f066` docs). The user's `.gitignore` change no longer differs from `HEAD`, and `docs/So_sanh_2_script_Ikariam.md` is not on disk in the 22/10 checkout; it is listed in `.gitignore`. The 17/10 note, kept for the file list: **§23** — `src/send-resources/features/auto-wine.ts`, `auto-wine.test.ts`, `src/send-resources/ui/styles.ts`, and both documents. **§22 was committed after the next sentence was written** (`1baf274` code, `772a055` docs). The 05/10 row, kept for the file list: §22 (05/10): 55 modified files — 52 in `src/`, `build/vite.empire-overview.ts`, `project-summary.md` and both documents — and three new test files the user agreed to (`src/core/dom.test.ts`, `src/send-resources/features/summary-account.test.ts`, `src/send-resources/ui/data-transfer-ui.test.ts`). **Modified or untracked and the user's, left out of every commit:** `.gitignore`, `docs/So_sanh_2_script_Ikariam.md`. `docs/wiki/s303/` (their crawl, the source of §19's levels past 50) was committed at the user's request on 04/10 evening as `180fead` |
-| Tests       | **39 files, 864 tests, all passing (29/10, evening, after §30)**; **39 files, 880 tests, all passing (29/10, after §29)**; **38 files, 783 tests, all passing (26/10, after §28)**; 774 before §28's two loose ends; **735 after §27**; 727 before §27's Escape change, 721 before §27; **38 files, 721 tests (22/10, after §26's window fold, on Linux)**; 715 before it; 710 after §25; 701 after §24; 699 after §23 (17/10, and again 22/10 before §24); 698 after §22; before it 35 files, 645 tests (645 after §20; 500 before §12, 515 after it, 537 after §13, 560 after §14, 567 after §15, 569 after §16's first round, 578 after §16, 583 after §17, 605 after §18 and §19's 2.6 and R, 608 after K, 627 after J, 640 after E, 641 after 2.8, 643 after the s303 levels). §11 added no test (see §11). Prettier: `core/ikariam/http.test.ts`, `send-resources/features/transport-buttons.test.ts` and `send-resources/town-cache.test.ts` are off its format at `HEAD` already — not reflowed; §19's tests appended to `http.test.ts` were formatted on their own and checked |
+| Tests       | **39 files, 871 tests, all passing (30/10, after §31)**; **39 files, 864 tests, all passing (29/10, evening, after §30)**; **39 files, 880 tests, all passing (29/10, after §29)**; **38 files, 783 tests, all passing (26/10, after §28)**; 774 before §28's two loose ends; **735 after §27**; 727 before §27's Escape change, 721 before §27; **38 files, 721 tests (22/10, after §26's window fold, on Linux)**; 715 before it; 710 after §25; 701 after §24; 699 after §23 (17/10, and again 22/10 before §24); 698 after §22; before it 35 files, 645 tests (645 after §20; 500 before §12, 515 after it, 537 after §13, 560 after §14, 567 after §15, 569 after §16's first round, 578 after §16, 583 after §17, 605 after §18 and §19's 2.6 and R, 608 after K, 627 after J, 640 after E, 641 after 2.8, 643 after the s303 levels). §11 added no test (see §11). Prettier: `core/ikariam/http.test.ts`, `send-resources/features/transport-buttons.test.ts` and `send-resources/town-cache.test.ts` are off its format at `HEAD` already — not reflowed; §19's tests appended to `http.test.ts` were formatted on their own and checked |
 | Typecheck   | Clean (`tsc --noEmit` and the strict config)                      |
-| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 01/10 at 02:23 and contains §11 (grepped: `Crawl Building` and `building-help-` in Send Resources; the new Academy figure `568954467` present and the old `582271779` gone, `winePressSavingPercent` and the time `12873600` in Empire Overview; `Math.min(50, …)` in Send Resources' `modelWineConsumption`). Earlier markers were checked in earlier builds: §2.I–2.J (`ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows`) and §10 (`ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save`, `capped`). **`dist/` was rebuilt by the user on 03/10 at 22:54 from the working tree and holds §12 to §15** (grepped in Send Resources: `wine.autoRun`, `ika-move`, `ika_pendingTownSwitch`, `to spare, less than one`, `ikaWindowOpen_`, `js-ika-build-time-buff`, `translateX(-146px)`, `ikariam-bug-report`, `then cleared them`, `createPopupSource`, and no `"???"` left; in Empire Overview: `listAccount` and `entry.length === 2 && typeof entry[0] === "string" && entry[1] === null`). It was built before §15 was committed, so it matches the working tree, not a commit. **The userscripts installed in the browser were older than that 22:54 `dist/`** (§2). **Rebuilt 04/10 at 09:09 with §16** (grepped: `?view=transport&destinationCityId=`, `shipment form to close`, `was sent `, `Move up`; Empire Overview writes the month as `month = 2592e3` — the minifier's form of 2592000) — the build the user tried on the game (§17). **Rebuilt again at 09:44 with §17** (grepped: `ika-queue-scroll`, `resourceTableScroll`, and the `dialog.close` button after `build.save`). **Rebuilt 04/10 at 13:11 from the working tree, with §18 and §19** (grepped: `ika-building-level` in Send Resources; `empire_quickUpgrade`, `stockTip_stock`, `empire_syncIndicator` and Academy level 51's time `15379200` in Empire Overview; `ikaNotifications` and `ikaQuickUpgradeTrace` in both). It matched the working tree at 13:11, not a commit. **Rebuilt 04/10 at 21:21, holding §20 and §21** (grepped: `quick upgrade refresh` in `Ikariam Empire Overview -VN-.user.js` and in `extension/page/empire-overview.js`; `dist/extension/manifest.json` has `exclude_globs`). `dist/extension/` was rebuilt in this session with `npm run build:extension`, which builds the extension only; the two userscripts carry 21:21 too, so the user built them. It matched `9c363f7`. **Rebuilt 05/10 at 02:03 with `npm run build` in this session, from the working tree, holding §22** (grepped: `event subscriber` and `quick upgrade refresh` in Empire Overview, `ika_oneOffRunTypes` in Send Resources, in both the userscripts and the extension; no `GM_xmlhttpRequest` left in Empire Overview's header). It matched the working tree then, not a commit. **Rebuilt 22/10 at 16:37 on Linux, holding §23–§26** (grepped 26/10 in Send Resources: `ika-window-collapse`, `ikaPanelCollapsedGroups`, `ikaCrawl_`, `ikariam-wine`, `1250px`, `pausedUntil`, `ika_oneOffRunTypes`; in Empire Overview: `quick upgrade refresh`, `event subscriber`; `dist/extension/manifest.json` has `exclude_globs`, and `extension/page/send-resources.js` has `ika-window-collapse`). That is the current `dist/`; `HEAD` (`e7f2acb` + docs `455047d`) was committed after it — the markers above are in both, but the build was not rebuilt from the commit or compared with it byte for byte. **The installed userscripts are older** — reinstall both before trying anything; the extension has never loaded before §21. **29/10, evening: not rebuilt for §30** — the 18:32 build holds §29 as committed, with its upgrade bug (grep `FORMAT_ONE` / `Q2` in `Ikariam Send Resources.user.js`: 0). **29/10: rebuilt at 18:32, not in this session — the user's — after the last source change (18:23), holding all of §29** (grepped in `Ikariam Send Resources.user.js`: `saveAvatarNotes`, `ikaQueueNoteBase`, `ikaQueueNoteMachine`, `Another computer runs this account`, `Notepad not updated before acting`, and `watchLease(true)` — the last change of the round; in `extension/page/send-resources.js`: `saveAvatarNotes`). **This was the `dist/` to install until §30; do not use it for Auto Build.** **26/10: rebuilt three times.** 12:28 (in this session, with §27's 10 s wait — **sends a shipment over and over, do not install**), 12:49 (in this session, the wait removed), and **13:56, not built in this session — the user's, presumably — holding all of §27** (grepped in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: `alwaysOpen`, `onCollapsedChange`, `toggleCollapsed`, `Town switch answered`, `sent through`, and `backToCity("shipment sent");` followed directly by `if (remaining <= 0) return { status: "done" };`; in both Empire Overview bundles: `typeof handler !== "function") return`). That was the `dist/` until 16:10. **Rebuilt 26/10 at 16:10 and again at 16:22 with `npm run build` in this session, from the working tree, holding §28** (grepped in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: `makes the most wine`, `holds the most hours of it`, `so they get none`, `td.resource.wine span.production`, `Math.max(entry.stock, entry.capacity)`, `entry.consume - (entry.production`; and still `alwaysOpen`, `Town switch answered`; in Empire Overview `event subscriber`, `quick upgrade refresh`, `typeof handler !== "function") return`). It matches the working tree, not a commit. **Smaller than the 13:56 build and not explained:** Send Resources 177,252 → 165,546 bytes, Empire Overview 542,909 → 504,847 — every marker grepped is present; how the 13:56 build was made is not known |
+| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 01/10 at 02:23 and contains §11 (grepped: `Crawl Building` and `building-help-` in Send Resources; the new Academy figure `568954467` present and the old `582271779` gone, `winePressSavingPercent` and the time `12873600` in Empire Overview; `Math.min(50, …)` in Send Resources' `modelWineConsumption`). Earlier markers were checked in earlier builds: §2.I–2.J (`ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows`) and §10 (`ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save`, `capped`). **`dist/` was rebuilt by the user on 03/10 at 22:54 from the working tree and holds §12 to §15** (grepped in Send Resources: `wine.autoRun`, `ika-move`, `ika_pendingTownSwitch`, `to spare, less than one`, `ikaWindowOpen_`, `js-ika-build-time-buff`, `translateX(-146px)`, `ikariam-bug-report`, `then cleared them`, `createPopupSource`, and no `"???"` left; in Empire Overview: `listAccount` and `entry.length === 2 && typeof entry[0] === "string" && entry[1] === null`). It was built before §15 was committed, so it matches the working tree, not a commit. **The userscripts installed in the browser were older than that 22:54 `dist/`** (§2). **Rebuilt 04/10 at 09:09 with §16** (grepped: `?view=transport&destinationCityId=`, `shipment form to close`, `was sent `, `Move up`; Empire Overview writes the month as `month = 2592e3` — the minifier's form of 2592000) — the build the user tried on the game (§17). **Rebuilt again at 09:44 with §17** (grepped: `ika-queue-scroll`, `resourceTableScroll`, and the `dialog.close` button after `build.save`). **Rebuilt 04/10 at 13:11 from the working tree, with §18 and §19** (grepped: `ika-building-level` in Send Resources; `empire_quickUpgrade`, `stockTip_stock`, `empire_syncIndicator` and Academy level 51's time `15379200` in Empire Overview; `ikaNotifications` and `ikaQuickUpgradeTrace` in both). It matched the working tree at 13:11, not a commit. **Rebuilt 04/10 at 21:21, holding §20 and §21** (grepped: `quick upgrade refresh` in `Ikariam Empire Overview -VN-.user.js` and in `extension/page/empire-overview.js`; `dist/extension/manifest.json` has `exclude_globs`). `dist/extension/` was rebuilt in this session with `npm run build:extension`, which builds the extension only; the two userscripts carry 21:21 too, so the user built them. It matched `9c363f7`. **Rebuilt 05/10 at 02:03 with `npm run build` in this session, from the working tree, holding §22** (grepped: `event subscriber` and `quick upgrade refresh` in Empire Overview, `ika_oneOffRunTypes` in Send Resources, in both the userscripts and the extension; no `GM_xmlhttpRequest` left in Empire Overview's header). It matched the working tree then, not a commit. **Rebuilt 22/10 at 16:37 on Linux, holding §23–§26** (grepped 26/10 in Send Resources: `ika-window-collapse`, `ikaPanelCollapsedGroups`, `ikaCrawl_`, `ikariam-wine`, `1250px`, `pausedUntil`, `ika_oneOffRunTypes`; in Empire Overview: `quick upgrade refresh`, `event subscriber`; `dist/extension/manifest.json` has `exclude_globs`, and `extension/page/send-resources.js` has `ika-window-collapse`). That is the current `dist/`; `HEAD` (`e7f2acb` + docs `455047d`) was committed after it — the markers above are in both, but the build was not rebuilt from the commit or compared with it byte for byte. **The installed userscripts are older** — reinstall both before trying anything; the extension has never loaded before §21. **30/10: rebuilt at 10:26, not in this session — the user's — after the last source change (10:12), holding §30 and §31** (grepped in `Ikariam Send Resources.user.js`: `FORMAT_ONE` ×2, `transporterSendStock` ×1, the `stockTitle` text, and `ikaQueueNoteMachine` / `leaseHeldByOther` ×0; in `extension/page/send-resources.js`: `transporterSendStock`). It matches the working tree by time, not compared byte for byte; §31 is not committed. **This is the `dist/` to install.** **29/10, evening: not rebuilt for §30** — the 18:32 build holds §29 as committed, with its upgrade bug (grep `FORMAT_ONE` / `Q2` in `Ikariam Send Resources.user.js`: 0). **29/10: rebuilt at 18:32, not in this session — the user's — after the last source change (18:23), holding all of §29** (grepped in `Ikariam Send Resources.user.js`: `saveAvatarNotes`, `ikaQueueNoteBase`, `ikaQueueNoteMachine`, `Another computer runs this account`, `Notepad not updated before acting`, and `watchLease(true)` — the last change of the round; in `extension/page/send-resources.js`: `saveAvatarNotes`). **This was the `dist/` to install until §30; do not use it for Auto Build.** **26/10: rebuilt three times.** 12:28 (in this session, with §27's 10 s wait — **sends a shipment over and over, do not install**), 12:49 (in this session, the wait removed), and **13:56, not built in this session — the user's, presumably — holding all of §27** (grepped in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: `alwaysOpen`, `onCollapsedChange`, `toggleCollapsed`, `Town switch answered`, `sent through`, and `backToCity("shipment sent");` followed directly by `if (remaining <= 0) return { status: "done" };`; in both Empire Overview bundles: `typeof handler !== "function") return`). That was the `dist/` until 16:10. **Rebuilt 26/10 at 16:10 and again at 16:22 with `npm run build` in this session, from the working tree, holding §28** (grepped in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: `makes the most wine`, `holds the most hours of it`, `so they get none`, `td.resource.wine span.production`, `Math.max(entry.stock, entry.capacity)`, `entry.consume - (entry.production`; and still `alwaysOpen`, `Town switch answered`; in Empire Overview `event subscriber`, `quick upgrade refresh`, `typeof handler !== "function") return`). It matches the working tree, not a commit. **Smaller than the 13:56 build and not explained:** Send Resources 177,252 → 165,546 bytes, Empire Overview 542,909 → 504,847 — every marker grepped is present; how the 13:56 build was made is not known |
 
 What landed: the AJAX transport layer, the shared window widget, the rewritten
 panel, four features (sync-towns, transport-buttons, queue-view, wine-warning),
@@ -3589,9 +3605,11 @@ the queue.
 
 ## 30. 29/10, evening: computer 2's bug report — upgrades refused; the lease removed
 
-**Not committed when written. Not built — the 29/10 18:32 `dist/` does not
-hold it (grep `FORMAT_ONE` / `Q2`: 0), and that build has the bug below.
-Not tried on the game.** The plan's write-up, in Vietnamese, is §2.AF.
+**Not committed when written; committed since as `94d359e` (docs
+`71d5379`) and pushed (checked 30/10). Not built when written — the 29/10
+18:32 `dist/` does not hold it (grep `FORMAT_ONE` / `Q2`: 0), and that
+build has the bug below; the 30/10 10:26 build does (`FORMAT_ONE`: 2,
+`ikaQueueNoteMachine`: 0). Not tried on the game.** The plan's write-up, in Vietnamese, is §2.AF.
 880 → 864 tests, 39 files; typecheck clean; prettier clean on every file
 touched.
 
@@ -3705,3 +3723,127 @@ upgrading", the slot turns to a building site, the notepad loses the
 entry. Send a shipment → it arrives, the notepad's amount drops. Switch
 computers and log in → the queue runs at once, no wait. A notepad still
 reading `Q1…` → `Q2…` after the first load, with the same orders.
+
+## 31. 30/10: Transport Settings shows the From town's stock beside each amount
+
+**Not committed when written. In the 30/10 10:26 `dist/` — not built in
+this session, built after the last source change (10:12); grepped
+`transporterSendStock` in `Ikariam Send Resources.user.js` and
+`extension/page/send-resources.js`. Not tried on the game.** The plan's
+write-up, in Vietnamese, is §2.AG. 864 → 871 tests, 39 files; typecheck
+clean; prettier clean on every file touched.
+
+**Asked for by the user:** in Transport Settings, once a From town is
+picked, show each resource's stock beside its amount field; once rows are
+queued, show the stock less those rows with each figure — stock 1834 and
+two rows of 500 and 100 read `1234 (1834-500-100)`. The stock is the one
+in storage, as saved after Scan.
+
+### Where the stock comes from
+
+Send Resources' own town cache (`town-cache.ts`) holds wine only, and the
+fast Scan path does not record the other stocks. All five, for every town,
+are only in **Empire Overview's saved towns**: `localStorage`
+`***<account>***cities` (`empireKeyPrefix`, `src/core/storage.ts:84`),
+keyed by city id, each with
+`_resources.<wood|wine|marble|glass|sulfur>._current`. The board's
+response hook records every town Scan fetches
+(`empire-overview/game-api.ts` ~550–565, `updateGlobalData` →
+`updateCityData`) and `database.Save()` writes the whole table
+(`empire-overview/database.ts:189`). The scripts share no module, only
+`localStorage`; `readStoredStock` reads that key, `JSON.parse` in a `try`.
+
+**What the figure is, read from the code (not measured on the game):**
+`Resource.project()` (`empire-overview/models/resource.ts:39`) runs when
+the board starts and every second (`models/city.ts:115`), adding
+production and taking off consumption into `_current`. The saved figure
+is the board's **estimate at its last save**, not exactly Scan's. We do
+not project it any further.
+
+### On screen
+
+- Each amount row has a third cell, `<span class="ika-send-stock"
+  id="transporterSendStock_<resource>">` (`ui/dialogs.ts:196`); the grid
+  went from `65px 1fr` to `65px 150px auto`, the box from `width: 260px`
+  to `min-width: 260px; width: max-content`.
+- **Nothing queued** from that town of that resource: the stock alone,
+  `1,834`.
+- **Rows queued:** `<left> (<stock>-<row 1>-<row 2>…)`, e.g.
+  `1,234 (1,834-500-100)` (`SEND_DIALOG.stockLeft`, `messages.ts:131`),
+  through `formatInteger` like the dialog's other figures. `left` can go
+  negative when the queue ships more than the stock.
+- **No figure:** `—` (`SEND_DIALOG.stockUnknown`) — no key (the board
+  never ran for this account), the town not in the table, or broken or
+  non-numeric data.
+- The hover title (`stockTitle`) says what the figure is.
+
+**Rows taken off:** every `sendResource` task whose `origin` is the From
+town and whose `resource` matches, **Auto Wine's included** — they leave
+from there too. Each counts its current `amount`, so a partly sent row
+counts what is left of it.
+
+**Redrawn on:** a From change (a `change` listener on
+`#transporterSendFromTown`, `ui/dialogs.ts:220`) and every
+`renderResourceTable` (`ui/dialogs.ts:111`) — Add, Remove First / Last,
+and moving a row (`app.ts:459`, 502–515). **Not** when the runner ships
+while the dialog is open.
+
+### Changes
+
+- `game-state.ts:121`: `readStoredStock(accountName, cityId, resource)`
+  — an integer (floored) or `null`; `EMPIRE_CITIES_KEY = "cities"`; the
+  comment says why the board's data is read.
+- `ui/dialogs.ts`: `renderSendStock()` (exported), `stockFieldId()`, the
+  third cell, `.ika-send-stock`, the `change` listener, the call in
+  `renderResourceTable`.
+- `messages.ts:129–135`: `stockUnknown`, `stockLeft`, `stockTitle` in
+  `SEND_DIALOG`.
+
+### Tests
+
+864 → 871 (+7). `game-state.test.ts` 8 → 11 (`describe("readStoredStock")`,
+line 93): reads by city id and floors; `null` for a town, resource or
+account not saved; broken or odd data gives `null` without throwing.
+`app.test.ts` 66 → 70 (`describe("stock beside each amount")`, line 280,
+inside "the Transport settings dialog"): the stock and a dash; follows the
+From picker (it opens on the first town by name); takes off the rows of
+the same town and resource, showing each; redraws on Add / Remove Last.
+
+**Seen red, 9 breaks** (`break-stock.mjs` in the scratchpad): no floor,
+no number check, a fixed account, no origin filter, no resource filter,
+no `change` listener, `renderResourceTable` not calling `renderSendStock`,
+a blank instead of `—`, always the bracketed form. `md5sum -c` after:
+`game-state.ts: OK`, `ui/dialogs.ts: OK`. Run again 30/10: `39 passed
+(39)`, `871 passed (871)`, `9/9 red`.
+
+**My own mistakes:** three tests first failed because I assumed the
+dialog opens on W-Athens; `getTownList()` sorts by name, so the first town
+is M-Corinth. The tests now pick the town (`pickFrom("0")`); the code did
+not change. In `break-stock.mjs` the `tableSilent` patch first did not
+apply (green for patching nothing); fixed, now red. **The first report to
+the user said "`—` until Scan has run" — not quite**, see below.
+
+### Still open, not measured
+
+- **A town in the table with no figure yet shows `0`, not `—`.**
+  `FetchAllTowns` (`empire-overview/game-api.ts:1715`) creates every own
+  town from the page's `relatedCityData` with `new Resource(...)` at
+  `_current = 0` (`models/resource.ts:12`), before Scan fetches anything.
+  A town neither scanned nor visited since the board was installed is
+  saved as `0`, and the dialog shows `0`. The saved data cannot tell it
+  from a real empty store (`_currentChangedDate` is set at creation too).
+  Read from the code, not measured. **Not fixed — waiting on the user.**
+- `stockTitle` ("as saved at the last Scan") is not quite right: the
+  figure is the board's estimate at its last save (above).
+- The layout (third column, box width) has not been seen in the real
+  popup; happy-dom does no layout.
+- Not measured on the game that `***<account>***cities` holds all five
+  resources for every town after Scan; traced through the code only.
+- With the Empire Overview board off: `—` everywhere, or old figures if
+  the key is left from before.
+
+**What to try on the game:** Scan, open Transport Settings — each cell is
+the From town's stock (compare with the board). Change From — the figures
+change. Add 500 and 100 wood from one town — the wood cell reads
+`<stock − 600> (<stock>-500-100)`. Remove Last — one row left. Check the
+box does not overflow or wrap.
