@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { getActionPoints, getFreeShips, readCurrentStock } from "./game-state";
+import {
+  getActionPoints,
+  getFreeShips,
+  readCurrentStock,
+  readStoredStock,
+} from "./game-state";
 
 /** The game's header, as captured live. */
 function globalMenu(merchants: string, freighters: string, points: string) {
@@ -82,5 +87,52 @@ describe("readCurrentStock", () => {
 
   it("reports zero when neither source is there", () => {
     expect(readCurrentStock("marble")).toBe(0);
+  });
+});
+
+describe("readStoredStock", () => {
+  /** Empire Overview's saved towns, as `JSON.stringify(database.cities)`. */
+  function saveEmpireCities(account: string, cities: unknown): void {
+    localStorage.setItem(`***${account}***cities`, JSON.stringify(cities));
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("reads a town's stock from Empire Overview's saved towns, by city id", () => {
+    saveEmpireCities("tester", {
+      "297034": {
+        _id: 297034,
+        _name: "W-Athens",
+        _resources: {
+          wood: { _current: 1834.6, _production: 0.2, _name: "wood" },
+          glass: { _current: 500, _name: "glass" },
+        },
+      },
+    });
+    // Floored, as the board shows it (`getCurrent`).
+    expect(readStoredStock("tester", "297034", "wood")).toBe(1834);
+    expect(readStoredStock("tester", "297034", "glass")).toBe(500);
+  });
+
+  it("knows nothing of a town, a resource or an account it did not save", () => {
+    saveEmpireCities("tester", {
+      "297034": { _resources: { wood: { _current: 1834 } } },
+    });
+    expect(readStoredStock("tester", "297035", "wood")).toBeNull();
+    expect(readStoredStock("tester", "297034", "marble")).toBeNull();
+    expect(readStoredStock("other", "297034", "wood")).toBeNull();
+  });
+
+  it("takes broken or odd saved data as unknown, without throwing", () => {
+    localStorage.setItem("***tester***cities", "{not json");
+    expect(readStoredStock("tester", "297034", "wood")).toBeNull();
+    saveEmpireCities("tester", {
+      "297034": { _resources: { wood: { _current: "1834" } } },
+    });
+    expect(readStoredStock("tester", "297034", "wood")).toBeNull();
+    saveEmpireCities("tester", null);
+    expect(readStoredStock("tester", "297034", "wood")).toBeNull();
   });
 });

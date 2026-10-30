@@ -23,6 +23,7 @@
 import { qs, readNumberOrNull } from "@core/dom";
 import { parseGameNumber } from "@core/format";
 import { SEL } from "@core/ikariam/selectors";
+import { empireKeyPrefix } from "@core/storage";
 import {
   modelActionPoints,
   modelFreeFreighters,
@@ -100,4 +101,44 @@ export function readCurrentStock(resource: string): number {
     modelResource(resource) ??
     parseAmount(qs(SEL.globalMenu.resource(resource))?.textContent)
   );
+}
+
+/** Empire Overview's saved towns, under its account prefix. */
+const EMPIRE_CITIES_KEY = "cities";
+
+/**
+ * A town's stock of one resource as Empire Overview last saved it, or `null`
+ * when it saved nothing for that town.
+ *
+ * Send Resources' own town cache holds wine only, and Scan asks the game for
+ * every town without opening it, so the other towns' stocks land on the board
+ * alone: its response hook records each town Scan fetches and saves them all
+ * as `***<account>***cities` (`empire-overview/database.ts`), keyed by city
+ * id, each with `_resources.<resource>._current`. The two scripts share no
+ * module, only the page's localStorage. The figure is as of that save, not
+ * projected forward.
+ */
+export function readStoredStock(
+  accountName: string,
+  cityId: string,
+  resource: string,
+): number | null {
+  let cities: unknown;
+  try {
+    cities = JSON.parse(
+      localStorage.getItem(empireKeyPrefix(accountName) + EMPIRE_CITIES_KEY) ??
+        "null",
+    );
+  } catch {
+    return null;
+  }
+  const current = (
+    cities as Record<
+      string,
+      { _resources?: Record<string, { _current?: unknown }> } | undefined
+    > | null
+  )?.[cityId]?._resources?.[resource]?._current;
+  return typeof current === "number" && Number.isFinite(current)
+    ? Math.floor(current)
+    : null;
 }

@@ -277,6 +277,131 @@ describe("the Transport settings dialog", () => {
     showToast.mockClear();
   });
 
+  describe("stock beside each amount", () => {
+    /** Two towns in the dropdown, as the game draws it. */
+    const DROPDOWN =
+      `<div id="dropDown_js_citySelectContainer"><div class="bg"><ul>` +
+      `<li selectvalue="297034" class="ownCity"><a title="W-Athens"> W-Athens</a></li>` +
+      `<li selectvalue="297035" class="ownCity"><a title="M-Corinth"> M-Corinth</a></li>` +
+      `</ul></div></div>`;
+
+    /** Open the dialog as the game's popup would draw it. */
+    async function openDialog(): Promise<void> {
+      document.body.insertAdjacentHTML("beforeend", DROPDOWN);
+      const createPopup = (id: string, _title: string, html: string) =>
+        document.body.insertAdjacentHTML(
+          "beforeend",
+          `<div id="${id}">${html}</div>`,
+        );
+      Object.assign(window, { ikariam: { createPopup } });
+      await actions["send.settings"](document.body);
+      delete window.ikariam;
+    }
+
+    function stockBeside(resource: string): string {
+      return document.querySelector(`#transporterSendStock_${resource}`)!
+        .textContent!;
+    }
+
+    function pickFrom(townNumber: string): void {
+      const select = document.querySelector<HTMLSelectElement>(
+        "#transporterSendFromTown",
+      )!;
+      select.value = townNumber;
+      select.dispatchEvent(new Event("change"));
+    }
+
+    beforeEach(() => {
+      // Empire Overview's saved towns after a Scan.
+      localStorage.setItem(
+        "***tester***cities",
+        JSON.stringify({
+          "297034": {
+            _resources: {
+              wood: { _current: 1834 },
+              wine: { _current: 12000 },
+            },
+          },
+          "297035": { _resources: { wood: { _current: 700 } } },
+        }),
+      );
+    });
+
+    it("shows the source town's saved stock of each resource, and a dash when it has none", async () => {
+      await startWith({});
+      await openDialog();
+      pickFrom("0");
+
+      expect(stockBeside("wood")).toBe("1,834");
+      expect(stockBeside("wine")).toBe("12,000");
+      expect(stockBeside("marble")).toBe("—");
+    });
+
+    it("follows the From picker, from the town it opens on", async () => {
+      await startWith({});
+      await openDialog();
+      // The picker lists towns by name: M-Corinth (1) comes first.
+      expect(stockBeside("wood")).toBe("700");
+
+      pickFrom("0");
+      expect(stockBeside("wood")).toBe("1,834");
+
+      pickFrom("1");
+      expect(stockBeside("wood")).toBe("700");
+      expect(stockBeside("wine")).toBe("—");
+    });
+
+    it("takes off what the queue already ships of it from that town, and shows each row", async () => {
+      await startWith({});
+      const { getState: appGetState } = await appState();
+      const { queue } = appGetState();
+      queue.push({
+        type: "sendResource",
+        data: { origin: "0", destination: "1", resource: "wood", amount: 500 },
+      });
+      // Another resource, and another source town: neither counts for wood here.
+      queue.push({
+        type: "sendResource",
+        data: { origin: "0", destination: "1", resource: "wine", amount: 300 },
+      });
+      queue.push({
+        type: "sendResource",
+        data: { origin: "1", destination: "0", resource: "wood", amount: 200 },
+      });
+      queue.push({
+        type: "sendResource",
+        data: { origin: "0", destination: "1", resource: "wood", amount: 100 },
+      });
+      await openDialog();
+      pickFrom("0");
+
+      expect(stockBeside("wood")).toBe("1,234 (1,834-500-100)");
+      expect(stockBeside("wine")).toBe("11,700 (12,000-300)");
+    });
+
+    it("updates when a row is added or removed", async () => {
+      await startWith({});
+      await openDialog();
+      pickFrom("0");
+      (
+        document.querySelector(
+          "#transporterSendDestination",
+        ) as HTMLSelectElement
+      ).value = "1";
+      (
+        document.querySelector(
+          "#transporterSendAmount_wood",
+        ) as HTMLInputElement
+      ).value = "500";
+
+      await actions["send.add"](document.body);
+      expect(stockBeside("wood")).toBe("1,334 (1,834-500)");
+
+      await actions["send.removeLast"](document.body);
+      expect(stockBeside("wood")).toBe("1,834");
+    });
+  });
+
   it("shows ten shipments in its table and scrolls the rest", async () => {
     await startWith({});
     const { getState: appGetState } = await appState();

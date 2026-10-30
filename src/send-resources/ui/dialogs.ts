@@ -22,7 +22,8 @@ import {
 } from "@core/ikariam/globals";
 import { DIALOG_ID, SEL } from "@core/ikariam/selectors";
 import { showToast } from "@core/ui/window";
-import { getTownList, getTownNameFromList } from "../navigation";
+import { readStoredStock } from "../game-state";
+import { getTownList, getTownNameFromList, townCityId } from "../navigation";
 import {
   getTownQueue,
   listBuildingsInCurrentTown,
@@ -106,6 +107,8 @@ export function renderResourceTable(): void {
 
   const body = qs("#resourceTableBody");
   if (body) body.innerHTML = rows;
+  // What is left at the source changes with every row added or removed.
+  renderSendStock();
   // At most `VISIBLE_ROWS` shipments, the rest scroll — like the panel's queue.
   const scroll = qs(`#${RESOURCE_TABLE_SCROLL_ID}`);
   if (scroll) {
@@ -124,7 +127,8 @@ const SEND_AMOUNTS_STYLE_ID = "ika-send-amounts-style";
 function sendAmountsStyles(): string {
   return `
 .ika-send-amounts {
-  width: 260px;
+  min-width: 260px;
+  width: max-content;
   padding: 10px 12px;
   background: #f5ead0;
   border: 1px solid #c8b98f;
@@ -139,7 +143,7 @@ function sendAmountsStyles(): string {
 }
 .ika-send-amounts-row {
   display: grid;
-  grid-template-columns: 65px 1fr;
+  grid-template-columns: 65px 150px auto;
   align-items: center;
   gap: 8px;
   margin-bottom: 5px;
@@ -164,6 +168,11 @@ function sendAmountsStyles(): string {
   text-align: right;
   outline: none;
 }
+.ika-send-stock {
+  font-size: 12px;
+  color: #4b4030;
+  white-space: nowrap;
+}
 .ika-send-amounts-row input:focus {
   border-color: #8b6f3d;
   box-shadow: 0 0 0 2px rgba(139, 111, 61, 0.15);
@@ -184,6 +193,7 @@ export function openSendResourcesDialog(): void {
     return `<div class="ika-send-amounts-row">
         <label for="${id}">${resource.label}</label>
         <input id="${id}" type="number" min="1" step="1" inputmode="numeric">
+        <span class="ika-send-stock" id="${stockFieldId(resource.value)}" title="${SEND_DIALOG.stockTitle}"></span>
       </div>`;
   }).join("");
 
@@ -207,7 +217,53 @@ export function openSendResourcesDialog(): void {
      </table>
      </div>`,
   );
+  qs("#transporterSendFromTown")?.addEventListener("change", renderSendStock);
   renderResourceTable();
+}
+
+/** Id of the stock shown beside one resource's amount field. */
+function stockFieldId(resource: string): string {
+  return `transporterSendStock_${resource}`;
+}
+
+/**
+ * Beside each amount: the source town's stock as saved at the last Scan
+ * (`readStoredStock`), less what the queue already ships of it from that
+ * town — `1,234 (1,834-500-100)`, or the stock alone when nothing is queued.
+ * Every queued shipment counts, Auto Wine's too: they all leave from there.
+ */
+export function renderSendStock(): void {
+  const origin = qs<HTMLSelectElement>("#transporterSendFromTown")?.value;
+  if (origin === undefined) return;
+  const { accountName, queue } = getState();
+  const cityId = townCityId(origin);
+  const fromOrigin = queue
+    .listOfType("sendResource")
+    .filter((task) => task.data.origin === origin);
+
+  for (const resource of RESOURCE_OPTIONS) {
+    const cell = qs(`#${stockFieldId(resource.value)}`);
+    if (!cell) continue;
+    const stock =
+      cityId === null
+        ? null
+        : readStoredStock(accountName, cityId, resource.value);
+    if (stock === null) {
+      cell.textContent = SEND_DIALOG.stockUnknown;
+      continue;
+    }
+    const queued = fromOrigin
+      .filter((task) => task.data.resource === resource.value)
+      .map((task) => task.data.amount);
+    const left = stock - queued.reduce((sum, amount) => sum + amount, 0);
+    cell.textContent =
+      queued.length === 0
+        ? formatInteger(stock)
+        : SEND_DIALOG.stockLeft(
+            formatInteger(left),
+            [stock, ...queued].map(formatInteger),
+          );
+  }
 }
 
 export interface SendFormValues {

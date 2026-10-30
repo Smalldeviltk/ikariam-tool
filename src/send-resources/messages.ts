@@ -125,6 +125,14 @@ export const SEND_DIALOG = {
   removeFirst: "Remove First",
   removeLast: "Remove Last",
   columns: ["Origin", "Destination", "Resource", "Amount", "Source", ""],
+  /** Beside an amount when the source town's stock is not known. */
+  stockUnknown: "—",
+  /** What is left, then the stock less each queued amount: `1,234 (1,834-500-100)`. */
+  stockLeft: (left: string, stockAndQueued: string[]) =>
+    `${left} (${stockAndQueued.join("-")})`,
+  stockTitle:
+    "The source town's stock as saved at the last Scan, less what the " +
+    "queue already ships of it from there.",
   errors: {
     incomplete: "Please choose both towns.",
     sameTown: "Source and destination are the same!",
