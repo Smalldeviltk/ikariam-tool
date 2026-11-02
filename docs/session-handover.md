@@ -10,7 +10,7 @@ It deliberately does **not** repeat the feature status. That lives in
 second. [project-summary.md](../project-summary.md) covers what the TypeScript
 port changed and what is still unverified.
 
-Last updated: 30/10/2026.
+Last updated: 02/11/2026.
 
 ---
 
@@ -336,10 +336,27 @@ origin/refactor..HEAD` = 0. **Checked 29/10:** §28 is committed
 §30 is not committed. **Checked 30/10:** §30 is committed (`94d359e`
 code, `71d5379` docs) and pushed — `origin/refactor` is at `71d5379` =
 `HEAD`. §31 is not committed (`game-state.ts` + test, `ui/dialogs.ts`,
-`messages.ts`, `app.test.ts`, and these two documents).
+`messages.ts`, `app.test.ts`, and these two documents). **Checked
+02/11:** §31 is committed (`ba2fb35` code, `6deabe9` docs) and pushed —
+`origin/refactor` is at `6deabe9` = `HEAD`, `git rev-list --count
+origin/refactor..HEAD` = 0. §32 is not committed.
+
+**02/11: a bug report shows town switches that do not land, and a
+logging mechanism for them — not committed, not built (the 30/10 10:26
+`dist/` has none of it: grep `ikaTownSwitchTrace` = 0), not tried on the
+game** — see §32, and `improvement-plan.md` §2.AH. The switch to
+M-Eretria failed four times on 30/10, and on 02/11 the game answered a
+switch with no reload at all, leaving the runner in the old town while
+the queue deferred round and round; the user had to switch by hand. It
+cannot be reproduced at will, so nothing was changed in how switching
+works. Instead: the switch log lines carry the game's `provideFeedback`
+text and tags (hashes) of the `actionRequest` tokens; each switch that
+does not land is kept apart from the log (`ikaTownSwitchTrace`, the
+last 5) with the tool's last requests (`ikaToolRequestTrace`, 10 short
+lines); Bug Report carries both. Kept short at the user's request.
 
 **30/10: Transport Settings shows the From town's stock beside each
-amount — not committed; in the 30/10 10:26 `dist/` (not built in this
+amount — committed since as `ba2fb35` (docs `6deabe9`), pushed; in the 30/10 10:26 `dist/` (not built in this
 session, grepped); not tried on the game** — see §31, and
 `improvement-plan.md` §2.AG. Each resource's stock, as Empire Overview
 saved it (`***<account>***cities`, refreshed by Scan), less what the
@@ -417,6 +434,11 @@ the city id, so a building cell turns upgradable by itself; a runner that
 is stopped and started again does not sit out an old rest; the log is
 stored as text, not HTML-escaped.
 
+**Next (02/11):** rebuild `dist/` — the 30/10 10:26 build has no §32 —
+and reinstall both userscripts. When a town switch does not land (the
+queue sits in the old town), press Bug Report — at any time after, the
+last five are kept — and put the file in `sample/`; its
+`gameData.townSwitches` is what §32 waits on. Then the 30/10 list.
 **Next (30/10):** reinstall both userscripts from the 30/10 10:26
 `dist/` (it holds §30 and §31, grepped — §1), try §30 as its last
 paragraph says, then §31. **Next (29/10, evening), done by the 30/10
@@ -454,14 +476,14 @@ working between loads) is
 | ----------- | ---------------------------------------------------------------- |
 | Branch      | `refactor`, tracking `origin/refactor`                            |
 | Checkout (22/10) | **26/10:** the Linux checkout now has `node_modules/` and `dist/` (built 22/10 16:37, §1 Build); `sample/` and `tools/output/` are still absent, so the review report and the bug report files are not available here. The 22/10 note, kept: The 22/10 session ran on Linux, in `/data/Projects/dump/ikariam-tool`, with Node v20.20.2 and npm 10.8.2. That checkout has no `node_modules/`, `dist/`, `sample/` or `tools/output/` (dependencies, build output and gitignored folders), so tests, the build, the bug report files and the review report were not available there. The PowerShell and CRLF traps in §4 come from the earlier Windows checkout (`D:\Working\Ika`) |
-| Pushed      | **Checked 29/10, evening:** `origin/refactor` is at `b033eae` = `HEAD` (§29 pushed: `6d0c0a0` code, `b033eae` docs), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 29/10:** `origin/refactor` is at `1f631d4` = `HEAD` (pushed by the user; §28 is `1c41ce8` code, `1f631d4` docs), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 26/10, evening:** `origin/refactor` is at `0baafe6` = `HEAD` (pushed by the user), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 26/10, later:** `origin/refactor` is at `455047d`; `HEAD` is `fac13d6`, `git rev-list --count origin/refactor..HEAD` = 2 (`3dff502` docs, `fac13d6` §27) — not pushed. **Checked 26/10: `origin/refactor` is at `455047d` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0.** **Checked 22/10: `origin/refactor` is at `534f066` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0.** **Checked 17/10: `origin/refactor` is at `772a055` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0 — everything below is pushed.** The rest is the 05/10 note, kept for the commit list: `origin/refactor` was at `066eb44` (the plan's §2.I–2.J docs), pushed by the user; §10's `1f7c0e7` and `4841fb9` are before it, so pushed too (checked with `git log origin/refactor..HEAD` on 02/10). **Seventeen local commits since, not pushed** (`git rev-list --count origin/refactor..HEAD` = 17 on 05/10, at `180fead`): §11 is `6ed66c6` + `c38dca4`, its docs `b9f1d7a`; §12 and §13 are one code commit, `4f9436c` (25 files in `src/`), and one docs commit, `3209964`; §14 is `7ed3a85` (15 files), its docs `b45f792`; §15–§17 are `32fe3ba`, their docs `ec3fdc4`; §18 is `b2e9084` and `3f8a51b` (the user's `barbarian.ts` change); §19 is `c78b49e` (32 files in `src/`, two of them new), its docs `0da427b`; §20 is `cefcc92`, §21 is `9c363f7`, their docs `e36516a`; the s303 crawl `180fead` |
+| Pushed      | **Checked 02/11:** `origin/refactor` is at `6deabe9` = `HEAD` (§31 pushed: `ba2fb35` code, `6deabe9` docs), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 29/10, evening:** `origin/refactor` is at `b033eae` = `HEAD` (§29 pushed: `6d0c0a0` code, `b033eae` docs), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 29/10:** `origin/refactor` is at `1f631d4` = `HEAD` (pushed by the user; §28 is `1c41ce8` code, `1f631d4` docs), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 26/10, evening:** `origin/refactor` is at `0baafe6` = `HEAD` (pushed by the user), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 26/10, later:** `origin/refactor` is at `455047d`; `HEAD` is `fac13d6`, `git rev-list --count origin/refactor..HEAD` = 2 (`3dff502` docs, `fac13d6` §27) — not pushed. **Checked 26/10: `origin/refactor` is at `455047d` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0.** **Checked 22/10: `origin/refactor` is at `534f066` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0.** **Checked 17/10: `origin/refactor` is at `772a055` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0 — everything below is pushed.** The rest is the 05/10 note, kept for the commit list: `origin/refactor` was at `066eb44` (the plan's §2.I–2.J docs), pushed by the user; §10's `1f7c0e7` and `4841fb9` are before it, so pushed too (checked with `git log origin/refactor..HEAD` on 02/10). **Seventeen local commits since, not pushed** (`git rev-list --count origin/refactor..HEAD` = 17 on 05/10, at `180fead`): §11 is `6ed66c6` + `c38dca4`, its docs `b9f1d7a`; §12 and §13 are one code commit, `4f9436c` (25 files in `src/`), and one docs commit, `3209964`; §14 is `7ed3a85` (15 files), its docs `b45f792`; §15–§17 are `32fe3ba`, their docs `ec3fdc4`; §18 is `b2e9084` and `3f8a51b` (the user's `barbarian.ts` change); §19 is `c78b49e` (32 files in `src/`, two of them new), its docs `0da427b`; §20 is `cefcc92`, §21 is `9c363f7`, their docs `e36516a`; the s303 crawl `180fead` |
 | Committed 02/10 | At the user's request, in two commits as before: code and tests, then the two documents. The commit message went through a file (`git commit -F`): PowerShell 5.1 splits a here-string passed to a native command at its double quotes, and the first attempt failed with "pathspec did not match" — nothing was committed by it |
 | Committed 03/10 | §14, at the user's request, the same way: `7ed3a85` (code and tests), `b45f792` (the two documents), messages through `git commit -F`. `barbarian.ts` was left out (below) |
 | Committed 04/10 | At the user's request, each time asked for in that turn: §15–§17 as `32fe3ba` (code and tests) and `ec3fdc4` (the two documents); then §18 as `b2e9084`, and — the user asked for `barbarian.ts` to go in too — its change on its own as `3f8a51b`. Messages through `git commit -F`. The documents were not updated for §18 until the §19 round. §19 the same afternoon, again at the user's request: `c78b49e` (code and tests, `src/core/notifications.ts` and its test added) and `0da427b` (the two documents). In the evening, asked for in the turn after §21: `cefcc92` (§20, `render.ts` and its test), `9c363f7` (§21, `build/build-extension.mjs`), then the two documents |
-| Uncommitted | **29/10, evening: §30** — `src/send-resources/queue-note.ts` (+ test), `app.ts` (+ test), `features/auto-build.ts` (+ test), `features/send-resources.ts` (+ test), `src/core/data-transfer.test.ts`, and both documents. **29/10: §29** (committed since as `6d0c0a0` / `b033eae`) — `src/core/ikariam/http.ts` (+ test), `src/core/task-queue.ts`, `src/core/data-transfer.ts` (+ test), `src/send-resources/app.ts` (+ test), `state.ts`, `messages.ts`, `features/send-resources.ts` (+ test), `features/auto-build.ts` (+ test), two new files (`src/send-resources/queue-note.ts`, `queue-note.test.ts` — the user asked for full tests), and both documents. Before §29 the tree was clean. **26/10, evening: §28** (committed since as `1c41ce8` / `1f631d4`) — `src/core/ikariam/model.ts` (+ test), `src/core/ikariam/selectors.ts`, `src/send-resources/app.ts` (+ test), `features/auto-wine.ts` (+ test), `messages.ts`, `town-cache.ts` (+ test), and both documents. **26/10, later:** after `fac13d6`, `git status --short` was empty; this write-up of §27 in both documents is uncommitted when written. **26/10: nothing** (`git status --short` empty). §24–§26 and the files listed in the 22/10 note were committed as `e7f2acb` (code and tests, 19 files) and `455047d` (the two documents). The 22/10 note, kept for the file list: **22/10, after §26:** §26's `src/send-resources/ui/panel.ts` (+ test), `src/core/ui/window.ts` (+ test), `src/core/messages.ts`, and §24's files — `src/core/logger.ts`, `src/core/task-queue.ts` (+ test), `src/empire-overview/models/building.ts` (+ test) — and §25's — `src/send-resources/app.ts`, `features/auto-wine.ts` (+ test), `features/building-help-crawler.ts`, `messages.ts`, `ui/dialogs.ts`, `ui/panel.ts`, `ui/data-transfer-ui.ts` (+ test) — plus `src/send-resources/app.test.ts` (both rounds) and both documents. Before §24 the tree was clean (`git status --short` empty). §23 was committed after the 17/10 note below (`21464dd` code, `534f066` docs). The user's `.gitignore` change no longer differs from `HEAD`, and `docs/So_sanh_2_script_Ikariam.md` is not on disk in the 22/10 checkout; it is listed in `.gitignore`. The 17/10 note, kept for the file list: **§23** — `src/send-resources/features/auto-wine.ts`, `auto-wine.test.ts`, `src/send-resources/ui/styles.ts`, and both documents. **§22 was committed after the next sentence was written** (`1baf274` code, `772a055` docs). The 05/10 row, kept for the file list: §22 (05/10): 55 modified files — 52 in `src/`, `build/vite.empire-overview.ts`, `project-summary.md` and both documents — and three new test files the user agreed to (`src/core/dom.test.ts`, `src/send-resources/features/summary-account.test.ts`, `src/send-resources/ui/data-transfer-ui.test.ts`). **Modified or untracked and the user's, left out of every commit:** `.gitignore`, `docs/So_sanh_2_script_Ikariam.md`. `docs/wiki/s303/` (their crawl, the source of §19's levels past 50) was committed at the user's request on 04/10 evening as `180fead` |
-| Tests       | **39 files, 871 tests, all passing (30/10, after §31)**; **39 files, 864 tests, all passing (29/10, evening, after §30)**; **39 files, 880 tests, all passing (29/10, after §29)**; **38 files, 783 tests, all passing (26/10, after §28)**; 774 before §28's two loose ends; **735 after §27**; 727 before §27's Escape change, 721 before §27; **38 files, 721 tests (22/10, after §26's window fold, on Linux)**; 715 before it; 710 after §25; 701 after §24; 699 after §23 (17/10, and again 22/10 before §24); 698 after §22; before it 35 files, 645 tests (645 after §20; 500 before §12, 515 after it, 537 after §13, 560 after §14, 567 after §15, 569 after §16's first round, 578 after §16, 583 after §17, 605 after §18 and §19's 2.6 and R, 608 after K, 627 after J, 640 after E, 641 after 2.8, 643 after the s303 levels). §11 added no test (see §11). Prettier: `core/ikariam/http.test.ts`, `send-resources/features/transport-buttons.test.ts` and `send-resources/town-cache.test.ts` are off its format at `HEAD` already — not reflowed; §19's tests appended to `http.test.ts` were formatted on their own and checked |
+| Uncommitted | **02/11: §32** — `src/core/ikariam/http.ts` (+ test), `src/send-resources/navigation.ts` (+ test), `src/send-resources/diagnostics.ts`, `src/send-resources/app.test.ts`, `src/core/data-transfer.ts` (+ test), and both documents. §31 was committed since as `ba2fb35` / `6deabe9`. **29/10, evening: §30** — `src/send-resources/queue-note.ts` (+ test), `app.ts` (+ test), `features/auto-build.ts` (+ test), `features/send-resources.ts` (+ test), `src/core/data-transfer.test.ts`, and both documents. **29/10: §29** (committed since as `6d0c0a0` / `b033eae`) — `src/core/ikariam/http.ts` (+ test), `src/core/task-queue.ts`, `src/core/data-transfer.ts` (+ test), `src/send-resources/app.ts` (+ test), `state.ts`, `messages.ts`, `features/send-resources.ts` (+ test), `features/auto-build.ts` (+ test), two new files (`src/send-resources/queue-note.ts`, `queue-note.test.ts` — the user asked for full tests), and both documents. Before §29 the tree was clean. **26/10, evening: §28** (committed since as `1c41ce8` / `1f631d4`) — `src/core/ikariam/model.ts` (+ test), `src/core/ikariam/selectors.ts`, `src/send-resources/app.ts` (+ test), `features/auto-wine.ts` (+ test), `messages.ts`, `town-cache.ts` (+ test), and both documents. **26/10, later:** after `fac13d6`, `git status --short` was empty; this write-up of §27 in both documents is uncommitted when written. **26/10: nothing** (`git status --short` empty). §24–§26 and the files listed in the 22/10 note were committed as `e7f2acb` (code and tests, 19 files) and `455047d` (the two documents). The 22/10 note, kept for the file list: **22/10, after §26:** §26's `src/send-resources/ui/panel.ts` (+ test), `src/core/ui/window.ts` (+ test), `src/core/messages.ts`, and §24's files — `src/core/logger.ts`, `src/core/task-queue.ts` (+ test), `src/empire-overview/models/building.ts` (+ test) — and §25's — `src/send-resources/app.ts`, `features/auto-wine.ts` (+ test), `features/building-help-crawler.ts`, `messages.ts`, `ui/dialogs.ts`, `ui/panel.ts`, `ui/data-transfer-ui.ts` (+ test) — plus `src/send-resources/app.test.ts` (both rounds) and both documents. Before §24 the tree was clean (`git status --short` empty). §23 was committed after the 17/10 note below (`21464dd` code, `534f066` docs). The user's `.gitignore` change no longer differs from `HEAD`, and `docs/So_sanh_2_script_Ikariam.md` is not on disk in the 22/10 checkout; it is listed in `.gitignore`. The 17/10 note, kept for the file list: **§23** — `src/send-resources/features/auto-wine.ts`, `auto-wine.test.ts`, `src/send-resources/ui/styles.ts`, and both documents. **§22 was committed after the next sentence was written** (`1baf274` code, `772a055` docs). The 05/10 row, kept for the file list: §22 (05/10): 55 modified files — 52 in `src/`, `build/vite.empire-overview.ts`, `project-summary.md` and both documents — and three new test files the user agreed to (`src/core/dom.test.ts`, `src/send-resources/features/summary-account.test.ts`, `src/send-resources/ui/data-transfer-ui.test.ts`). **Modified or untracked and the user's, left out of every commit:** `.gitignore`, `docs/So_sanh_2_script_Ikariam.md`. `docs/wiki/s303/` (their crawl, the source of §19's levels past 50) was committed at the user's request on 04/10 evening as `180fead` |
+| Tests       | **39 files, 882 tests, all passing (02/11, after §32)**; **39 files, 871 tests, all passing (30/10, after §31)**; **39 files, 864 tests, all passing (29/10, evening, after §30)**; **39 files, 880 tests, all passing (29/10, after §29)**; **38 files, 783 tests, all passing (26/10, after §28)**; 774 before §28's two loose ends; **735 after §27**; 727 before §27's Escape change, 721 before §27; **38 files, 721 tests (22/10, after §26's window fold, on Linux)**; 715 before it; 710 after §25; 701 after §24; 699 after §23 (17/10, and again 22/10 before §24); 698 after §22; before it 35 files, 645 tests (645 after §20; 500 before §12, 515 after it, 537 after §13, 560 after §14, 567 after §15, 569 after §16's first round, 578 after §16, 583 after §17, 605 after §18 and §19's 2.6 and R, 608 after K, 627 after J, 640 after E, 641 after 2.8, 643 after the s303 levels). §11 added no test (see §11). Prettier: `core/ikariam/http.test.ts`, `send-resources/features/transport-buttons.test.ts` and `send-resources/town-cache.test.ts` are off its format at `HEAD` already — not reflowed; §19's tests appended to `http.test.ts` were formatted on their own and checked |
 | Typecheck   | Clean (`tsc --noEmit` and the strict config)                      |
-| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 01/10 at 02:23 and contains §11 (grepped: `Crawl Building` and `building-help-` in Send Resources; the new Academy figure `568954467` present and the old `582271779` gone, `winePressSavingPercent` and the time `12873600` in Empire Overview; `Math.min(50, …)` in Send Resources' `modelWineConsumption`). Earlier markers were checked in earlier builds: §2.I–2.J (`ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows`) and §10 (`ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save`, `capped`). **`dist/` was rebuilt by the user on 03/10 at 22:54 from the working tree and holds §12 to §15** (grepped in Send Resources: `wine.autoRun`, `ika-move`, `ika_pendingTownSwitch`, `to spare, less than one`, `ikaWindowOpen_`, `js-ika-build-time-buff`, `translateX(-146px)`, `ikariam-bug-report`, `then cleared them`, `createPopupSource`, and no `"???"` left; in Empire Overview: `listAccount` and `entry.length === 2 && typeof entry[0] === "string" && entry[1] === null`). It was built before §15 was committed, so it matches the working tree, not a commit. **The userscripts installed in the browser were older than that 22:54 `dist/`** (§2). **Rebuilt 04/10 at 09:09 with §16** (grepped: `?view=transport&destinationCityId=`, `shipment form to close`, `was sent `, `Move up`; Empire Overview writes the month as `month = 2592e3` — the minifier's form of 2592000) — the build the user tried on the game (§17). **Rebuilt again at 09:44 with §17** (grepped: `ika-queue-scroll`, `resourceTableScroll`, and the `dialog.close` button after `build.save`). **Rebuilt 04/10 at 13:11 from the working tree, with §18 and §19** (grepped: `ika-building-level` in Send Resources; `empire_quickUpgrade`, `stockTip_stock`, `empire_syncIndicator` and Academy level 51's time `15379200` in Empire Overview; `ikaNotifications` and `ikaQuickUpgradeTrace` in both). It matched the working tree at 13:11, not a commit. **Rebuilt 04/10 at 21:21, holding §20 and §21** (grepped: `quick upgrade refresh` in `Ikariam Empire Overview -VN-.user.js` and in `extension/page/empire-overview.js`; `dist/extension/manifest.json` has `exclude_globs`). `dist/extension/` was rebuilt in this session with `npm run build:extension`, which builds the extension only; the two userscripts carry 21:21 too, so the user built them. It matched `9c363f7`. **Rebuilt 05/10 at 02:03 with `npm run build` in this session, from the working tree, holding §22** (grepped: `event subscriber` and `quick upgrade refresh` in Empire Overview, `ika_oneOffRunTypes` in Send Resources, in both the userscripts and the extension; no `GM_xmlhttpRequest` left in Empire Overview's header). It matched the working tree then, not a commit. **Rebuilt 22/10 at 16:37 on Linux, holding §23–§26** (grepped 26/10 in Send Resources: `ika-window-collapse`, `ikaPanelCollapsedGroups`, `ikaCrawl_`, `ikariam-wine`, `1250px`, `pausedUntil`, `ika_oneOffRunTypes`; in Empire Overview: `quick upgrade refresh`, `event subscriber`; `dist/extension/manifest.json` has `exclude_globs`, and `extension/page/send-resources.js` has `ika-window-collapse`). That is the current `dist/`; `HEAD` (`e7f2acb` + docs `455047d`) was committed after it — the markers above are in both, but the build was not rebuilt from the commit or compared with it byte for byte. **The installed userscripts are older** — reinstall both before trying anything; the extension has never loaded before §21. **30/10: rebuilt at 10:26, not in this session — the user's — after the last source change (10:12), holding §30 and §31** (grepped in `Ikariam Send Resources.user.js`: `FORMAT_ONE` ×2, `transporterSendStock` ×1, the `stockTitle` text, and `ikaQueueNoteMachine` / `leaseHeldByOther` ×0; in `extension/page/send-resources.js`: `transporterSendStock`). It matches the working tree by time, not compared byte for byte; §31 is not committed. **This is the `dist/` to install.** **29/10, evening: not rebuilt for §30** — the 18:32 build holds §29 as committed, with its upgrade bug (grep `FORMAT_ONE` / `Q2` in `Ikariam Send Resources.user.js`: 0). **29/10: rebuilt at 18:32, not in this session — the user's — after the last source change (18:23), holding all of §29** (grepped in `Ikariam Send Resources.user.js`: `saveAvatarNotes`, `ikaQueueNoteBase`, `ikaQueueNoteMachine`, `Another computer runs this account`, `Notepad not updated before acting`, and `watchLease(true)` — the last change of the round; in `extension/page/send-resources.js`: `saveAvatarNotes`). **This was the `dist/` to install until §30; do not use it for Auto Build.** **26/10: rebuilt three times.** 12:28 (in this session, with §27's 10 s wait — **sends a shipment over and over, do not install**), 12:49 (in this session, the wait removed), and **13:56, not built in this session — the user's, presumably — holding all of §27** (grepped in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: `alwaysOpen`, `onCollapsedChange`, `toggleCollapsed`, `Town switch answered`, `sent through`, and `backToCity("shipment sent");` followed directly by `if (remaining <= 0) return { status: "done" };`; in both Empire Overview bundles: `typeof handler !== "function") return`). That was the `dist/` until 16:10. **Rebuilt 26/10 at 16:10 and again at 16:22 with `npm run build` in this session, from the working tree, holding §28** (grepped in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: `makes the most wine`, `holds the most hours of it`, `so they get none`, `td.resource.wine span.production`, `Math.max(entry.stock, entry.capacity)`, `entry.consume - (entry.production`; and still `alwaysOpen`, `Town switch answered`; in Empire Overview `event subscriber`, `quick upgrade refresh`, `typeof handler !== "function") return`). It matches the working tree, not a commit. **Smaller than the 13:56 build and not explained:** Send Resources 177,252 → 165,546 bytes, Empire Overview 542,909 → 504,847 — every marker grepped is present; how the 13:56 build was made is not known |
+| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 01/10 at 02:23 and contains §11 (grepped: `Crawl Building` and `building-help-` in Send Resources; the new Academy figure `568954467` present and the old `582271779` gone, `winePressSavingPercent` and the time `12873600` in Empire Overview; `Math.min(50, …)` in Send Resources' `modelWineConsumption`). Earlier markers were checked in earlier builds: §2.I–2.J (`ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows`) and §10 (`ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save`, `capped`). **`dist/` was rebuilt by the user on 03/10 at 22:54 from the working tree and holds §12 to §15** (grepped in Send Resources: `wine.autoRun`, `ika-move`, `ika_pendingTownSwitch`, `to spare, less than one`, `ikaWindowOpen_`, `js-ika-build-time-buff`, `translateX(-146px)`, `ikariam-bug-report`, `then cleared them`, `createPopupSource`, and no `"???"` left; in Empire Overview: `listAccount` and `entry.length === 2 && typeof entry[0] === "string" && entry[1] === null`). It was built before §15 was committed, so it matches the working tree, not a commit. **The userscripts installed in the browser were older than that 22:54 `dist/`** (§2). **Rebuilt 04/10 at 09:09 with §16** (grepped: `?view=transport&destinationCityId=`, `shipment form to close`, `was sent `, `Move up`; Empire Overview writes the month as `month = 2592e3` — the minifier's form of 2592000) — the build the user tried on the game (§17). **Rebuilt again at 09:44 with §17** (grepped: `ika-queue-scroll`, `resourceTableScroll`, and the `dialog.close` button after `build.save`). **Rebuilt 04/10 at 13:11 from the working tree, with §18 and §19** (grepped: `ika-building-level` in Send Resources; `empire_quickUpgrade`, `stockTip_stock`, `empire_syncIndicator` and Academy level 51's time `15379200` in Empire Overview; `ikaNotifications` and `ikaQuickUpgradeTrace` in both). It matched the working tree at 13:11, not a commit. **Rebuilt 04/10 at 21:21, holding §20 and §21** (grepped: `quick upgrade refresh` in `Ikariam Empire Overview -VN-.user.js` and in `extension/page/empire-overview.js`; `dist/extension/manifest.json` has `exclude_globs`). `dist/extension/` was rebuilt in this session with `npm run build:extension`, which builds the extension only; the two userscripts carry 21:21 too, so the user built them. It matched `9c363f7`. **Rebuilt 05/10 at 02:03 with `npm run build` in this session, from the working tree, holding §22** (grepped: `event subscriber` and `quick upgrade refresh` in Empire Overview, `ika_oneOffRunTypes` in Send Resources, in both the userscripts and the extension; no `GM_xmlhttpRequest` left in Empire Overview's header). It matched the working tree then, not a commit. **Rebuilt 22/10 at 16:37 on Linux, holding §23–§26** (grepped 26/10 in Send Resources: `ika-window-collapse`, `ikaPanelCollapsedGroups`, `ikaCrawl_`, `ikariam-wine`, `1250px`, `pausedUntil`, `ika_oneOffRunTypes`; in Empire Overview: `quick upgrade refresh`, `event subscriber`; `dist/extension/manifest.json` has `exclude_globs`, and `extension/page/send-resources.js` has `ika-window-collapse`). That is the current `dist/`; `HEAD` (`e7f2acb` + docs `455047d`) was committed after it — the markers above are in both, but the build was not rebuilt from the commit or compared with it byte for byte. **The installed userscripts are older** — reinstall both before trying anything; the extension has never loaded before §21. **02/11: not rebuilt for §32** — the 30/10 10:26 build has none of it (grep `ikaTownSwitchTrace` in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: 0); rebuild before installing. **30/10: rebuilt at 10:26, not in this session — the user's — after the last source change (10:12), holding §30 and §31** (grepped in `Ikariam Send Resources.user.js`: `FORMAT_ONE` ×2, `transporterSendStock` ×1, the `stockTitle` text, and `ikaQueueNoteMachine` / `leaseHeldByOther` ×0; in `extension/page/send-resources.js`: `transporterSendStock`). It matches the working tree by time, not compared byte for byte; §31 is not committed. **This is the `dist/` to install.** **29/10, evening: not rebuilt for §30** — the 18:32 build holds §29 as committed, with its upgrade bug (grep `FORMAT_ONE` / `Q2` in `Ikariam Send Resources.user.js`: 0). **29/10: rebuilt at 18:32, not in this session — the user's — after the last source change (18:23), holding all of §29** (grepped in `Ikariam Send Resources.user.js`: `saveAvatarNotes`, `ikaQueueNoteBase`, `ikaQueueNoteMachine`, `Another computer runs this account`, `Notepad not updated before acting`, and `watchLease(true)` — the last change of the round; in `extension/page/send-resources.js`: `saveAvatarNotes`). **This was the `dist/` to install until §30; do not use it for Auto Build.** **26/10: rebuilt three times.** 12:28 (in this session, with §27's 10 s wait — **sends a shipment over and over, do not install**), 12:49 (in this session, the wait removed), and **13:56, not built in this session — the user's, presumably — holding all of §27** (grepped in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: `alwaysOpen`, `onCollapsedChange`, `toggleCollapsed`, `Town switch answered`, `sent through`, and `backToCity("shipment sent");` followed directly by `if (remaining <= 0) return { status: "done" };`; in both Empire Overview bundles: `typeof handler !== "function") return`). That was the `dist/` until 16:10. **Rebuilt 26/10 at 16:10 and again at 16:22 with `npm run build` in this session, from the working tree, holding §28** (grepped in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: `makes the most wine`, `holds the most hours of it`, `so they get none`, `td.resource.wine span.production`, `Math.max(entry.stock, entry.capacity)`, `entry.consume - (entry.production`; and still `alwaysOpen`, `Town switch answered`; in Empire Overview `event subscriber`, `quick upgrade refresh`, `typeof handler !== "function") return`). It matches the working tree, not a commit. **Smaller than the 13:56 build and not explained:** Send Resources 177,252 → 165,546 bytes, Empire Overview 542,909 → 504,847 — every marker grepped is present; how the 13:56 build was made is not known |
 
 What landed: the AJAX transport layer, the shared window widget, the rewritten
 panel, four features (sync-towns, transport-buttons, queue-view, wine-warning),
@@ -3847,3 +3869,144 @@ the From town's stock (compare with the board). Change From — the figures
 change. Add 500 and 100 wood from one town — the wood cell reads
 `<stock − 600> (<stock>-500-100)`. Remove Last — one row left. Check the
 box does not overflow or wrap.
+
+---
+
+## 32. 02/11: town switches that do not land, and a log for them
+
+Not committed, not built (the 30/10 10:26 `dist/` has none of it — grep
+`ikaTownSwitchTrace`: 0), not tried on the game. The Vietnamese write-up is
+`improvement-plan.md` §2.AH. 871 → 882 tests, 39 files; typecheck clean
+(both configs); prettier clean on every file changed except
+`http.test.ts` (off its format at `HEAD` already, not re-checked).
+
+### The report
+
+`sample/ikariam-bug-report-Smalldevil-2026-11-02-08-04-06.json`
+(userscript Send Resources `21.0.0`, s303-en; 18 bug groups, 66
+occurrences; 200 log lines from 30/10 17:30:29 to 02/11 15:04:04, in the
+browser's time, which matches `firstAt` at +07).
+
+- **30/10: the switch to M-Eretria did not land four times** (11:43
+  from M-Rhodes, 16:10 from M-Argos, 16:58 from M-Syracuse, 17:05 from
+  M-Corinth), all upgrade tasks; `gotoTown(…) timed out` for M-Argos at
+  15:23, M-Corinth at 16:56 and 17:29, M-Eretria at 16:58 and 17:05.
+  Each context has `town` = `modelTown` = the old town. **The log does
+  not reach back to them** — the last error is 17:29:44, the oldest line
+  17:30:29 — so the `Town switch answered` lines §27 waited on had rolled
+  out of the 200 lines.
+- **New, 02/11 15:03:** Auto Wine's Start scanned 9/9 towns in 8.3 s,
+  then switched to W-Athens (297034). The server answered
+  `[updateGlobalData, updateViewScriptData, updateTemplateData,
+  provideFeedback, popupData, removeIngameCounterData, ingameCounterData,
+  updateBacklink] (no custom)` — **no reload**; every other answer in
+  the log is `["reload", …]`. At 15:03:16 the page loaded again (the log
+  does not say why) still in C-Thebes; for 30 s every shipment from
+  W-Athens deferred ("did not land (now in C-Thebes)"), the runner rested
+  60 s, and at 15:03:41 the switch went again, reloaded and landed; four
+  shipments sailed (8060, 3 × 8680 wine). About 32 s lost, nothing lost
+  or sent twice. **The user saw the same thing without the recovery:**
+  the queue looped until they switched to the source by hand; they cannot
+  reproduce it at will.
+- **§30 worked once:** 30/10 17:51:33 `Start upgrading Warehouse 19`,
+  17:51:38 `Finished upgrading Warehouse 19`, the notepad 14 → 13
+  entries. One run, one computer; the report does not name its build.
+- **Measured:** `environment.pageJQuery` is `4.0.0`
+  (`page.jQuery?.fn?.jquery`, `src/core/bug-report.ts:357`), which §22
+  had as unknown. The board still runs its own `2.2.4` (Empire Overview's
+  bug contexts), so §22's reasoning on `$.Callbacks` stands.
+- **Not analysed:** `parseCulturalPossessions` throwing `reading '0'` on
+  the `culturalPossessions_assign` view (26/10, 29/10 ×2; caught by
+  `parseViewData`'s try, the board carries on); `maxSci` null in
+  `getResearchTip` (26/10 ×2); paired "Script error." lines (~38,
+  cross-origin, ignored as in §16); four failed notepad reads on 02/11
+  14:59–15:00, then fine; `city id 297039 -> not a response array:
+  undefined` at 15:01:13.
+
+### Why the queue loops — read from the code
+
+`gotoTown` sends the game's form and waits up to 15 s for the town name to
+change; it only expects a `reload` answer. An answer without one leaves
+the page where it was; for `SWITCH_LANDING_WINDOW_MS` (30 s) every
+shipment from that town defers (`features/send-resources.ts:129-131`),
+the whole queue defers, the runner rests 60 s, and the switch is sent
+again. If the server keeps answering that way, it never ends; a switch by
+hand makes `gotoTown` find itself in the town and the queue runs.
+
+**Hypothesis, not measured:** the page's `actionRequest` had gone stale.
+The tool's own requests (Scan, the notepad) use the tool's token and on
+purpose never write the new one into the page (`http.ts`, top of file);
+§30 met exactly this with the Upgrade button after a notepad write. The
+15:03:10 answer carried `provideFeedback`, whose words the log did not
+keep. **It does not all fit:** the resend at 15:03:41 landed right after a
+notepad read (15:03:40), so which request staled the token is not known.
+
+### Chosen by the user
+
+"I cannot reproduce it, it happens now and then — build a logging
+mechanism", then, mid-turn: **"keep the log short, only the main events,
+so it does not fill the storage"**. The first version kept whole
+responses (up to 20,000 characters × 10); it was cut down in the same
+turn.
+
+### Changes
+
+| Change | Where |
+| ------ | ----- |
+| `tokenTag(token)`: FNV-1a 32-bit hash in base 36, `#…` — tells two tokens apart without carrying either; cannot be turned back | `core/ikariam/http.ts:593` |
+| `pageModelToken()` (the game model's token — what the page's form sends) and `toolNewestToken()` (the newest one the tool's requests were answered with); `actionRequestToken()` behaves as before | `http.ts:149`, `:164` |
+| **The tool's request trace** `ikaToolRequestTrace`: every `ikariamRequest` / `postIkariamForm`, success or failure, writes **one line** — `15:03:08 view=townHall&cityId=297038 #a>#b`: time, `view` / `action` / `function` / `cityId`, tag sent > tag received; a failure is `#a failed: <≤ 60 chars>`. The newest **10** kept | `http.ts:632`, `recordToolRequest` `:648` |
+| **Town switches that did not land** `ikaTownSwitchTrace`, the newest **5**: `at`, `kind`, `target`, `pageTown`, `answer` (the log's one-line summary, tokens out), `tokens` (`sent #…, page #…, tool #…`), `toolRequests` (the last 5 lines) | `http.ts:675`, `recordTownSwitch` `:704` |
+| Recorded in three places: an answer **without a reload** (`ajaxComplete` on `changeCurrentCity`); **not in the town after 15 s** (`waitFor` throws); **reloaded into another town** — once per switch (`traced` in `ika_pendingTownSwitch`), however many queued tasks come by | `navigation.ts:379`, `:292`, `:243` |
+| Log line on sending: `Switch to "X" sent through … (page token #…, tool's newest #…)`. The answer's line gains `feedback: type N "<text, ≤ 120 chars>"` and `(sent #…, tool's newest #…)`. `describeSwitchAnswer` became `readSwitchAnswer` (the line, whether it reloads, the token sent) | `navigation.ts:281`, `:424` |
+| Bug Report: `gameData.townSwitches`, `gameData.toolRequests` | `send-resources/diagnostics.ts:181–183` |
+| Both new keys in the `diagnostics` group | `core/data-transfer.ts:83–84` |
+
+**Size, estimated from the caps in the code (not measured):** about 1 KB
+per switch record (an answer line of up to ~460 characters and five
+request lines) × 5, plus ten request lines of ~70 characters — around
+6 KB. The 200-line log (`loggerInfo`, capped at 100,000 characters) is
+unchanged; a switch line grows by ~40 characters.
+
+### Tests
+
+871 → 882 (+11): `http.test.ts` 38 → 44 (one tagged line per request,
+no token in it; a failed request; the newest 10; tags stable and
+distinct; a switch record with the right fields and no token; the newest
+5, five request lines each), `navigation.test.ts` 35 → 39 (an answer
+without reload: feedback and tags in the log, a record, no token; an
+answer with reload: no record; 15 s timeout: a record; reloaded into
+another town three times: one record), `app.test.ts` 70 → 71 (Bug Report
+carries both traces), `data-transfer.test.ts` (an existing test now lists
+both keys).
+
+**Seen red, 12/12** (`break2.py` in the scratchpad: patch one line, run
+the matching test file, restore; `md5sum -c` after: 4 files `OK`): no
+request recorded, each of the three caps (10, 5, 5) raised, the error not
+cut or redacted, a tag that is the token itself, a reload answer
+recorded, a no-reload answer not recorded, the summary line dropped,
+`traced` ignored, `toolRequests` out of Bug Report, a key unclassified.
+Before the cut-down, the timeout record's `kind` was checked too — red.
+
+**My own mistakes:** two tests first failed because the watcher installs
+once per module and an earlier test had installed it — fixed with
+`vi.resetModules()` and a fresh import. One change was redundant (adding
+the sent token to the log line's redaction set — the line never holds the
+request); nothing went red without it, so it was dropped.
+
+### Still open, not measured
+
+- Everything on the game. Whether the switch request
+  (`ajaxHandlerCallFromForm`) shows its `actionRequest` in
+  `settings.data` to the page's jQuery is not known — if not, the `sent`
+  tag is `-`.
+- The cause of either kind of failed switch; no behaviour was changed.
+- The size is an estimate.
+
+**What to try on the game** (after a rebuild, both userscripts
+reinstalled): play as usual; when a switch does not land (the queue sits
+in the old town, looping), press **Bug Report** — no hurry, the last five
+are kept — and put the file in `sample/`. Read
+`gameData.townSwitches[].answer` (what the game said), `tokens` (whether
+the page's token differs from the tool's), `toolRequests` (which request
+came just before).
