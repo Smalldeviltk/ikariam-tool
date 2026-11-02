@@ -13,7 +13,11 @@ import { FLAG, KEY } from "../send-resources/state";
 import { TOWN_STATS_KEY } from "../send-resources/town-cache";
 import { BUG_REPORT_STORAGE_KEY } from "./bug-report";
 import { LOGGER_STORAGE_KEY } from "./logger";
-import { QUICK_UPGRADE_TRACE_KEY } from "./ikariam/http";
+import {
+  QUICK_UPGRADE_TRACE_KEY,
+  TOOL_REQUEST_TRACE_KEY,
+  TOWN_SWITCH_TRACE_KEY,
+} from "./ikariam/http";
 import { NOTIFICATION_SETTINGS_KEY, NOTIFIED_KEY } from "./notifications";
 import { TRACE_STORAGE_KEY } from "../empire-overview/ajax-trace";
 
@@ -346,6 +350,8 @@ describe("every key the scripts write is classified", () => {
       LOGGER_STORAGE_KEY,
       BUG_REPORT_STORAGE_KEY,
       QUICK_UPGRADE_TRACE_KEY,
+      TOWN_SWITCH_TRACE_KEY,
+      TOOL_REQUEST_TRACE_KEY,
     ]) {
       expect(classifyKey(key), key).toMatchObject({ group: "diagnostics" });
     }

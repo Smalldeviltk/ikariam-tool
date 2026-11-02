@@ -33,7 +33,11 @@
 
 import { BUG_REPORT_STORAGE_KEY } from "./bug-report";
 import { errorMessage } from "./format";
-import { QUICK_UPGRADE_TRACE_KEY } from "./ikariam/http";
+import {
+  QUICK_UPGRADE_TRACE_KEY,
+  TOOL_REQUEST_TRACE_KEY,
+  TOWN_SWITCH_TRACE_KEY,
+} from "./ikariam/http";
 import { LOGGER_STORAGE_KEY } from "./logger";
 import { NOTIFICATION_SETTINGS_KEY, NOTIFIED_KEY } from "./notifications";
 import { IMPORT_ERRORS, IMPORT_NOTES, IMPORT_SUMMARY } from "./messages";
@@ -76,6 +80,8 @@ const GLOBAL_KEYS: Record<string, DataGroup> = {
   [BUG_REPORT_STORAGE_KEY]: "diagnostics",
   ikaDomReports: "diagnostics",
   [QUICK_UPGRADE_TRACE_KEY]: "diagnostics",
+  [TOWN_SWITCH_TRACE_KEY]: "diagnostics",
+  [TOOL_REQUEST_TRACE_KEY]: "diagnostics",
   // Empire Overview's response trace (`TRACE_STORAGE_KEY` in
   // `empire-overview/ajax-trace.ts`); spelled out for the same reason.
   ikaAjaxTrace: "diagnostics",

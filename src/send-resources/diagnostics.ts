@@ -22,7 +22,11 @@ import {
 import { qs, qsa } from "@core/dom";
 import { errorMessage } from "@core/format";
 import { getCurrentTownName, pageWindow } from "@core/ikariam/globals";
-import { quickUpgradeTraces } from "@core/ikariam/http";
+import {
+  quickUpgradeTraces,
+  toolRequestTraces,
+  townSwitchTraces,
+} from "@core/ikariam/http";
 import { recentLogLines } from "@core/logger";
 import { hasModel, modelCurrentCityName } from "@core/ikariam/model";
 import { DIALOG_ID, SEL } from "@core/ikariam/selectors";
@@ -173,6 +177,10 @@ export function captureGameData(): Record<string, unknown> {
     createPopupSource: capture(captureCreatePopupSource),
     // What the game answered the board's quick upgrades.
     quickUpgrades: capture(quickUpgradeTraces),
+    // Town switches that did not land, each with the tool's requests before it.
+    townSwitches: capture(townSwitchTraces),
+    // The tool's own latest requests, with tags of the tokens.
+    toolRequests: capture(toolRequestTraces),
   };
 }
 

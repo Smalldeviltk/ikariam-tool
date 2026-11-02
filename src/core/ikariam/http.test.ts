@@ -10,11 +10,15 @@ import {
   postIkariamForm,
   quickUpgradeTraces,
   readAvatarNotes,
+  recordTownSwitch,
   resetHttpState,
   saveAvatarNotes,
   TOKEN_PLACEHOLDER,
   responseFeedback,
   SUCCESS_FEEDBACK_TYPE,
+  tokenTag,
+  toolRequestTraces,
+  townSwitchTraces,
   upgradeBuildingNow,
 } from "./http";
 
@@ -620,5 +624,124 @@ describe("the game's notepad", () => {
     await expect(readAvatarNotes({ minGapMs: 0 })).rejects.toThrow(
       /no notepad text box/,
     );
+  });
+});
+
+describe("the trace of the tool's own requests", () => {
+  beforeEach(() => localStorage.clear());
+
+  it(
+    "keeps one short line per request, with tags of the token sent and " +
+      "received, never the tokens themselves",
+    async () => {
+      mockFetch(TOWN_RESPONSE);
+      await ikariamRequest({ view: "townHall", cityId: 297042, position: 0 });
+      mockFetch({ dataForJSCallback: [], actionRequest: "token-after-post" });
+      await postIkariamForm(
+        { action: "Diplomacy", function: "saveAvatarNotes" },
+        { notes: "Q2ab|" },
+        { minGapMs: 0 },
+      );
+
+      const lines = toolRequestTraces();
+      const model = tokenTag("token-from-model");
+      const fromGet = tokenTag("token-from-response");
+      const fromPost = tokenTag("token-after-post");
+      expect(lines).toHaveLength(2);
+      expect(lines[0]).toMatch(
+        new RegExp(
+          `^\\d\\d:\\d\\d:\\d\\d view=townHall&cityId=297042 ${model}>${fromGet}$`,
+        ),
+      );
+      // The POST went with the token the GET was answered with.
+      expect(lines[1]).toMatch(
+        new RegExp(
+          `action=Diplomacy&function=saveAvatarNotes ${fromGet}>${fromPost}$`,
+        ),
+      );
+      expect(lines.join("\n")).not.toContain("token-");
+    },
+  );
+
+  it("notes a failed request in a few words", async () => {
+    mockFetch("<html>login</html>");
+    await expect(ikariamRequest({ view: "avatarNotes" })).rejects.toThrow();
+
+    const [line] = toolRequestTraces();
+    expect(line).toContain("view=avatarNotes");
+    expect(line).toContain("failed: Ikariam returned");
+    expect(line.length).toBeLessThan(120);
+  });
+
+  it("keeps the newest 10", async () => {
+    mockFetch(TOWN_RESPONSE);
+    for (let i = 0; i < 12; i++) {
+      await ikariamRequest({ view: "townHall", cityId: i }, { minGapMs: 0 });
+    }
+    const lines = toolRequestTraces();
+    expect(lines).toHaveLength(10);
+    expect(lines[0]).toContain("cityId=2 ");
+    expect(lines[9]).toContain("cityId=11 ");
+  });
+
+  it("tags a token the same way every time, and different tokens apart", () => {
+    expect(tokenTag("abc")).toBe(tokenTag("abc"));
+    expect(tokenTag("abc")).not.toBe(tokenTag("abd"));
+    expect(tokenTag("abc")).not.toContain("abc");
+    expect(tokenTag(null)).toBeNull();
+  });
+});
+
+describe("the trace of town switches that did not land", () => {
+  beforeEach(() => localStorage.clear());
+
+  it(
+    "keeps the main facts: the answer's line, the token tags, and the " +
+      "tool's last requests",
+    async () => {
+      mockFetch(TOWN_RESPONSE);
+      await ikariamRequest({ view: "townHall", cityId: 297042 });
+
+      recordTownSwitch({
+        kind: "answered without a reload",
+        target: "city id 297034",
+        pageTown: "C-Thebes",
+        answer: "city id 297034 -> [updateGlobalData] (no custom)",
+        sentToken: "stale1",
+      });
+
+      const [trace] = townSwitchTraces();
+      expect(trace).toMatchObject({
+        kind: "answered without a reload",
+        target: "city id 297034",
+        pageTown: "C-Thebes",
+        answer: "city id 297034 -> [updateGlobalData] (no custom)",
+        tokens:
+          `sent ${tokenTag("stale1")}, page ${tokenTag("token-from-model")}, ` +
+          `tool ${tokenTag("token-from-response")}`,
+      });
+      expect(trace.toolRequests).toHaveLength(1);
+      expect(trace.toolRequests[0]).toContain("view=townHall&cityId=297042");
+      expect(JSON.stringify(trace)).not.toMatch(/stale1|token-/);
+    },
+  );
+
+  it("keeps the newest 5, each with at most 5 of the tool's requests", async () => {
+    mockFetch(TOWN_RESPONSE);
+    for (let i = 0; i < 8; i++) {
+      await ikariamRequest({ view: "townHall", cityId: i }, { minGapMs: 0 });
+    }
+    for (let i = 0; i < 7; i++) {
+      recordTownSwitch({
+        kind: "k",
+        target: `t${i}`,
+        pageTown: null,
+        answer: null,
+        sentToken: null,
+      });
+    }
+    const traces = townSwitchTraces();
+    expect(traces.map((t) => t.target)).toEqual(["t2", "t3", "t4", "t5", "t6"]);
+    expect(traces[0].toolRequests).toHaveLength(5);
   });
 });

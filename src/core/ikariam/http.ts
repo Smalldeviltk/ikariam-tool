@@ -145,13 +145,24 @@ function publishResponse(entries: unknown[]): void {
   }
 }
 
-/** The token to send, newest first. `null` when the game has not loaded. */
-export function actionRequestToken(): string | null {
+/** The token in the game's own model — what the page's requests carry. */
+export function pageModelToken(): string | null {
   const model = (pageWindow.ikariam as { model?: { actionRequest?: unknown } })
     ?.model;
-  const fromModel =
-    typeof model?.actionRequest === "string" ? model.actionRequest : null;
-  return latestToken ?? fromModel;
+  return typeof model?.actionRequest === "string" ? model.actionRequest : null;
+}
+
+/** The token to send, newest first. `null` when the game has not loaded. */
+export function actionRequestToken(): string | null {
+  return latestToken ?? pageModelToken();
+}
+
+/**
+ * The newest token this module's own requests were answered with, or `null`
+ * before the first one. Unlike `actionRequestToken`, never the model's.
+ */
+export function toolNewestToken(): string | null {
+  return latestToken;
 }
 
 /** Forget the tracked token. For tests. */
@@ -167,14 +178,20 @@ export function resetHttpState(): void {
  * `headerData` and `backgroundData`.
  */
 function absorbToken(entries: unknown[]): void {
+  const token = tokenInEntries(entries);
+  if (token !== null) latestToken = token;
+}
+
+/** The first `actionRequest` carried by a response array's entries. */
+function tokenInEntries(entries: unknown[]): string | null {
   for (const entry of entries) {
     if (!Array.isArray(entry)) continue;
     const payload = entry[1] as { actionRequest?: unknown } | null | undefined;
     if (payload && typeof payload.actionRequest === "string") {
-      latestToken = payload.actionRequest;
-      return;
+      return payload.actionRequest;
     }
   }
+  return null;
 }
 
 /**
@@ -258,12 +275,20 @@ export async function ikariamRequest(
   query.set("actionRequest", token);
   query.set("ajax", "1");
 
-  const parsed = await fetchJson("/index.php?" + query.toString(), {}, options);
+  let parsed: unknown;
+  try {
+    parsed = await fetchJson("/index.php?" + query.toString(), {}, options);
+  } catch (e) {
+    recordToolRequest(params, token, null, errorMessage(e));
+    throw e;
+  }
   if (!Array.isArray(parsed)) {
+    recordToolRequest(params, token, null, "not a response array");
     throw new Error("Ikariam returned JSON that is not a response array");
   }
 
   absorbToken(parsed);
+  recordToolRequest(params, token, tokenInEntries(parsed), null);
 
   publishResponse(parsed);
 
@@ -293,18 +318,31 @@ export async function postIkariamForm(
   body.set("ajax", "1");
   body.set("actionRequest", token);
 
-  const parsed = await fetchJson(
-    "/index.php?" + new URLSearchParams(query).toString(),
-    { method: "POST", body },
-    options,
-  );
+  let parsed: unknown;
+  try {
+    parsed = await fetchJson(
+      "/index.php?" + new URLSearchParams(query).toString(),
+      { method: "POST", body },
+      options,
+    );
+  } catch (e) {
+    recordToolRequest(query, token, null, errorMessage(e));
+    throw e;
+  }
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    recordToolRequest(query, token, null, "not a response object");
     throw new Error("Ikariam returned JSON that is not a response object");
   }
   const answer = parsed as Record<string, unknown>;
   if (typeof answer.actionRequest === "string") {
     latestToken = answer.actionRequest;
   }
+  recordToolRequest(
+    query,
+    token,
+    typeof answer.actionRequest === "string" ? answer.actionRequest : null,
+    null,
+  );
   return answer;
 }
 
@@ -544,6 +582,147 @@ function traceResponse(
   return redactTokens(JSON.stringify(entries), tokens).slice(
     0,
     TRACE_RESPONSE_CHARS,
+  );
+}
+
+/**
+ * A short tag for a session token, so a trace can show whether two tokens are
+ * the same without carrying either: a 32-bit FNV-1a hash in base 36. It cannot
+ * be turned back into the token. `null` for no token.
+ */
+export function tokenTag(token: string | null | undefined): string | null {
+  if (!token) return null;
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < token.length; i++) {
+    hash ^= token.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return "#" + hash.toString(36);
+}
+
+/** Read a JSON list from storage; anything unreadable is an empty list. */
+function readTraceList<T>(key: string): T[] {
+  try {
+    const raw = localStorage.getItem(key);
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Append to a stored JSON list, keeping the newest `limit`. Never throws. */
+function appendTraceList<T>(key: string, item: T, limit: number): void {
+  try {
+    const list = [...readTraceList<T>(key), item].slice(-limit);
+    localStorage.setItem(key, JSON.stringify(list));
+  } catch {
+    // A full storage must not fail the request it records.
+  }
+}
+
+/**
+ * The last requests this module sent itself (Scan, the notepad), newest last,
+ * one short line each: time, request, and tags of the token sent and the
+ * token the answer carried — `08:03:08 view=townHall&cityId=297038 #a>#b`.
+ * Kept for the town switches that sometimes do not land: the switch goes
+ * through the game's form with the page's token, and these requests may have
+ * moved the server on from it. Short on purpose; it lives in `localStorage`.
+ */
+export const TOOL_REQUEST_TRACE_KEY = "ikaToolRequestTrace";
+const TOOL_REQUEST_TRACE_LIMIT = 10;
+/** Cap on an error's words in a trace line. */
+const TRACE_ERROR_CHARS = 60;
+
+export function toolRequestTraces(): string[] {
+  return readTraceList<string>(TOOL_REQUEST_TRACE_KEY);
+}
+
+const TRACED_PARAMS = ["view", "action", "function", "cityId"];
+
+/** `HH:MM:SS` of now, in the browser's time zone, like the log. */
+function clockTime(): string {
+  return new Date().toTimeString().slice(0, 8);
+}
+
+function recordToolRequest(
+  params: Record<string, string | number>,
+  sent: string,
+  received: string | null,
+  error: string | null,
+): void {
+  const request = TRACED_PARAMS.filter((name) => params[name] !== undefined)
+    .map((name) => `${name}=${params[name]}`)
+    .join("&");
+  const outcome =
+    error === null
+      ? `${tokenTag(sent)}>${tokenTag(received) ?? "-"}`
+      : `${tokenTag(sent)} failed: ` +
+        redactTokens(error, new Set([sent])).slice(0, TRACE_ERROR_CHARS);
+  appendTraceList<string>(
+    TOOL_REQUEST_TRACE_KEY,
+    `${clockTime()} ${request} ${outcome}`,
+    TOOL_REQUEST_TRACE_LIMIT,
+  );
+}
+
+/**
+ * The last town switches that did not land, newest last — only the main
+ * facts, kept small. The log keeps 200 lines and an Auto Build lap writes
+ * several a minute, so the lines of a failure an hour old are gone by the
+ * time Bug Report is pressed (02/11); these are not.
+ */
+export const TOWN_SWITCH_TRACE_KEY = "ikaTownSwitchTrace";
+const TOWN_SWITCH_TRACE_LIMIT = 5;
+/** How many of the tool's requests go with each switch trace. */
+const SWITCH_TRACE_TOOL_REQUESTS = 5;
+
+export interface TownSwitchTrace {
+  at: string;
+  /** What went wrong: an answer without reload, a timeout, a wrong landing. */
+  kind: string;
+  /** The town the switch was for. */
+  target: string;
+  /** The town the page was in when this was written. */
+  pageTown: string | null;
+  /** The server's answer in one line (entry names, reload, feedback). */
+  answer: string | null;
+  /** Tags: in the switch request, in the game's model, the tool's newest. */
+  tokens: string;
+  /** The tool's own requests just before. */
+  toolRequests: string[];
+}
+
+export function townSwitchTraces(): TownSwitchTrace[] {
+  return readTraceList<TownSwitchTrace>(TOWN_SWITCH_TRACE_KEY);
+}
+
+/**
+ * Record a town switch that did not land. `answer` is the one-line summary
+ * the log gets, already free of tokens; `sentToken` is raw and only tagged.
+ */
+export function recordTownSwitch(details: {
+  kind: string;
+  target: string;
+  pageTown: string | null;
+  answer: string | null;
+  sentToken: string | null;
+}): void {
+  appendTraceList<TownSwitchTrace>(
+    TOWN_SWITCH_TRACE_KEY,
+    {
+      at: new Date().toISOString(),
+      kind: details.kind,
+      target: details.target,
+      pageTown: details.pageTown,
+      answer: details.answer,
+      tokens:
+        `sent ${tokenTag(details.sentToken) ?? "-"}, ` +
+        `page ${tokenTag(pageModelToken()) ?? "-"}, ` +
+        `tool ${tokenTag(latestToken) ?? "-"}`,
+      toolRequests: toolRequestTraces().slice(-SWITCH_TRACE_TOOL_REQUESTS),
+    },
+    TOWN_SWITCH_TRACE_LIMIT,
   );
 }
 

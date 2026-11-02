@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { tokenTag, townSwitchTraces } from "@core/ikariam/http";
 import {
   backToCity,
   closeGamePopup,
@@ -329,6 +330,117 @@ describe("what the log says about a town switch", () => {
   );
 });
 
+describe("what is kept of a town switch that did not land", () => {
+  beforeEach(() => localStorage.clear());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+    delete (window as { jQuery?: unknown }).jQuery;
+  });
+
+  /**
+   * The watcher's `ajaxComplete` handler, with the page's jQuery faked. A
+   * fresh copy of the module: the watcher installs once per page, and an
+   * earlier test already did.
+   */
+  async function installWatcher(): Promise<(...args: unknown[]) => void> {
+    let handler: ((...args: unknown[]) => void) | undefined;
+    const on = vi.fn((_event: string, h: (...args: unknown[]) => void) => {
+      handler = h;
+    });
+    (window as { jQuery?: unknown }).jQuery = vi.fn(() => ({ on }));
+    vi.resetModules();
+    const fresh = await import("./navigation");
+    fresh.watchTownSwitchResponses();
+    return (...args: unknown[]) => handler!(...args);
+  }
+
+  const switchRequest = (cityId: number, token: string) => ({
+    url: "/index.php",
+    data:
+      `action=header&function=changeCurrentCity&actionRequest=${token}` +
+      `&oldView=city&cityId=${cityId}`,
+  });
+
+  it(
+    "logs the game's feedback and the token tags, and keeps an answer " +
+      "without a reload apart from the log, tokens out - the 02/11 report " +
+      "had only the entry names, not what the game said",
+    async () => {
+      document.body.innerHTML = `<div id="js_cityBread">C-Thebes</div>`;
+      const log = vi.spyOn(console, "log").mockImplementation(() => {});
+      const answer = await installWatcher();
+
+      answer(
+        {},
+        {
+          responseText: JSON.stringify([
+            ["updateGlobalData", { actionRequest: "fresh9" }],
+            ["provideFeedback", [{ type: 11, text: "<b>Not</b> allowed" }]],
+          ]),
+        },
+        switchRequest(297034, "stale8"),
+      );
+
+      const line = log.mock.calls.map((call) => String(call[0])).join("\n");
+      expect(line).toContain('feedback: type 11 "Not allowed"');
+      expect(line).toContain(`(sent ${tokenTag("stale8")}, tool's newest`);
+      expect(line).not.toContain("stale8");
+      expect(line).not.toContain("fresh9");
+
+      const traces = townSwitchTraces();
+      expect(traces).toHaveLength(1);
+      expect(traces[0]).toMatchObject({
+        kind: "answered without a reload",
+        target: "city id 297034",
+        pageTown: "C-Thebes",
+      });
+      expect(traces[0].answer).toContain('feedback: type 11 "Not allowed"');
+      expect(traces[0].tokens).toContain(`sent ${tokenTag("stale8")}`);
+      expect(JSON.stringify(traces[0])).not.toMatch(/stale8|fresh9/);
+    },
+  );
+
+  it("keeps nothing for a switch answered with a reload", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const answer = await installWatcher();
+
+    answer(
+      {},
+      {
+        responseText: JSON.stringify([
+          ["custom", ["reload", { link: "?view=city&cityId=297034" }]],
+        ]),
+      },
+      switchRequest(297034, "token1"),
+    );
+
+    expect(townSwitchTraces()).toEqual([]);
+  });
+
+  it("keeps a switch that left the page in the old town for 15 s", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    // A dropdown whose click does nothing: the page never moves.
+    document.body.innerHTML =
+      townDropdown(["W-Athens", "C-Thebes"]) +
+      `<div id="js_cityBread">W-Athens</div>`;
+
+    const going = gotoTown(1);
+    const failed = expect(going).rejects.toThrow(/timed out/);
+    await vi.advanceTimersByTimeAsync(16_000);
+    await failed;
+
+    expect(townSwitchTraces()).toMatchObject([
+      {
+        kind: "not in the town 15s after the switch",
+        target: "C-Thebes",
+        pageTown: "W-Athens",
+      },
+    ]);
+  });
+});
+
 describe("gotoTown town switching", () => {
   it(
     "REGRESSION: falls back to the game's own dropdown when the Empire " +
@@ -584,6 +696,25 @@ describe("a dropdown that shows coordinates", () => {
 
       expect(early).toMatch(/did not land/);
       expect(later).toBe(early);
+    },
+  );
+
+  it(
+    "keeps one trace of a reload that landed in another town, however " +
+      "many queued tasks come by in the window",
+    async () => {
+      localStorage.clear();
+      installFormAndBoard();
+      switchSentBeforeTheReload("S-Clone1", 1_000);
+
+      for (let i = 0; i < 3; i++) {
+        await expect(gotoTown(2)).rejects.toThrow(/did not land/);
+      }
+
+      const traces = townSwitchTraces();
+      expect(traces).toHaveLength(1);
+      expect(traces[0].kind).toMatch(/^reloaded into another town/);
+      expect(traces[0].target).toBe("S-Clone1");
     },
   );
 

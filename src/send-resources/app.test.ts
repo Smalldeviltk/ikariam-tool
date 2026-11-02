@@ -1724,6 +1724,34 @@ describe("Bug Report", () => {
     },
   );
 
+  it(
+    "carries the town switches that did not land and the tool's own " +
+      "requests before them",
+    async () => {
+      await startWith({});
+      const switchTrace = {
+        at: "2026-11-02T08:03:10.000Z",
+        kind: "answered without a reload",
+        target: "city id 297034",
+        pageTown: "C-Thebes",
+        answer: "city id 297034 -> [provideFeedback] (no custom)",
+        tokens: "sent #a, page #a, tool #b",
+        toolRequests: [],
+      };
+      const requestTrace = "15:03:08 view=townHall&cityId=297038 #a>#b";
+      localStorage.setItem("ikaTownSwitchTrace", JSON.stringify([switchTrace]));
+      localStorage.setItem(
+        "ikaToolRequestTrace",
+        JSON.stringify([requestTrace]),
+      );
+
+      const report = await pressBugReport();
+
+      expect(report.gameData.townSwitches).toEqual([switchTrace]);
+      expect(report.gameData.toolRequests).toEqual([requestTrace]);
+    },
+  );
+
   it("says nothing of quick upgrades when there were none", async () => {
     await startWith({});
     const report = await pressBugReport();

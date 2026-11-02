@@ -12,7 +12,14 @@ import {
   pageWindow,
   readTownName,
 } from "@core/ikariam/globals";
-import { redactTokens } from "@core/ikariam/http";
+import {
+  pageModelToken,
+  recordTownSwitch,
+  redactTokens,
+  responseFeedback,
+  tokenTag,
+  toolNewestToken,
+} from "@core/ikariam/http";
 import { modelCityName } from "@core/ikariam/model";
 import { SEL } from "@core/ikariam/selectors";
 import { logInfo } from "@core/logger";
@@ -153,6 +160,8 @@ const SWITCH_LANDING_WINDOW_MS = 30_000;
 interface PendingSwitch {
   target: string;
   sentAt: number;
+  /** Whether the landing in another town was already traced. */
+  traced?: boolean;
 }
 
 /**
@@ -229,6 +238,21 @@ export async function gotoTown(townNumber: number | string): Promise<void> {
     // made one fault fill all 50 records (03/10).
     const secondsAgo = Math.round((Date.now() - pending.sentAt) / 1000);
     logInfo(`The switch to "${target}" was sent ${secondsAgo}s ago`);
+    // Traced once per switch: every queued task from that town comes here
+    // for the rest of the window, and one trace says all of it.
+    if (!pending.traced) {
+      recordTownSwitch({
+        kind: `reloaded into another town ${secondsAgo}s after the switch`,
+        target,
+        pageTown: getCurrentTownName(),
+        answer: null,
+        sentToken: null,
+      });
+      sessionStorage.setItem(
+        PENDING_SWITCH_KEY,
+        JSON.stringify({ ...pending, traced: true }),
+      );
+    }
     throw new TownSwitchPendingError(
       `The switch to "${target}" did not land ` +
         `(now in "${getCurrentTownName()}") - not sending it again`,
@@ -250,13 +274,30 @@ export async function gotoTown(townNumber: number | string): Promise<void> {
   }
   // With the server's answer (`watchTownSwitchResponses`), the log says what
   // happened to a switch that did not land.
-  logInfo(`Switch to "${target}" sent through ${route}`);
+  // The tags show whether the page's token (what the game's form sends) is
+  // still the one the tool's own requests were last answered with.
+  logInfo(
+    `Switch to "${target}" sent through ${route} ` +
+      `(page token ${tokenTag(pageModelToken()) ?? "none"}, ` +
+      `tool's newest ${tokenTag(toolNewestToken()) ?? "none"})`,
+  );
 
-  await waitFor(() => getCurrentTownName() === target, {
-    intervalMs: 100,
-    timeoutMs: TOWN_SWITCH_TIMEOUT_MS,
-    label: `gotoTown(${target})`,
-  });
+  try {
+    await waitFor(() => getCurrentTownName() === target, {
+      intervalMs: 100,
+      timeoutMs: TOWN_SWITCH_TIMEOUT_MS,
+      label: `gotoTown(${target})`,
+    });
+  } catch (error) {
+    recordTownSwitch({
+      kind: `not in the town ${TOWN_SWITCH_TIMEOUT_MS / 1000}s after the switch`,
+      target,
+      pageTown: getCurrentTownName(),
+      answer: null,
+      sentToken: null,
+    });
+    throw error;
+  }
   // Landed without a reload: nothing for the next page to check.
   forgetPendingSwitch();
 }
@@ -331,9 +372,19 @@ export function watchTownSwitchResponses(): void {
       try {
         const request = ajaxRequestText(settings);
         if (!request.includes(CHANGE_CITY_FUNCTION)) return;
-        logInfo(
-          `Town switch answered: ${describeSwitchAnswer(request, xhr?.responseText)}`,
-        );
+        const answer = readSwitchAnswer(request, xhr?.responseText);
+        logInfo(`Town switch answered: ${answer.line}`);
+        // A switch that lands is a reload; anything else leaves the page
+        // where it was. Kept apart from the log, which rolls over.
+        if (!answer.reloads) {
+          recordTownSwitch({
+            kind: "answered without a reload",
+            target: `city id ${answer.askedFor}`,
+            pageTown: getCurrentTownName(),
+            answer: answer.line,
+            sentToken: answer.sentToken,
+          });
+        }
       } catch {
         // A diagnostic must never get in the way of the game's own request.
       }
@@ -356,10 +407,29 @@ function ajaxRequestText(
   return `${url}&${body}`;
 }
 
-/** One line on what the server said to a town switch. */
-function describeSwitchAnswer(request: string, responseText: unknown): string {
+/** How much of the game's feedback text goes into the log line. */
+const SWITCH_FEEDBACK_MAX_CHARS = 120;
+
+interface SwitchAnswer {
+  /** One line for the log, tokens out. */
+  line: string;
+  askedFor: string;
+  /** Whether the server answered with a reload — a switch that lands. */
+  reloads: boolean;
+  /** The token the switch request carried, raw; never logged. */
+  sentToken: string | null;
+}
+
+/** What the server said to a town switch. */
+function readSwitchAnswer(
+  request: string,
+  responseText: unknown,
+): SwitchAnswer {
   const askedFor = /(?:^|[?&])cityId=(\d+)/.exec(request)?.[1] ?? "?";
+  const sentToken =
+    /(?:^|[?&])actionRequest=([^&]*)/.exec(request)?.[1] ?? null;
   let answer: string;
+  let reloads = false;
   try {
     const entries = JSON.parse(String(responseText)) as unknown;
     if (!Array.isArray(entries)) throw new Error("not a response array");
@@ -369,14 +439,31 @@ function describeSwitchAnswer(request: string, responseText: unknown): string {
     const custom = entries.find(
       (entry) => Array.isArray(entry) && entry[0] === "custom",
     ) as unknown[] | undefined;
+    reloads = Array.isArray(custom?.[1]) && custom[1][0] === "reload";
+    const feedback = responseFeedback(entries);
     answer =
       `[${names.join(", ")}]` +
-      (custom ? ` custom: ${JSON.stringify(custom[1])}` : " (no custom)");
+      (custom ? ` custom: ${JSON.stringify(custom[1])}` : " (no custom)") +
+      (feedback
+        ? ` feedback: type ${feedback.type} ` +
+          JSON.stringify(
+            (feedback.text ?? "").slice(0, SWITCH_FEEDBACK_MAX_CHARS),
+          )
+        : "");
   } catch {
     answer = `not a response array: ${String(responseText).slice(0, 80)}`;
   }
+  const tags =
+    ` (sent ${tokenTag(sentToken) ?? "no token"}, ` +
+    `tool's newest ${tokenTag(toolNewestToken()) ?? "none"})`;
   const line = `city id ${askedFor} -> ${answer}`;
-  return redactTokens(line, new Set()).slice(0, SWITCH_ANSWER_MAX_CHARS);
+  return {
+    line:
+      redactTokens(line, new Set()).slice(0, SWITCH_ANSWER_MAX_CHARS) + tags,
+    askedFor,
+    reloads,
+    sentToken,
+  };
 }
 
 /**
