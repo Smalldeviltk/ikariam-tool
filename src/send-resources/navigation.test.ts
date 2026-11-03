@@ -336,6 +336,7 @@ describe("what is kept of a town switch that did not land", () => {
     vi.restoreAllMocks();
     vi.useRealTimers();
     delete (window as { jQuery?: unknown }).jQuery;
+    Reflect.deleteProperty(window, "ajaxHandlerCallFromForm");
   });
 
   /**
@@ -416,6 +417,113 @@ describe("what is kept of a town switch that did not land", () => {
     );
 
     expect(townSwitchTraces()).toEqual([]);
+  });
+
+  /** The page with the game's form; the switch lands on submit `landsOn`. */
+  function installForm(landsOn: number): string[] {
+    document.body.innerHTML =
+      townDropdown(["W-Athens", "C-Thebes"]) +
+      `<div id="js_cityBread">W-Athens</div>` +
+      `<form id="changeCityForm"><input id="js_cityIdOnChange" name="cityId"></form>`;
+    const submitted: string[] = [];
+    Object.assign(window, {
+      ajaxHandlerCallFromForm: (form: HTMLFormElement) => {
+        submitted.push(
+          form.querySelector<HTMLInputElement>("#js_cityIdOnChange")!.value,
+        );
+        if (submitted.length === landsOn) {
+          document.getElementById("js_cityBread")!.textContent = "C-Thebes";
+        }
+      },
+    });
+    return submitted;
+  }
+
+  const refusal = {
+    responseText: JSON.stringify([
+      ["updateGlobalData", { actionRequest: "fresh9" }],
+      ["provideFeedback", [{ type: 11, text: "The last action was invalid" }]],
+    ]),
+  };
+
+  it(
+    "sends the tool's switch again, once, when the server refuses it as an " +
+      "invalid action - measured 03/11, the refusal brings the new token and " +
+      "the same switch sent again lands",
+    async () => {
+      vi.useFakeTimers();
+      vi.spyOn(console, "log").mockImplementation(() => {});
+      const answer = await installWatcher();
+      const submitted = installForm(2);
+
+      const fresh = await import("./navigation");
+      const going = fresh.gotoTown(1);
+      expect(submitted).toEqual(["78039"]);
+
+      answer({}, refusal, switchRequest(78039, "stale8"));
+      await vi.advanceTimersByTimeAsync(300);
+      expect(submitted).toEqual(["78039", "78039"]);
+      await expect(going).resolves.toBeUndefined();
+    },
+  );
+
+  it("does not send a refused switch a second time", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const answer = await installWatcher();
+    const submitted = installForm(0);
+    sessionStorage.setItem(
+      "ika_pendingTownSwitch",
+      JSON.stringify({
+        target: "C-Thebes",
+        cityId: "78039",
+        sentAt: Date.now(),
+      }),
+    );
+
+    answer({}, refusal, switchRequest(78039, "stale8"));
+    await vi.advanceTimersByTimeAsync(300);
+    answer({}, refusal, switchRequest(78039, "stale9"));
+    await vi.advanceTimersByTimeAsync(300);
+    expect(submitted).toEqual(["78039"]);
+  });
+
+  it("leaves alone a refused switch the tool did not send", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const answer = await installWatcher();
+    const submitted = installForm(0);
+
+    answer({}, refusal, switchRequest(78039, "stale8"));
+    await vi.advanceTimersByTimeAsync(300);
+    expect(submitted).toEqual([]);
+  });
+
+  it("does not send again a switch refused for another reason", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const answer = await installWatcher();
+    const submitted = installForm(0);
+    sessionStorage.setItem(
+      "ika_pendingTownSwitch",
+      JSON.stringify({
+        target: "C-Thebes",
+        cityId: "78039",
+        sentAt: Date.now(),
+      }),
+    );
+
+    answer(
+      {},
+      {
+        responseText: JSON.stringify([
+          ["provideFeedback", [{ type: 12, text: "Something else" }]],
+        ]),
+      },
+      switchRequest(78039, "token1"),
+    );
+    await vi.advanceTimersByTimeAsync(300);
+    expect(submitted).toEqual([]);
   });
 
   it("keeps a switch that left the page in the old town for 15 s", async () => {

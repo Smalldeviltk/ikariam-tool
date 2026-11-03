@@ -32,6 +32,9 @@
  * It does not apply responses to the game. It hands the parsed array to
  * whoever registered an interest and stops there. Driving the page is the
  * feature code's business, not the transport's.
+ *
+ * The one exception is the session token (`adoptToken`): an action of ours
+ * moves it on the server, and the page's next request must carry the new one.
  */
 
 import { sleep } from "../async";
@@ -55,13 +58,12 @@ export interface RequestOptions {
 }
 
 /**
- * The newest `actionRequest` seen, which is not always the model's.
+ * The newest `actionRequest` this copy of the module was answered with.
  *
- * The model is the source of truth at page load. But responses carry the token
- * too, and this module does not apply responses to the game — so if the server
- * ever does rotate it, the model's copy would go stale while ours stays
- * correct. Tracking it costs nothing and removes a whole failure mode where
- * requests are accepted, do nothing, and report no error.
+ * The game's model is where the token is kept (`actionRequestToken`); this is
+ * the fallback when the model cannot be read, and a tag in the diagnostics.
+ * It is per copy: the two scripts each have one, and neither sees the
+ * other's, which is why the token goes into the model as well.
  */
 let latestToken: string | null = null;
 
@@ -152,9 +154,39 @@ export function pageModelToken(): string | null {
   return typeof model?.actionRequest === "string" ? model.actionRequest : null;
 }
 
-/** The token to send, newest first. `null` when the game has not loaded. */
+/**
+ * The token to send. `null` when the game has not loaded.
+ *
+ * The model's first: the page's own requests move it there, and so do both
+ * scripts' (`adoptToken`). This copy's newest is only a fallback — after the
+ * other script's action or the page's own, it is the old one, and the server
+ * refuses an action sent with it.
+ */
 export function actionRequestToken(): string | null {
-  return latestToken ?? pageModelToken();
+  return pageModelToken() ?? latestToken;
+}
+
+/**
+ * Keep a token the server answered one of our requests with, and put it into
+ * the game's model.
+ *
+ * An action moves the token on the server (measured: `UpgradeExistingBuilding`
+ * and the notepad's save answer with a new one; a view answers with the same).
+ * The page's next request carries the model's copy, and the server refuses an
+ * old one: on 03/11, an "Upgrade now" on the board, then a town clicked on the
+ * board, was answered "The last action was invalid" and the page stayed in
+ * its town. The game puts every token it is answered with into the model
+ * itself; this does the same for ours.
+ */
+function adoptToken(token: string): void {
+  latestToken = token;
+  const model = (pageWindow.ikariam as { model?: unknown } | undefined)?.model;
+  if (model === null || typeof model !== "object") return;
+  try {
+    (model as { actionRequest?: unknown }).actionRequest = token;
+  } catch {
+    // A frozen or foreign model: the fallback above still has the token.
+  }
 }
 
 /**
@@ -179,7 +211,7 @@ export function resetHttpState(): void {
  */
 function absorbToken(entries: unknown[]): void {
   const token = tokenInEntries(entries);
-  if (token !== null) latestToken = token;
+  if (token !== null) adoptToken(token);
 }
 
 /** The first `actionRequest` carried by a response array's entries. */
@@ -335,7 +367,7 @@ export async function postIkariamForm(
   }
   const answer = parsed as Record<string, unknown>;
   if (typeof answer.actionRequest === "string") {
-    latestToken = answer.actionRequest;
+    adoptToken(answer.actionRequest);
   }
   recordToolRequest(
     query,

@@ -159,9 +159,13 @@ const SWITCH_LANDING_WINDOW_MS = 30_000;
 
 interface PendingSwitch {
   target: string;
+  /** The target's city id, as the switch request names it. */
+  cityId?: string;
   sentAt: number;
   /** Whether the landing in another town was already traced. */
   traced?: boolean;
+  /** Whether it was sent again after the server refused it. */
+  resent?: boolean;
 }
 
 /**
@@ -259,7 +263,11 @@ export async function gotoTown(townNumber: number | string): Promise<void> {
     );
   }
 
-  const sent: PendingSwitch = { target, sentAt: Date.now() };
+  const sent: PendingSwitch = {
+    target,
+    cityId: townCityId(townNumber) ?? undefined,
+    sentAt: Date.now(),
+  };
   sessionStorage.setItem(PENDING_SWITCH_KEY, JSON.stringify(sent));
   const route = submitChangeCityForm(townNumber)
     ? "the game's form"
@@ -316,17 +324,67 @@ export async function gotoTown(townNumber: number | string): Promise<void> {
  */
 function submitChangeCityForm(townNumber: number | string): boolean {
   const cityId = townCityId(townNumber);
+  return cityId !== null && submitChangeCityFormFor(cityId);
+}
+
+/** `submitChangeCityForm` for a city id. Returns whether it was sent. */
+function submitChangeCityFormFor(cityId: string): boolean {
   const form = qs<HTMLFormElement>(SEL.changeCityForm);
   const cityInput = qs<HTMLInputElement>(SEL.changeCityInput);
   const submitForm = (
     pageWindow as { ajaxHandlerCallFromForm?: (form: HTMLFormElement) => void }
   ).ajaxHandlerCallFromForm;
-  if (cityId === null || !form || !cityInput) return false;
+  if (!form || !cityInput) return false;
   if (typeof submitForm !== "function") return false;
 
   cityInput.value = cityId;
   submitForm(form);
   return true;
+}
+
+/**
+ * `provideFeedback` type of the answer "The last action was invalid", the
+ * server's word for a request that carried an old session token. Measured
+ * 03/11, on a town switch sent with the token an action of ours had moved on.
+ */
+const INVALID_ACTION_FEEDBACK_TYPE = 11;
+
+/**
+ * Wait before sending a refused switch again: the game is still handling the
+ * refusal when the watcher hears of it. The same gap as the tool's requests.
+ */
+const REFUSED_SWITCH_RESEND_DELAY_MS = 300;
+
+/**
+ * Send this page's switch again, once, when the server refused it as an
+ * invalid action.
+ *
+ * The refusal itself brings the server's current token, and the game puts it
+ * into its model, so the next switch carries it: on 03/11 the same switch,
+ * sent again by hand 5 s later, reloaded into the town. Without this the
+ * switch is not sent again for `SWITCH_LANDING_WINDOW_MS`, and every task
+ * from that town waits it out.
+ *
+ * Only a switch `gotoTown` sent, to the town the answer names, not yet sent
+ * again, and the page still not there; one the player sent by hand is theirs.
+ */
+function resendRefusedSwitch(cityId: string): void {
+  const pending = readPendingSwitch();
+  if (!pending || pending.cityId !== cityId || pending.resent) return;
+  if (Date.now() - pending.sentAt >= SWITCH_LANDING_WINDOW_MS) return;
+  sessionStorage.setItem(
+    PENDING_SWITCH_KEY,
+    JSON.stringify({ ...pending, resent: true }),
+  );
+  window.setTimeout(() => {
+    if (getCurrentTownName() === pending.target) return;
+    if (submitChangeCityFormFor(cityId)) {
+      logInfo(
+        `The switch to "${pending.target}" was refused as an invalid ` +
+          `action - sent again with the page's new token`,
+      );
+    }
+  }, REFUSED_SWITCH_RESEND_DELAY_MS);
 }
 
 /** The game's request that changes town (`action=header&function=…`). */
@@ -385,6 +443,7 @@ export function watchTownSwitchResponses(): void {
             sentToken: answer.sentToken,
           });
         }
+        if (answer.refused) resendRefusedSwitch(answer.askedFor);
       } catch {
         // A diagnostic must never get in the way of the game's own request.
       }
@@ -416,6 +475,8 @@ interface SwitchAnswer {
   askedFor: string;
   /** Whether the server answered with a reload — a switch that lands. */
   reloads: boolean;
+  /** Whether the server refused it as an invalid action, without a reload. */
+  refused: boolean;
   /** The token the switch request carried, raw; never logged. */
   sentToken: string | null;
 }
@@ -430,6 +491,7 @@ function readSwitchAnswer(
     /(?:^|[?&])actionRequest=([^&]*)/.exec(request)?.[1] ?? null;
   let answer: string;
   let reloads = false;
+  let refused = false;
   try {
     const entries = JSON.parse(String(responseText)) as unknown;
     if (!Array.isArray(entries)) throw new Error("not a response array");
@@ -441,6 +503,7 @@ function readSwitchAnswer(
     ) as unknown[] | undefined;
     reloads = Array.isArray(custom?.[1]) && custom[1][0] === "reload";
     const feedback = responseFeedback(entries);
+    refused = !reloads && feedback?.type === INVALID_ACTION_FEEDBACK_TYPE;
     answer =
       `[${names.join(", ")}]` +
       (custom ? ` custom: ${JSON.stringify(custom[1])}` : " (no custom)") +
@@ -462,6 +525,7 @@ function readSwitchAnswer(
       redactTokens(line, new Set()).slice(0, SWITCH_ANSWER_MAX_CHARS) + tags,
     askedFor,
     reloads,
+    refused,
     sentToken,
   };
 }

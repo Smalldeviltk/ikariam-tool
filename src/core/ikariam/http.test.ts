@@ -127,12 +127,15 @@ describe("the action request token", () => {
   });
 
   it(
-    "prefers one the server sent back — the module never applies responses " +
-      "to the game, so the model's copy would go stale if it ever rotated, " +
-      "and a stale token is accepted, does nothing, and reports no error",
+    "puts the token the server answered with into the game's model — the " +
+      "page's next request carries the model's, and the server refuses an " +
+      "old one after an action of ours",
     async () => {
       const fetchMock = mockFetch(TOWN_RESPONSE);
       await ikariamRequest({ view: "townHall" });
+      expect((window as any).ikariam.model.actionRequest).toBe(
+        "token-from-response",
+      );
       expect(actionRequestToken()).toBe("token-from-response");
 
       await ikariamRequest({ view: "townHall" }, { minGapMs: 0 });
@@ -141,6 +144,28 @@ describe("the action request token", () => {
       );
     },
   );
+
+  it(
+    "sends the model's token over its own newest — the page's request or " +
+      "the other script's moved it there after ours",
+    async () => {
+      const fetchMock = mockFetch(TOWN_RESPONSE);
+      await ikariamRequest({ view: "townHall" });
+      (window as any).ikariam.model.actionRequest = "token-moved-by-the-page";
+
+      await ikariamRequest({ view: "townHall" }, { minGapMs: 0 });
+      expect(String(fetchMock.mock.calls[1][0])).toContain(
+        "actionRequest=token-moved-by-the-page",
+      );
+    },
+  );
+
+  it("falls back to its own newest when the model cannot be read", async () => {
+    mockFetch(TOWN_RESPONSE);
+    await ikariamRequest({ view: "townHall" });
+    (window as any).ikariam = {};
+    expect(actionRequestToken()).toBe("token-from-response");
+  });
 
   it("keeps the old token when a response carries none", async () => {
     mockFetch([["changeView", ["city", ""]]]);
@@ -565,6 +590,9 @@ describe("the game's notepad", () => {
     mockFetch(SAVE_ANSWER);
     await saveAvatarNotes("x", { minGapMs: 0 });
     expect(actionRequestToken()).toBe("token-after-save");
+    expect((window as any).ikariam.model.actionRequest).toBe(
+      "token-after-save",
+    );
   });
 
   it("refuses an answer that is not an object", async () => {
@@ -701,6 +729,7 @@ describe("the trace of town switches that did not land", () => {
     async () => {
       mockFetch(TOWN_RESPONSE);
       await ikariamRequest({ view: "townHall", cityId: 297042 });
+      (window as any).ikariam.model.actionRequest = "token-moved-by-the-page";
 
       recordTownSwitch({
         kind: "answered without a reload",
@@ -717,7 +746,8 @@ describe("the trace of town switches that did not land", () => {
         pageTown: "C-Thebes",
         answer: "city id 297034 -> [updateGlobalData] (no custom)",
         tokens:
-          `sent ${tokenTag("stale1")}, page ${tokenTag("token-from-model")}, ` +
+          `sent ${tokenTag("stale1")}, ` +
+          `page ${tokenTag("token-moved-by-the-page")}, ` +
           `tool ${tokenTag("token-from-response")}`,
       });
       expect(trace.toolRequests).toHaveLength(1);
