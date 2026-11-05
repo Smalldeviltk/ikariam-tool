@@ -346,13 +346,45 @@ origin/refactor..HEAD` = 0. **`8d0293d` (03/11, "fix: put the tool's new
 session token into the page, and send a refused town switch again once"
 — `core/ikariam/http.ts`, `send-resources/navigation.ts` and their tests,
 +250/−16) is committed and pushed but written up in neither document.**
-§33 is not committed.
+§33 is not committed. **Checked 05/11, evening:** §33 is committed
+(`8bf7308` code, `7816bdf` docs) and pushed — `origin/refactor` is at
+`7816bdf` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0.
+`8d0293d` still has no write-up. §34 is not committed.
+
+**05/11, evening: Pirate — captures from a Pirate Fortress on a timer, a
+captcha that stops it, and a queue that waits — not committed; all of it,
+with the capture points line and the fixed dialog width added later that
+evening, in the 05/11 19:37 `dist/`; the first part was in the 19:09
+`dist/` (the user's build, after the last source change at
+19:06; grep `btnStartPirate` 1 / 1, `Pirate waits for the security word`
+1 / 2); not tried on the game** — see §34, and `improvement-plan.md`
+§2.AJ:
+
+- **A Pirate group in the panel:** Start Pirate (Stop when pressed again)
+  and Settings (the town whose fortress captures, and the capture level —
+  level 1 by default, only the levels its fortress level allows, read
+  from the fortress view itself).
+- **The tool sends the capture request** the fortress's Capture button
+  sends (measured from the user's network capture). The next goes out
+  when the mission is over plus 10 s; the schedule survives reloads.
+- **A failure** is tried again every 10 s; after 30 s, a desktop notice
+  (a new checkbox, "Pirate capture failed", ticked by Start Pirate) and
+  Pirate stops.
+- **A captcha** (a form with `captchaNeeded=1` — its shape from HTML the
+  user pasted): the notice at once, Pirate stops, the fortress is opened
+  for the word to be typed, and **the Transport/Build queue and the
+  keep-alive reload wait until Start Pirate**. Nothing reads or answers
+  the word.
+- **The token race:** a capture waits while a town switch is landing or
+  the runner is in a task; the runner waits while a capture is out.
+- Crawl gains **Pirate**; Bug Report carries the last three failed
+  captures. Two new files, `features/pirate.ts` and its test, created
+  with the user's agreement.
 
 **05/11: Crawl Wine writes every town, a cross-account wine split tool,
-and Import in Auto Wine Settings — not committed; the 05/11 17:15
-`dist/` (the user's build, not this session's) holds the crawl fix and
-Import (grep `wine.importFrom` = 2) but still the old "made by dump.js"
-wording (= 2), so rebuild; not tried on the game** — see §33, and
+and Import in Auto Wine Settings — committed since as `8bf7308` (docs
+`7816bdf`), pushed; in the 05/11 19:09 `dist/` (grep `made by
+tools/wine-transport.js` 2 / 2); not tried on the game** — see §33, and
 `improvement-plan.md` §2.AI. Three requests in one day:
 
 - **Crawl Wine missed towns.** The file held only the towns Auto Wine
@@ -464,7 +496,17 @@ the city id, so a building cell turns upgradable by itself; a runner that
 is stopped and started again does not sit out an old rest; the log is
 stored as text, not HTML-escaped.
 
-**Next (05/11):** rebuild `dist/` (the 17:15 build predates the rename
+**Next (05/11, evening):** reinstall both userscripts from the 19:37
+`dist/` (it holds §33 and all of §34, the capture points line and the
+fixed dialog width included — grepped, §1). Pirate → Settings: pick the
+town and level, Save; Start Pirate — a capture starts at once, the log
+names the next. When the game asks for the security word: a notice,
+Pirate stops, the fortress opens with the form, and the queue stands;
+type the word, press Capture, then Start Pirate — the queue runs again.
+If Pirate stops for any other failure, Crawl → Pirate (or Bug Report) and
+put the file in `sample/`: its `failedCaptures` shows what the game
+answered — the first thing to read is whether a capture sent as GET is
+refused. **Next (05/11):** rebuild `dist/` (the 17:15 build predates the rename
 to `tools/wine-transport.js` in the UI wording) and reinstall both
 userscripts. Crawl Wine in each account; check each file holds every
 town but the source. Move the files from `sample/input-wine-transport/`
@@ -514,14 +556,14 @@ working between loads) is
 | ----------- | ---------------------------------------------------------------- |
 | Branch      | `refactor`, tracking `origin/refactor`                            |
 | Checkout (22/10) | **26/10:** the Linux checkout now has `node_modules/` and `dist/` (built 22/10 16:37, §1 Build); `sample/` and `tools/output/` are still absent, so the review report and the bug report files are not available here. The 22/10 note, kept: The 22/10 session ran on Linux, in `/data/Projects/dump/ikariam-tool`, with Node v20.20.2 and npm 10.8.2. That checkout has no `node_modules/`, `dist/`, `sample/` or `tools/output/` (dependencies, build output and gitignored folders), so tests, the build, the bug report files and the review report were not available there. The PowerShell and CRLF traps in §4 come from the earlier Windows checkout (`D:\Working\Ika`) |
-| Pushed      | **Checked 05/11:** `origin/refactor` is at `8d0293d` = `HEAD` (§32 pushed: `9cfdc97` code, `d643967` docs; then `8d0293d`, 03/11, not written up), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 02/11:** `origin/refactor` is at `6deabe9` = `HEAD` (§31 pushed: `ba2fb35` code, `6deabe9` docs), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 29/10, evening:** `origin/refactor` is at `b033eae` = `HEAD` (§29 pushed: `6d0c0a0` code, `b033eae` docs), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 29/10:** `origin/refactor` is at `1f631d4` = `HEAD` (pushed by the user; §28 is `1c41ce8` code, `1f631d4` docs), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 26/10, evening:** `origin/refactor` is at `0baafe6` = `HEAD` (pushed by the user), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 26/10, later:** `origin/refactor` is at `455047d`; `HEAD` is `fac13d6`, `git rev-list --count origin/refactor..HEAD` = 2 (`3dff502` docs, `fac13d6` §27) — not pushed. **Checked 26/10: `origin/refactor` is at `455047d` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0.** **Checked 22/10: `origin/refactor` is at `534f066` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0.** **Checked 17/10: `origin/refactor` is at `772a055` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0 — everything below is pushed.** The rest is the 05/10 note, kept for the commit list: `origin/refactor` was at `066eb44` (the plan's §2.I–2.J docs), pushed by the user; §10's `1f7c0e7` and `4841fb9` are before it, so pushed too (checked with `git log origin/refactor..HEAD` on 02/10). **Seventeen local commits since, not pushed** (`git rev-list --count origin/refactor..HEAD` = 17 on 05/10, at `180fead`): §11 is `6ed66c6` + `c38dca4`, its docs `b9f1d7a`; §12 and §13 are one code commit, `4f9436c` (25 files in `src/`), and one docs commit, `3209964`; §14 is `7ed3a85` (15 files), its docs `b45f792`; §15–§17 are `32fe3ba`, their docs `ec3fdc4`; §18 is `b2e9084` and `3f8a51b` (the user's `barbarian.ts` change); §19 is `c78b49e` (32 files in `src/`, two of them new), its docs `0da427b`; §20 is `cefcc92`, §21 is `9c363f7`, their docs `e36516a`; the s303 crawl `180fead` |
+| Pushed      | **Checked 05/11, evening:** `origin/refactor` is at `7816bdf` = `HEAD` (§33 pushed: `8bf7308` code, `7816bdf` docs), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 05/11:** `origin/refactor` is at `8d0293d` = `HEAD` (§32 pushed: `9cfdc97` code, `d643967` docs; then `8d0293d`, 03/11, not written up), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 02/11:** `origin/refactor` is at `6deabe9` = `HEAD` (§31 pushed: `ba2fb35` code, `6deabe9` docs), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 29/10, evening:** `origin/refactor` is at `b033eae` = `HEAD` (§29 pushed: `6d0c0a0` code, `b033eae` docs), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 29/10:** `origin/refactor` is at `1f631d4` = `HEAD` (pushed by the user; §28 is `1c41ce8` code, `1f631d4` docs), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 26/10, evening:** `origin/refactor` is at `0baafe6` = `HEAD` (pushed by the user), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 26/10, later:** `origin/refactor` is at `455047d`; `HEAD` is `fac13d6`, `git rev-list --count origin/refactor..HEAD` = 2 (`3dff502` docs, `fac13d6` §27) — not pushed. **Checked 26/10: `origin/refactor` is at `455047d` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0.** **Checked 22/10: `origin/refactor` is at `534f066` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0.** **Checked 17/10: `origin/refactor` is at `772a055` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0 — everything below is pushed.** The rest is the 05/10 note, kept for the commit list: `origin/refactor` was at `066eb44` (the plan's §2.I–2.J docs), pushed by the user; §10's `1f7c0e7` and `4841fb9` are before it, so pushed too (checked with `git log origin/refactor..HEAD` on 02/10). **Seventeen local commits since, not pushed** (`git rev-list --count origin/refactor..HEAD` = 17 on 05/10, at `180fead`): §11 is `6ed66c6` + `c38dca4`, its docs `b9f1d7a`; §12 and §13 are one code commit, `4f9436c` (25 files in `src/`), and one docs commit, `3209964`; §14 is `7ed3a85` (15 files), its docs `b45f792`; §15–§17 are `32fe3ba`, their docs `ec3fdc4`; §18 is `b2e9084` and `3f8a51b` (the user's `barbarian.ts` change); §19 is `c78b49e` (32 files in `src/`, two of them new), its docs `0da427b`; §20 is `cefcc92`, §21 is `9c363f7`, their docs `e36516a`; the s303 crawl `180fead` |
 | Committed 02/10 | At the user's request, in two commits as before: code and tests, then the two documents. The commit message went through a file (`git commit -F`): PowerShell 5.1 splits a here-string passed to a native command at its double quotes, and the first attempt failed with "pathspec did not match" — nothing was committed by it |
 | Committed 03/10 | §14, at the user's request, the same way: `7ed3a85` (code and tests), `b45f792` (the two documents), messages through `git commit -F`. `barbarian.ts` was left out (below) |
 | Committed 04/10 | At the user's request, each time asked for in that turn: §15–§17 as `32fe3ba` (code and tests) and `ec3fdc4` (the two documents); then §18 as `b2e9084`, and — the user asked for `barbarian.ts` to go in too — its change on its own as `3f8a51b`. Messages through `git commit -F`. The documents were not updated for §18 until the §19 round. §19 the same afternoon, again at the user's request: `c78b49e` (code and tests, `src/core/notifications.ts` and its test added) and `0da427b` (the two documents). In the evening, asked for in the turn after §21: `cefcc92` (§20, `render.ts` and its test), `9c363f7` (§21, `build/build-extension.mjs`), then the two documents |
-| Uncommitted | **05/11: §33** — `src/send-resources/app.ts` (+ test), `features/auto-wine.ts` (+ test), `features/wine-distribution.ts`, `messages.ts`, `ui/data-transfer-ui.ts`, `ui/dialogs.ts`, `.gitignore`, a new file `tools/wine-transport.js` (asked for by the user), and both documents. `sample/dump.js` (gitignored) is kept, as the user said "copy". §32 was committed since as `9cfdc97` / `d643967`. **02/11: §32** — `src/core/ikariam/http.ts` (+ test), `src/send-resources/navigation.ts` (+ test), `src/send-resources/diagnostics.ts`, `src/send-resources/app.test.ts`, `src/core/data-transfer.ts` (+ test), and both documents. §31 was committed since as `ba2fb35` / `6deabe9`. **29/10, evening: §30** — `src/send-resources/queue-note.ts` (+ test), `app.ts` (+ test), `features/auto-build.ts` (+ test), `features/send-resources.ts` (+ test), `src/core/data-transfer.test.ts`, and both documents. **29/10: §29** (committed since as `6d0c0a0` / `b033eae`) — `src/core/ikariam/http.ts` (+ test), `src/core/task-queue.ts`, `src/core/data-transfer.ts` (+ test), `src/send-resources/app.ts` (+ test), `state.ts`, `messages.ts`, `features/send-resources.ts` (+ test), `features/auto-build.ts` (+ test), two new files (`src/send-resources/queue-note.ts`, `queue-note.test.ts` — the user asked for full tests), and both documents. Before §29 the tree was clean. **26/10, evening: §28** (committed since as `1c41ce8` / `1f631d4`) — `src/core/ikariam/model.ts` (+ test), `src/core/ikariam/selectors.ts`, `src/send-resources/app.ts` (+ test), `features/auto-wine.ts` (+ test), `messages.ts`, `town-cache.ts` (+ test), and both documents. **26/10, later:** after `fac13d6`, `git status --short` was empty; this write-up of §27 in both documents is uncommitted when written. **26/10: nothing** (`git status --short` empty). §24–§26 and the files listed in the 22/10 note were committed as `e7f2acb` (code and tests, 19 files) and `455047d` (the two documents). The 22/10 note, kept for the file list: **22/10, after §26:** §26's `src/send-resources/ui/panel.ts` (+ test), `src/core/ui/window.ts` (+ test), `src/core/messages.ts`, and §24's files — `src/core/logger.ts`, `src/core/task-queue.ts` (+ test), `src/empire-overview/models/building.ts` (+ test) — and §25's — `src/send-resources/app.ts`, `features/auto-wine.ts` (+ test), `features/building-help-crawler.ts`, `messages.ts`, `ui/dialogs.ts`, `ui/panel.ts`, `ui/data-transfer-ui.ts` (+ test) — plus `src/send-resources/app.test.ts` (both rounds) and both documents. Before §24 the tree was clean (`git status --short` empty). §23 was committed after the 17/10 note below (`21464dd` code, `534f066` docs). The user's `.gitignore` change no longer differs from `HEAD`, and `docs/So_sanh_2_script_Ikariam.md` is not on disk in the 22/10 checkout; it is listed in `.gitignore`. The 17/10 note, kept for the file list: **§23** — `src/send-resources/features/auto-wine.ts`, `auto-wine.test.ts`, `src/send-resources/ui/styles.ts`, and both documents. **§22 was committed after the next sentence was written** (`1baf274` code, `772a055` docs). The 05/10 row, kept for the file list: §22 (05/10): 55 modified files — 52 in `src/`, `build/vite.empire-overview.ts`, `project-summary.md` and both documents — and three new test files the user agreed to (`src/core/dom.test.ts`, `src/send-resources/features/summary-account.test.ts`, `src/send-resources/ui/data-transfer-ui.test.ts`). **Modified or untracked and the user's, left out of every commit:** `.gitignore`, `docs/So_sanh_2_script_Ikariam.md`. `docs/wiki/s303/` (their crawl, the source of §19's levels past 50) was committed at the user's request on 04/10 evening as `180fead` |
-| Tests       | **39 files, 907 tests, all passing (05/11, after §33)**; 891 after §33's crawl fix; **888 at `HEAD` (`8d0293d` added 6 after §32's write-up)**; **39 files, 882 tests, all passing (02/11, after §32)**; **39 files, 871 tests, all passing (30/10, after §31)**; **39 files, 864 tests, all passing (29/10, evening, after §30)**; **39 files, 880 tests, all passing (29/10, after §29)**; **38 files, 783 tests, all passing (26/10, after §28)**; 774 before §28's two loose ends; **735 after §27**; 727 before §27's Escape change, 721 before §27; **38 files, 721 tests (22/10, after §26's window fold, on Linux)**; 715 before it; 710 after §25; 701 after §24; 699 after §23 (17/10, and again 22/10 before §24); 698 after §22; before it 35 files, 645 tests (645 after §20; 500 before §12, 515 after it, 537 after §13, 560 after §14, 567 after §15, 569 after §16's first round, 578 after §16, 583 after §17, 605 after §18 and §19's 2.6 and R, 608 after K, 627 after J, 640 after E, 641 after 2.8, 643 after the s303 levels). §11 added no test (see §11). Prettier: `core/ikariam/http.test.ts`, `send-resources/features/transport-buttons.test.ts` and `send-resources/town-cache.test.ts` are off its format at `HEAD` already — not reflowed; §19's tests appended to `http.test.ts` were formatted on their own and checked |
+| Uncommitted | **05/11, evening: §34** — `src/core/data-transfer.ts`, `src/core/notifications.ts`, `src/send-resources/app.ts` (+ test), `diagnostics.ts`, `messages.ts`, `navigation.ts` (+ test), `ui/dialogs.ts`, `ui/panel.ts` (+ test), two new files `src/send-resources/features/pirate.ts` and `pirate.test.ts` (the user agreed), and both documents (`git diff --stat -- src`: 11 files, +855/−11 after the capture points and the width — +749/−11 at the first write-up — the two new files not counted). `sample/1` and `sample/2` (the user's network captures, gitignored) hold a live token and other players' names; nothing of them went into the tests. §33 was committed since as `8bf7308` / `7816bdf`. **05/11: §33** — `src/send-resources/app.ts` (+ test), `features/auto-wine.ts` (+ test), `features/wine-distribution.ts`, `messages.ts`, `ui/data-transfer-ui.ts`, `ui/dialogs.ts`, `.gitignore`, a new file `tools/wine-transport.js` (asked for by the user), and both documents. `sample/dump.js` (gitignored) is kept, as the user said "copy". §32 was committed since as `9cfdc97` / `d643967`. **02/11: §32** — `src/core/ikariam/http.ts` (+ test), `src/send-resources/navigation.ts` (+ test), `src/send-resources/diagnostics.ts`, `src/send-resources/app.test.ts`, `src/core/data-transfer.ts` (+ test), and both documents. §31 was committed since as `ba2fb35` / `6deabe9`. **29/10, evening: §30** — `src/send-resources/queue-note.ts` (+ test), `app.ts` (+ test), `features/auto-build.ts` (+ test), `features/send-resources.ts` (+ test), `src/core/data-transfer.test.ts`, and both documents. **29/10: §29** (committed since as `6d0c0a0` / `b033eae`) — `src/core/ikariam/http.ts` (+ test), `src/core/task-queue.ts`, `src/core/data-transfer.ts` (+ test), `src/send-resources/app.ts` (+ test), `state.ts`, `messages.ts`, `features/send-resources.ts` (+ test), `features/auto-build.ts` (+ test), two new files (`src/send-resources/queue-note.ts`, `queue-note.test.ts` — the user asked for full tests), and both documents. Before §29 the tree was clean. **26/10, evening: §28** (committed since as `1c41ce8` / `1f631d4`) — `src/core/ikariam/model.ts` (+ test), `src/core/ikariam/selectors.ts`, `src/send-resources/app.ts` (+ test), `features/auto-wine.ts` (+ test), `messages.ts`, `town-cache.ts` (+ test), and both documents. **26/10, later:** after `fac13d6`, `git status --short` was empty; this write-up of §27 in both documents is uncommitted when written. **26/10: nothing** (`git status --short` empty). §24–§26 and the files listed in the 22/10 note were committed as `e7f2acb` (code and tests, 19 files) and `455047d` (the two documents). The 22/10 note, kept for the file list: **22/10, after §26:** §26's `src/send-resources/ui/panel.ts` (+ test), `src/core/ui/window.ts` (+ test), `src/core/messages.ts`, and §24's files — `src/core/logger.ts`, `src/core/task-queue.ts` (+ test), `src/empire-overview/models/building.ts` (+ test) — and §25's — `src/send-resources/app.ts`, `features/auto-wine.ts` (+ test), `features/building-help-crawler.ts`, `messages.ts`, `ui/dialogs.ts`, `ui/panel.ts`, `ui/data-transfer-ui.ts` (+ test) — plus `src/send-resources/app.test.ts` (both rounds) and both documents. Before §24 the tree was clean (`git status --short` empty). §23 was committed after the 17/10 note below (`21464dd` code, `534f066` docs). The user's `.gitignore` change no longer differs from `HEAD`, and `docs/So_sanh_2_script_Ikariam.md` is not on disk in the 22/10 checkout; it is listed in `.gitignore`. The 17/10 note, kept for the file list: **§23** — `src/send-resources/features/auto-wine.ts`, `auto-wine.test.ts`, `src/send-resources/ui/styles.ts`, and both documents. **§22 was committed after the next sentence was written** (`1baf274` code, `772a055` docs). The 05/10 row, kept for the file list: §22 (05/10): 55 modified files — 52 in `src/`, `build/vite.empire-overview.ts`, `project-summary.md` and both documents — and three new test files the user agreed to (`src/core/dom.test.ts`, `src/send-resources/features/summary-account.test.ts`, `src/send-resources/ui/data-transfer-ui.test.ts`). **Modified or untracked and the user's, left out of every commit:** `.gitignore`, `docs/So_sanh_2_script_Ikariam.md`. `docs/wiki/s303/` (their crawl, the source of §19's levels past 50) was committed at the user's request on 04/10 evening as `180fead` |
+| Tests       | **40 files, 959 tests, all passing (05/11, evening, after §34's capture points and dialog width)**; 950 before those two; 941 before the captcha form was known, 947 before the queue waited on it; **39 files, 907 tests, all passing (05/11, after §33)**; 891 after §33's crawl fix; **888 at `HEAD` (`8d0293d` added 6 after §32's write-up)**; **39 files, 882 tests, all passing (02/11, after §32)**; **39 files, 871 tests, all passing (30/10, after §31)**; **39 files, 864 tests, all passing (29/10, evening, after §30)**; **39 files, 880 tests, all passing (29/10, after §29)**; **38 files, 783 tests, all passing (26/10, after §28)**; 774 before §28's two loose ends; **735 after §27**; 727 before §27's Escape change, 721 before §27; **38 files, 721 tests (22/10, after §26's window fold, on Linux)**; 715 before it; 710 after §25; 701 after §24; 699 after §23 (17/10, and again 22/10 before §24); 698 after §22; before it 35 files, 645 tests (645 after §20; 500 before §12, 515 after it, 537 after §13, 560 after §14, 567 after §15, 569 after §16's first round, 578 after §16, 583 after §17, 605 after §18 and §19's 2.6 and R, 608 after K, 627 after J, 640 after E, 641 after 2.8, 643 after the s303 levels). §11 added no test (see §11). Prettier: `core/ikariam/http.test.ts`, `send-resources/features/transport-buttons.test.ts` and `send-resources/town-cache.test.ts` are off its format at `HEAD` already — not reflowed; §19's tests appended to `http.test.ts` were formatted on their own and checked |
 | Typecheck   | Clean (`tsc --noEmit` and the strict config)                      |
-| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 01/10 at 02:23 and contains §11 (grepped: `Crawl Building` and `building-help-` in Send Resources; the new Academy figure `568954467` present and the old `582271779` gone, `winePressSavingPercent` and the time `12873600` in Empire Overview; `Math.min(50, …)` in Send Resources' `modelWineConsumption`). Earlier markers were checked in earlier builds: §2.I–2.J (`ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows`) and §10 (`ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save`, `capped`). **`dist/` was rebuilt by the user on 03/10 at 22:54 from the working tree and holds §12 to §15** (grepped in Send Resources: `wine.autoRun`, `ika-move`, `ika_pendingTownSwitch`, `to spare, less than one`, `ikaWindowOpen_`, `js-ika-build-time-buff`, `translateX(-146px)`, `ikariam-bug-report`, `then cleared them`, `createPopupSource`, and no `"???"` left; in Empire Overview: `listAccount` and `entry.length === 2 && typeof entry[0] === "string" && entry[1] === null`). It was built before §15 was committed, so it matches the working tree, not a commit. **The userscripts installed in the browser were older than that 22:54 `dist/`** (§2). **Rebuilt 04/10 at 09:09 with §16** (grepped: `?view=transport&destinationCityId=`, `shipment form to close`, `was sent `, `Move up`; Empire Overview writes the month as `month = 2592e3` — the minifier's form of 2592000) — the build the user tried on the game (§17). **Rebuilt again at 09:44 with §17** (grepped: `ika-queue-scroll`, `resourceTableScroll`, and the `dialog.close` button after `build.save`). **Rebuilt 04/10 at 13:11 from the working tree, with §18 and §19** (grepped: `ika-building-level` in Send Resources; `empire_quickUpgrade`, `stockTip_stock`, `empire_syncIndicator` and Academy level 51's time `15379200` in Empire Overview; `ikaNotifications` and `ikaQuickUpgradeTrace` in both). It matched the working tree at 13:11, not a commit. **Rebuilt 04/10 at 21:21, holding §20 and §21** (grepped: `quick upgrade refresh` in `Ikariam Empire Overview -VN-.user.js` and in `extension/page/empire-overview.js`; `dist/extension/manifest.json` has `exclude_globs`). `dist/extension/` was rebuilt in this session with `npm run build:extension`, which builds the extension only; the two userscripts carry 21:21 too, so the user built them. It matched `9c363f7`. **Rebuilt 05/10 at 02:03 with `npm run build` in this session, from the working tree, holding §22** (grepped: `event subscriber` and `quick upgrade refresh` in Empire Overview, `ika_oneOffRunTypes` in Send Resources, in both the userscripts and the extension; no `GM_xmlhttpRequest` left in Empire Overview's header). It matched the working tree then, not a commit. **Rebuilt 22/10 at 16:37 on Linux, holding §23–§26** (grepped 26/10 in Send Resources: `ika-window-collapse`, `ikaPanelCollapsedGroups`, `ikaCrawl_`, `ikariam-wine`, `1250px`, `pausedUntil`, `ika_oneOffRunTypes`; in Empire Overview: `quick upgrade refresh`, `event subscriber`; `dist/extension/manifest.json` has `exclude_globs`, and `extension/page/send-resources.js` has `ika-window-collapse`). That is the current `dist/`; `HEAD` (`e7f2acb` + docs `455047d`) was committed after it — the markers above are in both, but the build was not rebuilt from the commit or compared with it byte for byte. **The installed userscripts are older** — reinstall both before trying anything; the extension has never loaded before §21. **05/11: rebuilt at 17:15 (userscripts) and 17:14 (extension), not in this session — the user's** (grepped in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: `ikaTownSwitchTrace` ×1 / ×1, `wine.importFrom` ×2 / ×2, `ikariam-wine-transport` ×2 / ×2, `shipments.length === 0` ×2 in the userscript; and "made by dump.js" ×2, "made by tools/wine-transport.js" ×0). It holds §32, `8d0293d` (grep `was refused as an invalid` ×1 / ×1), and §33 up to the rename; the sources were changed last at 17:26 (the rename), so **rebuild before installing**. Not compared byte for byte. **02/11: not rebuilt for §32** — the 30/10 10:26 build has none of it (grep `ikaTownSwitchTrace` in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: 0); rebuild before installing. **30/10: rebuilt at 10:26, not in this session — the user's — after the last source change (10:12), holding §30 and §31** (grepped in `Ikariam Send Resources.user.js`: `FORMAT_ONE` ×2, `transporterSendStock` ×1, the `stockTitle` text, and `ikaQueueNoteMachine` / `leaseHeldByOther` ×0; in `extension/page/send-resources.js`: `transporterSendStock`). It matches the working tree by time, not compared byte for byte; §31 is not committed. **This is the `dist/` to install.** **29/10, evening: not rebuilt for §30** — the 18:32 build holds §29 as committed, with its upgrade bug (grep `FORMAT_ONE` / `Q2` in `Ikariam Send Resources.user.js`: 0). **29/10: rebuilt at 18:32, not in this session — the user's — after the last source change (18:23), holding all of §29** (grepped in `Ikariam Send Resources.user.js`: `saveAvatarNotes`, `ikaQueueNoteBase`, `ikaQueueNoteMachine`, `Another computer runs this account`, `Notepad not updated before acting`, and `watchLease(true)` — the last change of the round; in `extension/page/send-resources.js`: `saveAvatarNotes`). **This was the `dist/` to install until §30; do not use it for Auto Build.** **26/10: rebuilt three times.** 12:28 (in this session, with §27's 10 s wait — **sends a shipment over and over, do not install**), 12:49 (in this session, the wait removed), and **13:56, not built in this session — the user's, presumably — holding all of §27** (grepped in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: `alwaysOpen`, `onCollapsedChange`, `toggleCollapsed`, `Town switch answered`, `sent through`, and `backToCity("shipment sent");` followed directly by `if (remaining <= 0) return { status: "done" };`; in both Empire Overview bundles: `typeof handler !== "function") return`). That was the `dist/` until 16:10. **Rebuilt 26/10 at 16:10 and again at 16:22 with `npm run build` in this session, from the working tree, holding §28** (grepped in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: `makes the most wine`, `holds the most hours of it`, `so they get none`, `td.resource.wine span.production`, `Math.max(entry.stock, entry.capacity)`, `entry.consume - (entry.production`; and still `alwaysOpen`, `Town switch answered`; in Empire Overview `event subscriber`, `quick upgrade refresh`, `typeof handler !== "function") return`). It matches the working tree, not a commit. **Smaller than the 13:56 build and not explained:** Send Resources 177,252 → 165,546 bytes, Empire Overview 542,909 → 504,847 — every marker grepped is present; how the 13:56 build was made is not known |
+| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 01/10 at 02:23 and contains §11 (grepped: `Crawl Building` and `building-help-` in Send Resources; the new Academy figure `568954467` present and the old `582271779` gone, `winePressSavingPercent` and the time `12873600` in Empire Overview; `Math.min(50, …)` in Send Resources' `modelWineConsumption`). Earlier markers were checked in earlier builds: §2.I–2.J (`ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows`) and §10 (`ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save`, `capped`). **`dist/` was rebuilt by the user on 03/10 at 22:54 from the working tree and holds §12 to §15** (grepped in Send Resources: `wine.autoRun`, `ika-move`, `ika_pendingTownSwitch`, `to spare, less than one`, `ikaWindowOpen_`, `js-ika-build-time-buff`, `translateX(-146px)`, `ikariam-bug-report`, `then cleared them`, `createPopupSource`, and no `"???"` left; in Empire Overview: `listAccount` and `entry.length === 2 && typeof entry[0] === "string" && entry[1] === null`). It was built before §15 was committed, so it matches the working tree, not a commit. **The userscripts installed in the browser were older than that 22:54 `dist/`** (§2). **Rebuilt 04/10 at 09:09 with §16** (grepped: `?view=transport&destinationCityId=`, `shipment form to close`, `was sent `, `Move up`; Empire Overview writes the month as `month = 2592e3` — the minifier's form of 2592000) — the build the user tried on the game (§17). **Rebuilt again at 09:44 with §17** (grepped: `ika-queue-scroll`, `resourceTableScroll`, and the `dialog.close` button after `build.save`). **Rebuilt 04/10 at 13:11 from the working tree, with §18 and §19** (grepped: `ika-building-level` in Send Resources; `empire_quickUpgrade`, `stockTip_stock`, `empire_syncIndicator` and Academy level 51's time `15379200` in Empire Overview; `ikaNotifications` and `ikaQuickUpgradeTrace` in both). It matched the working tree at 13:11, not a commit. **Rebuilt 04/10 at 21:21, holding §20 and §21** (grepped: `quick upgrade refresh` in `Ikariam Empire Overview -VN-.user.js` and in `extension/page/empire-overview.js`; `dist/extension/manifest.json` has `exclude_globs`). `dist/extension/` was rebuilt in this session with `npm run build:extension`, which builds the extension only; the two userscripts carry 21:21 too, so the user built them. It matched `9c363f7`. **Rebuilt 05/10 at 02:03 with `npm run build` in this session, from the working tree, holding §22** (grepped: `event subscriber` and `quick upgrade refresh` in Empire Overview, `ika_oneOffRunTypes` in Send Resources, in both the userscripts and the extension; no `GM_xmlhttpRequest` left in Empire Overview's header). It matched the working tree then, not a commit. **Rebuilt 22/10 at 16:37 on Linux, holding §23–§26** (grepped 26/10 in Send Resources: `ika-window-collapse`, `ikaPanelCollapsedGroups`, `ikaCrawl_`, `ikariam-wine`, `1250px`, `pausedUntil`, `ika_oneOffRunTypes`; in Empire Overview: `quick upgrade refresh`, `event subscriber`; `dist/extension/manifest.json` has `exclude_globs`, and `extension/page/send-resources.js` has `ika-window-collapse`). That is the current `dist/`; `HEAD` (`e7f2acb` + docs `455047d`) was committed after it — the markers above are in both, but the build was not rebuilt from the commit or compared with it byte for byte. **The installed userscripts are older** — reinstall both before trying anything; the extension has never loaded before §21. **05/11, evening, later: rebuilt at 19:37:00 (extension) and 19:37:05 (Send Resources userscript), not in this session — the user's — after the last source change (19:36:41)** (grepped in `Ikariam Send Resources.user.js` / `extension/page/send-resources.js`: `ikaPirateCapturePoints` ×3 / ×3, `ikaPirateDialogBody` ×1 / ×1, `pirateHeader` ×2 / ×3, `height:56px` ×0 / ×0). It holds all of §34. Not compared byte for byte. **This is the `dist/` to install.** **05/11, evening: rebuilt at 19:08–19:09, not in this session — the user's — after the last source change (19:06:17)** (grepped in `Ikariam Send Resources.user.js` / `extension/page/send-resources.js`: `btnStartPirate` ×1 / ×1, `ikaPirateRun` ×2 / ×2, `captchaPending` ×4 / ×5, `data:image;base64,<image>` ×1 / ×1, `Pirate waits for the security word` ×1 / ×2, `made by tools/wine-transport.js` ×2 / ×2, `made by dump.js` ×0 / ×0). It held §33 and §34 up to that point (not the capture points line or the dialog width). A first listing caught the userscript mid-build (224,586 bytes at 19:08; 249,607 at 19:09:01). Not compared byte for byte. **This is the `dist/` to install.** **05/11: rebuilt at 17:15 (userscripts) and 17:14 (extension), not in this session — the user's** (grepped in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: `ikaTownSwitchTrace` ×1 / ×1, `wine.importFrom` ×2 / ×2, `ikariam-wine-transport` ×2 / ×2, `shipments.length === 0` ×2 in the userscript; and "made by dump.js" ×2, "made by tools/wine-transport.js" ×0). It holds §32, `8d0293d` (grep `was refused as an invalid` ×1 / ×1), and §33 up to the rename; the sources were changed last at 17:26 (the rename), so **rebuild before installing**. Not compared byte for byte. **02/11: not rebuilt for §32** — the 30/10 10:26 build has none of it (grep `ikaTownSwitchTrace` in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: 0); rebuild before installing. **30/10: rebuilt at 10:26, not in this session — the user's — after the last source change (10:12), holding §30 and §31** (grepped in `Ikariam Send Resources.user.js`: `FORMAT_ONE` ×2, `transporterSendStock` ×1, the `stockTitle` text, and `ikaQueueNoteMachine` / `leaseHeldByOther` ×0; in `extension/page/send-resources.js`: `transporterSendStock`). It matches the working tree by time, not compared byte for byte; §31 is not committed. **This is the `dist/` to install.** **29/10, evening: not rebuilt for §30** — the 18:32 build holds §29 as committed, with its upgrade bug (grep `FORMAT_ONE` / `Q2` in `Ikariam Send Resources.user.js`: 0). **29/10: rebuilt at 18:32, not in this session — the user's — after the last source change (18:23), holding all of §29** (grepped in `Ikariam Send Resources.user.js`: `saveAvatarNotes`, `ikaQueueNoteBase`, `ikaQueueNoteMachine`, `Another computer runs this account`, `Notepad not updated before acting`, and `watchLease(true)` — the last change of the round; in `extension/page/send-resources.js`: `saveAvatarNotes`). **This was the `dist/` to install until §30; do not use it for Auto Build.** **26/10: rebuilt three times.** 12:28 (in this session, with §27's 10 s wait — **sends a shipment over and over, do not install**), 12:49 (in this session, the wait removed), and **13:56, not built in this session — the user's, presumably — holding all of §27** (grepped in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: `alwaysOpen`, `onCollapsedChange`, `toggleCollapsed`, `Town switch answered`, `sent through`, and `backToCity("shipment sent");` followed directly by `if (remaining <= 0) return { status: "done" };`; in both Empire Overview bundles: `typeof handler !== "function") return`). That was the `dist/` until 16:10. **Rebuilt 26/10 at 16:10 and again at 16:22 with `npm run build` in this session, from the working tree, holding §28** (grepped in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: `makes the most wine`, `holds the most hours of it`, `so they get none`, `td.resource.wine span.production`, `Math.max(entry.stock, entry.capacity)`, `entry.consume - (entry.production`; and still `alwaysOpen`, `Town switch answered`; in Empire Overview `event subscriber`, `quick upgrade refresh`, `typeof handler !== "function") return`). It matches the working tree, not a commit. **Smaller than the 13:56 build and not explained:** Send Resources 177,252 → 165,546 bytes, Empire Overview 542,909 → 504,847 — every marker grepped is present; how the 13:56 build was made is not known |
 
 What landed: the AJAX transport layer, the shared window widget, the rewritten
 panel, four features (sync-towns, transport-buttons, queue-view, wine-warning),
@@ -4054,7 +4096,10 @@ came just before).
 
 ## 33. 05/11: Crawl Wine writes every town; a cross-account wine split; Import in Auto Wine Settings
 
-Not committed when written. The 05/11 17:15 `dist/` (the user's build)
+Not committed when written; committed since as `8bf7308` (docs
+`7816bdf`), pushed (checked 05/11, evening); the 05/11 19:09 `dist/` holds
+part 4 too (grep `made by tools/wine-transport.js` 2 / 2). As written:
+the 05/11 17:15 `dist/` (the user's build)
 holds parts 1 and 3 but not part 4's wording (§1, Build) — rebuild. Not
 tried on the game. The Vietnamese write-up is `improvement-plan.md`
 §2.AI. 888 → 907 tests, 39 files; `tsc --noEmit` = 0; prettier clean on
@@ -4294,3 +4339,302 @@ each account → every town but the source in each file. Put the files in
 account, Import its file → the queue holds those rows, rounded to whole
 ships, and Transport is on. Import another account's file → refused.
 Import Illidan's (empty) → only a toast.
+
+---
+
+## 34. 05/11, evening: Pirate — timed captures, the captcha, and a queue that waits
+
+Not committed when written. The capture points line and the fixed
+dialog width (the last two parts) are in the 05/11 19:37 `dist/` — see
+there; the rest was first in the 05/11 19:09 `dist/` — the user's
+build, not this session's; the userscript at 19:09:01, after the last
+source change at 19:06:17 (grepped in `Ikariam Send Resources.user.js` /
+`dist/extension/page/send-resources.js`: `btnStartPirate` 1 / 1,
+`ikaPirateRun` 2 / 2, `captchaPending` 4 / 5, `data:image;base64,<image>`
+1 / 1, `Pirate waits for the security word` 1 / 2); not compared byte for
+byte. Not tried on the game. The Vietnamese write-up is
+`improvement-plan.md` §2.AJ. 907 → 950 tests, 39 → 40 files; `tsc
+--noEmit` and `tsc -p tsconfig.strict.json` = 0; prettier clean on every
+file changed.
+
+### Asked for, and measured
+
+**The request:** Pirate in the Send Resources panel; Start presses Capture
+on a timer; capture level 1 by default, configurable; two buttons, **Start
+Pirate** and **Settings**; the gap between two captures is the level's
+duration + 10 s; a captcha turns up at random — for now, catch it: no
+capture within 30 s sends a notice (a new checkbox); anything that needs
+measuring goes into Crawl.
+
+**Measured from the user's network capture** (`sample/1`: Capture
+pressed, server time 11:14:07 UTC; `sample/2`: the fortress view while
+idle, 11:10:09 UTC — about four minutes **before** that capture, not its
+end; s303-en, town 297057):
+
+- The capture: `POST ?action=PiracyScreen&function=capture&buildingLevel=1&
+  view=pirateFortress&cityId=297057&position=17&activeTab=tabBootyQuest&
+  backgroundView=city&currentCityId=297057&templateView=pirateFortress&
+  actionRequest=…&ajax=1`.
+- The answer is the usual array (`updateGlobalData`, `changeView`,
+  `updateTemplateData`, `provideFeedback`, `popupData`, …). On success,
+  `provideFeedback` type 10 "Your order has been carried out.", and
+  `updateTemplateData.load_js.params` — **a JSON string** — holds
+  `hasOngoingMission: true`, `ongoingMissionType: "capture"`,
+  `ongoingMissionTimeRemaining: 150`, `ongoingMissionLevel: 1`,
+  `buildingLevel` (the fortress's level), `capturePoints`, and
+  `pirateCaptureLevels`: nine rows, `buildingLevel` 1/3/5/…/17, `duration`
+  150/450/900/1800/3600/7200/14400/28800/57600 s.
+- The idle view (`sample/2`): `hasOngoingMission: false`, the Capture
+  button with its link.
+- Both saved answers hold raw newlines inside JSON strings (copied out of
+  DevTools); `JSON.parse` takes them only once flattened. The tool does not
+  parse leniently because of it.
+
+**The captcha — from HTML the user pasted (the dialog on screen):** the
+capture box swaps its table for `<form onsubmit="ajaxHandlerCallFromForm(
+this)…">` holding `<input type="hidden" name="captchaNeeded" value="1">`,
+`action=PiracyScreen`, `function=capture`, `cityId`, `position`,
+`buildingLevel`, the picture `#js_captchaImage` (a PNG `data:` URI, about
+10 KB) and the field `#captcha`.
+
+### Chosen by the user
+
+- Send the capture: **the tool sends the request** (no dialog opened, no
+  real button pressed).
+- **One town**, picked in Settings.
+- After 30 s of failures: **stop Pirate**; Start Pirate **ticks** the
+  Pirate notice by itself.
+- Measuring: **Crawl Pirate, and keep the failed answers**.
+- Two new files, `features/pirate.ts` and `pirate.test.ts`: **agreed**.
+- A captcha: **notice at once and stop** (no 30 s); **open the Pirate
+  Fortress** ready; once the word is typed, **press Start Pirate again**.
+- While a captcha waits: **pause the queue until Start is pressed again**
+  (taken as Start Pirate).
+
+### How it behaves
+
+- **Success** is an answer with a mission under way
+  (`hasOngoingMission: true`), whoever started it and whatever its kind —
+  a capture by hand, a raid, or the tool's own request answered after a
+  reload. The next waits `ongoingMissionTimeRemaining` + 10 s
+  (`PIRATE_MARGIN_MS`); right after a capture the time left is the
+  duration.
+- **A captcha** (`answerAsksForCaptcha`: a string in the answer holds
+  `input[name="captchaNeeded"][value="1"]`): the notice at once ("Pirate
+  needs a captcha in <town>"), a toast, Pirate stops with `captchaPending`
+  set, and the fortress is opened with
+  `ajaxHandlerCall('?view=pirateFortress&activeTab=tabBootyQuest&cityId=…&position=…')`
+  once the runner is idle and no switch is landing (polled every 2 s, given
+  up after 60 s). **Nothing reads or answers the word.**
+- **Any other failure** (no mission, a failed request): tried again every
+  10 s; 30 s after the first, the notice, a toast, and Pirate stops.
+- **The notice:** a new kind, `pirateCaptureFailed`; its key carries the
+  failure streak's start (or the captcha's time), so each stop is its own
+  notice — `notify` never repeats a key within 7 days; `happenedAt` is the
+  time of the stop.
+- **The queue waits for the captcha:** `captchaPending` in the account
+  store, kept across reloads. Meanwhile `mayRunQueue` is false (one log
+  line, "Pirate waits for the security word - the queue holds until Start
+  Pirate") and `setReloadGuard` holds the keep-alive — otherwise the next
+  task (the shipment form, a click on a building, a town switch) or the
+  two-minute reload would replace the form. Start Pirate clears it; a
+  plain stop or the 30 s give-up never sets it.
+- **The token race:** a capture is an action, so it moves `actionRequest`;
+  the Upgrade link (`auto-build.ts:375-380`) and the shipment form carry
+  the token of the moment they were opened. So a capture waits (5 s, not
+  a failure) while `isTownSwitchInFlight()` or the runner `isBusy`, and
+  the runner starts no task while `isPirateCaptureInFlight()`.
+- **Several tabs:** `TabLock` `ika-pirate:<account>` — one tab captures.
+- **The schedule** lives in `ikaPirateRun` (`running`, `nextAt`,
+  `failingSince`, `captchaPending`); a page load re-arms it from `nextAt`
+  (`resumePirate()`).
+
+### Changes
+
+| Change | Where |
+| ------ | ----- |
+| `readFortressView` (reads `load_js.params`), `openCaptureLevels` (levels up to the fortress's) | `features/pirate.ts:161`, `:205` |
+| `storedFortressTowns` — towns with `pirateFortress` in the board's saved data (`***<account>***cities`, `_buildings[]._name/_position/_level`); `pirateSettingsOrDefault` (the first such town, level 1); slot 17 by default (measured) | `:224`, `:278` |
+| `fetchFortressView`, `sendCapture` (the Capture button's request), `answerAsksForCaptcha` | `:303`, `:444`, `:332` |
+| The failure trace `ikaPirateCaptureTrace`, the last 3, each part ≤ 2,000 characters: the reason, the entry names, `provideFeedback`, `popupData`, the capture box's HTML; tokens out (the answer's, the page's, the tool's — `knownTokens`; a token in `<input name="actionRequest" value>` has no pattern to find it by unless named) and `data:` pictures out | `:367`, `:380`, `:405` |
+| The schedule: `tick`, `startPirate`, `stopPirate({ captchaPending })`, `resumePirate`, `isPirateCaptchaPending`, `setPirateHoldCheck`, `isPirateCaptureInFlight`, `openFortressWhenIdle` | `:560`, `:687`, `:700`, `:711`, `:505`, `:521`, `:526`, `:661` |
+| `isTownSwitchInFlight()` — a switch sent within 30 s, and the page not there yet | `navigation.ts:198` |
+| `mayRunQueue` with `captchaHoldsQueue`; `setReloadGuard(() => !runner.isBusy && !isPirateCaptchaPending())`; `setPirateHoldCheck(() => runner.isBusy)`; `resumePirate()` at start | `app.ts:230`, `:248`, `:1048`, `:1051`, `:1092` |
+| `togglePirate` (ticks the notice; a refused permission is said and Pirate starts anyway), `crawlPirate` (file `ikariam-pirate-<account>-<UTC>.json`: town, level, the fortress view, `failedCaptures`), actions `pirate.toggle` / `pirate.settings` / `pirate.save`, the `pirate` crawl | `app.ts:536`, `:562`, `:901`, `:612` |
+| Settings dialog: a town dropdown (fortress towns marked), a level dropdown read from that town's fortress view (read again on a town change), Save | `ui/dialogs.ts:375`, `:411`, `:457` |
+| The **Pirate** group in the panel (`btnStartPirate`, Settings), a third notice checkbox, `refreshPirateButton`, `refreshNotificationSwitch` | `ui/panel.ts:135`, `:178`, `:185`, `:191` |
+| `PIRATE` (wording), `PANEL.groups.pirate`, `NOTIFICATIONS.pirateFailedSwitch`, `CRAWL_DIALOG.kinds.pirate` | `messages.ts:253`, `:63`, `:102` |
+| `NotificationKind` gains `pirateCaptureFailed` | `core/notifications.ts:25` |
+| Bug Report: `gameData.pirateCaptures` | `diagnostics.ts:186` |
+| Key groups: `ikaPirateSettings` config, `ikaPirateRun` runtime, `ikaPirateCaptureTrace` diagnostics | `core/data-transfer.ts:102-104` |
+
+### Tests
+
+907 → 950 (+43), 39 → 40 files: `pirate.test.ts` new, 31 tests (four of
+them one `it.each`); `navigation.test.ts` 43 → 47 (`isTownSwitchInFlight`:
+pending and not landed; landed; 30 s on; none sent); `app.test.ts` +8
+(Start Pirate ticks the notice, relabels, stops; a refused permission
+still starts; no town; Settings reads the levels and saves; a town without
+a fortress; the runner waits on a capture out; a captcha holds the queue
+and the keep-alive until Start Pirate; Crawl Pirate saves the file). Four
+existing tests that list the groups, the notice checkboxes and the crawls
+were updated (`panel.test.ts`, `app.test.ts`).
+
+`pirate.test.ts` covers: reading the view (a mission, none, not the
+fortress, the level filter); towns from the board's data, the default,
+slot 17; `sendCapture` (the exact parameters; any mission is success; a
+failure kept with no token; a failed request; the last 3, cut short); the
+schedule (at once, then exactly at +150 s +10 s and not 1 ms sooner;
+failures every 10 s, at 30 s one notice, a toast, a stop, nothing more
+sent; a success within 30 s does not stop; one key per stall; carries on
+after a reload from `nextAt`; waits for a switch; waits for a busy
+runner; the in-flight flag, even when the request throws; stopped
+mid-request sets no timer; no town, no start); the captcha (seen, not
+seen by mistake; the trace without picture or token; the notice at once,
+a stop, one request, the fortress opened at the right URL; opened only
+once the runner is idle; given up after a minute busy; the queue held
+across a reload until Start Pirate; other stops do not hold it; one key
+per captcha).
+
+The fixtures are built with only the fields the tool reads, a fake token
+and a fake picture; **nothing** was copied from `sample/1` or `sample/2`
+(a live token, other players' names).
+
+**Seen red, 32/32, re-run against the final code** (`break_pirate.py` in
+the scratchpad: change one place, run the matching test file, copy the
+original back; 30 in one pass, and 2 whose patch strings had gone stale —
+the queue-hold step changed those lines — fixed and run on their own;
+`md5sum -c` after: OK for all 4 files): success on params alone; no +10 s; giving up at 40
+s; a fixed notice key; the failure streak not reset on success; a reload
+ignoring `nextAt`; no wait for a switch; no wait for the runner; tokens not
+named; 4 traces kept; no level filter; a stop mid-request still
+rescheduling; Start not ticking the notice; the wrong `function`; Save
+always keeping level 1; the capture never marked in flight; the flag left
+set after a throw; the runner ignoring a capture in flight;
+`isTownSwitchInFlight` true after landing / at 30 s; the captcha not
+seen; seen for any `captchaNeeded`; the picture kept; a captcha not
+stopping; a captcha opening nothing; opening while the runner is busy;
+waiting for ever; a fixed captcha key; a captcha not holding the queue;
+the runner ignoring it; the keep-alive ignoring it; Start Pirate not
+clearing it.
+
+### My own mistakes
+
+- The first version let a token through a trace, in
+  `<input name="actionRequest" value="…">` — a test went red; fixed with
+  `knownTokens`.
+- The first comments carried `§2.AF`, `8d0293d`, `sample/1` (rule 11) —
+  rewritten.
+- A first `tsc=0` was `head`'s exit code, not `tsc`'s — run again on its
+  own.
+- An assertion on `happenedAt` first held for anything (`typeof … ===
+  "number"`) — now compared with the time of the stop.
+- The first version held the capture for town switches only, not for a
+  runner in a task — the advisor pointed at it; confirmed at
+  `auto-build.ts:375-380`; held both ways.
+- The break script missed four patches (lines changed by Prettier or by
+  later code) and once failed on an escape — the script was fixed and
+  those re-run; all four red.
+- Writing this up, I first gave 35 tests for `pirate.test.ts` and 46
+  breaks; measured, they are 31 and 32 — corrected.
+
+### Still open, not measured
+
+- Everything on the game.
+- The tool sends the capture as **GET**; the game sent **POST**. If the
+  server refuses GET, every capture is an ordinary failure, a captcha is
+  never seen, and Pirate stops after 30 s with the general notice — the
+  trace will tell.
+- Whether the answer to **the tool's own capture request** carries the
+  captcha form (the pasted HTML is the dialog on screen).
+- A capture while the page is in **another town** than the fortress's
+  (`currentCityId` is the fortress's town); opening the fortress with
+  `ajaxHandlerCall` from another town: the fortress, a town switch, or
+  something else.
+- A capture queued behind a notepad save can carry the old token
+  (`requireToken()` reads it before `waitForRequestSlot()` in
+  `core/ikariam/http.ts`) → refused, looking like a failure; the retry
+  10 s later usually clears it. Not changed.
+- A hidden tab: Chrome can stretch chained timers to about once a minute —
+  a 160 s cycle runs ~3 min, and the 30 s give-up gets 2 tries, not 4.
+- The panel does not show "the queue waits for a captcha" — only the
+  toast, the notice and the log. To give Pirate up after a captcha, press
+  Start then Stop Pirate, and the queue runs again.
+
+**What to try on the game** (reinstalled from the 19:09 `dist/`): Pirate →
+Settings: pick the town, look at the levels (only those the fortress
+allows), Save. Start Pirate: a capture starts at once, the log names the
+next; after the duration + 10 s, the next one. On a captcha: a notice,
+Pirate stops, the fortress opens with the form, the Transport/Build queue
+stands; type the word, press Capture, then Start Pirate — the queue runs
+again. If Pirate stops for another failure: Crawl → Pirate (or Bug Report)
+and put the file in `sample/` — `failedCaptures` shows what the game
+answered.
+
+### Later that evening: capture points in the panel
+
+**Asked for:** "show capturePoints in the Send Resources dialog before
+Capture is pressed", then, mid-turn: **"I mean the capturePoints in
+pirateHeader"** — the figure in the fortress view's `<div
+class="pirateHeader"><ul class="resources"><li class="capturePoints">…
+<span class="value">1,035</span>`.
+
+**Measured:** `pirateHeader` is in the `changeView` HTML of both captured
+answers, `<span class="value">345</span>`, matching `capturePoints: "345"`
+in the params. The capture's answer (`sample/1`) and the idle view four
+minutes before (`sample/2`) both read 345 — points come in when a run
+**ends**, not when it starts. So the header in a capture's answer is **the
+points just before that press**; no extra request is needed. The captcha
+view the user pasted has the header too (1,035).
+
+**My own mistake:** the first version read the params; the user said
+`pirateHeader`, so the source changed. On the figures measured, both give
+the same value.
+
+| Change | Where |
+| ------ | ----- |
+| `readHeaderCapturePoints` — `.pirateHeader li.capturePoints .value` in the `changeView` HTML, read with `parseGameNumber` ("1,035" → 1035); no header → null. `FortressView.capturePoints` comes from it | `features/pirate.ts:210` |
+| `PIRATE_CAPTURE_POINTS_KEY` (`ikaPirateCapturePoints`: `points`, `at`), `lastCapturePoints`, `recordCapturePoints` — kept on every fortress view read: each capture (failed and captcha ones too), Settings, Crawl; a failed request keeps the old figure; Pirate's listener is told | `:340`, `:348`, `:362` |
+| The line `#ikaPirateCapturePoints` under the two Pirate buttons: "Capture Points: 1,035 (at 19:20)" (`formatInteger`, the machine's hour:minute), "Capture Points: —" before any; `refreshPirateCapturePoints` | `ui/panel.ts:187`, `:189`, `:201` |
+| Pirate's listener redraws the button and the points line | `app.ts:1094` |
+| Wording `PIRATE.capturePoints`, `capturePointsUnknown`, `capturePointsTitle` | `messages.ts:256-259` |
+| `ikaPirateCapturePoints` in the measurements group | `core/data-transfer.ts:104` |
+
+**Tests** 950 → 958 → 959 (with the width change below): `pirate.test.ts`
+31 → 35 (the header, even when the params differ; no header → null; kept
+from a capture's answer and kept when the request fails; kept from
+`fetchFortressView`; read in the captcha view), `panel.test.ts` 36 → 40
+("—"; the figure with its separator and time; redrawn; the measurements
+group), `app.test.ts` +1 (the listener redraws the line). `fortressAnswer`
+gains a `pirateHeader` (its `headerPoints` argument), `captchaAnswer` one
+at 1,035. **Seen red 5/5** (points never kept, the `pirateCrew` cell read
+instead, `Number` instead of `parseGameNumber`, no `formatInteger`, the
+listener not redrawing the line; `md5sum -c`: OK).
+
+**Not measured:** whether the answer to **the tool's own** capture request
+carries `pirateHeader` (both measured answers were the game's own
+requests); how the line looks in the real panel.
+
+### Later still: a fixed width for the Settings dialog
+
+**Reported:** the help line "Start Pirate sends the crew on this capture
+run, and…" is too long and stretches the dialog. First asked for a **fixed
+height** (done: the text in a 56px box that scrolls), then **"my mistake,
+set a fixed width"**, with the real popup's HTML (`#ikaMationTransporterDialog
+.popupMessage`, the help text on one long line).
+
+**Change:** the 56px height is gone; the dialog's whole content sits in
+`<div id="ikaPirateDialogBody" style="width:400px">`
+(`PIRATE_DIALOG_WIDTH_PX`, `ui/dialogs.ts:370`, `:376`) — the game's popup
+grows to its content, and at a fixed width the text wraps. The Settings
+test checks `width: 400px`, the text inside the box, and no `height`;
+without the width it goes red (`1 failed`), restored → `cmp` matched.
+
+**Not measured:** how 400px looks in the real popup (happy-dom has no
+layout).
+
+**What to try on the game** (reinstalled from the 19:37 `dist/`): the
+Pirate group shows "Capture Points: —" until the first capture, Settings
+or Crawl, then the figure from the fortress's header with the time it was
+read; it changes after each capture once a run has ended. Pirate Settings
+is 400px wide and the help text wraps.
