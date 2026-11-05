@@ -15,5 +15,10 @@ legacy/
 # the page markup. Useful locally, not something to publish.
 tools/output/
 
+# tools/wine-transport.js reads the Crawl Wine files and writes one wine
+# transport file per account; both carry account and town names.
+tools/input-wine-transport/
+tools/output-wine-transport/
+
 So_sanh_2_script_Ikariam.md
 

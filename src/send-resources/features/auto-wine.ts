@@ -34,6 +34,7 @@ import type { WineReceiver } from "../types";
 import { projectedStats } from "../town-cache";
 import {
   distributeWine,
+  roundToWholeShips,
   type WineDistributionResult,
   type WineTown,
 } from "./wine-distribution";
@@ -407,32 +408,45 @@ function escapeTemplateLiteral(text: string): string {
 }
 
 /**
- * The receiving towns' wine figures as the snippet the player pastes into
- * their own sheet:
+ * Every town's wine figures but the source's, as the snippet the player
+ * pastes into their own sheet:
  *
  *     const csv = `
  *     account,town,stock,consume,maxSupply
  *     Smalldevil1, S-Nuithanh    , 0    , 194    , 65000
  *     `;
  *
- * One row per receiver Auto Wine would ship to from `fromTown`, with the
- * same stock and hourly consumption it plans with. `maxSupply` is what the
- * source can spare — its stock less one hour of its own consumption, the
- * `supply` of `planWineRun` — and is the same on every row. The spacing
- * copies the player's sample.
+ * One row per town of the account other than `fromTown` — ticked senders and
+ * towns that need no wine included — in the town list's order. `stock` and
+ * `consume` are the figures Auto Wine plans with: the measured stock (0 when
+ * none), and what the town drinks an hour less what its island makes, or its
+ * saved Wine/h when nothing is measured; 0 when that is not above 0.
+ * `maxSupply` is what the source can spare — its stock less one hour of its
+ * own consumption, the `supply` of `planWineRun` — and is the same on every
+ * row. The spacing copies the player's sample.
  */
 export function buildWineCsv(
   fromTown: string,
   accountName: string,
 ): { text: string; rows: number } {
   const board = readWineBoard();
-  const receivers = loadReceivers().filter((r) => r.townNumber !== fromTown);
+  const saved = loadReceivers();
   const maxSupply = Math.round(getSourceSupply(fromTown, board));
-  const lines = buildWineTowns(receivers, board).map(
-    (town) =>
-      `${accountName}, ${town.townName}    , ${Math.round(town.stock)}    , ` +
-      `${Math.round(town.consume)}    , ${maxSupply}`,
-  );
+  const lines = getTownList()
+    .filter((town) => town.townNumber.toString() !== fromTown)
+    .map((town) => {
+      const townNumber = town.townNumber.toString();
+      const measured = measuredStats(town.townName, board);
+      const receiver = saved.find(
+        (entry) => entry.townNumber === townNumber,
+      ) ?? { townNumber, winePerHour: "0" };
+      const consume = Math.max(0, netWineNeed(receiver, measured));
+      return (
+        `${accountName}, ${town.townName.trim()}    , ` +
+        `${Math.round(measured?.stock ?? 0)}    , ` +
+        `${Math.round(consume)}    , ${maxSupply}`
+      );
+    });
   const body = ["account,town,stock,consume,maxSupply", ...lines].join("\n");
   return {
     text: "const csv = `\n" + escapeTemplateLiteral(body) + "\n`;\n",
@@ -533,6 +547,139 @@ export function enqueueWineRun(fromTown: string): number {
       `(${plan.unused} left over)`,
   );
   return added;
+}
+
+/** What `tools/wine-transport.js` writes in a wine transport file, to tell it from others. */
+export const WINE_TRANSPORT_FILE_KIND = "ikariam-wine-transport";
+const WINE_TRANSPORT_FILE_VERSION = 1;
+
+/**
+ * One account's shipments from the split across accounts that `tools/wine-transport.js`
+ * makes out of the Crawl Wine files, fewest hours left first.
+ */
+export interface WineTransportFile {
+  account: string;
+  shipments: { town: string; wine: number }[];
+}
+
+/**
+ * Read a wine transport file. Throws, with the message to show, when the text
+ * is not one: another JSON file (the panel's Data export is one too), a newer
+ * version, or a shipment without a town name or a whole positive amount.
+ */
+export function parseWineTransportFile(text: string): WineTransportFile {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error(AUTO_WINE.importNotTransportFile);
+  }
+  const file = parsed as {
+    kind?: unknown;
+    version?: unknown;
+    account?: unknown;
+    shipments?: unknown;
+  } | null;
+  if (
+    !file ||
+    file.kind !== WINE_TRANSPORT_FILE_KIND ||
+    file.version !== WINE_TRANSPORT_FILE_VERSION ||
+    typeof file.account !== "string" ||
+    !Array.isArray(file.shipments)
+  ) {
+    throw new Error(AUTO_WINE.importNotTransportFile);
+  }
+  const shipments = file.shipments.map((entry: unknown) => {
+    const shipment = entry as { town?: unknown; wine?: unknown } | null;
+    if (
+      !shipment ||
+      typeof shipment.town !== "string" ||
+      typeof shipment.wine !== "number" ||
+      !Number.isInteger(shipment.wine) ||
+      shipment.wine <= 0
+    ) {
+      throw new Error(AUTO_WINE.importNotTransportFile);
+    }
+    return { town: shipment.town.trim(), wine: shipment.wine };
+  });
+  return { account: file.account, shipments };
+}
+
+/**
+ * Queue a wine transport file's shipments from `fromTown`, as a wine run:
+ * pending Auto Wine shipments are replaced, each amount of one merchant
+ * ship or more is rounded down to whole ships, and the source keeps one hour
+ * of its own consumption. The file's order is kept. A town not in this
+ * account's town list, and the source's own row, are skipped and named.
+ * Returns how many shipments were queued; with none, nothing in the queue
+ * changes.
+ */
+export function enqueueWineTransport(
+  file: WineTransportFile,
+  fromTown: string,
+): number {
+  const towns = getTownList();
+  const cargo = getPerShipCapacity();
+  const unknown: string[] = [];
+  const skipped: string[] = [];
+  const shipments: { destination: string; amount: number }[] = [];
+
+  for (const shipment of file.shipments) {
+    const town = towns.find((entry) => entry.townName.trim() === shipment.town);
+    if (!town) {
+      unknown.push(shipment.town);
+      continue;
+    }
+    const destination = town.townNumber.toString();
+    if (destination === fromTown) {
+      skipped.push(AUTO_WINE.importSourceInFile(shipment.town));
+      continue;
+    }
+    shipments.push({
+      destination,
+      amount: roundToWholeShips(shipment.wine, cargo),
+    });
+  }
+  if (unknown.length > 0) skipped.push(AUTO_WINE.importUnknownTowns(unknown));
+  const skippedText = skipped.join("\n");
+
+  if (shipments.length === 0) {
+    showToast(AUTO_WINE.importNothingToQueue(skippedText));
+    return 0;
+  }
+
+  const reserve = getSourceReserve(fromTown);
+  const { queue } = getState();
+  queue.removeByLabel(AUTO_WINE_LABEL);
+  for (const { destination, amount } of shipments) {
+    queue.push({
+      type: "sendResource",
+      data: {
+        origin: fromTown,
+        destination,
+        resource: "wine",
+        amount,
+        reserve,
+        label: AUTO_WINE_LABEL,
+      },
+    });
+  }
+
+  const wine = shipments.reduce((sum, shipment) => sum + shipment.amount, 0);
+  logInfo(
+    `Auto Wine: imported ${shipments.length} shipments, ${wine} wine from ` +
+      `${townNameOf(fromTown)}` +
+      (skippedText ? ` (${skippedText.replace(/\n/g, " ")})` : ""),
+  );
+  showToast(
+    AUTO_WINE.importQueued(
+      shipments.length,
+      wine,
+      townNameOf(fromTown),
+      skippedText,
+    ),
+  );
+  return shipments.length;
 }
 
 /**

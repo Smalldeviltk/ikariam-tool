@@ -74,6 +74,15 @@ export interface WineDistributionOptions {
   shipCapacity?: number;
 }
 
+/**
+ * A share of one ship's cargo or more, rounded down to whole ships; a share
+ * under one ship, or any share when the cargo is not known, as it is.
+ */
+export function roundToWholeShips(share: number, cargo: number): number {
+  if (cargo <= 0 || share < cargo) return share;
+  return Math.floor(share / cargo) * cargo;
+}
+
 /** The wine a town will hold when a shipment leaving now arrives. */
 function stockOnArrival(town: WineTown): number {
   const drunk = town.consume * Math.max(0, town.transitHours ?? 0);
@@ -228,8 +237,7 @@ export function distributeWine(
   if (cargo > 0) {
     for (const town of active) {
       const share = add.get(town.townNumber) ?? 0;
-      if (share < cargo) continue;
-      const whole = Math.floor(share / cargo) * cargo;
+      const whole = roundToWholeShips(share, cargo);
       add.set(town.townNumber, whole);
       used -= share - whole;
     }

@@ -343,6 +343,7 @@ export function openAutoWineDialog(): void {
      <button style="margin-right:20px" class="button" ${action("wine.save")}>${BUTTON.save}</button>
      <button style="margin-right:20px" class="button" ${action("wine.load")}>${BUTTON.load}</button>
      <button style="margin-right:20px" class="button" ${action("wine.preview")}>${WINE_DIALOG.previewPlan}</button>
+     <button style="margin-right:20px" class="button" title="${WINE_DIALOG.importTransportTitle}" ${action("wine.import")}>${WINE_DIALOG.importTransport}</button>
      <button class="button" ${action("dialog.close")}>${BUTTON.cancel}</button><br/><br/>
      <div id="winePlanPreview"></div>`,
   );

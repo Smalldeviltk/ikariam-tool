@@ -15,6 +15,7 @@
  */
 
 import { isTypingTarget, qs } from "@core/dom";
+import { errorMessage } from "@core/format";
 import { getAccountName, getCurrentTownName } from "@core/ikariam/globals";
 import { DIALOG_ID, SEL } from "@core/ikariam/selectors";
 import { installErrorHandlers } from "@core/bug-report";
@@ -24,6 +25,7 @@ import { TabLock, TaskRunner, type TaskType } from "@core/task-queue";
 import { showToast } from "@core/ui/window";
 
 import {
+  AUTO_WINE,
   BUG_REPORT,
   CRAWL_DIALOG,
   NOTIFICATIONS,
@@ -64,10 +66,12 @@ import {
   chooseWineSource,
   collectWineSettings,
   enqueueWineRun,
-  hasReceiversFor,
+  enqueueWineTransport,
   loadConsumedWine,
+  parseWineTransportFile,
   pickWineSource,
   saveMeasuredReceivers,
+  type WineTransportFile,
 } from "./features/auto-wine";
 import {
   addBuildingToQueue,
@@ -118,6 +122,7 @@ import {
   downloadText,
   exportDataToFile,
   importDataFromFile,
+  pickTextFile,
   timestampedFilename,
 } from "./ui/data-transfer-ui";
 import {
@@ -374,19 +379,25 @@ async function runAutoWine(fromTown: string | null): Promise<void> {
 /**
  * Crawl's wine part, the first steps of Auto Wine's Start: scan every town
  * and wait for it, take each town's measured consumption as Load then Save
- * would, then save the receiving towns' wine figures as a `const csv`
- * snippet. Nothing is saved when the scan refuses to run.
+ * would, then save every town's wine figures but the source's as a
+ * `const csv` snippet. Nothing is saved when the scan refuses to run.
  *
- * The receivers come from the scan, not from what was saved before it: a
- * town never loaded into Auto Wine Settings used to be missing from the file
- * although the scan had just measured it.
+ * The source is found as Start finds it: with none ticked (`null`), picked
+ * after the scan, from the figures it has just measured.
+ *
+ * Every town but the source gets a row, whether or not it needs wine: the
+ * file feeds a split across accounts, which needs each town's figures.
  */
-async function crawlWine(fromTown: string): Promise<void> {
+async function crawlWine(fromTown: string | null): Promise<void> {
   if (!(await scanBuildings(undefined, () => runner.isRunning))) return;
+  const source = fromTown ?? pickWineSource();
+  if (source === null) {
+    showToast(WINE_DIALOG.noSourceTicked);
+    return;
+  }
   saveMeasuredReceivers();
-  if (!hasReceiversFor(fromTown)) return;
   const { accountName } = getState();
-  const csv = buildWineCsv(fromTown, accountName);
+  const csv = buildWineCsv(source, accountName);
   const filename = timestampedFilename(
     accountName,
     WINE_CRAWL_FILE_PREFIX,
@@ -398,12 +409,86 @@ async function crawlWine(fromTown: string): Promise<void> {
 }
 
 /**
+ * The wine transport file read by Auto Wine Settings' Import, held while the
+ * source-town popup is open (several towns ticked as Sender).
+ */
+let pendingWineTransport: WineTransportFile | null = null;
+
+/**
+ * Auto Wine Settings' Import: read a wine transport file made by `tools/wine-transport.js`,
+ * refuse another account's, then queue its shipments from the source found as
+ * Start finds it and switch Transport's timer on.
+ */
+function importWineTransportFile(): void {
+  pickTextFile(
+    "application/json,.json",
+    (text) => {
+      let file: WineTransportFile;
+      try {
+        file = parseWineTransportFile(text);
+      } catch (error) {
+        showToast(errorMessage(error));
+        return;
+      }
+      const { accountName } = getState();
+      if (file.account !== accountName) {
+        showToast(AUTO_WINE.importOtherAccount(file.account, accountName));
+        return;
+      }
+      // An account the split sends nothing to: no scan, no Sender ticked.
+      if (file.shipments.length === 0) {
+        showToast(AUTO_WINE.importNothingToQueue(""));
+        return;
+      }
+      closeDialog();
+      pendingWineTransport = file;
+      // None ticked: picked after a scan, from fresh figures, as Start does.
+      if (loadSenders().length === 0) {
+        void queueWineTransport(null);
+        return;
+      }
+      withWineSource(
+        "wine.importFrom",
+        (town) => void queueWineTransport(town),
+      );
+    },
+    (error) => showToast(errorMessage(error)),
+  );
+}
+
+/** Queue the held wine transport file from `fromTown`, or the picked source. */
+async function queueWineTransport(fromTown: string | null): Promise<void> {
+  const file = pendingWineTransport;
+  pendingWineTransport = null;
+  if (!file) return;
+  let source = fromTown;
+  if (source === null) {
+    if (!(await scanBuildings(undefined, () => runner.isRunning))) return;
+    source = pickWineSource();
+    if (source === null) {
+      showToast(WINE_DIALOG.noSourceTicked);
+      return;
+    }
+  }
+  if (enqueueWineTransport(file, source) === 0) return;
+  refreshQueueView();
+  if (!isAutoStart()) toggleQueueRunner();
+}
+
+/**
  * What each crawl of the Crawl dialog runs. A `Record` over every kind, so a
  * crawl added to `CRAWL_DIALOG.kinds` without a run here does not compile.
  */
 const CRAWLS: Record<CrawlKind, () => void> = {
   building: saveBuildingHelpToFile,
-  wine: () => withWineSource("crawl.wineFrom", (town) => void crawlWine(town)),
+  wine: () => {
+    // None ticked: picked after the scan, from fresh figures, as Start does.
+    if (loadSenders().length === 0) {
+      void crawlWine(null);
+      return;
+    }
+    withWineSource("crawl.wineFrom", (town) => void crawlWine(town));
+  },
 };
 
 /** The Crawl dialog's button: the one crawl picked. */
@@ -530,6 +615,13 @@ function registerUiActions(): void {
       withWineSource("wine.queueFrom", queueWineRun);
     },
     "wine.load": loadConsumedWine,
+    "wine.import": importWineTransportFile,
+    "wine.importFrom": (element) => {
+      const town = element.dataset.ikaTown;
+      if (!town) return;
+      closeDialog();
+      void queueWineTransport(town);
+    },
     "wine.preview": () => {
       // With several sources, preview against the first one. With none, the
       // one a run would pick — not ticked here: the dialog's Save writes the

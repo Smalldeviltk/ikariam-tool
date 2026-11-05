@@ -90,6 +90,26 @@ export function exportDataToFile(): void {
 }
 
 /**
+ * Prompt for a file and hand its text to `onText`; a file that cannot be read
+ * goes to `onError`. Nothing happens when the player cancels the picker.
+ */
+export function pickTextFile(
+  accept: string,
+  onText: (text: string) => void,
+  onError: (error: unknown) => void,
+): void {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = accept;
+  input.addEventListener("change", () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    void file.text().then(onText, onError);
+  });
+  input.click();
+}
+
+/**
  * Prompt for a file and merge it in.
  *
  * Account mismatch is checked rather than assumed: both browsers normally play

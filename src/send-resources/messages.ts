@@ -154,6 +154,10 @@ export const WINE_DIALOG = {
     "no measurement yet and Auto Wine uses the <b>Wine/h</b> you type here, " +
     "assuming zero stock.",
   previewPlan: "Preview plan",
+  importTransport: "Import",
+  importTransportTitle:
+    "Queue the shipments of a wine transport file made by tools/wine-transport.js from the " +
+    "Crawl Wine files, and switch Transport's timer on.",
   chooseSourceTitle: "Choose the wine source town",
   noSourceTicked:
     "No town is ticked as a wine source, and no town's wine figures are " +
@@ -212,6 +216,28 @@ export const AUTO_WINE = {
       ? `${Math.floor(hours)}h at its own consumption`
       : "and drinks none") +
     "), so it is ticked now.",
+  importNotTransportFile:
+    "This is not a wine transport file: pick an " +
+    "ikariam-wine-transport-<account>-<time>.json file made by tools/wine-transport.js.",
+  importOtherAccount: (fileAccount: string, account: string) =>
+    `This wine transport file is for the account "${fileAccount}", not ` +
+    `"${account}": nothing was queued.`,
+  importNothingToQueue: (skipped: string) =>
+    "Nothing to queue from this wine transport file." +
+    (skipped ? `\n\n${skipped}` : ""),
+  importQueued: (
+    shipments: number,
+    wine: number,
+    source: string,
+    skipped: string,
+  ) =>
+    `Queued ${shipments} wine shipment(s), ${wine} wine from ${source}; ` +
+    "Transport's timer is on." +
+    (skipped ? `\n\n${skipped}` : ""),
+  importUnknownTowns: (towns: readonly string[]) =>
+    `Not in this account's town list, so skipped: ${towns.join(", ")}.`,
+  importSourceInFile: (town: string) =>
+    `${town} is the source town, so its row was skipped.`,
   noFigures:
     "No wine figures are available yet.\n\n" +
     "They come from the Empire Overview board, or from visiting a town " +

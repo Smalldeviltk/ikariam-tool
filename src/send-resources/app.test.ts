@@ -891,6 +891,168 @@ describe("Auto Wine", () => {
     },
   );
 
+  describe("Import of a wine transport file", () => {
+    /** A wine transport file as tools/wine-transport.js writes it, for `account`. */
+    function transportFile(
+      account: string,
+      shipments = [{ town: "M-Corinth", wine: 1234 }],
+    ): string {
+      return JSON.stringify({
+        kind: "ikariam-wine-transport",
+        version: 1,
+        account,
+        createdAt: "2026-11-05T10:07:46.885Z",
+        crawlFile: `ikariam-wine-${account}-2026-11-05-09-48-43.js`,
+        targetHours: 1980.73,
+        shipments,
+      });
+    }
+
+    /** Answer the file picker with `content`, as a player choosing it would. */
+    function pickFile(content: string) {
+      return vi
+        .spyOn(HTMLInputElement.prototype, "click")
+        .mockImplementation(function (this: HTMLInputElement) {
+          Object.defineProperty(this, "files", {
+            value: [new File([content], "transport.json")],
+          });
+          this.dispatchEvent(new Event("change"));
+        });
+    }
+
+    it("Auto Wine Settings has an Import button that runs it", async () => {
+      await startWithSource();
+      const createPopup = (id: string, _title: string, html: string) =>
+        document.body.insertAdjacentHTML(
+          "beforeend",
+          `<div id="${id}">${html}</div>`,
+        );
+      Object.assign(window, { ikariam: { createPopup } });
+      await actions["wine.settings"](document.body);
+      delete window.ikariam;
+
+      expect(
+        document.querySelector('[data-ika-action="wine.import"]')?.textContent,
+      ).toBe("Import");
+    });
+
+    it(
+      "queues the file's shipments from the ticked source and switches " +
+        "Transport's timer on",
+      async () => {
+        const state = await startWithSource();
+        const picker = pickFile(transportFile("tester"));
+        try {
+          await actions["wine.import"](document.body);
+          await vi.waitFor(() => expect(queuedWine(state)).toHaveLength(1));
+        } finally {
+          picker.mockRestore();
+        }
+
+        expect(queuedWine(state)).toEqual(["0 -> 1: wine"]);
+        // 1,234 is two ships and more at 500: rounded down to whole ships.
+        expect(
+          state.getState().queue.listOfType("sendResource")[0].data.amount,
+        ).toBe(1000);
+        expect(scanBuildings).not.toHaveBeenCalled();
+        expect(state.isAutoStart()).toBe(true);
+      },
+    );
+
+    it("refuses another account's file, and queues and starts nothing", async () => {
+      const state = await startWithSource();
+      const picker = pickFile(transportFile("Saigon"));
+      try {
+        await actions["wine.import"](document.body);
+        await vi.waitFor(() => expect(showToast).toHaveBeenCalled());
+      } finally {
+        picker.mockRestore();
+      }
+
+      expect(String(showToast.mock.calls[0][0])).toContain(
+        'for the account "Saigon", not "tester"',
+      );
+      expect(queuedWine(state)).toEqual([]);
+      expect(state.isAutoStart()).toBe(false);
+    });
+
+    it(
+      "with several towns ticked, asks which one, then ships from the town " +
+        "picked in the popup",
+      async () => {
+        const state = await startWithSource(["0", "1"]);
+        const createPopup = (id: string, _title: string, html: string) =>
+          document.body.insertAdjacentHTML(
+            "beforeend",
+            `<div id="${id}">${html}</div>`,
+          );
+        Object.assign(window, { ikariam: { createPopup } });
+        const picker = pickFile(
+          transportFile("tester", [{ town: "W-Athens", wine: 300 }]),
+        );
+        let button: HTMLElement | null = null;
+        try {
+          await actions["wine.import"](document.body);
+          await vi.waitFor(() => {
+            button = document.querySelector<HTMLElement>(
+              '[data-ika-action="wine.importFrom"][data-ika-town="1"]',
+            );
+            expect(button).not.toBeNull();
+          });
+        } finally {
+          picker.mockRestore();
+          delete window.ikariam;
+        }
+        expect(queuedWine(state)).toEqual([]);
+
+        await actions["wine.importFrom"](button!);
+        await settle();
+
+        expect(queuedWine(state)).toEqual(["1 -> 0: wine"]);
+        expect(state.isAutoStart()).toBe(true);
+      },
+    );
+
+    it("with nothing to ship in the file, neither scans nor ticks a source", async () => {
+      const state = await startWithSource([]);
+      const picker = pickFile(transportFile("tester", []));
+      try {
+        await actions["wine.import"](document.body);
+        await vi.waitFor(() => expect(showToast).toHaveBeenCalled());
+      } finally {
+        picker.mockRestore();
+      }
+
+      expect(String(showToast.mock.calls[0][0])).toContain(
+        "Nothing to queue from this wine transport file",
+      );
+      expect(scanBuildings).not.toHaveBeenCalled();
+      expect(state.loadSenders()).toEqual([]);
+      expect(queuedWine(state)).toEqual([]);
+      expect(state.isAutoStart()).toBe(false);
+    });
+
+    it(
+      "with no source ticked, scans first, then ships from the town Start " +
+        "would pick",
+      async () => {
+        const state = await startWithSource([]);
+        const picker = pickFile(transportFile("tester"));
+        try {
+          await actions["wine.import"](document.body);
+          await vi.waitFor(() => expect(queuedWine(state)).toHaveLength(1));
+        } finally {
+          picker.mockRestore();
+        }
+
+        expect(scanBuildings).toHaveBeenCalledTimes(1);
+        expect(state.loadSenders()).toEqual(["0"]);
+        expect(queuedWine(state)).toEqual(["0 -> 1: wine"]);
+        expect(state.isAutoStart()).toBe(true);
+      },
+    );
+  });
+
   describe("Crawl with Wine picked", () => {
     /** The Crawl dialog as the game's popup would draw it, Wine picked. */
     function pickWineInCrawlDialog(): void {
@@ -987,7 +1149,7 @@ describe("Auto Wine", () => {
       ]);
     });
 
-    it("says so after the scan, and saves no file, when no town drinks wine", async () => {
+    it("still saves every town but the source when no town drinks wine, with consume 0", async () => {
       scanBuildings.mockImplementation(async () => {
         document.body.insertAdjacentHTML(
           "beforeend",
@@ -1005,11 +1167,49 @@ describe("Auto Wine", () => {
       await settle();
 
       expect(scanBuildings).toHaveBeenCalledTimes(1);
-      expect(downloadText).not.toHaveBeenCalled();
-      expect(showToast).toHaveBeenCalledWith(
-        expect.stringContaining("No town is set to receive wine"),
+      expect(downloadText).toHaveBeenCalledTimes(1);
+      expect(downloadText.mock.calls[0][1]).toContain(
+        "tester, M-Corinth    , 500    , 0    , 9900\n",
       );
     });
+
+    it(
+      "with no source ticked, picks the source after the scan, from the " +
+        "figures it has just measured, as Start does",
+      async () => {
+        // Before the scan M-Corinth looks like the wine maker; the scan shows
+        // it is W-Athens.
+        scanBuildings.mockImplementation(async () => {
+          document.querySelector("#ResTab")?.remove();
+          document.body.insertAdjacentHTML(
+            "beforeend",
+            `<div id="ResTab"><table><tbody>` +
+              boardRow("W-Athens", "10,000", "-100", "+605") +
+              boardRow("M-Corinth", "0", "-200") +
+              `</tbody></table></div>`,
+          );
+          return true;
+        });
+        const state = await startWithSource([]);
+        document.body.insertAdjacentHTML(
+          "beforeend",
+          `<div id="ResTab"><table><tbody>` +
+            boardRow("W-Athens", "10,000", "-100") +
+            boardRow("M-Corinth", "0", "-200", "+900") +
+            `</tbody></table></div>`,
+        );
+        pickWineInCrawlDialog();
+
+        await actions["crawl.run"](document.body);
+        await settle();
+
+        expect(state.loadSenders()).toEqual(["0"]);
+        expect(downloadText).toHaveBeenCalledTimes(1);
+        const text = downloadText.mock.calls[0][1] as string;
+        expect(text).toContain("tester, M-Corinth    , 0    , 200    , 9900\n");
+        expect(text).not.toContain("W-Athens");
+      },
+    );
   });
 });
 

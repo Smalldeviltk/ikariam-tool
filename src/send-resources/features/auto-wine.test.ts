@@ -21,6 +21,8 @@ import {
   buildWineCsv,
   buildWineTowns,
   enqueueWineRun,
+  enqueueWineTransport,
+  parseWineTransportFile,
   FALLBACK_WINE_RESERVE,
   getSourceReserve,
   getSourceSupply,
@@ -422,16 +424,21 @@ describe("only a town drinking more than its island makes gets wine", () => {
     expect(queued.map((task) => task.data.destination)).toEqual(["2"]);
   });
 
-  it("writes no wine-crawl row for a town that makes more than it drinks", () => {
-    saveReceivers([
-      { townNumber: "0", winePerHour: "300" },
-      { townNumber: "2", winePerHour: "200" },
-    ]);
-    const { text, rows } = buildWineCsv("1", "tester");
-    expect(rows).toBe(1);
-    expect(text).toContain("tester, Corinth    ,");
-    expect(text).not.toContain("Athens");
-  });
+  it(
+    "writes a wine-crawl row with consume 0 for a town that makes more than " +
+      "it drinks",
+    () => {
+      saveReceivers([
+        { townNumber: "0", winePerHour: "300" },
+        { townNumber: "2", winePerHour: "200" },
+      ]);
+      // Sparta sends: 3,000 less its 800 reserve.
+      const { text, rows } = buildWineCsv("1", "tester");
+      expect(rows).toBe(2);
+      expect(text).toContain("tester, Athens    , 5000    , 0    , 2200\n");
+      expect(text).toContain("tester, Corinth    , 1000    , 200    , 2200\n");
+    },
+  );
 
   it(
     "says which towns make their own wine when they were the only " +
@@ -761,8 +768,8 @@ describe("enqueueWineRun", () => {
 
 describe("buildWineCsv", () => {
   it(
-    "writes one row per receiving town, with what the source can spare on " +
-      "every row, spaced like the player's sample",
+    "writes one row per town but the source, in the town list's order, with " +
+      "what the source can spare on every row, spaced like the player's sample",
     () => {
       document.body.innerHTML =
         townDropdown(TOWNS) +
@@ -786,10 +793,57 @@ describe("buildWineCsv", () => {
         text:
           "const csv = `\n" +
           "account,town,stock,consume,maxSupply\n" +
-          "Smalldevil1, Sparta    , 1000    , 100    , 49475\n" +
           "Smalldevil1, Corinth    , 2000    , 1000    , 49475\n" +
+          "Smalldevil1, Sparta    , 1000    , 100    , 49475\n" +
           "`;\n",
       });
+    },
+  );
+
+  it(
+    "REGRESSION: writes a row for every town but the source — a ticked " +
+      "sender, a town drinking none and a town never saved as a receiver " +
+      "used to be missing from the file",
+    () => {
+      document.body.innerHTML =
+        townDropdown(["Athens", "Sparta", "Corinth", "Delos"]) +
+        renderBoard([
+          boardRow("Athens", "50,000", "-500"),
+          boardRow("Sparta", "4,000", "-100"),
+          boardRow("Corinth", "2,000", "0"),
+          boardRow("Delos", "300", "-50"),
+        ]);
+      // Athens is the source; Sparta is ticked as a sender too; nothing is
+      // saved as a receiver.
+      saveSenders(["0", "1"]);
+
+      const { text, rows } = buildWineCsv("0", "tester");
+
+      expect(rows).toBe(3);
+      expect(text).toBe(
+        "const csv = `\n" +
+          "account,town,stock,consume,maxSupply\n" +
+          "tester, Corinth    , 2000    , 0    , 49500\n" +
+          "tester, Delos    , 300    , 50    , 49500\n" +
+          "tester, Sparta    , 4000    , 100    , 49500\n" +
+          "`;\n",
+      );
+    },
+  );
+
+  it(
+    "writes a town with no figures with stock 0 and its saved Wine/h, or 0 " +
+      "with none saved",
+    () => {
+      document.body.innerHTML =
+        townDropdown(TOWNS) +
+        renderBoard([boardRow("Athens", "5,000", "-100")]);
+      saveReceivers([{ townNumber: "1", winePerHour: "150" }]);
+
+      const { text } = buildWineCsv("0", "tester");
+
+      expect(text).toContain("tester, Corinth    , 0    , 0    , 4900\n");
+      expect(text).toContain("tester, Sparta    , 0    , 150    , 4900\n");
     },
   );
 
@@ -805,6 +859,211 @@ describe("buildWineCsv", () => {
     const { text } = buildWineCsv("0", "tester");
 
     expect(text).toContain("tester, Spar\\`ta    , 10    , 50    , 4900");
+  });
+});
+
+/** A wine transport file exactly as tools/wine-transport.js wrote it from a real crawl. */
+const SAIGON_TRANSPORT_FILE = `{
+  "kind": "ikariam-wine-transport",
+  "version": 1,
+  "account": "Saigon",
+  "createdAt": "2026-11-05T10:07:46.885Z",
+  "crawlFile": "ikariam-wine-Saigon-2026-11-05-09-48-43.js",
+  "targetHours": 1980.73,
+  "shipments": [
+    {
+      "town": "S-District3",
+      "wine": 21728
+    },
+    {
+      "town": "M-District6",
+      "wine": 10728
+    },
+    {
+      "town": "M-District7",
+      "wine": 1875
+    },
+    {
+      "town": "C-District5",
+      "wine": 4228
+    },
+    {
+      "town": "M-District4",
+      "wine": 3121
+    }
+  ]
+}
+`;
+
+/** Saigon's towns, with M-District1 (town 0) as its source. */
+const SAIGON_TOWNS = [
+  "M-District1",
+  "C-District5",
+  "M-District4",
+  "M-District6",
+  "M-District7",
+  "S-District3",
+  "W-District2",
+];
+
+function queuedWineShipments(): string[] {
+  return getState()
+    .queue.listOfType("sendResource")
+    .map(
+      (task) =>
+        `${task.data.origin} -> ${task.data.destination}: ` +
+        `${task.data.amount} (${task.data.label ?? "manual"})`,
+    );
+}
+
+describe("parseWineTransportFile", () => {
+  it("reads a file tools/wine-transport.js wrote", () => {
+    expect(parseWineTransportFile(SAIGON_TRANSPORT_FILE)).toEqual({
+      account: "Saigon",
+      shipments: [
+        { town: "S-District3", wine: 21728 },
+        { town: "M-District6", wine: 10728 },
+        { town: "M-District7", wine: 1875 },
+        { town: "C-District5", wine: 4228 },
+        { town: "M-District4", wine: 3121 },
+      ],
+    });
+  });
+
+  it.each([
+    ["text that is not JSON", "const csv = `x`;"],
+    ["the panel's Data export", '{"version":1,"entries":{}}'],
+    [
+      "a newer version",
+      '{"kind":"ikariam-wine-transport","version":2,"account":"A","shipments":[]}',
+    ],
+    [
+      "a shipment without a whole positive amount",
+      '{"kind":"ikariam-wine-transport","version":1,"account":"A",' +
+        '"shipments":[{"town":"T","wine":1.5}]}',
+    ],
+  ])("refuses %s", (_label, text) => {
+    expect(() => parseWineTransportFile(text)).toThrow(
+      "This is not a wine transport file",
+    );
+  });
+});
+
+describe("enqueueWineTransport", () => {
+  beforeEach(() => {
+    document.body.innerHTML = townDropdown(SAIGON_TOWNS);
+  });
+
+  it(
+    "queues a tools/wine-transport.js file's shipments from the source, in the file's " +
+      "order, rounded down to whole merchant ships",
+    () => {
+      const file = parseWineTransportFile(SAIGON_TRANSPORT_FILE);
+
+      expect(enqueueWineTransport(file, "0")).toBe(5);
+
+      // 500 per merchant ship, the base cargo.
+      expect(queuedWineShipments()).toEqual([
+        `0 -> 5: 21500 (${AUTO_WINE_LABEL})`,
+        `0 -> 3: 10500 (${AUTO_WINE_LABEL})`,
+        `0 -> 4: 1500 (${AUTO_WINE_LABEL})`,
+        `0 -> 1: 4000 (${AUTO_WINE_LABEL})`,
+        `0 -> 2: 3000 (${AUTO_WINE_LABEL})`,
+      ]);
+      const [first] = getState().queue.listOfType("sendResource");
+      expect(first.data).toMatchObject({
+        resource: "wine",
+        reserve: FALLBACK_WINE_RESERVE,
+      });
+      expect(showToast.mock.calls[0][0]).toContain(
+        "Queued 5 wine shipment(s), 40500 wine from M-District1",
+      );
+    },
+  );
+
+  it("sends a share under one ship as it is", () => {
+    expect(
+      enqueueWineTransport(
+        { account: "Saigon", shipments: [{ town: "M-District7", wine: 321 }] },
+        "0",
+      ),
+    ).toBe(1);
+    expect(queuedWineShipments()).toEqual([`0 -> 4: 321 (${AUTO_WINE_LABEL})`]);
+  });
+
+  it("replaces pending Auto Wine shipments and keeps the player's own", () => {
+    const { queue } = getState();
+    const shipment = (destination: string, label?: string) => ({
+      type: "sendResource" as const,
+      data: {
+        origin: "0",
+        destination,
+        resource: "wine" as const,
+        amount: 100,
+        reserve: 0,
+        ...(label ? { label } : {}),
+      },
+    });
+    queue.push(shipment("1", AUTO_WINE_LABEL));
+    queue.push(shipment("2"));
+
+    enqueueWineTransport(
+      { account: "Saigon", shipments: [{ town: "S-District3", wine: 1000 }] },
+      "0",
+    );
+
+    expect(queuedWineShipments()).toEqual([
+      "0 -> 2: 100 (manual)",
+      `0 -> 5: 1000 (${AUTO_WINE_LABEL})`,
+    ]);
+  });
+
+  it("skips and names a town not in the town list, and the source's own row", () => {
+    expect(
+      enqueueWineTransport(
+        {
+          account: "Saigon",
+          shipments: [
+            { town: "Atlantis", wine: 1000 },
+            { town: "M-District1", wine: 1000 },
+            { town: "S-District3", wine: 1000 },
+          ],
+        },
+        "0",
+      ),
+    ).toBe(1);
+    expect(queuedWineShipments()).toEqual([
+      `0 -> 5: 1000 (${AUTO_WINE_LABEL})`,
+    ]);
+    const toast = String(showToast.mock.calls[0][0]);
+    expect(toast).toContain("M-District1 is the source town");
+    expect(toast).toContain(
+      "Not in this account's town list, so skipped: Atlantis.",
+    );
+  });
+
+  it("changes nothing in the queue when there is nothing to queue", () => {
+    const { queue } = getState();
+    queue.push({
+      type: "sendResource",
+      data: {
+        origin: "0",
+        destination: "1",
+        resource: "wine",
+        amount: 100,
+        reserve: 0,
+        label: AUTO_WINE_LABEL,
+      },
+    });
+
+    expect(
+      enqueueWineTransport({ account: "Saigon", shipments: [] }, "0"),
+    ).toBe(0);
+
+    expect(queuedWineShipments()).toEqual([`0 -> 1: 100 (${AUTO_WINE_LABEL})`]);
+    expect(showToast.mock.calls[0][0]).toContain(
+      "Nothing to queue from this wine transport file",
+    );
   });
 });
 
