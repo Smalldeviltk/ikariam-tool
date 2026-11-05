@@ -10,7 +10,7 @@ It deliberately does **not** repeat the feature status. That lives in
 second. [project-summary.md](../project-summary.md) covers what the TypeScript
 port changed and what is still unverified.
 
-Last updated: 02/11/2026.
+Last updated: 05/11/2026.
 
 ---
 
@@ -339,12 +339,42 @@ code, `71d5379` docs) and pushed — `origin/refactor` is at `71d5379` =
 `messages.ts`, `app.test.ts`, and these two documents). **Checked
 02/11:** §31 is committed (`ba2fb35` code, `6deabe9` docs) and pushed —
 `origin/refactor` is at `6deabe9` = `HEAD`, `git rev-list --count
-origin/refactor..HEAD` = 0. §32 is not committed.
+origin/refactor..HEAD` = 0. §32 is not committed. **Checked 05/11:**
+§32 is committed (`9cfdc97` code, `d643967` docs) and pushed;
+`origin/refactor` is at `8d0293d` = `HEAD`, `git rev-list --count
+origin/refactor..HEAD` = 0. **`8d0293d` (03/11, "fix: put the tool's new
+session token into the page, and send a refused town switch again once"
+— `core/ikariam/http.ts`, `send-resources/navigation.ts` and their tests,
++250/−16) is committed and pushed but written up in neither document.**
+§33 is not committed.
+
+**05/11: Crawl Wine writes every town, a cross-account wine split tool,
+and Import in Auto Wine Settings — not committed; the 05/11 17:15
+`dist/` (the user's build, not this session's) holds the crawl fix and
+Import (grep `wine.importFrom` = 2) but still the old "made by dump.js"
+wording (= 2), so rebuild; not tried on the game** — see §33, and
+`improvement-plan.md` §2.AI. Three requests in one day:
+
+- **Crawl Wine missed towns.** The file held only the towns Auto Wine
+  would ship to; it now holds **every town of the account but the
+  source**, `consume` net of the island's production and `0` when not
+  above 0, and finds the source as Start does (picked **after** the
+  scan when none is ticked).
+- **The user's `sample/dump.js` became `tools/wine-transport.js`.** It
+  reads the Crawl Wine files in `tools/input-wine-transport/` and splits
+  so that **every town of every account runs dry at the same moment**:
+  the common target is the lowest level any account can reach, and what
+  an account does not need stays at its source. It writes **one JSON file
+  per account** to `tools/output-wine-transport/`. Both folders are in
+  `.gitignore`.
+- **Auto Wine Settings has an Import button**: it reads that file, queues
+  the shipments as a wine run (whole ships), and switches Transport's
+  timer on.
 
 **02/11: a bug report shows town switches that do not land, and a
-logging mechanism for them — not committed, not built (the 30/10 10:26
-`dist/` has none of it: grep `ikaTownSwitchTrace` = 0), not tried on the
-game** — see §32, and `improvement-plan.md` §2.AH. The switch to
+logging mechanism for them — committed since as `9cfdc97` (docs
+`d643967`), pushed; in the 05/11 17:15 `dist/` (grep `ikaTownSwitchTrace`
+= 1); not tried on the game** — see §32, and `improvement-plan.md` §2.AH. The switch to
 M-Eretria failed four times on 30/10, and on 02/11 the game answered a
 switch with no reload at all, leaving the runner in the old town while
 the queue deferred round and round; the user had to switch by hand. It
@@ -434,7 +464,15 @@ the city id, so a building cell turns upgradable by itself; a runner that
 is stopped and started again does not sit out an old rest; the log is
 stored as text, not HTML-escaped.
 
-**Next (02/11):** rebuild `dist/` — the 30/10 10:26 build has no §32 —
+**Next (05/11):** rebuild `dist/` (the 17:15 build predates the rename
+to `tools/wine-transport.js` in the UI wording) and reinstall both
+userscripts. Crawl Wine in each account; check each file holds every
+town but the source. Move the files from `sample/input-wine-transport/`
+to `tools/input-wine-transport/`, run `node tools/wine-transport.js`,
+then Import each account's file in that account, with the same Sender
+ticked as at the crawl. Two questions to the user are unanswered (§33,
+last part): Illidan's M_Pyrewood at `0, 0`, and stocks identical to the
+unit between the 09:20 and 09:50 crawls. **Next (02/11):** rebuild `dist/` — the 30/10 10:26 build has no §32 —
 and reinstall both userscripts. When a town switch does not land (the
 queue sits in the old town), press Bug Report — at any time after, the
 last five are kept — and put the file in `sample/`; its
@@ -476,14 +514,14 @@ working between loads) is
 | ----------- | ---------------------------------------------------------------- |
 | Branch      | `refactor`, tracking `origin/refactor`                            |
 | Checkout (22/10) | **26/10:** the Linux checkout now has `node_modules/` and `dist/` (built 22/10 16:37, §1 Build); `sample/` and `tools/output/` are still absent, so the review report and the bug report files are not available here. The 22/10 note, kept: The 22/10 session ran on Linux, in `/data/Projects/dump/ikariam-tool`, with Node v20.20.2 and npm 10.8.2. That checkout has no `node_modules/`, `dist/`, `sample/` or `tools/output/` (dependencies, build output and gitignored folders), so tests, the build, the bug report files and the review report were not available there. The PowerShell and CRLF traps in §4 come from the earlier Windows checkout (`D:\Working\Ika`) |
-| Pushed      | **Checked 02/11:** `origin/refactor` is at `6deabe9` = `HEAD` (§31 pushed: `ba2fb35` code, `6deabe9` docs), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 29/10, evening:** `origin/refactor` is at `b033eae` = `HEAD` (§29 pushed: `6d0c0a0` code, `b033eae` docs), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 29/10:** `origin/refactor` is at `1f631d4` = `HEAD` (pushed by the user; §28 is `1c41ce8` code, `1f631d4` docs), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 26/10, evening:** `origin/refactor` is at `0baafe6` = `HEAD` (pushed by the user), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 26/10, later:** `origin/refactor` is at `455047d`; `HEAD` is `fac13d6`, `git rev-list --count origin/refactor..HEAD` = 2 (`3dff502` docs, `fac13d6` §27) — not pushed. **Checked 26/10: `origin/refactor` is at `455047d` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0.** **Checked 22/10: `origin/refactor` is at `534f066` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0.** **Checked 17/10: `origin/refactor` is at `772a055` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0 — everything below is pushed.** The rest is the 05/10 note, kept for the commit list: `origin/refactor` was at `066eb44` (the plan's §2.I–2.J docs), pushed by the user; §10's `1f7c0e7` and `4841fb9` are before it, so pushed too (checked with `git log origin/refactor..HEAD` on 02/10). **Seventeen local commits since, not pushed** (`git rev-list --count origin/refactor..HEAD` = 17 on 05/10, at `180fead`): §11 is `6ed66c6` + `c38dca4`, its docs `b9f1d7a`; §12 and §13 are one code commit, `4f9436c` (25 files in `src/`), and one docs commit, `3209964`; §14 is `7ed3a85` (15 files), its docs `b45f792`; §15–§17 are `32fe3ba`, their docs `ec3fdc4`; §18 is `b2e9084` and `3f8a51b` (the user's `barbarian.ts` change); §19 is `c78b49e` (32 files in `src/`, two of them new), its docs `0da427b`; §20 is `cefcc92`, §21 is `9c363f7`, their docs `e36516a`; the s303 crawl `180fead` |
+| Pushed      | **Checked 05/11:** `origin/refactor` is at `8d0293d` = `HEAD` (§32 pushed: `9cfdc97` code, `d643967` docs; then `8d0293d`, 03/11, not written up), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 02/11:** `origin/refactor` is at `6deabe9` = `HEAD` (§31 pushed: `ba2fb35` code, `6deabe9` docs), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 29/10, evening:** `origin/refactor` is at `b033eae` = `HEAD` (§29 pushed: `6d0c0a0` code, `b033eae` docs), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 29/10:** `origin/refactor` is at `1f631d4` = `HEAD` (pushed by the user; §28 is `1c41ce8` code, `1f631d4` docs), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 26/10, evening:** `origin/refactor` is at `0baafe6` = `HEAD` (pushed by the user), `git rev-list --count origin/refactor..HEAD` = 0. **Checked 26/10, later:** `origin/refactor` is at `455047d`; `HEAD` is `fac13d6`, `git rev-list --count origin/refactor..HEAD` = 2 (`3dff502` docs, `fac13d6` §27) — not pushed. **Checked 26/10: `origin/refactor` is at `455047d` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0.** **Checked 22/10: `origin/refactor` is at `534f066` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0.** **Checked 17/10: `origin/refactor` is at `772a055` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0 — everything below is pushed.** The rest is the 05/10 note, kept for the commit list: `origin/refactor` was at `066eb44` (the plan's §2.I–2.J docs), pushed by the user; §10's `1f7c0e7` and `4841fb9` are before it, so pushed too (checked with `git log origin/refactor..HEAD` on 02/10). **Seventeen local commits since, not pushed** (`git rev-list --count origin/refactor..HEAD` = 17 on 05/10, at `180fead`): §11 is `6ed66c6` + `c38dca4`, its docs `b9f1d7a`; §12 and §13 are one code commit, `4f9436c` (25 files in `src/`), and one docs commit, `3209964`; §14 is `7ed3a85` (15 files), its docs `b45f792`; §15–§17 are `32fe3ba`, their docs `ec3fdc4`; §18 is `b2e9084` and `3f8a51b` (the user's `barbarian.ts` change); §19 is `c78b49e` (32 files in `src/`, two of them new), its docs `0da427b`; §20 is `cefcc92`, §21 is `9c363f7`, their docs `e36516a`; the s303 crawl `180fead` |
 | Committed 02/10 | At the user's request, in two commits as before: code and tests, then the two documents. The commit message went through a file (`git commit -F`): PowerShell 5.1 splits a here-string passed to a native command at its double quotes, and the first attempt failed with "pathspec did not match" — nothing was committed by it |
 | Committed 03/10 | §14, at the user's request, the same way: `7ed3a85` (code and tests), `b45f792` (the two documents), messages through `git commit -F`. `barbarian.ts` was left out (below) |
 | Committed 04/10 | At the user's request, each time asked for in that turn: §15–§17 as `32fe3ba` (code and tests) and `ec3fdc4` (the two documents); then §18 as `b2e9084`, and — the user asked for `barbarian.ts` to go in too — its change on its own as `3f8a51b`. Messages through `git commit -F`. The documents were not updated for §18 until the §19 round. §19 the same afternoon, again at the user's request: `c78b49e` (code and tests, `src/core/notifications.ts` and its test added) and `0da427b` (the two documents). In the evening, asked for in the turn after §21: `cefcc92` (§20, `render.ts` and its test), `9c363f7` (§21, `build/build-extension.mjs`), then the two documents |
-| Uncommitted | **02/11: §32** — `src/core/ikariam/http.ts` (+ test), `src/send-resources/navigation.ts` (+ test), `src/send-resources/diagnostics.ts`, `src/send-resources/app.test.ts`, `src/core/data-transfer.ts` (+ test), and both documents. §31 was committed since as `ba2fb35` / `6deabe9`. **29/10, evening: §30** — `src/send-resources/queue-note.ts` (+ test), `app.ts` (+ test), `features/auto-build.ts` (+ test), `features/send-resources.ts` (+ test), `src/core/data-transfer.test.ts`, and both documents. **29/10: §29** (committed since as `6d0c0a0` / `b033eae`) — `src/core/ikariam/http.ts` (+ test), `src/core/task-queue.ts`, `src/core/data-transfer.ts` (+ test), `src/send-resources/app.ts` (+ test), `state.ts`, `messages.ts`, `features/send-resources.ts` (+ test), `features/auto-build.ts` (+ test), two new files (`src/send-resources/queue-note.ts`, `queue-note.test.ts` — the user asked for full tests), and both documents. Before §29 the tree was clean. **26/10, evening: §28** (committed since as `1c41ce8` / `1f631d4`) — `src/core/ikariam/model.ts` (+ test), `src/core/ikariam/selectors.ts`, `src/send-resources/app.ts` (+ test), `features/auto-wine.ts` (+ test), `messages.ts`, `town-cache.ts` (+ test), and both documents. **26/10, later:** after `fac13d6`, `git status --short` was empty; this write-up of §27 in both documents is uncommitted when written. **26/10: nothing** (`git status --short` empty). §24–§26 and the files listed in the 22/10 note were committed as `e7f2acb` (code and tests, 19 files) and `455047d` (the two documents). The 22/10 note, kept for the file list: **22/10, after §26:** §26's `src/send-resources/ui/panel.ts` (+ test), `src/core/ui/window.ts` (+ test), `src/core/messages.ts`, and §24's files — `src/core/logger.ts`, `src/core/task-queue.ts` (+ test), `src/empire-overview/models/building.ts` (+ test) — and §25's — `src/send-resources/app.ts`, `features/auto-wine.ts` (+ test), `features/building-help-crawler.ts`, `messages.ts`, `ui/dialogs.ts`, `ui/panel.ts`, `ui/data-transfer-ui.ts` (+ test) — plus `src/send-resources/app.test.ts` (both rounds) and both documents. Before §24 the tree was clean (`git status --short` empty). §23 was committed after the 17/10 note below (`21464dd` code, `534f066` docs). The user's `.gitignore` change no longer differs from `HEAD`, and `docs/So_sanh_2_script_Ikariam.md` is not on disk in the 22/10 checkout; it is listed in `.gitignore`. The 17/10 note, kept for the file list: **§23** — `src/send-resources/features/auto-wine.ts`, `auto-wine.test.ts`, `src/send-resources/ui/styles.ts`, and both documents. **§22 was committed after the next sentence was written** (`1baf274` code, `772a055` docs). The 05/10 row, kept for the file list: §22 (05/10): 55 modified files — 52 in `src/`, `build/vite.empire-overview.ts`, `project-summary.md` and both documents — and three new test files the user agreed to (`src/core/dom.test.ts`, `src/send-resources/features/summary-account.test.ts`, `src/send-resources/ui/data-transfer-ui.test.ts`). **Modified or untracked and the user's, left out of every commit:** `.gitignore`, `docs/So_sanh_2_script_Ikariam.md`. `docs/wiki/s303/` (their crawl, the source of §19's levels past 50) was committed at the user's request on 04/10 evening as `180fead` |
-| Tests       | **39 files, 882 tests, all passing (02/11, after §32)**; **39 files, 871 tests, all passing (30/10, after §31)**; **39 files, 864 tests, all passing (29/10, evening, after §30)**; **39 files, 880 tests, all passing (29/10, after §29)**; **38 files, 783 tests, all passing (26/10, after §28)**; 774 before §28's two loose ends; **735 after §27**; 727 before §27's Escape change, 721 before §27; **38 files, 721 tests (22/10, after §26's window fold, on Linux)**; 715 before it; 710 after §25; 701 after §24; 699 after §23 (17/10, and again 22/10 before §24); 698 after §22; before it 35 files, 645 tests (645 after §20; 500 before §12, 515 after it, 537 after §13, 560 after §14, 567 after §15, 569 after §16's first round, 578 after §16, 583 after §17, 605 after §18 and §19's 2.6 and R, 608 after K, 627 after J, 640 after E, 641 after 2.8, 643 after the s303 levels). §11 added no test (see §11). Prettier: `core/ikariam/http.test.ts`, `send-resources/features/transport-buttons.test.ts` and `send-resources/town-cache.test.ts` are off its format at `HEAD` already — not reflowed; §19's tests appended to `http.test.ts` were formatted on their own and checked |
+| Uncommitted | **05/11: §33** — `src/send-resources/app.ts` (+ test), `features/auto-wine.ts` (+ test), `features/wine-distribution.ts`, `messages.ts`, `ui/data-transfer-ui.ts`, `ui/dialogs.ts`, `.gitignore`, a new file `tools/wine-transport.js` (asked for by the user), and both documents. `sample/dump.js` (gitignored) is kept, as the user said "copy". §32 was committed since as `9cfdc97` / `d643967`. **02/11: §32** — `src/core/ikariam/http.ts` (+ test), `src/send-resources/navigation.ts` (+ test), `src/send-resources/diagnostics.ts`, `src/send-resources/app.test.ts`, `src/core/data-transfer.ts` (+ test), and both documents. §31 was committed since as `ba2fb35` / `6deabe9`. **29/10, evening: §30** — `src/send-resources/queue-note.ts` (+ test), `app.ts` (+ test), `features/auto-build.ts` (+ test), `features/send-resources.ts` (+ test), `src/core/data-transfer.test.ts`, and both documents. **29/10: §29** (committed since as `6d0c0a0` / `b033eae`) — `src/core/ikariam/http.ts` (+ test), `src/core/task-queue.ts`, `src/core/data-transfer.ts` (+ test), `src/send-resources/app.ts` (+ test), `state.ts`, `messages.ts`, `features/send-resources.ts` (+ test), `features/auto-build.ts` (+ test), two new files (`src/send-resources/queue-note.ts`, `queue-note.test.ts` — the user asked for full tests), and both documents. Before §29 the tree was clean. **26/10, evening: §28** (committed since as `1c41ce8` / `1f631d4`) — `src/core/ikariam/model.ts` (+ test), `src/core/ikariam/selectors.ts`, `src/send-resources/app.ts` (+ test), `features/auto-wine.ts` (+ test), `messages.ts`, `town-cache.ts` (+ test), and both documents. **26/10, later:** after `fac13d6`, `git status --short` was empty; this write-up of §27 in both documents is uncommitted when written. **26/10: nothing** (`git status --short` empty). §24–§26 and the files listed in the 22/10 note were committed as `e7f2acb` (code and tests, 19 files) and `455047d` (the two documents). The 22/10 note, kept for the file list: **22/10, after §26:** §26's `src/send-resources/ui/panel.ts` (+ test), `src/core/ui/window.ts` (+ test), `src/core/messages.ts`, and §24's files — `src/core/logger.ts`, `src/core/task-queue.ts` (+ test), `src/empire-overview/models/building.ts` (+ test) — and §25's — `src/send-resources/app.ts`, `features/auto-wine.ts` (+ test), `features/building-help-crawler.ts`, `messages.ts`, `ui/dialogs.ts`, `ui/panel.ts`, `ui/data-transfer-ui.ts` (+ test) — plus `src/send-resources/app.test.ts` (both rounds) and both documents. Before §24 the tree was clean (`git status --short` empty). §23 was committed after the 17/10 note below (`21464dd` code, `534f066` docs). The user's `.gitignore` change no longer differs from `HEAD`, and `docs/So_sanh_2_script_Ikariam.md` is not on disk in the 22/10 checkout; it is listed in `.gitignore`. The 17/10 note, kept for the file list: **§23** — `src/send-resources/features/auto-wine.ts`, `auto-wine.test.ts`, `src/send-resources/ui/styles.ts`, and both documents. **§22 was committed after the next sentence was written** (`1baf274` code, `772a055` docs). The 05/10 row, kept for the file list: §22 (05/10): 55 modified files — 52 in `src/`, `build/vite.empire-overview.ts`, `project-summary.md` and both documents — and three new test files the user agreed to (`src/core/dom.test.ts`, `src/send-resources/features/summary-account.test.ts`, `src/send-resources/ui/data-transfer-ui.test.ts`). **Modified or untracked and the user's, left out of every commit:** `.gitignore`, `docs/So_sanh_2_script_Ikariam.md`. `docs/wiki/s303/` (their crawl, the source of §19's levels past 50) was committed at the user's request on 04/10 evening as `180fead` |
+| Tests       | **39 files, 907 tests, all passing (05/11, after §33)**; 891 after §33's crawl fix; **888 at `HEAD` (`8d0293d` added 6 after §32's write-up)**; **39 files, 882 tests, all passing (02/11, after §32)**; **39 files, 871 tests, all passing (30/10, after §31)**; **39 files, 864 tests, all passing (29/10, evening, after §30)**; **39 files, 880 tests, all passing (29/10, after §29)**; **38 files, 783 tests, all passing (26/10, after §28)**; 774 before §28's two loose ends; **735 after §27**; 727 before §27's Escape change, 721 before §27; **38 files, 721 tests (22/10, after §26's window fold, on Linux)**; 715 before it; 710 after §25; 701 after §24; 699 after §23 (17/10, and again 22/10 before §24); 698 after §22; before it 35 files, 645 tests (645 after §20; 500 before §12, 515 after it, 537 after §13, 560 after §14, 567 after §15, 569 after §16's first round, 578 after §16, 583 after §17, 605 after §18 and §19's 2.6 and R, 608 after K, 627 after J, 640 after E, 641 after 2.8, 643 after the s303 levels). §11 added no test (see §11). Prettier: `core/ikariam/http.test.ts`, `send-resources/features/transport-buttons.test.ts` and `send-resources/town-cache.test.ts` are off its format at `HEAD` already — not reflowed; §19's tests appended to `http.test.ts` were formatted on their own and checked |
 | Typecheck   | Clean (`tsc --noEmit` and the strict config)                      |
-| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 01/10 at 02:23 and contains §11 (grepped: `Crawl Building` and `building-help-` in Send Resources; the new Academy figure `568954467` present and the old `582271779` gone, `winePressSavingPercent` and the time `12873600` in Empire Overview; `Math.min(50, …)` in Send Resources' `modelWineConsumption`). Earlier markers were checked in earlier builds: §2.I–2.J (`ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows`) and §10 (`ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save`, `capped`). **`dist/` was rebuilt by the user on 03/10 at 22:54 from the working tree and holds §12 to §15** (grepped in Send Resources: `wine.autoRun`, `ika-move`, `ika_pendingTownSwitch`, `to spare, less than one`, `ikaWindowOpen_`, `js-ika-build-time-buff`, `translateX(-146px)`, `ikariam-bug-report`, `then cleared them`, `createPopupSource`, and no `"???"` left; in Empire Overview: `listAccount` and `entry.length === 2 && typeof entry[0] === "string" && entry[1] === null`). It was built before §15 was committed, so it matches the working tree, not a commit. **The userscripts installed in the browser were older than that 22:54 `dist/`** (§2). **Rebuilt 04/10 at 09:09 with §16** (grepped: `?view=transport&destinationCityId=`, `shipment form to close`, `was sent `, `Move up`; Empire Overview writes the month as `month = 2592e3` — the minifier's form of 2592000) — the build the user tried on the game (§17). **Rebuilt again at 09:44 with §17** (grepped: `ika-queue-scroll`, `resourceTableScroll`, and the `dialog.close` button after `build.save`). **Rebuilt 04/10 at 13:11 from the working tree, with §18 and §19** (grepped: `ika-building-level` in Send Resources; `empire_quickUpgrade`, `stockTip_stock`, `empire_syncIndicator` and Academy level 51's time `15379200` in Empire Overview; `ikaNotifications` and `ikaQuickUpgradeTrace` in both). It matched the working tree at 13:11, not a commit. **Rebuilt 04/10 at 21:21, holding §20 and §21** (grepped: `quick upgrade refresh` in `Ikariam Empire Overview -VN-.user.js` and in `extension/page/empire-overview.js`; `dist/extension/manifest.json` has `exclude_globs`). `dist/extension/` was rebuilt in this session with `npm run build:extension`, which builds the extension only; the two userscripts carry 21:21 too, so the user built them. It matched `9c363f7`. **Rebuilt 05/10 at 02:03 with `npm run build` in this session, from the working tree, holding §22** (grepped: `event subscriber` and `quick upgrade refresh` in Empire Overview, `ika_oneOffRunTypes` in Send Resources, in both the userscripts and the extension; no `GM_xmlhttpRequest` left in Empire Overview's header). It matched the working tree then, not a commit. **Rebuilt 22/10 at 16:37 on Linux, holding §23–§26** (grepped 26/10 in Send Resources: `ika-window-collapse`, `ikaPanelCollapsedGroups`, `ikaCrawl_`, `ikariam-wine`, `1250px`, `pausedUntil`, `ika_oneOffRunTypes`; in Empire Overview: `quick upgrade refresh`, `event subscriber`; `dist/extension/manifest.json` has `exclude_globs`, and `extension/page/send-resources.js` has `ika-window-collapse`). That is the current `dist/`; `HEAD` (`e7f2acb` + docs `455047d`) was committed after it — the markers above are in both, but the build was not rebuilt from the commit or compared with it byte for byte. **The installed userscripts are older** — reinstall both before trying anything; the extension has never loaded before §21. **02/11: not rebuilt for §32** — the 30/10 10:26 build has none of it (grep `ikaTownSwitchTrace` in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: 0); rebuild before installing. **30/10: rebuilt at 10:26, not in this session — the user's — after the last source change (10:12), holding §30 and §31** (grepped in `Ikariam Send Resources.user.js`: `FORMAT_ONE` ×2, `transporterSendStock` ×1, the `stockTitle` text, and `ikaQueueNoteMachine` / `leaseHeldByOther` ×0; in `extension/page/send-resources.js`: `transporterSendStock`). It matches the working tree by time, not compared byte for byte; §31 is not committed. **This is the `dist/` to install.** **29/10, evening: not rebuilt for §30** — the 18:32 build holds §29 as committed, with its upgrade bug (grep `FORMAT_ONE` / `Q2` in `Ikariam Send Resources.user.js`: 0). **29/10: rebuilt at 18:32, not in this session — the user's — after the last source change (18:23), holding all of §29** (grepped in `Ikariam Send Resources.user.js`: `saveAvatarNotes`, `ikaQueueNoteBase`, `ikaQueueNoteMachine`, `Another computer runs this account`, `Notepad not updated before acting`, and `watchLease(true)` — the last change of the round; in `extension/page/send-resources.js`: `saveAvatarNotes`). **This was the `dist/` to install until §30; do not use it for Auto Build.** **26/10: rebuilt three times.** 12:28 (in this session, with §27's 10 s wait — **sends a shipment over and over, do not install**), 12:49 (in this session, the wait removed), and **13:56, not built in this session — the user's, presumably — holding all of §27** (grepped in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: `alwaysOpen`, `onCollapsedChange`, `toggleCollapsed`, `Town switch answered`, `sent through`, and `backToCity("shipment sent");` followed directly by `if (remaining <= 0) return { status: "done" };`; in both Empire Overview bundles: `typeof handler !== "function") return`). That was the `dist/` until 16:10. **Rebuilt 26/10 at 16:10 and again at 16:22 with `npm run build` in this session, from the working tree, holding §28** (grepped in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: `makes the most wine`, `holds the most hours of it`, `so they get none`, `td.resource.wine span.production`, `Math.max(entry.stock, entry.capacity)`, `entry.consume - (entry.production`; and still `alwaysOpen`, `Town switch answered`; in Empire Overview `event subscriber`, `quick upgrade refresh`, `typeof handler !== "function") return`). It matches the working tree, not a commit. **Smaller than the 13:56 build and not explained:** Send Resources 177,252 → 165,546 bytes, Empire Overview 542,909 → 504,847 — every marker grepped is present; how the 13:56 build was made is not known |
+| Build       | `npm run build` produces both the userscripts and the extension. `dist/` was built by the user on 01/10 at 02:23 and contains §11 (grepped: `Crawl Building` and `building-help-` in Send Resources; the new Academy figure `568954467` present and the old `582271779` gone, `winePressSavingPercent` and the time `12873600` in Empire Overview; `Math.min(50, …)` in Send Resources' `modelWineConsumption`). Earlier markers were checked in earlier builds: §2.I–2.J (`ika-send-amounts`, `ika-toast`, `blockedTypes`, `drains`, `fitTownRows`) and §10 (`ika-task-runner`, `Back to the town view`, `transporterSendAmount_`, `build.save`, `capped`). **`dist/` was rebuilt by the user on 03/10 at 22:54 from the working tree and holds §12 to §15** (grepped in Send Resources: `wine.autoRun`, `ika-move`, `ika_pendingTownSwitch`, `to spare, less than one`, `ikaWindowOpen_`, `js-ika-build-time-buff`, `translateX(-146px)`, `ikariam-bug-report`, `then cleared them`, `createPopupSource`, and no `"???"` left; in Empire Overview: `listAccount` and `entry.length === 2 && typeof entry[0] === "string" && entry[1] === null`). It was built before §15 was committed, so it matches the working tree, not a commit. **The userscripts installed in the browser were older than that 22:54 `dist/`** (§2). **Rebuilt 04/10 at 09:09 with §16** (grepped: `?view=transport&destinationCityId=`, `shipment form to close`, `was sent `, `Move up`; Empire Overview writes the month as `month = 2592e3` — the minifier's form of 2592000) — the build the user tried on the game (§17). **Rebuilt again at 09:44 with §17** (grepped: `ika-queue-scroll`, `resourceTableScroll`, and the `dialog.close` button after `build.save`). **Rebuilt 04/10 at 13:11 from the working tree, with §18 and §19** (grepped: `ika-building-level` in Send Resources; `empire_quickUpgrade`, `stockTip_stock`, `empire_syncIndicator` and Academy level 51's time `15379200` in Empire Overview; `ikaNotifications` and `ikaQuickUpgradeTrace` in both). It matched the working tree at 13:11, not a commit. **Rebuilt 04/10 at 21:21, holding §20 and §21** (grepped: `quick upgrade refresh` in `Ikariam Empire Overview -VN-.user.js` and in `extension/page/empire-overview.js`; `dist/extension/manifest.json` has `exclude_globs`). `dist/extension/` was rebuilt in this session with `npm run build:extension`, which builds the extension only; the two userscripts carry 21:21 too, so the user built them. It matched `9c363f7`. **Rebuilt 05/10 at 02:03 with `npm run build` in this session, from the working tree, holding §22** (grepped: `event subscriber` and `quick upgrade refresh` in Empire Overview, `ika_oneOffRunTypes` in Send Resources, in both the userscripts and the extension; no `GM_xmlhttpRequest` left in Empire Overview's header). It matched the working tree then, not a commit. **Rebuilt 22/10 at 16:37 on Linux, holding §23–§26** (grepped 26/10 in Send Resources: `ika-window-collapse`, `ikaPanelCollapsedGroups`, `ikaCrawl_`, `ikariam-wine`, `1250px`, `pausedUntil`, `ika_oneOffRunTypes`; in Empire Overview: `quick upgrade refresh`, `event subscriber`; `dist/extension/manifest.json` has `exclude_globs`, and `extension/page/send-resources.js` has `ika-window-collapse`). That is the current `dist/`; `HEAD` (`e7f2acb` + docs `455047d`) was committed after it — the markers above are in both, but the build was not rebuilt from the commit or compared with it byte for byte. **The installed userscripts are older** — reinstall both before trying anything; the extension has never loaded before §21. **05/11: rebuilt at 17:15 (userscripts) and 17:14 (extension), not in this session — the user's** (grepped in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: `ikaTownSwitchTrace` ×1 / ×1, `wine.importFrom` ×2 / ×2, `ikariam-wine-transport` ×2 / ×2, `shipments.length === 0` ×2 in the userscript; and "made by dump.js" ×2, "made by tools/wine-transport.js" ×0). It holds §32, `8d0293d` (grep `was refused as an invalid` ×1 / ×1), and §33 up to the rename; the sources were changed last at 17:26 (the rename), so **rebuild before installing**. Not compared byte for byte. **02/11: not rebuilt for §32** — the 30/10 10:26 build has none of it (grep `ikaTownSwitchTrace` in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: 0); rebuild before installing. **30/10: rebuilt at 10:26, not in this session — the user's — after the last source change (10:12), holding §30 and §31** (grepped in `Ikariam Send Resources.user.js`: `FORMAT_ONE` ×2, `transporterSendStock` ×1, the `stockTitle` text, and `ikaQueueNoteMachine` / `leaseHeldByOther` ×0; in `extension/page/send-resources.js`: `transporterSendStock`). It matches the working tree by time, not compared byte for byte; §31 is not committed. **This is the `dist/` to install.** **29/10, evening: not rebuilt for §30** — the 18:32 build holds §29 as committed, with its upgrade bug (grep `FORMAT_ONE` / `Q2` in `Ikariam Send Resources.user.js`: 0). **29/10: rebuilt at 18:32, not in this session — the user's — after the last source change (18:23), holding all of §29** (grepped in `Ikariam Send Resources.user.js`: `saveAvatarNotes`, `ikaQueueNoteBase`, `ikaQueueNoteMachine`, `Another computer runs this account`, `Notepad not updated before acting`, and `watchLease(true)` — the last change of the round; in `extension/page/send-resources.js`: `saveAvatarNotes`). **This was the `dist/` to install until §30; do not use it for Auto Build.** **26/10: rebuilt three times.** 12:28 (in this session, with §27's 10 s wait — **sends a shipment over and over, do not install**), 12:49 (in this session, the wait removed), and **13:56, not built in this session — the user's, presumably — holding all of §27** (grepped in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: `alwaysOpen`, `onCollapsedChange`, `toggleCollapsed`, `Town switch answered`, `sent through`, and `backToCity("shipment sent");` followed directly by `if (remaining <= 0) return { status: "done" };`; in both Empire Overview bundles: `typeof handler !== "function") return`). That was the `dist/` until 16:10. **Rebuilt 26/10 at 16:10 and again at 16:22 with `npm run build` in this session, from the working tree, holding §28** (grepped in `Ikariam Send Resources.user.js` and `extension/page/send-resources.js`: `makes the most wine`, `holds the most hours of it`, `so they get none`, `td.resource.wine span.production`, `Math.max(entry.stock, entry.capacity)`, `entry.consume - (entry.production`; and still `alwaysOpen`, `Town switch answered`; in Empire Overview `event subscriber`, `quick upgrade refresh`, `typeof handler !== "function") return`). It matches the working tree, not a commit. **Smaller than the 13:56 build and not explained:** Send Resources 177,252 → 165,546 bytes, Empire Overview 542,909 → 504,847 — every marker grepped is present; how the 13:56 build was made is not known |
 
 What landed: the AJAX transport layer, the shared window widget, the rewritten
 panel, four features (sync-towns, transport-buttons, queue-view, wine-warning),
@@ -3874,8 +3912,9 @@ box does not overflow or wrap.
 
 ## 32. 02/11: town switches that do not land, and a log for them
 
-Not committed, not built (the 30/10 10:26 `dist/` has none of it — grep
-`ikaTownSwitchTrace`: 0), not tried on the game. The Vietnamese write-up is
+Not committed when written; committed since as `9cfdc97` (docs
+`d643967`), pushed (checked 05/11); in the 05/11 17:15 `dist/` (grep
+`ikaTownSwitchTrace`: 1). Not tried on the game. The Vietnamese write-up is
 `improvement-plan.md` §2.AH. 871 → 882 tests, 39 files; typecheck clean
 (both configs); prettier clean on every file changed except
 `http.test.ts` (off its format at `HEAD` already, not re-checked).
@@ -4010,3 +4049,248 @@ are kept — and put the file in `sample/`. Read
 `gameData.townSwitches[].answer` (what the game said), `tokens` (whether
 the page's token differs from the tool's), `toolRequests` (which request
 came just before).
+
+---
+
+## 33. 05/11: Crawl Wine writes every town; a cross-account wine split; Import in Auto Wine Settings
+
+Not committed when written. The 05/11 17:15 `dist/` (the user's build)
+holds parts 1 and 3 but not part 4's wording (§1, Build) — rebuild. Not
+tried on the game. The Vietnamese write-up is `improvement-plan.md`
+§2.AI. 888 → 907 tests, 39 files; `tsc --noEmit` = 0; prettier clean on
+the 8 changed files in `src/` and on `tools/wine-transport.js`.
+
+### 1. Crawl Wine missed towns
+
+**Reported:** "I want to crawl every town but towns are missing"; then,
+"M_Devias is not the source … the main fault is still that it does not
+crawl every town but the source". Asked for: **every town of the account
+but the source; `consume` 0 when it drinks none; `maxSupply` the source's
+figure.**
+
+**Measured in the first six crawl files** (09:20:22–09:25:53): 3–5 rows
+each; against the old `dump.js` sample, each account lacked one town
+(Quảng Nam M-Tamky, Saigon M-District1, Dark Lord M_Lorencia, Illidan
+M_Azshara, Kael M_Fenris Isle).
+
+**Why, read at `HEAD`:** `buildWineCsv` wrote only the towns Auto Wine
+would ship to — the saved receivers less the source, less any town
+`buildWineTowns` drops for a net need ≤ 0. The receivers come from
+`saveMeasuredReceivers`, which leaves out ticked senders, towns whose
+island makes what they drink, and towns with neither a figure nor a saved
+Wine/h. And `crawlWine` saved nothing when `hasReceiversFor` found no town
+in need.
+
+**Chosen by the user** (asked first): the source **"found as Auto Wine
+finds it"**; `maxSupply` **stock less one hour** (unchanged); `consume`
+**"as Auto Wine has it"**.
+
+| Change | Where |
+| ------ | ----- |
+| `buildWineCsv` walks `getTownList()` (sorted by name) and leaves out **only** the source. `stock` = the measured stock, else `0`; `consume` = `max(0, netWineNeed(...))` — drinks less the island's production, the saved Wine/h with no figure, else `0`. `maxSupply` unchanged (`getSourceSupply`) | `features/auto-wine.ts:428` |
+| `crawlWine(fromTown \| null)`: scan → `fromTown ?? pickWineSource()` → toast if none → `saveMeasuredReceivers()` → file. The `hasReceiversFor` gate is gone: every crawl saves | `app.ts:391` |
+| The `wine` crawl: none ticked → `crawlWine(null)`, picked **after** the scan as `wine.autoRun` does; ticked → `withWineSource` as before. It used to pick **before** the scan, from older figures | `app.ts:484` |
+
+**The user's second crawl** (09:48–09:52, a build not made in this
+session) has the missing towns: Dark Lord 3 → 5 rows (M_Lost Tower, and
+W_Noria at `consume 0`), Illidan 3 → 5, Kael 3 → 5, Quảng Nam 4 → 6,
+Saigon 4 → 6, Arthas 5 → 5. Each still lacks exactly one town — its
+source.
+
+**Tests:** `auto-wine.test.ts` — "writes no wine-crawl row…" became
+"writes a wine-crawl row with consume 0…" (line 428); the sample test's
+rows now follow the town list's order; a **REGRESSION** test (line 804: a
+ticked sender other than the source, a town drinking none, a town never
+saved as a receiver all get rows) and line 835 (no figures: stock 0, the
+saved Wine/h or 0). `app.test.ts` — "says so … saves no file" became
+"still saves every town but the source…" (line 1152); new "picks the
+source after the scan…" (line 1177: before the scan M-Corinth looks like
+the wine maker, after it W-Athens does → W-Athens is ticked and absent
+from the file). **Seen red 6/6** against the `HEAD` sources (the two fixed
+files copied to the scratchpad, `git show HEAD:` put in place, the two
+test files run: `6 failed | 124 passed`, then copied back; `cmp` matched).
+
+### 2. `tools/wine-transport.js` — the split across accounts
+
+It started as the user's `sample/dump.js` (294 lines, gitignored). **The
+goal, in the user's words:** every town of every account runs out of wine
+at the same moment; an account with more than it needs keeps the rest at
+its source.
+
+**The original overdrew its supply — measured:** `add = max(0, t·consume −
+stock)` with `t = (Σstock + supply) / Σconsume`, exactly the draft
+`wine-distribution.ts:20-25` calls wrong. On `wine-distribution.test.ts`'s
+seven towns with 31000: `used 37271, unused -6271`; one full town and one
+empty, 1000 supply: `used 3000, unused -2000`. It also read a `group`
+column where Crawl Wine writes `account`, so every town fell into group
+`undefined`.
+
+**How it splits now:**
+
+1. Each account alone: the level its supply lifts its towns to, by
+   **water filling** as `distributeWine` does (towns sorted by hours left;
+   one already past the level stays out) — `waterFillingLevel`.
+2. **The common target is the lowest** of those levels (wine does not move
+   between accounts); the account that set it is printed.
+3. Every account tops its towns up to that target: `floor(max(0,
+   T·consume − stock))`, the flooring remainder +1 by largest fraction to
+   towns still below, never past `maxSupply`. The rest **stays at the
+   source** (`Kept at source`).
+4. A town already past the target gets 0 and runs dry later ("already
+   past the target"); `consume 0` is "drinks none".
+
+**Reading:** every `ikariam-wine-*.js` in `input-wine-transport/` beside
+the script (missing folder → its path is printed, nothing else). The text
+between the backticks, `escapeTemplateLiteral` undone, CRLF accepted,
+grouped by the `account` column. **One account in two files → the newest**
+by the time in the name (the user's choice), with a warning; a name
+without a time (the browser's "… (1).js") falls back to `mtime`.
+
+**Writing:** `output-wine-transport/` (created when missing), **one file
+per account read**, including an account with nothing to send; flag `wx`,
+a clash gets `-2`, `-3` — nothing is overwritten. Name
+`ikariam-wine-transport-<account>-<UTC>.json`:
+
+```json
+{
+  "kind": "ikariam-wine-transport",
+  "version": 1,
+  "account": "Saigon",
+  "createdAt": "2026-11-05T10:07:46.885Z",
+  "crawlFile": "ikariam-wine-Saigon-2026-11-05-09-48-43.js",
+  "targetHours": 1980.73,
+  "shipments": [{ "town": "S-District3", "wine": 21728 }, …]
+}
+```
+
+`shipments` holds only towns getting more than 0, **fewest hours left
+first** (at crawl time). `account` is the CSV's own name, not the
+file-name-safe one.
+
+**Measured on fixtures in the scratchpad:** the seven sample towns →
+74.86 h, 31000/31000, M-Syracuse +0 (as `wine-distribution.test.ts:61-67`
+expects); Poor (1000) + Rich (10000) → 5 h set by Poor, Rich keeps 9000;
+a duplicate account, CRLF, and names holding `` ` `` and `${` read right;
+the literal CSV strings of `auto-wine.test.ts:787` and `app.test.ts:936`
+read right; three runs → 18 files, none overwritten.
+
+**Measured on the six real crawl files of 09:48–09:52** (copies in the
+scratchpad): target **1980.73 h**, set by Arthas Menethil.
+
+| Account | Supply | Sent | Kept at source |
+| ------- | ------ | ---- | -------------- |
+| Arthas Menethil | 108651 | 108651 | 0 |
+| Dark Lord | 349554 | 19263 | 330291 |
+| Illidan | 223836 | 0 | 223836 |
+| Kael | 280268 | 181672 | 98596 |
+| Quảng Nam | 258663 | 149192 | 109471 |
+| Saigon | 241531 | 41680 | 199851 |
+
+**Crawl-time skew — measured, not corrected:** each file is a snapshot at
+its own crawl time, so the target counts from each account's crawl. The
+six were ~0.09 h apart against a ~1980 h target — ~0.005 %. No time
+adjustment was added; the user did not ask for one.
+
+**Backups** (this session's scratchpad, not in the repo): the original,
+5016 bytes, `dump.js.backup`; the cross-account version, 9952 bytes,
+`dump.js.backup-levelling`.
+
+### 3. Import in Auto Wine Settings
+
+**Chosen by the user:** the source **picked as Auto Wine picks it, at
+import** (the crawl file does not name it); the file format **"your
+call"** (JSON); **whole ships**; after the import, **queue and switch
+Transport on**.
+
+| Change | Where |
+| ------ | ----- |
+| An **Import** button (tooltip `importTransportTitle`) beside Preview plan | `ui/dialogs.ts:346`, `messages.ts:157-160` |
+| `pickTextFile(accept, onText, onError)` — opens the picker, hands back the text | `ui/data-transfer-ui.ts:96` |
+| `WINE_TRANSPORT_FILE_KIND`, `parseWineTransportFile` — throws (with the words to show) on text that is not JSON, a wrong `kind` (the panel's Data export is `.json` too), `version` ≠ 1, a shipment without a town name or a whole positive amount | `features/auto-wine.ts:553`, `:570` |
+| `enqueueWineTransport(file, fromTown)` — finds each town by name in the town list; a town not there and the source's own row are skipped and named; `roundToWholeShips(wine, getPerShipCapacity())`; nothing to queue → a toast and **the queue untouched**; otherwise `removeByLabel(AUTO_WINE_LABEL)` and a `push` per row (`reserve = getSourceReserve(fromTown)`, the file's order kept) | `features/auto-wine.ts:617` |
+| `roundToWholeShips(share, cargo)` taken out to be shared; `distributeWine` calls it (the 21 `wine-distribution` tests still pass) | `features/wine-distribution.ts:81`, `:240` |
+| `importWineTransportFile`: read → refuse another account's file → **a file with no shipment: say so, no scan, no Sender ticked** → none ticked: scan, then `pickWineSource`; ticked: `withWineSource("wine.importFrom", …)` (several → the popup). `queueWineTransport` → `refreshQueueView()` → `if (!isAutoStart()) toggleQueueRunner()`. The file is held in `pendingWineTransport` while the popup is open | `app.ts:415-478`, actions `wine.import` / `wine.importFrom` at `:618` |
+| Wording: `importNotTransportFile`, `importOtherAccount`, `importNothingToQueue`, `importQueued`, `importUnknownTowns`, `importSourceInFile` | `messages.ts:219-240` |
+
+The imported queue goes through `queue.push`, so it is copied to the
+notepad like any change: `TaskQueue.write` calls `onChange`
+(`core/task-queue.ts:152-155`), wired to `queueChanged` (`state.ts:98`,
+`setQueueChangeListener` in `app.ts`).
+
+**Tests:** `auto-wine.test.ts` — `parseWineTransportFile` (reads, **word
+for word**, the file `tools/wine-transport.js` wrote for Saigon from the
+real crawl; refuses four kinds of file); `enqueueWineTransport` (the
+Saigon file → five shipments `21500, 10500, 1500, 4000, 3000` at 500 per
+ship, in the file's order, reserve 500; a share under one ship as it is;
+pending Auto Wine shipments replaced, the player's own kept; unknown and
+source rows skipped and named; nothing → queue untouched). `app.test.ts`
+`describe("Import of a wine transport file")` (line 894): the dialog has
+the button; one town ticked → queued, Transport on, no scan; another
+account's file → refused, nothing changes; several ticked → the
+`wine.importFrom` popup, town 1 picked → shipped from town 1; an empty
+file → no scan, no tick; none ticked → one scan, W-Athens ticked. **None
+of these has been seen red against a broken version** (a new feature,
+nothing older to compare with); the empty-file test was written **after**
+its fix.
+
+### 4. Copied into `tools/`, renamed, `.gitignore`
+
+As asked: `sample/dump.js` copied to **`tools/wine-transport.js`** (named
+after its two folders, kebab-case like `tools/collect-dom-report.js`);
+`sample/dump.js` kept. It differs from the original in the
+`Run: node tools/wine-transport.js` line and in Prettier's format (it now
+sits in a tracked folder) — both formatted and the Run line ignored, the
+code is the same. Every `dump.js` in `src/` (9: comments, the tooltip,
+the error toast, test names) now reads `tools/wine-transport.js` (`grep
+-rn "dump\.js" src`: 0). `.gitignore` gains `tools/input-wine-transport/`
+and `tools/output-wine-transport/` (`git check-ignore -v`: lines 20 and
+21; `tools/wine-transport.js` itself is not ignored).
+
+**To use:** put the Crawl Wine files in `tools/input-wine-transport/`
+(today's are in `sample/input-wine-transport/`, not moved), run `node
+tools/wine-transport.js`, then in each account: Auto Wine Settings →
+**Import** → that account's file; keep the Sender ticked at the crawl.
+
+### 5. My own mistakes
+
+- The first new `dump.js` compared file times as strings, mixing
+  `2026-11-05-07-00-00` (the name) with an ISO `mtime` — `'-'` sorts
+  before `'T'`, so a "(1).js" copy always won. Now epoch ms; every case
+  re-run, same figures.
+- A new test line was off Prettier's format (`auto-wine.test.ts`), and
+  `app.test.ts` after part 3 — both clean at `HEAD`, reformatted.
+- An empty transport file (Illidan's) at first still scanned and ticked a
+  Sender before saying there was nothing — found on review, fixed in the
+  round.
+- My first report gave 882 tests "per the docs"; `HEAD` has 888 —
+  `8d0293d` added six after the last write-up.
+
+### 6. Not measured
+
+- Everything on the game: the new crawl, Import, the queue running.
+- **Whole-ship rounding moves towns off the common target:** at 500 per
+  ship M-District7 gets 1500 instead of 1875 and runs dry ~6.6 h early
+  (375 ÷ 57); at 620, ~0.3 h. Cargo is a per-browser flag
+  (`ika_perShipCapacity`), not per account — whether all six accounts have
+  the same cargo research is not known.
+- The amounts are fixed at crawl time; a source holding less at import
+  makes the shipments wait.
+- `tools/wine-transport.js` has run on Node v24.22.1 only; outside the repo
+  (no `"type": "module"` above it) it relies on Node detecting ESM — it ran
+  that way in the scratchpad on v24, other versions not tried. Names with
+  commas are not handled.
+- **Two oddities in the crawl files, asked of the user, no answer yet:**
+  Illidan's M_Pyrewood at `stock 0, consume 0` (no tavern yet, or not
+  measured — if it drinks, it gets nothing); and **stocks identical to the
+  unit** between the 09:20 and 09:50 crawls for every town in both (e.g.
+  C_Hearthglen 409085), Dark Lord's `maxSupply` unchanged while Arthas's
+  rose by 1252 — possibly stale board or cache figures.
+- A town with no figure and no saved Wine/h is written at `stock 0`, so the
+  tool takes it for dry and gives it a large share.
+
+**What to try on the game** (after a rebuild, reinstalled): Crawl Wine in
+each account → every town but the source in each file. Put the files in
+`tools/input-wine-transport/`, run the tool, read its tables. In one
+account, Import its file → the queue holds those rows, rounded to whole
+ships, and Transport is on. Import another account's file → refused.
+Import Illidan's (empty) → only a toast.

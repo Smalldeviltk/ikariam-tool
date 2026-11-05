@@ -1,8 +1,10 @@
 # Kế hoạch cải thiện — UI và tính năng
 
-> Trạng thái: **đang thực hiện.** Cập nhật 02/11/2026.
+> Trạng thái: **đang thực hiện.** Cập nhật 05/11/2026.
 >
-> **Mới nhất (§2.AH — 02/11, chưa commit, chưa build — `dist/` 30/10 10:26 không có (grep `ikaTownSwitchTrace`: 0), chưa thử trên game):** bug report 02/11 cho thấy lỗi **đổi town không tới nơi** vẫn còn (M-Eretria 4 lần ngày 30/10) và một dạng mới: game trả lời lệnh đổi town **không có reload** (02/11 15:03), runner đứng ở town cũ, queue `defer` lặp — người dùng phải tự sang town nguồn. Không tái hiện được, nên chưa sửa; thêm **cơ chế ghi log** gọn: dòng log đổi town ghi lời game báo (`provideFeedback`) và **tag** (hash) của `actionRequest`; mỗi lần đổi town không tới nơi lưu một bản ghi ngắn ngoài log (`ikaTownSwitchTrace`, 5 lần gần nhất) kèm 10 request gần nhất của tool (`ikaToolRequestTrace`); Bug Report mang cả hai. 871 → 882 test, 12/12 chỗ đã thấy đỏ.
+> **Mới nhất (§2.AI — 05/11, chưa commit; `dist/` build 05/11 17:15 — người dùng build, không build trong phiên — có Crawl Wine mới và nút Import (grep `wine.importFrom`: 2) nhưng còn chữ cũ "made by dump.js" (2), tức trước lần đổi tên cuối; chưa thử trên game):** ba việc người dùng yêu cầu. (1) **Crawl Wine sót town** — file chỉ có các town Auto Wine sẽ gửi tới; giờ ghi **mọi town của account trừ town nguồn**, `consume` = tiêu thụ trừ sản lượng đảo (không dương thì `0`), town nguồn chọn như Start của Auto Wine (không tick thì chọn **sau** scan). (2) Script của người dùng `sample/dump.js` thành **`tools/wine-transport.js`**: đọc các file Crawl Wine trong `tools/input-wine-transport/`, chia rượu để **mọi town của mọi account hết rượu cùng lúc** (mốc chung = mức thấp nhất giữa các account, account dư giữ lại ở town nguồn), ghi **mỗi account một file JSON** vào `tools/output-wine-transport/` (hai thư mục vào `.gitignore`). (3) Auto Wine Settings có nút **Import**: đọc file đó, tạo queue transport như Auto Wine (làm tròn theo tàu nguyên) và bật Start Timer của Transport. 888 → 907 test, 6/6 test của phần (1) đã thấy đỏ trên code `HEAD`.
+>
+> **§2.AH — 02/11, commit `9cfdc97` (tài liệu `d643967`), đã push (kiểm 05/11); có trong `dist/` build 05/11 17:15 (grep `ikaTownSwitchTrace`: 1), chưa thử trên game:** bug report 02/11 cho thấy lỗi **đổi town không tới nơi** vẫn còn (M-Eretria 4 lần ngày 30/10) và một dạng mới: game trả lời lệnh đổi town **không có reload** (02/11 15:03), runner đứng ở town cũ, queue `defer` lặp — người dùng phải tự sang town nguồn. Không tái hiện được, nên chưa sửa; thêm **cơ chế ghi log** gọn: dòng log đổi town ghi lời game báo (`provideFeedback`) và **tag** (hash) của `actionRequest`; mỗi lần đổi town không tới nơi lưu một bản ghi ngắn ngoài log (`ikaTownSwitchTrace`, 5 lần gần nhất) kèm 10 request gần nhất của tool (`ikaToolRequestTrace`); Bug Report mang cả hai. 871 → 882 test, 12/12 chỗ đã thấy đỏ.
 >
 > **§2.AG — 30/10, commit `ba2fb35` (tài liệu `6deabe9`), đã push (kiểm 02/11); có trong `dist/` build 30/10 10:26 (không build trong phiên, đã grep), chưa thử trên game:** hộp thoại **Transport Settings** hiện **tồn kho** của town From bên phải ô nhập của từng tài nguyên, trừ đi các dòng queue gửi từ town đó: `1,234 (1,834-500-100)`. Số tồn kho lấy từ dữ liệu Empire Overview lưu (`***<tài khoản>***cities`), Scan làm mới. 864 → 871 test, 9 chỗ đã thấy đỏ. **Town board biết nhưng chưa có số sẽ hiện `0`, không phải `—`** (đọc code, phần 5).
 >
@@ -34,7 +36,7 @@
 > phần U còn thiếu số (§2.U phần 4) · R: kênh cập nhật riêng (chờ người
 > dùng). **Không làm lúc này** (người dùng chọn 04/10): F, G, I, M, N, O, Q.
 >
-> Git (02/11, đã kiểm): `origin/refactor` ở `6deabe9` = `HEAD` (đã push §2.AG: `ba2fb35` code, `6deabe9` tài liệu), `git rev-list --count origin/refactor..HEAD` = 0. **Chưa commit: §2.AH** — `src/core/ikariam/http.ts` (+ test), `src/send-resources/navigation.ts` (+ test), `diagnostics.ts`, `app.test.ts`, `src/core/data-transfer.ts` (+ test), và hai tài liệu này. `dist/` vẫn build 30/10 10:26, **không có §2.AH** (grep `ikaTownSwitchTrace` trong `Ikariam Send Resources.user.js` và `dist/extension/page/send-resources.js`: 0). Git (30/10, đã kiểm): `origin/refactor` ở `71d5379` = `HEAD` (đã push §2.AF: `94d359e` code, `71d5379` tài liệu). **Chưa commit: §2.AG** — `src/send-resources/game-state.ts` (+ test), `ui/dialogs.ts`, `messages.ts`, `app.test.ts`, và hai tài liệu này. `dist/` hiện tại build 30/10 10:26 (không build trong phiên; sau lần sửa nguồn cuối lúc 10:12), có §2.AF và §2.AG (grep trong `Ikariam Send Resources.user.js`: `FORMAT_ONE` 2, `transporterSendStock` 1, `ikaQueueNoteMachine` 0, `leaseHeldByOther` 0; `transporterSendStock` có trong `dist/extension/page/send-resources.js`). Chưa so với một bản build mới từng byte. Git (29/10 tối, đã kiểm): `origin/refactor` ở `b033eae` = `HEAD` (đã push §2.AE: `6d0c0a0` code, `b033eae` tài liệu), `git rev-list --count origin/refactor..HEAD` = 0. **Chưa commit: §2.AF** — `src/send-resources/queue-note.ts` (+ test), `app.ts` (+ test), `features/auto-build.ts` (+ test), `features/send-resources.ts` (+ test), `src/core/data-transfer.test.ts`, và hai tài liệu này. `dist/` vẫn build 29/10 18:32, **không có §2.AF** (grep `FORMAT_ONE` / `Q2`: 0) — đừng dùng bản đó cho Auto Build. Git (29/10, đã kiểm): `origin/refactor` ở `1f631d4` = `HEAD` (người dùng đã push §2.AD), `git rev-list --count origin/refactor..HEAD` = 0. **Chưa commit: §2.AE** — `src/core/ikariam/http.ts` (+ test), `src/core/task-queue.ts`, `src/core/data-transfer.ts` (+ test), `src/send-resources/app.ts` (+ test), `state.ts`, `messages.ts`, `features/send-resources.ts` (+ test), `features/auto-build.ts` (+ test), hai file mới `src/send-resources/queue-note.ts` và `queue-note.test.ts`, và hai tài liệu này. `dist/` hiện tại build 29/10 18:32 (không build trong phiên — người dùng build, sau lần sửa nguồn cuối lúc 18:23), có §2.AE (đã grep `saveAvatarNotes`, `ikaQueueNoteBase`, `watchLease(true)` trong `Ikariam Send Resources.user.js`, `saveAvatarNotes` trong `dist/extension/page/send-resources.js`). Git (26/10 tối, đã kiểm): `origin/refactor` ở `0baafe6` = `HEAD` (người dùng đã push), `git rev-list --count origin/refactor..HEAD` = 0. **Lúc đó chưa commit: §2.AD** (sau đó commit `1c41ce8` code, `1f631d4` tài liệu) — `src/core/ikariam/model.ts` (+ test), `selectors.ts`, `src/send-resources/app.ts` (+ test), `features/auto-wine.ts` (+ test), `messages.ts`, `town-cache.ts` (+ test) và hai tài liệu này. `dist/` hiện tại build 26/10 16:22 trong phiên, từ working tree, có §2.AD (đã grep, handover §1). Git (26/10, sau §2.AC): `origin/refactor` vẫn ở `455047d`; `HEAD` là `fac13d6`, `git rev-list --count origin/refactor..HEAD` = 2 (`3dff502` tài liệu, `fac13d6` §2.AC) — **chưa push**; phần ghi §2.AC vào hai tài liệu này chưa commit lúc viết. `dist/` hiện tại build 26/10 13:56 (không build trong phiên — có lẽ người dùng build), có toàn bộ §2.AC (đã grep, handover §1). Git (26/10, đã kiểm lại): `origin/refactor` ở `455047d` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Z, §2.AA, §2.AB đã commit (`e7f2acb` code, `455047d` tài liệu). Checkout trên Linux giờ có `node_modules/` và `dist/` (build 22/10 16:37, có §2.R → §2.AB — đã grep 26/10, handover §1); vẫn không có `sample/`, `tools/output/`. Ghi chú 22/10, giữ để tra: `origin/refactor` ở `534f066` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Y đã commit (`21464dd` code, `534f066` tài liệu). Checkout 22/10 chạy trên Linux, không có `node_modules/`, `dist/`, `sample/`, `tools/output/` (handover §1). Ghi chú 17/10, giữ để tra: `origin/refactor` ở `772a055` = `HEAD`, **không còn commit nào chưa push**; §2.X đã commit (`1baf274` code, `772a055` tài liệu). Chưa commit: §2.Y (`auto-wine.ts`, `auto-wine.test.ts`, `styles.ts`) và hai tài liệu này. Đoạn sau là danh sách commit cũ (05/10), giữ để tra; lúc viết nó ghi `origin/refactor` ở `066eb44` và 17 commit chưa push —
+> Git (05/11, đã kiểm): `origin/refactor` ở `8d0293d` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0. §2.AH đã commit (`9cfdc97` code, `d643967` tài liệu). **`8d0293d` (03/11, "fix: put the tool's new session token into the page, and send a refused town switch again once" — `http.ts`, `navigation.ts` + test, +250/−16) đã commit và push nhưng chưa ghi vào hai tài liệu này** — chưa có mục nào mô tả nó. **Chưa commit: §2.AI** — `src/send-resources/app.ts` (+ test), `features/auto-wine.ts` (+ test), `features/wine-distribution.ts`, `messages.ts`, `ui/data-transfer-ui.ts`, `ui/dialogs.ts`, `.gitignore`, file mới `tools/wine-transport.js` (người dùng yêu cầu), và hai tài liệu này. `sample/dump.js` (gitignore) giữ nguyên theo lời người dùng ("copy"). Git (02/11, đã kiểm): `origin/refactor` ở `6deabe9` = `HEAD` (đã push §2.AG: `ba2fb35` code, `6deabe9` tài liệu), `git rev-list --count origin/refactor..HEAD` = 0. **Chưa commit: §2.AH** — `src/core/ikariam/http.ts` (+ test), `src/send-resources/navigation.ts` (+ test), `diagnostics.ts`, `app.test.ts`, `src/core/data-transfer.ts` (+ test), và hai tài liệu này. `dist/` vẫn build 30/10 10:26, **không có §2.AH** (grep `ikaTownSwitchTrace` trong `Ikariam Send Resources.user.js` và `dist/extension/page/send-resources.js`: 0). Git (30/10, đã kiểm): `origin/refactor` ở `71d5379` = `HEAD` (đã push §2.AF: `94d359e` code, `71d5379` tài liệu). **Chưa commit: §2.AG** — `src/send-resources/game-state.ts` (+ test), `ui/dialogs.ts`, `messages.ts`, `app.test.ts`, và hai tài liệu này. `dist/` hiện tại build 30/10 10:26 (không build trong phiên; sau lần sửa nguồn cuối lúc 10:12), có §2.AF và §2.AG (grep trong `Ikariam Send Resources.user.js`: `FORMAT_ONE` 2, `transporterSendStock` 1, `ikaQueueNoteMachine` 0, `leaseHeldByOther` 0; `transporterSendStock` có trong `dist/extension/page/send-resources.js`). Chưa so với một bản build mới từng byte. Git (29/10 tối, đã kiểm): `origin/refactor` ở `b033eae` = `HEAD` (đã push §2.AE: `6d0c0a0` code, `b033eae` tài liệu), `git rev-list --count origin/refactor..HEAD` = 0. **Chưa commit: §2.AF** — `src/send-resources/queue-note.ts` (+ test), `app.ts` (+ test), `features/auto-build.ts` (+ test), `features/send-resources.ts` (+ test), `src/core/data-transfer.test.ts`, và hai tài liệu này. `dist/` vẫn build 29/10 18:32, **không có §2.AF** (grep `FORMAT_ONE` / `Q2`: 0) — đừng dùng bản đó cho Auto Build. Git (29/10, đã kiểm): `origin/refactor` ở `1f631d4` = `HEAD` (người dùng đã push §2.AD), `git rev-list --count origin/refactor..HEAD` = 0. **Chưa commit: §2.AE** — `src/core/ikariam/http.ts` (+ test), `src/core/task-queue.ts`, `src/core/data-transfer.ts` (+ test), `src/send-resources/app.ts` (+ test), `state.ts`, `messages.ts`, `features/send-resources.ts` (+ test), `features/auto-build.ts` (+ test), hai file mới `src/send-resources/queue-note.ts` và `queue-note.test.ts`, và hai tài liệu này. `dist/` hiện tại build 29/10 18:32 (không build trong phiên — người dùng build, sau lần sửa nguồn cuối lúc 18:23), có §2.AE (đã grep `saveAvatarNotes`, `ikaQueueNoteBase`, `watchLease(true)` trong `Ikariam Send Resources.user.js`, `saveAvatarNotes` trong `dist/extension/page/send-resources.js`). Git (26/10 tối, đã kiểm): `origin/refactor` ở `0baafe6` = `HEAD` (người dùng đã push), `git rev-list --count origin/refactor..HEAD` = 0. **Lúc đó chưa commit: §2.AD** (sau đó commit `1c41ce8` code, `1f631d4` tài liệu) — `src/core/ikariam/model.ts` (+ test), `selectors.ts`, `src/send-resources/app.ts` (+ test), `features/auto-wine.ts` (+ test), `messages.ts`, `town-cache.ts` (+ test) và hai tài liệu này. `dist/` hiện tại build 26/10 16:22 trong phiên, từ working tree, có §2.AD (đã grep, handover §1). Git (26/10, sau §2.AC): `origin/refactor` vẫn ở `455047d`; `HEAD` là `fac13d6`, `git rev-list --count origin/refactor..HEAD` = 2 (`3dff502` tài liệu, `fac13d6` §2.AC) — **chưa push**; phần ghi §2.AC vào hai tài liệu này chưa commit lúc viết. `dist/` hiện tại build 26/10 13:56 (không build trong phiên — có lẽ người dùng build), có toàn bộ §2.AC (đã grep, handover §1). Git (26/10, đã kiểm lại): `origin/refactor` ở `455047d` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Z, §2.AA, §2.AB đã commit (`e7f2acb` code, `455047d` tài liệu). Checkout trên Linux giờ có `node_modules/` và `dist/` (build 22/10 16:37, có §2.R → §2.AB — đã grep 26/10, handover §1); vẫn không có `sample/`, `tools/output/`. Ghi chú 22/10, giữ để tra: `origin/refactor` ở `534f066` = `HEAD`, `git rev-list --count origin/refactor..HEAD` = 0, `git status --short` rỗng; §2.Y đã commit (`21464dd` code, `534f066` tài liệu). Checkout 22/10 chạy trên Linux, không có `node_modules/`, `dist/`, `sample/`, `tools/output/` (handover §1). Ghi chú 17/10, giữ để tra: `origin/refactor` ở `772a055` = `HEAD`, **không còn commit nào chưa push**; §2.X đã commit (`1baf274` code, `772a055` tài liệu). Chưa commit: §2.Y (`auto-wine.ts`, `auto-wine.test.ts`, `styles.ts`) và hai tài liệu này. Đoạn sau là danh sách commit cũ (05/10), giữ để tra; lúc viết nó ghi `origin/refactor` ở `066eb44` và 17 commit chưa push —
 > `6ed66c6`, `c38dca4`, `b9f1d7a` (U + V), `4f9436c`, `3209964` (§2.K + §2.L),
 > `7ed3a85`, `b45f792` (§2.M), `32fe3ba`, `ec3fdc4` (§2.N → §2.R), `b2e9084`
 > (§2.S), `3f8a51b` (thay đổi `barbarian.ts` của người dùng, commit riêng
@@ -2824,7 +2826,7 @@ Town cache của Send Resources (`town-cache.ts`) chỉ giữ **rượu**, và �
 
 ### 2.AH Bug report 02/11: đổi town không tới nơi; cơ chế ghi log (02/11/2026)
 
-**Chưa commit, chưa build (`dist/` 30/10 10:26 không có — grep `ikaTownSwitchTrace`: 0), chưa thử trên game.** Bản tiếng Anh: handover §32. 871 → 882 test, 39 file; typecheck sạch (cả hai cấu hình); prettier sạch trên mọi file đã sửa trừ `http.test.ts` (lệch sẵn từ `HEAD`, không chạy lại).
+**Chưa commit lúc viết; sau đó commit `9cfdc97` (tài liệu `d643967`), đã push (kiểm 05/11); có trong `dist/` build 05/11 17:15 (grep `ikaTownSwitchTrace`: 1). Chưa thử trên game.** Bản tiếng Anh: handover §32. 871 → 882 test, 39 file; typecheck sạch (cả hai cấu hình); prettier sạch trên mọi file đã sửa trừ `http.test.ts` (lệch sẵn từ `HEAD`, không chạy lại).
 
 #### 1. Bug report
 
@@ -2876,6 +2878,122 @@ Town cache của Send Resources (`town-cache.ts`) chỉ giữ **rượu**, và �
 - Dung lượng chỉ là ước tính.
 
 **Cần thử trên game (sau khi build lại, cài lại cả hai userscript):** dùng như thường; khi một lần đổi town không tới nơi (queue đứng ở town cũ, lặp), bấm **Bug Report** — không cần bấm ngay, 5 lần gần nhất được giữ — rồi chép file vào `sample/`. Trong file: `gameData.townSwitches[].answer` (game nói gì), `tokens` (mã trang có khác mã tool không), `toolRequests` (request nào ngay trước).
+
+### 2.AI Crawl Wine ghi mọi town; `tools/wine-transport.js` chia rượu giữa các account; nút Import của Auto Wine (05/11/2026)
+
+**Chưa commit. `dist/` build 05/11 17:15 — người dùng build, không build trong phiên — có phần (1) và (3) (grep trong `Ikariam Send Resources.user.js` và `dist/extension/page/send-resources.js`: `wine.importFrom` 2 / 2, `ikariam-wine-transport` 2 / 2, `shipments.length === 0` 2) nhưng còn chữ "made by dump.js" (2) — build trước lần đổi tên ở phần 4 (nguồn sửa lần cuối 17:26). Build lại trước khi cài. Chưa thử trên game.** Bản tiếng Anh: handover §33. 888 → 907 test, 39 file; `tsc --noEmit` = 0; prettier sạch trên 8 file `src/` đã sửa và `tools/wine-transport.js`.
+
+Ba yêu cầu của người dùng trong cùng ngày, theo thứ tự.
+
+#### 1. Crawl Wine sót town
+
+**Người dùng báo:** "tôi muốn crawl toàn bộ town nhưng tôi thấy sót town". Rồi: "M_Devias không phải town nguồn … lỗi chủ yếu vẫn là không crawl hết toàn bộ town trừ town nguồn". Yêu cầu: **mọi town của account trừ town nguồn; `consume` không xài thì ghi 0; `maxSupply` là giá trị của town nguồn.**
+
+**Đo được từ 6 file crawl đầu** (`ikariam-wine-<account>-2026-11-05-09-20-22 … 09-25-53.js`): mỗi account có 3–5 dòng; so với danh sách town trong ví dụ cũ của `dump.js`, Quảng Nam thiếu M-Tamky, Saigon thiếu M-District1, Dark Lord thiếu M_Lorencia, Illidan thiếu M_Azshara, Kael thiếu M_Fenris Isle.
+
+**Vì sao, đọc code `HEAD`:** `buildWineCsv` chỉ ghi các town Auto Wine sẽ gửi tới — `loadReceivers()` bỏ town nguồn, rồi `buildWineTowns` bỏ town có nhu cầu ròng ≤ 0. Danh sách receiver lại do `saveMeasuredReceivers` lập, và nó bỏ town được tick Sender, town mà đảo làm đủ rượu, town không có số đo lẫn Wine/h đã lưu. Thêm nữa, `crawlWine` dừng hẳn (không lưu file) khi `hasReceiversFor` thấy không town nào cần rượu.
+
+**Người dùng chọn** (hỏi trước khi sửa): town nguồn **"xác định giống như tính năng auto-wine"**; `maxSupply` **tồn kho trừ 1 giờ** (như cũ); `consume` **"tham khảo auto-wine"**.
+
+| Thay đổi | Ở đâu |
+| -------- | ----- |
+| `buildWineCsv` duyệt `getTownList()` (thứ tự theo tên), bỏ **chỉ** town nguồn. `stock` = số đo (không có thì `0`); `consume` = `max(0, netWineNeed(...))` — tiêu thụ trừ sản lượng đảo, không có số đo thì Wine/h đã lưu, không có thì `0`. `maxSupply` giữ nguyên (`getSourceSupply`) | `features/auto-wine.ts:428` |
+| `crawlWine(fromTown \| null)`: scan → `fromTown ?? pickWineSource()` → toast khi không chọn được → `saveMeasuredReceivers()` → file. Bỏ cổng `hasReceiversFor` (giờ lần nào cũng lưu) | `app.ts:391` |
+| Crawl `wine`: không tick Sender → `crawlWine(null)` (chọn **sau** scan, như `wine.autoRun`); có tick → `withWineSource` như cũ. Trước đây Crawl chọn **trước** scan, từ số cũ | `app.ts:484` |
+
+**Hai file crawl sau** (09:48–09:52, người dùng crawl lại, bản build không phải của phiên này) có đủ town hơn: Dark Lord 3 → 5 dòng (thêm M_Lost Tower, W_Noria `consume 0`), Illidan 3 → 5 (M_Pyrewood `0, 0`, W_Suramar `0`), Kael 3 → 5, Quảng Nam 4 → 6, Saigon 4 → 6, Arthas 5 → 5. Mỗi account vẫn thiếu đúng một town — town nguồn.
+
+**Test:** `auto-wine.test.ts` — sửa "writes no wine-crawl row…" thành "writes a wine-crawl row with consume 0…" (dòng 428); test mẫu đổi thứ tự dòng theo tên; thêm **REGRESSION** (dòng 804: town tick Sender khác nguồn, town uống 0, town chưa lưu receiver đều có dòng) và dòng 835 (town không số đo: stock 0, Wine/h đã lưu hoặc 0). `app.test.ts` — "says so … saves no file" thành "still saves every town but the source…" (dòng 1152); thêm "picks the source after the scan…" (dòng 1177: trước scan M-Corinth trông như town làm rượu, sau scan là W-Athens → W-Athens được tick và không có trong file). **Đã thấy đỏ 6/6** trên nguồn `HEAD` (chép hai file nguồn đã sửa ra scratchpad, `git show HEAD:` vào chỗ, chạy hai file test: `6 failed | 124 passed`, rồi chép lại; `cmp` khớp).
+
+#### 2. `tools/wine-transport.js` — chia rượu giữa các account
+
+Gốc là `sample/dump.js` của người dùng (294 dòng, gitignore). **Mục đích người dùng nêu:** "tất cả các town tại tất cả account đều phải cùng hết wine tại cùng 1 thời điểm; nếu account nào dư thì giữ lại town nguồn".
+
+**Bản gốc chia vượt nguồn — đo được:** nó dùng `add = max(0, t·consume − stock)` với `t = (Σstock + supply) / Σconsume`, đúng bản nháp mà `wine-distribution.ts:20-25` ghi là sai. Với 7 town mẫu của `wine-distribution.test.ts` (nguồn 31000) nó ra `used 37271, unused -6271`; một town đầy + một town rỗng, nguồn 1000: `used 3000, unused -2000`. Nó còn đọc cột `group`, trong khi Crawl Wine ghi `account` → mọi town dồn vào nhóm `undefined`.
+
+**Cách chia mới:**
+
+1. Mỗi account riêng: mức giờ mà nguồn của nó nâng các town tới — **water filling** như `distributeWine` (xếp town theo giờ còn lại, town đã quá mức thì ra ngoài) — `waterFillingLevel`.
+2. **Mốc chung = mức thấp nhất** giữa các account (rượu không chuyển giữa account được); in account đặt mốc.
+3. Mỗi account nâng town lên mốc chung: `floor(max(0, T·consume − stock))`, phần dư làm tròn +1 cho town phần lẻ lớn nhất còn dưới mốc, không vượt `maxSupply`. Phần account không cần **ở lại town nguồn** (`Kept at source`).
+4. Town đã quá mốc nhận 0 và hết rượu muộn hơn (ghi "already past the target"); town `consume 0` ghi "drinks none".
+
+**Đọc file:** mọi `ikariam-wine-*.js` trong `input-wine-transport/` cạnh script (thiếu thư mục → in đường dẫn và dừng). Lấy chuỗi giữa hai dấu `` ` ``, gỡ escape của `escapeTemplateLiteral`, chịu CRLF, nhóm theo cột `account`. **Một account trong hai file → lấy file mới nhất** theo giờ trong tên (người dùng chọn), in cảnh báo; file không có giờ trong tên (bản "… (1).js" của trình duyệt) dùng `mtime`.
+
+**Ghi file:** `output-wine-transport/` (tạo khi thiếu), **mỗi account đọc được một file**, kể cả account không gửi gì; flag `wx`, trùng tên thì thêm `-2`, `-3` — không ghi đè. Tên `ikariam-wine-transport-<account>-<UTC>.json`. Nội dung:
+
+```json
+{
+  "kind": "ikariam-wine-transport",
+  "version": 1,
+  "account": "Saigon",
+  "createdAt": "2026-11-05T10:07:46.885Z",
+  "crawlFile": "ikariam-wine-Saigon-2026-11-05-09-48-43.js",
+  "targetHours": 1980.73,
+  "shipments": [{ "town": "S-District3", "wine": 21728 }, …]
+}
+```
+
+`shipments` chỉ có town nhận > 0, **town ít giờ rượu nhất trước** (giờ lúc crawl). `account` là tên thật trong CSV, không phải tên đã làm sạch trong tên file.
+
+**Đo được, file mẫu trong scratchpad:** 7 town mẫu → mốc 74.86 h, gửi 31000/31000, M-Syracuse +0 (khớp `wine-distribution.test.ts:61-67`); Poor (1000) + Rich (10000) → mốc 5 h do Poor đặt, Rich giữ 9000; account trùng + CRLF + tên có `` ` `` và `${` đọc đúng; chuỗi CSV nguyên văn từ `auto-wine.test.ts:787` và `app.test.ts:936` đọc đúng; ba lần chạy → 18 file, không ghi đè.
+
+**Đo được, 6 file crawl thật 09:48–09:52** (bản sao trong scratchpad): mốc **1980.73 h**, do Arthas Menethil đặt.
+
+| Account | Nguồn | Gửi | Giữ ở nguồn |
+| ------- | ----- | --- | ----------- |
+| Arthas Menethil | 108651 | 108651 | 0 |
+| Dark Lord | 349554 | 19263 | 330291 |
+| Illidan | 223836 | 0 | 223836 |
+| Kael | 280268 | 181672 | 98596 |
+| Quảng Nam | 258663 | 149192 | 109471 |
+| Saigon | 241531 | 41680 | 199851 |
+
+**Lệch giờ crawl giữa các account — đo, không sửa:** mỗi file là ảnh chụp lúc crawl của nó, nên mốc tính từ giờ crawl của từng account. 6 file crawl cách nhau ~0,09 h, trên mốc ~1980 h — ~0,005 %. Không thêm bước quy về cùng thời điểm; người dùng chưa yêu cầu.
+
+**Backup** (scratchpad của phiên, không trong repo): bản gốc 5016 byte `dump.js.backup`, bản lượt chia giữa account 9952 byte `dump.js.backup-levelling`.
+
+#### 3. Nút Import trong Auto Wine Settings
+
+**Người dùng chọn:** town nguồn **chọn như Auto Wine lúc import** (file crawl không ghi tên nguồn); định dạng file **"tự quyết định"** (JSON); **làm tròn theo tàu nguyên**; import xong **tạo queue và bật Transport**.
+
+| Thay đổi | Ở đâu |
+| -------- | ----- |
+| Nút **Import** (tooltip `importTransportTitle`) cạnh Preview plan | `ui/dialogs.ts:346`, `messages.ts:157-160` |
+| `pickTextFile(accept, onText, onError)` — mở chọn file, trả chữ | `ui/data-transfer-ui.ts:96` |
+| `WINE_TRANSPORT_FILE_KIND`, `parseWineTransportFile` — ném lỗi (chữ hiển thị) khi không phải JSON, sai `kind` (file Export của panel Data cũng là `.json`), `version` ≠ 1, shipment không có tên town / lượng không phải số nguyên dương | `features/auto-wine.ts:553`, `:570` |
+| `enqueueWineTransport(file, fromTown)` — tìm town theo tên trong danh sách town; bỏ và nêu tên town không có / chính town nguồn; `roundToWholeShips(wine, getPerShipCapacity())`; không có gì để xếp → toast, **queue không đổi**; có → `removeByLabel(AUTO_WINE_LABEL)` rồi `push` từng dòng (`reserve = getSourceReserve(fromTown)`, giữ thứ tự file) | `features/auto-wine.ts:617` |
+| `roundToWholeShips(share, cargo)` tách ra dùng chung; `distributeWine` gọi nó (21/21 test `wine-distribution` vẫn xanh) | `features/wine-distribution.ts:81`, `:240` |
+| `importWineTransportFile`: đọc file → từ chối file của account khác → **file không có shipment: báo, không scan, không tick Sender** → không tick Sender: scan rồi `pickWineSource`; có tick: `withWineSource("wine.importFrom", …)` (nhiều town tick → popup). `queueWineTransport` → `refreshQueueView()` → `if (!isAutoStart()) toggleQueueRunner()`. File giữ trong `pendingWineTransport` khi popup mở | `app.ts:415-478`, action `wine.import` / `wine.importFrom` `:618` |
+| Chữ: `importNotTransportFile`, `importOtherAccount`, `importNothingToQueue`, `importQueued`, `importUnknownTowns`, `importSourceInFile` | `messages.ts:219-240` |
+
+Queue import đi qua `queue.push`, nên được chép vào sổ ghi chú như mọi thay đổi khác: `TaskQueue.write` gọi `onChange` (`core/task-queue.ts:152-155`), nối tới `queueChanged` (`state.ts:98`, `app.ts` `setQueueChangeListener`).
+
+**Test:** `auto-wine.test.ts` — `parseWineTransportFile` (đọc **nguyên văn** file `tools/wine-transport.js` ghi cho Saigon từ crawl thật; từ chối 4 loại file); `enqueueWineTransport` (file Saigon → 5 lệnh `21500, 10500, 1500, 4000, 3000` ở 500/tàu, theo thứ tự file, reserve 500; phần dưới 1 tàu gửi nguyên; thay lệnh Auto Wine, giữ lệnh tay; bỏ và nêu tên town lạ / town nguồn; không có gì → queue không đổi). `app.test.ts` `describe("Import of a wine transport file")` (dòng 894): dialog có nút Import; 1 town tick → queue + Transport bật, không scan; file account khác → từ chối, không gì đổi; nhiều town tick → popup `wine.importFrom`, bấm town 1 → gửi từ town 1; file rỗng → không scan, không tick; không tick → scan một lần, tick W-Athens. **Các test này chưa từng thấy đỏ với một bản code hỏng** (tính năng mới, không có bản cũ để so); test "file rỗng" viết **sau** khi sửa.
+
+#### 4. Chép sang `tools/`, đổi tên, `.gitignore`
+
+Theo yêu cầu: chép `sample/dump.js` thành **`tools/wine-transport.js`** (theo tên hai thư mục, kiểu kebab-case như `tools/collect-dom-report.js`); `sample/dump.js` giữ nguyên. Khác bản gốc: dòng `Run: node tools/wine-transport.js`, và định dạng Prettier (giờ nằm trong thư mục tracked) — so hai bản sau khi cùng format, bỏ dòng Run: giống nhau. Mọi chữ `dump.js` trong `src/` (9 chỗ: comment, tooltip, thông báo lỗi, tên test) đổi thành `tools/wine-transport.js` (`grep -rn "dump\.js" src`: 0). `.gitignore` thêm `tools/input-wine-transport/` và `tools/output-wine-transport/` (`git check-ignore -v`: dòng 20, 21; `tools/wine-transport.js` không bị bỏ qua).
+
+**Cách dùng:** đặt các file Crawl Wine vào `tools/input-wine-transport/` (file hiện ở `sample/input-wine-transport/` — chưa chuyển), chạy `node tools/wine-transport.js`, rồi ở mỗi account: Auto Wine Settings → **Import** → chọn file của account đó; giữ đúng town Sender đã tick lúc crawl.
+
+#### 5. Lỗi của chính mình
+
+- Bản đầu của `dump.js` mới so thời gian file bằng chuỗi, trộn `2026-11-05-07-00-00` (tên file) với ISO `mtime` — `'-'` < `'T'` nên file "(1).js" luôn thắng; sửa sang epoch ms, chạy lại các ca: cùng số.
+- Một dòng test mới lệch Prettier (`auto-wine.test.ts`); `app.test.ts` sau phần 3 cũng lệch — cả hai file sạch ở `HEAD`, đã format lại.
+- File transport rỗng (Illidan) lúc đầu vẫn scan và tick Sender rồi mới báo "không có gì" — thấy khi rà lại, sửa trong lượt.
+- Báo cáo đầu ghi "882 test (tài liệu)"; `HEAD` thật có 888 — `8d0293d` thêm 6 test sau lần ghi tài liệu cuối.
+
+#### 6. Chưa kiểm chứng
+
+- Mọi thứ trên game: Crawl Wine mới, Import, queue chạy.
+- **Làm tròn theo tàu lệch mốc chung:** ở 500/tàu, M-District7 nhận 1500 thay vì 1875 → hết rượu sớm hơn ~6,6 h (375 ÷ 57); ở 620/tàu ~0,3 h. Sức chứa tàu là flag theo trình duyệt (`ika_perShipCapacity`), không theo account — 6 account có cùng mức nghiên cứu không, chưa biết.
+- Lượng rượu cố định từ lúc crawl; nguồn lúc import có ít hơn thì lệnh gửi chờ.
+- `tools/wine-transport.js` mới chạy trên Node v24.22.1; ngoài repo (không có `package.json` `"type": "module"`) cần Node tự nhận ESM — chạy được trong scratchpad với v24, phiên bản khác chưa thử. Tên town / account có dấu phẩy chưa xử lý.
+- **Hai điểm lạ trong file crawl, đã hỏi người dùng, chưa có trả lời:** Illidan M_Pyrewood `stock 0, consume 0` (chưa có tavern, hay không đo được — nếu nó uống thì không được chia); **tồn kho giống hệt từng đơn vị** giữa crawl 09:20 và 09:50 ở mọi town có trong cả hai (ví dụ C_Hearthglen 409085), `maxSupply` Dark Lord không đổi còn Arthas tăng 1252 — có thể là số cũ của board / cache.
+- Một town không có số đo và không có Wine/h đã lưu ghi `stock 0` → tool coi là cạn và chia nhiều.
+
+**Cần thử trên game (sau khi build lại, cài lại):** Crawl Wine ở từng account → mỗi file có mọi town trừ town nguồn. Đặt file vào `tools/input-wine-transport/`, chạy tool, xem bảng. Ở một account: Import file của nó → queue có đúng các dòng (đã làm tròn theo tàu), Transport bật. Thử Import file của account khác → bị từ chối. Thử Import file Illidan (rỗng) → chỉ báo.
 
 ---
 
