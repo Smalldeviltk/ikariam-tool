@@ -17,6 +17,7 @@
  */
 
 import { addStyle, escapeHtml, qs } from "@core/dom";
+import { formatInteger } from "@core/format";
 import { SEL } from "@core/ikariam/selectors";
 import {
   isNotificationEnabled,
@@ -38,8 +39,15 @@ import {
   wineStatus,
   type TownWineStatus,
 } from "../features/wine-warning";
+import { isPirateRunning, lastCapturePoints } from "../features/pirate";
 import { getActionPoints, getFreeShips } from "../game-state";
-import { BUTTON, NOTIFICATIONS, PANEL, WINE_WARNING } from "../messages";
+import {
+  BUTTON,
+  NOTIFICATIONS,
+  PANEL,
+  PIRATE,
+  WINE_WARNING,
+} from "../messages";
 import { getState } from "../state";
 import { action } from "./actions";
 import { QUEUE_LIST_ID, refreshQueueView } from "./queue-view";
@@ -124,6 +132,12 @@ function windowContent(): string {
         `<button class="button" ${action("build.settings")}>${BUTTON.settings}</button>` +
         `<button class="button" id="btnStartScanBuilding" ${action("build.scan")}>${PANEL.scan}</button>`,
     ) +
+    group(
+      "pirate",
+      `<button class="button" id="${PIRATE_BUTTON_ID}" ${action("pirate.toggle")}>${pirateButtonLabel()}</button>` +
+        `<button class="button" ${action("pirate.settings")}>${BUTTON.settings}</button>` +
+        `<div id="${PIRATE_POINTS_ID}" title="${escapeHtml(PIRATE.capturePointsTitle)}">${escapeHtml(pirateCapturePointsText())}</div>`,
+    ) +
     group("queue", `<div id="${QUEUE_LIST_ID}"></div>`) +
     group(
       "account",
@@ -151,10 +165,56 @@ function windowContent(): string {
           "taskDropped",
           NOTIFICATIONS.taskDroppedSwitch,
           NOTIFICATIONS.taskDroppedSwitchTitle,
+        ) +
+        notificationSwitch(
+          "pirateCaptureFailed",
+          NOTIFICATIONS.pirateFailedSwitch,
+          NOTIFICATIONS.pirateFailedSwitchTitle,
         ),
     ) +
     `<div id="logger"><textarea rows="4" cols="60" id="txtLogger" style="font-size:9px; display:none"></textarea></div>`
   );
+}
+
+/** The Pirate group's Start / Stop button. */
+export const PIRATE_BUTTON_ID = "btnStartPirate";
+
+function pirateButtonLabel(): string {
+  return isPirateRunning() ? PIRATE.stop : PIRATE.start;
+}
+
+/** The line under the Pirate buttons with the account's capture points. */
+export const PIRATE_POINTS_ID = "ikaPirateCapturePoints";
+
+function pirateCapturePointsText(): string {
+  const last = lastCapturePoints();
+  if (!last) return PIRATE.capturePointsUnknown;
+  const at = new Date(last.at);
+  const time =
+    String(at.getHours()).padStart(2, "0") +
+    ":" +
+    String(at.getMinutes()).padStart(2, "0");
+  return PIRATE.capturePoints(formatInteger(last.points), time);
+}
+
+/** Redraw the capture points line after a fortress view was read. */
+export function refreshPirateCapturePoints(): void {
+  const line = qs(`#${PIRATE_POINTS_ID}`);
+  if (line) line.textContent = pirateCapturePointsText();
+}
+
+/** Redraw the Pirate button's label after Pirate started or stopped. */
+export function refreshPirateButton(): void {
+  const button = qs(`#${PIRATE_BUTTON_ID}`);
+  if (button) button.textContent = pirateButtonLabel();
+}
+
+/** Tick or untick a notification checkbox to match the saved switch. */
+export function refreshNotificationSwitch(kind: NotificationKind): void {
+  const box = qs<HTMLInputElement>(
+    `input[${NOTIFICATION_SWITCH_ATTR}="${kind}"]`,
+  );
+  if (box) box.checked = isNotificationEnabled(kind);
 }
 
 /** A checkbox switching one kind of desktop notification. */

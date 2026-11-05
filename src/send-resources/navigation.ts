@@ -190,6 +190,21 @@ function forgetPendingSwitch(): void {
 }
 
 /**
+ * Whether a town switch was sent within `SWITCH_LANDING_WINDOW_MS` and the
+ * page is not in its town yet. A request of ours that moves the session
+ * token (an action) should wait meanwhile: a switch is refused when the
+ * token it carries is no longer the newest.
+ */
+export function isTownSwitchInFlight(): boolean {
+  const pending = readPendingSwitch();
+  return (
+    pending !== null &&
+    Date.now() - pending.sentAt < SWITCH_LANDING_WINDOW_MS &&
+    getCurrentTownName() !== pending.target
+  );
+}
+
+/**
  * Switch to `townNumber` and wait until the breadcrumb reflects it.
  *
  * The original (`gotoTown`) used an `isCallback` flag so it clicked only once

@@ -18,7 +18,11 @@ import { writeToConsole } from "./logger";
 import { NOTIFICATION_PERMISSION } from "./messages";
 
 export type NotificationKind =
-  "buildFinished" | "arrival" | "wineLow" | "taskDropped";
+  | "buildFinished"
+  | "arrival"
+  | "wineLow"
+  | "taskDropped"
+  | "pirateCaptureFailed";
 
 /** Which kinds the player switched on: `{ buildFinished: true, ... }`. */
 export const NOTIFICATION_SETTINGS_KEY = "ikaNotifications";

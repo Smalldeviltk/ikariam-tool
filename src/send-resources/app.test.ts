@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   FLAG,
   getState,
@@ -44,6 +44,18 @@ const { scanBuildings } = vi.hoisted(() => ({ scanBuildings: vi.fn() }));
 vi.mock("./features/auto-build", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./features/auto-build")>()),
   scanBuildings,
+}));
+
+// The fortress request is tested in `pirate.test.ts`; here only what the
+// dialog and the crawl make of its answer.
+const { fetchFortressView, pirateCapture } = vi.hoisted(() => ({
+  fetchFortressView: vi.fn(),
+  pirateCapture: { inFlight: false },
+}));
+vi.mock("./features/pirate", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./features/pirate")>()),
+  fetchFortressView,
+  isPirateCaptureInFlight: () => pirateCapture.inFlight,
 }));
 
 // The notepad copy is tested in `queue-note.test.ts`; here only how the app
@@ -1249,7 +1261,7 @@ describe("the Crawl dialog", () => {
       // Every crawl the messages declare, so a new one is covered too.
       const { CRAWL_DIALOG } = await import("./messages");
       const kinds = Object.keys(CRAWL_DIALOG.kinds);
-      expect(kinds).toEqual(["building", "wine"]);
+      expect(kinds).toEqual(["building", "wine", "pirate"]);
       const choices = kinds.map((kind) =>
         document.querySelector<HTMLInputElement>(`#ikaCrawl_${kind}`)!,
       );
@@ -2056,5 +2068,331 @@ describe("the game's notepad", () => {
     actions["build.scan"](document.body);
     await vi.advanceTimersByTimeAsync(0);
     expect(queueNote.syncQueueNoteFromScan).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Pirate", () => {
+  const DROPDOWN =
+    `<div id="dropDown_js_citySelectContainer"><div class="bg"><ul>` +
+    `<li selectvalue="297057"><a title="Saigon-A"> Saigon-A</a></li>` +
+    `<li selectvalue="297058"><a title="Saigon-B"> Saigon-B</a></li>` +
+    `</ul></div></div>`;
+
+  /** The fortress view of a level-3 fortress, as `readFortressView` gives it. */
+  const LEVEL_3_FORTRESS = {
+    fortressLevel: 3,
+    levels: [
+      {
+        buildingLevel: 1,
+        durationSeconds: 150,
+        name: "Smugglers",
+        gold: 40,
+        capturePoints: 115,
+      },
+      {
+        buildingLevel: 3,
+        durationSeconds: 450,
+        name: "Fishing Boat",
+        gold: 96,
+        capturePoints: 276,
+      },
+      {
+        buildingLevel: 5,
+        durationSeconds: 900,
+        name: "Wine Transport",
+        gold: 173,
+        capturePoints: 442,
+      },
+    ],
+    ongoingMission: null,
+    capturePoints: 345,
+  };
+
+  /** Start the app with Saigon-A known to the board as the fortress town. */
+  async function startWithFortress(): Promise<void> {
+    localStorage.setItem(
+      "***tester***cities",
+      JSON.stringify({
+        "297057": {
+          _buildings: [{ _name: "pirateFortress", _position: 17, _level: 3 }],
+        },
+      }),
+    );
+    await startWith({});
+    document.body.insertAdjacentHTML("beforeend", DROPDOWN);
+  }
+
+  function drawPopups(): void {
+    const createPopup = (id: string, _title: string, html: string) =>
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<div id="${id}">${html}</div>`,
+      );
+    Object.assign(window, { ikariam: { createPopup } });
+  }
+
+  beforeEach(() => {
+    fetchFortressView.mockReset();
+    downloadJson.mockClear();
+    showToast.mockReset();
+  });
+
+  afterEach(async () => {
+    (await import("./features/pirate")).stopPirate();
+    delete window.ikariam;
+    vi.unstubAllGlobals();
+  });
+
+  it(
+    "Start Pirate ticks its notice, starts and reads Stop Pirate; pressed " +
+      "again, it stops",
+    async () => {
+      await startWithFortress();
+      vi.stubGlobal("Notification", {
+        permission: "default",
+        requestPermission: async () => "granted",
+      });
+      const pirate = await import("./features/pirate");
+      const { isNotificationEnabled } = await import("@core/notifications");
+      const button = () => document.querySelector("#btnStartPirate")!;
+      const noticeBox = () =>
+        document.querySelector<HTMLInputElement>(
+          '[data-ika-notification="pirateCaptureFailed"]',
+        )!;
+      expect(button().textContent).toBe("Start Pirate");
+      expect(noticeBox().checked).toBe(false);
+
+      await actions["pirate.toggle"](document.body);
+
+      expect(isNotificationEnabled("pirateCaptureFailed")).toBe(true);
+      expect(noticeBox().checked).toBe(true);
+      expect(pirate.isPirateRunning()).toBe(true);
+      expect(button().textContent).toBe("Stop Pirate");
+      const toasts = showToast.mock.calls;
+      expect(String(toasts[toasts.length - 1][0])).toContain(
+        "level 1 captures from Saigon-A",
+      );
+
+      await actions["pirate.toggle"](document.body);
+
+      expect(pirate.isPirateRunning()).toBe(false);
+      expect(button().textContent).toBe("Start Pirate");
+    },
+  );
+
+  it("redraws the capture points line when Pirate reads them", async () => {
+    await startWithFortress();
+    const line = () =>
+      document.querySelector("#ikaPirateCapturePoints")!.textContent;
+    expect(line()).toBe("Capture Points: —");
+
+    const pirate = await import("./features/pirate");
+    const { getState } = await appState();
+    getState().account.setJSON("ikaPirateCapturePoints", {
+      points: 1035,
+      at: Date.now(),
+    });
+    // Any change Pirate reports goes to the same listener.
+    pirate.stopPirate();
+
+    expect(line()).toContain("Capture Points: 1,035");
+  });
+
+  it("starts even when notices are refused, and says why", async () => {
+    await startWithFortress();
+    vi.stubGlobal("Notification", {
+      permission: "denied",
+      requestPermission: async () => "denied",
+    });
+    const pirate = await import("./features/pirate");
+
+    await actions["pirate.toggle"](document.body);
+
+    expect(pirate.isPirateRunning()).toBe(true);
+    expect(
+      showToast.mock.calls.some(([text]) =>
+        String(text).includes("notifications"),
+      ),
+    ).toBe(true);
+  });
+
+  it("does not start, and says so, with no town known to have a fortress", async () => {
+    await startWith({});
+    const pirate = await import("./features/pirate");
+
+    await actions["pirate.toggle"](document.body);
+
+    expect(pirate.isPirateRunning()).toBe(false);
+    expect(String(showToast.mock.calls[0][0])).toContain(
+      "No town with a Pirate Fortress",
+    );
+  });
+
+  it(
+    "Settings offers the towns and the levels the fortress allows, and Save " +
+      "keeps the choice",
+    async () => {
+      await startWithFortress();
+      fetchFortressView.mockResolvedValue(LEVEL_3_FORTRESS);
+      drawPopups();
+
+      await actions["pirate.settings"](document.body);
+      const levels = () =>
+        [
+          ...document.querySelectorAll<HTMLOptionElement>(
+            "#ikaPirateLevel option",
+          ),
+        ].map((option) => option.value);
+      await vi.waitFor(() => expect(levels()).toEqual(["1", "3"]));
+
+      expect(fetchFortressView).toHaveBeenCalledWith("297057", 17);
+      const town = document.querySelector<HTMLSelectElement>("#ikaPirateTown")!;
+      expect(town.value).toBe("297057");
+      expect(town.selectedOptions[0].textContent).toContain(
+        "(Pirate Fortress)",
+      );
+      // A fixed width, so the long help text wraps instead of stretching
+      // the popup across the screen; no fixed height any more.
+      const body = document.querySelector<HTMLElement>("#ikaPirateDialogBody")!;
+      expect(body.style.width).toBe("400px");
+      const help = body.querySelector<HTMLElement>("#ikaPirateHelp")!;
+      expect(help.textContent).toContain("Start Pirate sends the crew");
+      expect(help.style.height).toBe("");
+      expect(
+        document.querySelector("#ikaPirateLevel option")?.textContent,
+      ).toBe("1 — Smugglers (2m 30s)");
+
+      document.querySelector<HTMLSelectElement>("#ikaPirateLevel")!.value = "3";
+      await actions["pirate.save"](document.body);
+
+      const pirate = await import("./features/pirate");
+      expect(pirate.loadPirateSettings()).toEqual({
+        cityId: "297057",
+        position: 17,
+        level: 3,
+      });
+      expect(document.querySelector("#ikaPirateTown")).toBeNull();
+    },
+  );
+
+  it("Settings says so for a town without a fortress, and Save keeps nothing", async () => {
+    await startWithFortress();
+    fetchFortressView.mockResolvedValue(null);
+    drawPopups();
+
+    await actions["pirate.settings"](document.body);
+    await vi.waitFor(() =>
+      expect(document.querySelector("#ikaPirateLevelNote")?.textContent).toBe(
+        "No Pirate Fortress in this town.",
+      ),
+    );
+    await actions["pirate.save"](document.body);
+
+    const pirate = await import("./features/pirate");
+    expect(pirate.loadPirateSettings()).toBeNull();
+  });
+
+  it("holds the task runner back while a capture is out - nothing runs, not even the drain", async () => {
+    vi.useFakeTimers({ now: new Date("2026-09-26T10:01:00Z") });
+    let reloads = 0;
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="js_cityLink"><a href="#"></a></div>`,
+    );
+    document
+      .querySelector("#js_cityLink > a")!
+      .addEventListener("click", (event) => {
+        event.preventDefault();
+        reloads++;
+      });
+    pirateCapture.inFlight = true;
+    try {
+      await startWith({ build: true });
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(reloads).toBe(0);
+
+      pirateCapture.inFlight = false;
+      await vi.advanceTimersByTimeAsync(1_100);
+      expect(reloads).toBe(1);
+    } finally {
+      pirateCapture.inFlight = false;
+    }
+  });
+
+  it(
+    "after a captcha, holds the queue and the keep-alive reload until Start " +
+      "Pirate",
+    async () => {
+      // An even minute: the keep-alive would reload at once.
+      vi.useFakeTimers({ now: new Date("2026-09-26T10:02:00Z") });
+      let reloads = 0;
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<div id="js_cityLink"><a href="#"></a></div>`,
+      );
+      document
+        .querySelector("#js_cityLink > a")!
+        .addEventListener("click", (event) => {
+          event.preventDefault();
+          reloads++;
+        });
+      // The page before stopped Pirate for the security word.
+      localStorage.setItem(
+        "testerikaPirateRun",
+        JSON.stringify({
+          running: false,
+          nextAt: 0,
+          failingSince: null,
+          captchaPending: true,
+        }),
+      );
+      localStorage.setItem(
+        "***tester***cities",
+        JSON.stringify({
+          "297057": {
+            _buildings: [{ _name: "pirateFortress", _position: 17, _level: 3 }],
+          },
+        }),
+      );
+
+      await startWith({ build: true });
+      document.body.insertAdjacentHTML("beforeend", DROPDOWN);
+      await vi.advanceTimersByTimeAsync(3 * 60_000);
+      expect(reloads).toBe(0);
+
+      vi.stubGlobal("Notification", {
+        permission: "granted",
+        requestPermission: async () => "granted",
+      });
+      await actions["pirate.toggle"](document.body);
+      await vi.advanceTimersByTimeAsync(1_100);
+      expect(reloads).toBeGreaterThan(0);
+    },
+  );
+
+  it("Crawl with Pirate picked saves the fortress view and the failed captures", async () => {
+    await startWithFortress();
+    fetchFortressView.mockResolvedValue(LEVEL_3_FORTRESS);
+    drawPopups();
+    actions["crawl.open"](document.body);
+    (document.querySelector("#ikaCrawl_pirate") as HTMLInputElement).checked =
+      true;
+
+    await actions["crawl.run"](document.body);
+    await vi.waitFor(() => expect(downloadJson).toHaveBeenCalledTimes(1));
+
+    const [filename, json] = downloadJson.mock.calls[0];
+    expect(filename).toMatch(
+      /^ikariam-pirate-tester-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}\.json$/,
+    );
+    expect(JSON.parse(json)).toMatchObject({
+      account: "tester",
+      cityId: "297057",
+      town: "Saigon-A",
+      position: 17,
+      level: 1,
+      fortress: { fortressLevel: 3 },
+      failedCaptures: [],
+    });
   });
 });

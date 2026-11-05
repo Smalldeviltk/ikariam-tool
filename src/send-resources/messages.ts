@@ -60,6 +60,7 @@ export const PANEL = {
     account: "Account",
     data: "Data",
     notifications: "Notifications",
+    pirate: "Pirate",
   },
   calibrateCargo: "Calibrate Cargo",
   scan: "Scan",
@@ -98,6 +99,10 @@ export const NOTIFICATIONS = {
     "When the queue gives up on a task: it failed, or kept throwing errors.",
   wineLowTitle: (town: string) => `Wine running low in ${town}`,
   wineLowBody: (left: string) => `${left} of wine left.`,
+  pirateFailedSwitch: "Pirate capture failed",
+  pirateFailedSwitchTitle:
+    "When Pirate stopped: the game asks for the security word, or no " +
+    "capture could start for 30s. Start Pirate ticks it.",
   taskDroppedTitle: "Task dropped from the queue",
   taskDroppedBody: (task: string, reason: string) => `${task}: ${reason}`,
 } as const;
@@ -243,6 +248,62 @@ export const AUTO_WINE = {
     "They come from the Empire Overview board, or from visiting a town " +
     "(each visit records that town's wine). Visit the towns once, or open " +
     "the board, then press Load again — or just type the Wine/h values.",
+} as const;
+
+export const PIRATE = {
+  start: "Start Pirate",
+  stop: "Stop Pirate",
+  capturePoints: (points: string, time: string) =>
+    `Capture Points: ${points} (at ${time})`,
+  capturePointsUnknown: "Capture Points: —",
+  capturePointsTitle:
+    "As the Pirate Fortress last showed them: on each capture, before it " +
+    "runs, and on Settings or Crawl.",
+  dialogTitle: "Pirate",
+  town: "Town: ",
+  level: "Capture level: ",
+  /** Beside a town the board knows has a Pirate Fortress. */
+  hasFortress: " (Pirate Fortress)",
+  levelOption: (level: number, name: string, duration: string) =>
+    `${level} — ${name} (${duration})`,
+  loadingLevels: "Reading the Pirate Fortress…",
+  noFortressHere: "No Pirate Fortress in this town.",
+  levelsFailed: (reason: string) =>
+    `Could not read the Pirate Fortress: ${reason}`,
+  help:
+    "Start Pirate sends the crew on this capture run, and again each time " +
+    "it is back (its duration + 10s). When the game asks for the security " +
+    "word, it sends a desktop notice, stops and opens the Pirate Fortress: " +
+    "type the word in, press Capture, then press Start Pirate again. Any " +
+    "other failure is tried again for 30s before it does the same.",
+  saved: (town: string, level: number) =>
+    `Pirate: level ${level} captures from ${town}.`,
+  noTown:
+    "No town with a Pirate Fortress is known yet. Open the Empire Overview " +
+    "board or press Scan, or pick the town in Pirate Settings.",
+  started: (town: string, level: number) =>
+    `Pirate started: level ${level} captures from ${town}.`,
+  stopped: "Pirate stopped.",
+  noMissionStarted: "the answer shows no mission under way",
+  captchaReason: "the game asks for the security word",
+  captchaNoticeTitle: (town: string) => `Pirate needs a captcha in ${town}`,
+  captchaNoticeBody:
+    "The Pirate Fortress asks for the security word. Type it in and press " +
+    "Capture, then press Start Pirate: the queue waits until then.",
+  captchaToast: (town: string) =>
+    `Pirate stopped: the Pirate Fortress in ${town} asks for the security ` +
+    "word.\n\nType it in and press Capture, then press Start Pirate. The " +
+    "Transport and Build queue waits until then.",
+  failedNoticeTitle: (town: string) => `Pirate stopped in ${town}`,
+  failedNoticeBody: (reason: string) =>
+    `No capture could be started for 30s (${reason}). Solve the captcha, ` +
+    "if there is one, then press Start Pirate.",
+  failedToast: (reason: string) =>
+    `Pirate stopped: no capture could be started for 30s (${reason}).\n\n` +
+    "Solve the captcha in the Pirate Fortress, if there is one, then press " +
+    "Start Pirate.",
+  crawlSaved: (filename: string) =>
+    `Saved the Pirate Fortress view.\n${filename}`,
 } as const;
 
 export const BUILD_DIALOG = {
@@ -397,6 +458,7 @@ export const CRAWL_DIALOG = {
   kinds: {
     building: "Building — the one open in Help > building details",
     wine: "Wine — Auto Wine's receiving towns (scans every town first)",
+    pirate: "Pirate — the Pirate Fortress view, and the last failed captures",
   },
   run: "Crawl",
   nothingChosen: "Pick what to crawl.",

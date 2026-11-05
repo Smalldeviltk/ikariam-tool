@@ -20,7 +20,11 @@ import { getAccountName, getCurrentTownName } from "@core/ikariam/globals";
 import { DIALOG_ID, SEL } from "@core/ikariam/selectors";
 import { installErrorHandlers } from "@core/bug-report";
 import { clearLog, initLogger, logInfo } from "@core/logger";
-import { notify } from "@core/notifications";
+import {
+  notificationRefusal,
+  notify,
+  setNotificationEnabled,
+} from "@core/notifications";
 import { TabLock, TaskRunner, type TaskType } from "@core/task-queue";
 import { showToast } from "@core/ui/window";
 
@@ -31,8 +35,25 @@ import {
   NOTIFICATIONS,
   QUEUE_VIEW,
   SEND_DIALOG,
+  PIRATE,
   WINE_DIALOG,
 } from "./messages";
+import {
+  fetchFortressView,
+  fortressPosition,
+  isPirateCaptchaPending,
+  isPirateCaptureInFlight,
+  isPirateRunning,
+  pirateCaptureTraces,
+  pirateSettingsOrDefault,
+  resumePirate,
+  savePirateSettings,
+  setPirateHoldCheck,
+  setPirateStateListener,
+  startPirate,
+  stopPirate,
+  townNameOfCity,
+} from "./features/pirate";
 import {
   FLAG,
   getFlag,
@@ -138,9 +159,14 @@ import {
   refreshTownQueueCell,
   renderResourceTable,
   renderWinePlanPreview,
+  openPirateDialog,
+  readPirateDialog,
 } from "./ui/dialogs";
 import {
   buildPanel,
+  refreshNotificationSwitch,
+  refreshPirateButton,
+  refreshPirateCapturePoints,
   setAutoBuildButtonLabel,
   setQueueButtonLabel,
   setTransferInfo,
@@ -203,7 +229,35 @@ function stopRunner(): void {
  * only once the notepad has said what other computers did (`queue-note.ts`).
  */
 function mayRunQueue(): boolean {
-  return holdsTabLock() && queueNoteAllowsRunning();
+  // Not while a Pirate capture is out: it moves the session token, and a
+  // building or shipment form opened meanwhile would carry the old one.
+  return (
+    holdsTabLock() &&
+    queueNoteAllowsRunning() &&
+    !isPirateCaptureInFlight() &&
+    !captchaHoldsQueue()
+  );
+}
+
+let waitingForCaptchaLogged = false;
+
+/**
+ * Whether Pirate waits for the security word: the queue holds, or its next
+ * task would replace the Pirate Fortress opened for the player to type in.
+ * Said once in the log per wait.
+ */
+function captchaHoldsQueue(): boolean {
+  if (!isPirateCaptchaPending()) {
+    waitingForCaptchaLogged = false;
+    return false;
+  }
+  if (!waitingForCaptchaLogged) {
+    logInfo(
+      "Pirate waits for the security word - the queue holds until Start Pirate",
+    );
+    waitingForCaptchaLogged = true;
+  }
+  return true;
 }
 
 function holdsTabLock(): boolean {
@@ -476,6 +530,73 @@ async function queueWineTransport(fromTown: string | null): Promise<void> {
 }
 
 /**
+ * Start Pirate / Stop Pirate. Starting switches its desktop notice on first,
+ * so a stall is not missed; a refused permission is said, and Pirate starts
+ * anyway.
+ */
+async function togglePirate(): Promise<void> {
+  if (isPirateRunning()) {
+    stopPirate();
+    showToast(PIRATE.stopped);
+    return;
+  }
+  const settings = pirateSettingsOrDefault();
+  if (!settings) {
+    showToast(PIRATE.noTown);
+    return;
+  }
+  const noticeOn = await setNotificationEnabled("pirateCaptureFailed", true);
+  refreshNotificationSwitch("pirateCaptureFailed");
+  if (!noticeOn) showToast(notificationRefusal());
+  if (!startPirate()) return;
+  logInfo(
+    `Pirate started: level ${settings.level} from ` +
+      townNameOfCity(settings.cityId),
+  );
+  showToast(PIRATE.started(townNameOfCity(settings.cityId), settings.level));
+}
+
+/**
+ * Crawl's Pirate part: the fortress view of Pirate's town, as the game's own
+ * params give it, and the last failed captures, saved as one JSON file.
+ */
+async function crawlPirate(): Promise<void> {
+  const settings = pirateSettingsOrDefault();
+  if (!settings) {
+    showToast(PIRATE.noTown);
+    return;
+  }
+  let view;
+  try {
+    view = await fetchFortressView(settings.cityId, settings.position);
+  } catch (e) {
+    showToast(PIRATE.levelsFailed(errorMessage(e)));
+    return;
+  }
+  const { accountName } = getState();
+  const filename = timestampedFilename(accountName, "ikariam-pirate", "json");
+  downloadJson(
+    filename,
+    JSON.stringify(
+      {
+        account: accountName,
+        savedAt: new Date().toISOString(),
+        cityId: settings.cityId,
+        town: townNameOfCity(settings.cityId),
+        position: settings.position,
+        level: settings.level,
+        fortress: view,
+        failedCaptures: pirateCaptureTraces(),
+      },
+      null,
+      2,
+    ),
+  );
+  logInfo(`Saved the Pirate Fortress view: ${filename}`);
+  showToast(PIRATE.crawlSaved(filename));
+}
+
+/**
  * What each crawl of the Crawl dialog runs. A `Record` over every kind, so a
  * crawl added to `CRAWL_DIALOG.kinds` without a run here does not compile.
  */
@@ -489,6 +610,7 @@ const CRAWLS: Record<CrawlKind, () => void> = {
     }
     withWineSource("crawl.wineFrom", (town) => void crawlWine(town));
   },
+  pirate: () => void crawlPirate(),
 };
 
 /** The Crawl dialog's button: the one crawl picked. */
@@ -775,6 +897,24 @@ function registerUiActions(): void {
     "ship.calibrate": calibrateShipCapacity,
     "log.clear": clearLog,
     "crawl.open": openCrawlDialog,
+
+    /* ── Pirate ── */
+    "pirate.toggle": () => togglePirate(),
+    "pirate.settings": openPirateDialog,
+    "pirate.save": () => {
+      const chosen = readPirateDialog();
+      if (!chosen) {
+        showToast(PIRATE.noFortressHere);
+        return;
+      }
+      savePirateSettings({
+        cityId: chosen.cityId,
+        position: fortressPosition(chosen.cityId),
+        level: chosen.level,
+      });
+      closeDialog();
+      showToast(PIRATE.saved(townNameOfCity(chosen.cityId), chosen.level));
+    },
     "crawl.run": runCrawl,
     "crawl.wineFrom": (element) => {
       const town = element.dataset.ikaTown;
@@ -904,8 +1044,12 @@ export function start(): void {
     .register("sendResource", handleSendResource)
     .register("upgradeBuilding", handleUpgradeBuilding);
 
-  // Never let the keep-alive reload interrupt a task in flight.
-  setReloadGuard(() => !runner.isBusy);
+  // Never let the keep-alive reload interrupt a task in flight, nor wipe the
+  // Pirate Fortress opened for the security word.
+  setReloadGuard(() => !runner.isBusy && !isPirateCaptchaPending());
+  // Nor a Pirate capture: an Upgrade button or shipment form opened by the
+  // task carries the session token of that moment, and a capture moves it.
+  setPirateHoldCheck(() => runner.isBusy);
   // The queue's ▶ and the status line follow the task the runner is on.
   setCurrentTaskSource(() => runner.currentTaskId);
 
@@ -944,4 +1088,10 @@ export function start(): void {
   syncRunnerToFlags();
   // What other computers ran or added, before this page's first task.
   void startQueueNoteSync();
+  // A Pirate run an earlier page started carries on at its saved time.
+  setPirateStateListener(() => {
+    refreshPirateButton();
+    refreshPirateCapturePoints();
+  });
+  resumePirate();
 }

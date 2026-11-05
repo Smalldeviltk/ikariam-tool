@@ -14,7 +14,11 @@ import {
   qsa,
   removeElement,
 } from "@core/dom";
-import { formatInteger } from "@core/format";
+import {
+  errorMessage,
+  formatInteger,
+  formatTimeLengthToStr,
+} from "@core/format";
 import {
   getCurrentTownName,
   getIkariam,
@@ -34,11 +38,19 @@ import {
   readWineBoard,
 } from "../features/auto-wine";
 import {
+  fetchFortressView,
+  fortressPosition,
+  openCaptureLevels,
+  pirateSettingsOrDefault,
+  storedFortressTowns,
+} from "../features/pirate";
+import {
   BUILD_DIALOG,
   BUTTON,
   CRAWL_DIALOG,
   DURATION,
   MISC,
+  PIRATE,
   SEND_DIALOG,
   WINE_DIALOG,
   WINE_PREVIEW,
@@ -347,6 +359,119 @@ export function openAutoWineDialog(): void {
      <button class="button" ${action("dialog.close")}>${BUTTON.cancel}</button><br/><br/>
      <div id="winePlanPreview"></div>`,
   );
+}
+
+/* ───────────────────────────── Pirate dialog ───────────────────────────── */
+
+export const PIRATE_TOWN_SELECT_ID = "ikaPirateTown";
+export const PIRATE_LEVEL_SELECT_ID = "ikaPirateLevel";
+const PIRATE_LEVEL_NOTE_ID = "ikaPirateLevelNote";
+export const PIRATE_HELP_ID = "ikaPirateHelp";
+export const PIRATE_DIALOG_BODY_ID = "ikaPirateDialogBody";
+/**
+ * The Settings popup's width. The game's popup grows to its content, and the
+ * help text, left to itself, stretched it across the screen; at a fixed
+ * width the text wraps instead.
+ */
+export const PIRATE_DIALOG_WIDTH_PX = 400;
+
+/**
+ * Pirate Settings: the town whose fortress captures, and the capture level.
+ * The levels come from that town's own fortress view, so only those its
+ * fortress level allows are offered; changing the town reads them again.
+ */
+export function openPirateDialog(): void {
+  const current = pirateSettingsOrDefault();
+  const fortressTowns = new Set(
+    storedFortressTowns(getState().accountName).map((town) => town.cityId),
+  );
+  const options = getTownList()
+    .map((town) => {
+      const cityId = townCityId(town.townNumber);
+      if (cityId === null) return "";
+      const selected = cityId === current?.cityId ? " selected" : "";
+      const mark = fortressTowns.has(cityId) ? PIRATE.hasFortress : "";
+      return `<option value="${cityId}"${selected}>${escapeHtml(town.townName)}${mark}</option>`;
+    })
+    .join("");
+
+  openPopup(
+    PIRATE.dialogTitle,
+    `<div id="${PIRATE_DIALOG_BODY_ID}" style="width:${PIRATE_DIALOG_WIDTH_PX}px">
+     <p>${PIRATE.town}<select id="${PIRATE_TOWN_SELECT_ID}">${options}</select></p>
+     <p>${PIRATE.level}<select id="${PIRATE_LEVEL_SELECT_ID}"></select>
+       <span id="${PIRATE_LEVEL_NOTE_ID}"></span></p>
+     <p id="${PIRATE_HELP_ID}" style="font-size:11px">${PIRATE.help}</p>
+     <button style="margin-right:20px" class="button" ${action("pirate.save")}>${BUTTON.save}</button>
+     <button class="button" ${action("dialog.close")}>${BUTTON.cancel}</button>
+     </div>`,
+  );
+
+  const townSelect = qs<HTMLSelectElement>(`#${PIRATE_TOWN_SELECT_ID}`);
+  if (!townSelect) return;
+  townSelect.addEventListener("change", () => {
+    void fillPirateLevels(townSelect.value, null);
+  });
+  if (townSelect.value) {
+    void fillPirateLevels(townSelect.value, current?.level ?? null);
+  }
+}
+
+/** Read the town's fortress and offer the capture levels it allows. */
+export async function fillPirateLevels(
+  cityId: string,
+  chosenLevel: number | null,
+): Promise<void> {
+  const levelSelect = qs<HTMLSelectElement>(`#${PIRATE_LEVEL_SELECT_ID}`);
+  const note = qs(`#${PIRATE_LEVEL_NOTE_ID}`);
+  if (!levelSelect || !note) return;
+  levelSelect.innerHTML = "";
+  note.textContent = PIRATE.loadingLevels;
+  let levels;
+  try {
+    const view = await fetchFortressView(cityId, fortressPosition(cityId));
+    levels = view ? openCaptureLevels(view) : [];
+  } catch (e) {
+    note.textContent = PIRATE.levelsFailed(errorMessage(e));
+    return;
+  }
+  // The town was changed again while this one was read.
+  if (qs<HTMLSelectElement>(`#${PIRATE_TOWN_SELECT_ID}`)?.value !== cityId) {
+    return;
+  }
+  if (levels.length === 0) {
+    note.textContent = PIRATE.noFortressHere;
+    return;
+  }
+  note.textContent = "";
+  const wanted = levels.some((row) => row.buildingLevel === chosenLevel)
+    ? chosenLevel
+    : levels[0].buildingLevel;
+  levelSelect.innerHTML = levels
+    .map(
+      (row) =>
+        `<option value="${row.buildingLevel}"${row.buildingLevel === wanted ? " selected" : ""}>` +
+        escapeHtml(
+          PIRATE.levelOption(
+            row.buildingLevel,
+            row.name,
+            formatTimeLengthToStr(row.durationSeconds * 1000),
+          ),
+        ) +
+        `</option>`,
+    )
+    .join("");
+}
+
+/** The town and level the Pirate dialog holds, or null without a level. */
+export function readPirateDialog(): { cityId: string; level: number } | null {
+  const cityId = qs<HTMLSelectElement>(`#${PIRATE_TOWN_SELECT_ID}`)?.value;
+  const level = Number(
+    qs<HTMLSelectElement>(`#${PIRATE_LEVEL_SELECT_ID}`)?.value,
+  );
+  return cityId && Number.isInteger(level) && level > 0
+    ? { cityId, level }
+    : null;
 }
 
 /**

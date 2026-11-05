@@ -8,6 +8,7 @@ import {
   getTownNameFromList,
   getTownNumberByName,
   gotoTown,
+  isTownSwitchInFlight,
   openShipmentForm,
   townHasPort,
   watchTownSwitchResponses,
@@ -546,6 +547,46 @@ describe("what is kept of a town switch that did not land", () => {
         pageTown: "W-Athens",
       },
     ]);
+  });
+});
+
+describe("isTownSwitchInFlight", () => {
+  function pendSwitch(target: string, sentAt: number): void {
+    sessionStorage.setItem(
+      "ika_pendingTownSwitch",
+      JSON.stringify({ target, cityId: "78039", sentAt }),
+    );
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ now: new Date("2026-11-05T11:00:00Z") });
+    document.body.innerHTML =
+      townDropdown(["W-Athens", "C-Thebes"]) +
+      `<div id="js_cityBread">W-Athens</div>`;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("is true while a switch sent within 30s has not landed", () => {
+    pendSwitch("C-Thebes", Date.now() - 29_000);
+    expect(isTownSwitchInFlight()).toBe(true);
+  });
+
+  it("is false once the page is in the town", () => {
+    pendSwitch("C-Thebes", Date.now());
+    document.getElementById("js_cityBread")!.textContent = "C-Thebes";
+    expect(isTownSwitchInFlight()).toBe(false);
+  });
+
+  it("is false 30s after the switch was sent", () => {
+    pendSwitch("C-Thebes", Date.now() - 30_000);
+    expect(isTownSwitchInFlight()).toBe(false);
+  });
+
+  it("is false with no switch sent", () => {
+    expect(isTownSwitchInFlight()).toBe(false);
   });
 });
 

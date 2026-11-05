@@ -9,6 +9,8 @@ import {
   GROUP_COLLAPSED_CLASS,
   LAUNCHER_CLASS,
   NOTIFICATION_SWITCH_ATTR,
+  PIRATE_POINTS_ID,
+  refreshPirateCapturePoints,
   setAutoBuildButtonLabel,
   setQueueButtonLabel,
   setTransferInfo,
@@ -177,6 +179,7 @@ describe("buildPanel", () => {
       "Wine",
       "Transport",
       "Build",
+      "Pirate",
       "Queue",
       "Account",
       "Data",
@@ -197,6 +200,8 @@ describe("buildPanel", () => {
       "build.toggleTimer",
       "build.settings",
       "build.scan",
+      "pirate.toggle",
+      "pirate.settings",
       "account.update",
       "data.export",
       "data.import",
@@ -485,7 +490,7 @@ describe("the notification switches", () => {
     return box;
   }
 
-  it("offers the two Send Resources kinds, both off at first", () => {
+  it("offers the three Send Resources kinds, all off at first", () => {
     buildPanel();
     const boxes = [
       ...document.querySelectorAll<HTMLInputElement>(
@@ -494,7 +499,7 @@ describe("the notification switches", () => {
     ];
     expect(
       boxes.map((box) => box.getAttribute(NOTIFICATION_SWITCH_ATTR)),
-    ).toEqual(["wineLow", "taskDropped"]);
+    ).toEqual(["wineLow", "taskDropped", "pirateCaptureFailed"]);
     expect(boxes.every((box) => !box.checked)).toBe(true);
   });
 
@@ -564,6 +569,7 @@ describe("collapsing a group", () => {
       "wine",
       "transport",
       "build",
+      "pirate",
       "queue",
       "account",
       "data",
@@ -619,5 +625,41 @@ describe("collapsing a group", () => {
 
   it("stays out of the data export, like the window's position", () => {
     expect(classifyKey(`tester${COLLAPSED_GROUPS_KEY}`)).toBeNull();
+  });
+});
+
+describe("the Pirate group's capture points", () => {
+  const line = () =>
+    document.querySelector(`#${PIRATE_POINTS_ID}`)!.textContent;
+
+  it("shows a dash before any fortress view was read", () => {
+    buildPanel();
+    expect(line()).toBe("Capture Points: —");
+  });
+
+  it("shows the points last read, with the time they were read", () => {
+    const at = new Date(2026, 10, 5, 9, 7).getTime();
+    getState().account.setJSON("ikaPirateCapturePoints", {
+      points: 1035,
+      at,
+    });
+    buildPanel();
+    expect(line()).toBe("Capture Points: 1,035 (at 09:07)");
+  });
+
+  it("is redrawn on demand, after a new read", () => {
+    buildPanel();
+    getState().account.setJSON("ikaPirateCapturePoints", {
+      points: 345,
+      at: new Date(2026, 10, 5, 18, 30).getTime(),
+    });
+    refreshPirateCapturePoints();
+    expect(line()).toBe("Capture Points: 345 (at 18:30)");
+  });
+
+  it("is kept with the measurements in a data export", () => {
+    expect(classifyKey("testerikaPirateCapturePoints")?.group).toBe(
+      "measurements",
+    );
   });
 });

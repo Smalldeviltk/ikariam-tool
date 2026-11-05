@@ -30,6 +30,7 @@ import {
 import { recentLogLines } from "@core/logger";
 import { hasModel, modelCurrentCityName } from "@core/ikariam/model";
 import { DIALOG_ID, SEL } from "@core/ikariam/selectors";
+import { pirateCaptureTraces } from "./features/pirate";
 import { getState } from "./state";
 import { LAUNCHER_CLASS, WINDOW_ID } from "./ui/panel";
 
@@ -181,6 +182,8 @@ export function captureGameData(): Record<string, unknown> {
     townSwitches: capture(townSwitchTraces),
     // The tool's own latest requests, with tags of the tokens.
     toolRequests: capture(toolRequestTraces),
+    // What the game answered the last captures Pirate could not start.
+    pirateCaptures: capture(pirateCaptureTraces),
   };
 }
 
