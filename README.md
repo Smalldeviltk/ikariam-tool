@@ -3,10 +3,10 @@
 Two userscripts for Ikariam, written in TypeScript and built with Vite +
 `vite-plugin-monkey`.
 
-| Script                           | Role                                                                                  | Entry                         |
-| -------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------- |
-| **Ikariam Empire Overview -VN-** | Empire-wide board: towns, resources, army, buildings, research                        | `src/empire-overview/main.ts` |
-| **Ikariam Send Resources**       | Automates bulk shipments, wine distribution, building upgrades, multi-account summary | `src/send-resources/main.ts`  |
+| Script                           | Role                                                                                                                                     | Entry                         |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| **Ikariam Empire Overview -VN-** | Empire-wide board: towns, resources, army, buildings, research                                                                           | `src/empire-overview/main.ts` |
+| **Ikariam Send Resources**       | Automates bulk shipments, wine distribution, building upgrades, pirate captures; multi-account summary; a queue shared between computers | `src/send-resources/main.ts`  |
 
 Both run on **every** Ikariam world (`*://*.ikariam.gameforge.*/*`), not just the
 four servers the original scripts hard-coded.
@@ -46,6 +46,15 @@ npm run format          # prettier
 pointing at the dev server. After that, editing anything under `src/` reloads the
 game page automatically — no rebuild-and-reinstall cycle.
 
+Where things stand, round by round, lives in `docs/`:
+[improvement-plan.md](docs/improvement-plan.md) (Vietnamese; one section per
+round, §2.A–§2.AJ, each with what was measured on the live game and what is
+still unverified) and [session-handover.md](docs/session-handover.md) (English;
+the measured facts about the game in its §2, and the traps already fallen
+into). [project-summary.md](project-summary.md) is the overview. This README
+is the developer reference: layout, build, the design decisions, and the bugs
+the port found.
+
 ### The two packagings
 
 `build/build.mjs` is the single entry point; the npm scripts above are thin
@@ -78,55 +87,96 @@ src/
 │
 ├── core/                       SHARED by both scripts
 │   ├── async.ts                sleep, waitFor (replaces the recursive setTimeout idiom)
-│   ├── dom.ts                  qs/qsa/waitForElement, addStyle
-│   ├── format.ts               number & time formatting, compareValues, minBy
-│   ├── logger.ts               log to a textarea + localStorage
+│   ├── dom.ts                  qs/qsa/waitForElement, addStyle, setInputValue
+│   ├── format.ts               number & time formatting, parsing the game's numbers
+│   ├── logger.ts               log to a textarea + localStorage (last 200 lines)
+│   ├── messages.ts             the shared core's user-facing strings
 │   ├── storage.ts              typed localStorage, three key schemes
-│   ├── task-queue.ts           THE UNIFIED QUEUE + runner   ← see below
-│       ├── model.ts          typed ikariam.model — preferred over scraping
-│   └── ikariam/
-│       ├── selectors.ts        EVERY game CSS selector, in one place
-│       └── globals.ts          typed access to window.ikariam, transportConfig
+│   ├── task-queue.ts           THE UNIFIED QUEUE + runner + cross-tab lock  ← see below
+│   ├── bug-report.ts           runtime failure records (deduplicated, bounded)
+│   ├── data-transfer.ts        export/import, every stored key classified
+│   ├── notifications.ts        desktop notices, five kinds, switches in localStorage
+│   ├── ikariam/
+│   │   ├── selectors.ts        EVERY game CSS selector, in one place
+│   │   ├── globals.ts          typed access to window.ikariam, transportConfig
+│   │   ├── model.ts            typed ikariam.model — preferred over scraping
+│   │   └── http.ts             the game's own endpoints: fetch a town, post a
+│   │                           form, read/write the notepad; token handling;
+│   │                           request and town-switch traces for Bug Report
+│   └── ui/
+│       └── window.ts           the draggable, game-styled window
 │
 ├── send-resources/
 │   ├── main.ts                 userscript entry (waits for DOM, calls start)
-│   ├── app.ts                  start(): builds UI, registers handlers, restores state
+│   ├── app.ts                  start(): builds UI, registers actions and handlers,
+│   │                           restores state; the glue between the modules below
 │   ├── state.ts                state + localStorage keys (unchanged from the original)
 │   ├── game-state.ts           ships / action points / wine — model first, DOM fallback
 │   ├── town-cache.ts           per-town wine snapshots, projected forward
-│   ├── navigation.ts           switch towns, open the port, pick a destination
+│   ├── navigation.ts           switch towns (the game's own form), open the port
 │   ├── ship-capacity.ts        cargo capacity + Calibrate Cargo
+│   ├── queue-note.ts           the queue copied into the game's notepad, merged
+│   │                           three ways so a second computer carries on with it
+│   ├── diagnostics.ts          Bug Report context: queue, town, selectors, gameData
+│   ├── messages.ts             every user-facing string
+│   ├── types.ts
 │   ├── features/
 │   │   ├── send-resources.ts   shipment handler (also used for wine)
-│   │   ├── auto-wine.ts        board -> cache -> manual, then queue a run
+│   │   ├── auto-wine.ts        board -> cache -> manual; source pick; the run; Import
 │   │   ├── wine-distribution.ts THE ALGORITHM (pure, no DOM)  + unit tests
-│   │   ├── auto-build.ts       building upgrade queue
-│   │   ├── summary-account.ts  multi-account summary table
-│   │   └── barbarian.ts        ships needed for barbarian loot
+│   │   ├── wine-warning.ts     hours of wine left per town
+│   │   ├── auto-build.ts       building upgrades, one lap per run
+│   │   ├── sync-towns.ts       Scan: every town over ajax, no walking
+│   │   ├── pirate.ts           capture runs from a Pirate Fortress on a timer;
+│   │                           captcha detection
+│   │   ├── transport-buttons.ts whole-ship amount buttons on the shipment form
+│   │   ├── summary-account.ts  multi-account summary table + the keep-alive reload
+│   │   ├── barbarian.ts        ships needed for barbarian loot
+│   │   └── building-help-crawler.ts  Crawl > Building: the game's help page to a file
 │   └── ui/
 │       ├── actions.ts          event dispatch (replaces inline onclick)
-│       ├── dialogs.ts          the three settings popups
-│       ├── panel.ts            corner control panel
+│       ├── panel.ts            the control window: groups, launcher, notice switches
+│       ├── dialogs.ts          the settings popups (send, wine, build, pirate, crawl)
+│       ├── queue-view.ts       see and edit the queue
+│       ├── data-transfer-ui.ts export/import/file-picker UI
 │       └── styles.ts           CSS
 │
 ├── extension/                  CHROME EXTENSION packaging only
 │   ├── content.ts              isolated world — injects the page bundles
-│   ├── gm-shim.ts              GM_* + unsafeWindow stand-ins (imported FIRST)
+│   ├── gm-shim.ts              GM_addStyle + unsafeWindow stand-ins (imported FIRST)
 │   ├── view-guard.ts           runtime @exclude that Chrome cannot express
 │   └── page-*.ts               page-world entries
 │
 └── empire-overview/            MECHANICAL PORT of the 10.7k-line original
-    ├── main.ts                 the original's trailing "Main Init" block
-    ├── jquery.ts               the @require'd jQuery + the isChrome flag
+    ├── main.ts                 the original's trailing "Main Init" block; the
+    │                           ajax hook (jQuery ajaxSuccess) and the fetched-town feed
+    ├── jquery.ts               the @require'd jQuery + the isChromium flag
+    ├── jquery-compat.ts        shims for helpers jQuery 4 removed (extension build)
     ├── globals.d.ts            GM_* declarations, jQuery plugin types
-    ├── constants.ts (2.5k)     game data tables + translations
-    ├── render.ts (3.8k)        the entire Empire Overview board UI
-    ├── game-api.ts (1.5k)      parsers for the game's ajax payloads
+    ├── constants.ts (3.0k)     game data tables (from the game's help pages) + translations
+    ├── render.ts (4.1k)        the entire Empire Overview board UI, quick upgrades
+    ├── game-api.ts (1.8k)      parsers for the game's ajax payloads
+    ├── ajax-trace.ts           bounded trace of what arrived and what was kept
+    ├── diagnostics.ts          Bug Report context for the board
     ├── database.ts, empire.ts, utils.ts, events.ts, helpers.ts
     └── models/                 City, Building, Military, Movement, Resource, ...
+
+tools/
+├── collect-dom-report.js       live-page selector audit (paste into the console)
+├── wine-transport.js           levels wine across several accounts from their
+│                               Crawl Wine files; one plan file per account
+├── input-wine-transport/       its input  (ignored)
+└── output-wine-transport/      its output (ignored)
+
+docs/
+├── improvement-plan.md         the round-by-round record (Vietnamese)
+├── session-handover.md         the same in English, plus the measured facts
+└── wiki/                       the game's building-help pages as captured
 ```
 
-Import aliases: `@core/*`, `@send/*`, `@empire/*`.
+Import aliases: `@core/*`, `@send/*`, `@empire/*`. Non-test code is about
+27k lines (core 4.1k, send-resources 10k, empire-overview 12.8k) with 16.7k
+lines of tests in 40 files.
 
 > **Naming:** this used to be called "Quan ly Ika Perseus". Perseus is just one
 > game world, which made a poor name for a script that runs on all of them — and
@@ -155,9 +205,12 @@ Consequence: do **not** `@require` jQuery here. The page already ships its own;
 a second copy in page context would clobber it.
 
 **Empire Overview — sandboxed, original `@require` + `@grant` kept.**
-Required because it uses `GM_addStyle` (21 sites), `GM_openInTab`,
-`GM_xmlhttpRequest`, reaches `unsafeWindow.ikariam.templateView`, and needs
-jQuery UI (`.tabs()`, `.draggable()`, `.button()`) which the page's jQuery lacks.
+Required because it uses `GM_addStyle` (20 sites), reaches
+`unsafeWindow.ikariam.templateView`, and needs jQuery UI (`.tabs()`,
+`.draggable()`, `.button()`) which the page's jQuery lacks. (`GM_openInTab`,
+`GM_xmlhttpRequest` and `GM_registerMenuCommand` lost their last caller when
+the update check was removed on 04/10; the `@grant` list is `unsafeWindow`,
+`GM_getValue`, `GM_setValue`, `GM_deleteValue`, `GM_addStyle`.)
 
 `src/empire-overview/jquery.ts` deliberately references the bare `jQuery`
 identifier rather than `window.jQuery`: the sandbox proxy can hand back the game
@@ -167,7 +220,8 @@ page's jQuery, which has no jQuery UI.
 
 ## The unified task queue (`core/task-queue.ts`)
 
-Implements the fix proposed in `So_sanh_2_script_Ikariam.md`.
+Implements the fix proposed in `So_sanh_2_script_Ikariam.md` (a comparison of
+the two original scripts, kept outside the repository).
 
 The old script ran two independent loops against the same DOM:
 `checkAndProcess` (1s, shipping) and `autoCheckFinishedAccount` (10s, building).
@@ -179,35 +233,56 @@ shipping blocked auto build, auto build never blocked shipping.
 Replaced with: **one queue, one runner, exactly one task touching the DOM.**
 
 ```ts
-const runner = new TaskRunner(queue, { intervalMs: 1000, isUiReady, onDrain })
+runner = new TaskRunner(queue, {
+  intervalMs,
+  canRun, // the tab lock, the notepad, no Pirate capture in flight
+  allowsType, // each Start Timer lets only its own task type run
+  isUiReady,
+  onDrain,
+})
   .register("sendResource", handleSendResource)
   .register("upgradeBuilding", handleUpgradeBuilding);
 ```
 
-Handlers return one of four outcomes, which is what actually fixes the lost-order
+Handlers return one of five outcomes, which is what actually fixes the lost-order
 bug:
 
-| Outcome    | Meaning                                          | Effect on the queue         |
-| ---------- | ------------------------------------------------ | --------------------------- |
-| `done`     | finished                                         | removed                     |
-| `progress` | partially shipped                                | remainder written back      |
-| `retry`    | preconditions unmet (no ships, already building) | **kept**, retried next tick |
-| `failed`   | unrecoverable                                    | removed + logged            |
+| Outcome    | Meaning                                                 | Effect on the queue                              |
+| ---------- | ------------------------------------------------------- | ------------------------------------------------ |
+| `done`     | finished                                                | removed                                          |
+| `progress` | partially shipped                                       | remainder written back                           |
+| `retry`    | a blocker that stops this _type_ (no ships at all)      | **kept**; only tasks of that type wait this tick |
+| `defer`    | a blocker specific to this task (town already building) | moved to the back; the next task runs            |
+| `failed`   | unrecoverable                                           | removed + logged + a desktop notice              |
+
+`retry` and `defer` are different on purpose: without `defer`, one town
+mid-construction pinned the head of the queue and stalled every other town's
+upgrade for hours (the original explicitly moved on); and since 29/09 a `retry`
+blocks only its own type, so upgrades keep running while a shipment waits for
+ships. A task that throws five times in a row is dropped (and reported).
 
 The queue persists to localStorage so it survives the periodic reloads the script
 does to keep the session alive. The `busy` flag deliberately does **not** persist
 — a reload must reset it, or one mid-task crash would wedge the queue forever.
 
-Removal and replacement are keyed by task id rather than position, because the
-user can delete queue entries from the settings dialog while a task is running.
+Removal, replacement and reordering are keyed by task id rather than position,
+because the user can edit the queue from the panel while a task is running.
+`TabLock` (`navigator.locks`) keeps two tabs on the same account from both
+running the queue. Legacy queues are migrated automatically on first run
+(`migrateLegacyQueues`).
 
-Legacy queues are migrated automatically on first run (`migrateLegacyQueues`).
+Since 29/10 the player's shipments and the saved build list are also copied
+into the game's own notepad (`queue-note.ts`), so a second computer logged into
+the same account continues the queue instead of repeating it: a 200-character
+compact format, a three-way merge against the last agreed copy, and each order
+claimed in the notepad just before it is acted on.
 
 ---
 
 ## Auto Wine: new algorithm
 
-Based on `sample/wine-distribution.js` and `sample/wine-distribution-2.js`.
+Based on two earlier drafts of the algorithm, kept outside the repository (they
+are the "drafts" the tests cite).
 
 **Before:** a flat split — each town received `winePerHour × multiple`, i.e.
 "enough for N hours", **ignoring existing stock**. A town holding 30k wine got
@@ -220,23 +295,31 @@ t     = (Σ stock + supply) / Σ consume
 add_i = t × consume_i − stock_i
 ```
 
-Stock and consumption are read straight from the Empire Overview board
-(`td.resource.wine span.current` and `span.consumption`).
+Stock and consumption come from the Empire Overview board when it is open
+(`td.resource.wine span.current` and `span.consumption`), else from the town
+cache, else from the hand-entered Wine/h.
 
-**What the sample drafts got wrong:** if a town _already_ holds out longer than
+**What the drafts got wrong:** if a town _already_ holds out longer than
 `t`, its `add_i` is negative — but wine can only be shipped out, never pulled
-back. `wine-distribution-2.js` clamps with `Math.max(0, …)`, so the total demanded
-exceeds the supply: with its own example (7 towns, supply 31,000) it asks for
-**37,271**. This implementation drops over-supplied towns from the set and
-recomputes `t` until none remain, giving `used = 31,000` exactly. Covered by
+back. One draft clamps with `Math.max(0, …)`, so the total demanded exceeds the
+supply: with its own example (7 towns, supply 31,000) it asks for **37,271**.
+This implementation drops over-supplied towns from the set and recomputes `t`
+until none remain, giving `used = 31,000` exactly. Covered by
 `wine-distribution.test.ts`.
 
-The Auto Wine popup has a **Preview plan** button to check the split before
-queueing anything.
+Refinements since, each measured on the live game first (the wine
+measurements in plan §2, then §2.S, §2.Y, §2.AD): consumption is net of the Wine Press (the model's figure is the
+tavern's gross draw — 40% too high on a level-40 press), shares go as whole
+ships, the wine drunk while the ships are at sea is counted, the driest town is
+shipped first, a source town is picked by itself when none is ticked, and a
+town whose island makes at least what it drinks gets nothing. The settings
+popup has **Preview plan**, **Load**, **Save** (which also queues the run) and
+**Import** (a plan file from `tools/wine-transport.js`, which levels wine
+across several accounts at once).
 
-> **Dependency:** the `#ResTab` board is rendered by the **Empire Overview**
-> script, not by the game. Without it, Auto Wine falls back to the manually
-> entered Wine/h values.
+> The `#ResTab` board is rendered by the **Empire Overview** script, not by the
+> game. Without it, Auto Wine uses the town cache (filled by Scan and by
+> visiting towns) and, failing that, the Wine/h values typed in.
 
 ---
 
@@ -395,8 +478,12 @@ source.
 
 ## What the IkaEasy extension taught us
 
-`sample/IkaEasy-V3-Chrome-Web-Store/` is a mature Ikariam extension. Reading it
-changed three things here.
+IkaEasy is a mature Ikariam extension (its Chrome Web Store builds, V3 and
+V4, are kept outside the repository). Reading it changed three things here,
+and later the whole data layer: `core/ikariam/http.ts` asks the game's own
+endpoints for a town instead of walking to it, as IkaEasy's `httpClient.js`
+does — 328–974 ms per town against 2,367 ms measured for the click-and-poll
+path.
 
 ### 1. Read `ikariam.model`, do not scrape
 
@@ -424,7 +511,9 @@ Every IkaEasy field write is followed by `.focus().blur()`. Ikariam recalculates
 the ship count, the mission summary and its own clamping from the field's
 events, so a bare `input.value = x` — which is what both original scripts did —
 leaves the form showing, and possibly submitting, a stale number.
-`setInputValue` in `core/dom.ts` now dispatches `input`, `change` and `blur`.
+`setInputValue` in `core/dom.ts` now dispatches `input` and `change`, then calls
+`.blur()` — which fires the blur event itself; dispatching another by hand ran
+the game's handler twice.
 
 ### 3. Independent confirmation of the cargo maths
 
@@ -454,10 +543,13 @@ be installed _and_ its board to be open. The resolution order is now: board
 
 ### Deliberately not adopted
 
-- **`ajax.Responder.parseResponse` hooking.** IkaEasy wraps the game's ajax
-  responder to observe every server reply. Powerful, but it is a monkey-patch on
-  an internal the game can rename at any time, and nothing here needs a live
-  event stream.
+- **Replacing `ajax.Responder`.** IkaEasy (and the original Empire Overview)
+  observe every server reply by swapping in their own responder. Measured
+  25/09: the game keeps exactly one responder, so replacing it cuts the game
+  off from every later response. The board now listens on the page jQuery's
+  `ajaxSuccess` event instead (`observeGameResponses` in
+  `empire-overview/main.ts`), and the AJAX layer feeds the towns it fetches
+  into the same subscriber.
 - **Its own IndexedDB layer.** Overkill for two features whose state fits in a
   few localStorage keys.
 
@@ -488,17 +580,23 @@ invisible from it — precisely what both features are built on.
 So `content.js` does nothing but inject the real bundles as web-accessible
 `<script>` tags, which the browser then runs in the page's own world. This is
 the same approach IkaEasy uses. `src/extension/gm-shim.ts` supplies
-browser-native stand-ins for `GM_addStyle`, `GM_openInTab`, `GM_xmlhttpRequest`,
-`GM_registerMenuCommand` and `unsafeWindow`, and is imported _before_ the
-feature entry — ES modules evaluate imports in source order, which is what
-guarantees the globals exist in time.
+browser-native stand-ins for `GM_addStyle` and `unsafeWindow` (the only two
+still called), and is imported _before_ the feature entry — ES modules
+evaluate imports in source order, which is what guarantees the globals exist
+in time.
 
-|                         | Userscript                  | Extension                          |
-| ----------------------- | --------------------------- | ---------------------------------- |
-| Send Resources context  | `@grant none`, page world   | injected, page world               |
-| Empire Overview context | sandbox + `unsafeWindow`    | injected, page world + shims       |
-| jQuery                  | `@require` 2.2.4 / UI 1.9.2 | the page's own (3.6.3 / UI 1.13.3) |
-| `GM_*`                  | native                      | shimmed                            |
+|                         | Userscript                  | Extension                                              |
+| ----------------------- | --------------------------- | ------------------------------------------------------ |
+| Send Resources context  | `@grant none`, page world   | injected, page world                                   |
+| Empire Overview context | sandbox + `unsafeWindow`    | injected, page world + shims                           |
+| jQuery                  | `@require` 2.2.4 / UI 1.9.2 | the page's own (4.0.0 / UI 1.14.2 at the last capture) |
+| `GM_*`                  | native                      | shimmed                                                |
+
+**The extension has never been run on the game.** Its manifest was invalid
+from the toolchain commit until 04/10 (`exclude_matches` with a `*` inside the
+host, which Chrome refuses; now `exclude_globs`), and it has not been loaded
+since. Every test on the game so far was the userscripts. Load it with both
+userscripts switched off, or each script runs twice.
 
 ### The jQuery the page provides is a moving target
 
@@ -508,7 +606,7 @@ game loads — and that copy **changes without warning**: one capture found
 jQuery 3.6.3 with UI 1.13.3, another weeks later found **4.0.0 with UI 1.14.2**.
 
 jQuery 4 removed a batch of long-deprecated statics, and this codebase calls one
-of them **45 times**: `$.now()`. It runs in the `City` constructor, so on jQuery 4
+of them **43 times**: `$.now()`. It runs in the `City` constructor, so on jQuery 4
 the extension build would have thrown before the board ever rendered.
 
 `src/empire-overview/jquery-compat.ts` restores the removed helpers, and only
@@ -555,14 +653,16 @@ file (and copies it to the clipboard); import takes that file back.
 
 `src/core/data-transfer.ts` classifies every key this project writes:
 
-| Group          | Contents                                                                               | Exported by default |
-| -------------- | -------------------------------------------------------------------------------------- | ------------------- |
-| `config`       | wine senders/receivers, build queue, cargo calibration, Empire Overview board settings | **yes**             |
-| `measurements` | town cache, multi-account summary                                                      | **yes**             |
-| `runtime`      | the task queue, "is automation running" flags                                          | **no**              |
-| `diagnostics`  | log, bug reports, crawler captures                                                     | no                  |
+| Group          | Contents                                                                                                                  | Exported by default |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| `config`       | wine senders/receivers, build list, cargo calibration, notification switches, Pirate settings, Empire Overview's own keys | **yes**             |
+| `measurements` | town cache, route times, multi-account summary, Pirate capture points                                                     | **yes**             |
+| `runtime`      | the task queue, the notepad base, "is automation running" flags, Pirate's schedule, notices already shown                 | **no**              |
+| `diagnostics`  | log, bug reports, crawler captures, the quick-upgrade / town-switch / request / failed-capture / board ajax traces        | no                  |
 
-Keys belonging to the game itself are never touched.
+Keys belonging to the game itself are never touched. A test fails when a key
+this project writes is missing from the classification, so a new key cannot
+silently fall through.
 
 > ⚠ **Runtime state is excluded deliberately.** Copying a half-finished queue into
 > a second browser gives two installations the same orders against **one** game
@@ -633,7 +733,13 @@ and a health check of the selectors whose absence explains a whole class of
 
 ### Getting a report out
 
-- **Bug Report** button on the panel — copies the JSON to the clipboard.
+- **Bug Report** button on the panel — saves a JSON file
+  (`ikariam-bug-report-<account>-<UTC time>.json`; two clipboard pastes were
+  cut at 50,000 characters, hence the file) and then clears the records. The
+  file carries the last 200 log lines and `gameData`: the shipment form if on
+  screen, the game's `createPopup` source, the board's quick-upgrade answers,
+  the town switches that did not land, the tool's last requests, and Pirate's
+  failed captures. Session tokens are redacted.
 - Console: `ikaBugs()` for a summary, `ikaBugReport()` to copy, `ikaClearBugs()`.
 
 ### Design constraints
@@ -691,8 +797,16 @@ riskiest open questions.
 
 **The destination list does omit the current town.** Standing in `W-Athens`
 (dropdown index 0) with nine towns, the port listed **eight**, in dropdown order
-and without `W-Athens`. So `adjustDestinationIndex` is right, and shipments go
+and without `W-Athens`. So `adjustDestinationIndex` was right, and shipments go
 where they are addressed.
+
+> **Superseded 03/10.** The game replaced that list with `#js_transportPanel`
+> (`div.transportPanel_city[data-city-id]`), every automated shipment failed
+> silently for weeks, and no reference script knew the new markup. The
+> shipment form is now opened directly with
+> `?view=transport&destinationCityId=<id>`, the city id read from the
+> dropdown's `selectvalue`; `adjustDestinationIndex` and `.cities.clearfix`
+> are gone (plan §2.A, §2.O). The `transportConfig` finding below still holds.
 
 **`transportConfig` confirms the cargo maths a third time:**
 
@@ -705,10 +819,8 @@ Those are exactly the numbers this project derives from the shipyard text, and
 exactly what IkaEasy's `500 + 20 × level` produces. The freighter base of 50,000
 was the one constant with no second source; it now has one.
 
-The capture also showed `.cities.clearfix > li > a` is present on the **port**
-view but gone on the **transport** view, which is worth remembering when reading
-`handleSendResource`: it waits on that selector after submitting, on the
-assumption the game returns to the port list.
+The capture also showed `.cities.clearfix > li > a` present on the **port**
+view but gone on the **transport** view; both are history now (see above).
 
 ### What the Resource-tab capture settled
 
@@ -732,15 +844,25 @@ the board itself both exist on a live page.
 
 ### Still unverified
 
-Nothing below has been seen on a real page yet — these are the highest-risk
-remaining assumptions:
+The full list, kept current, is the "not measured" part of each section in
+`docs/improvement-plan.md` and §2 of `docs/session-handover.md`. Settled since
+this section was first written:
 
-- **Shipyard `.upgrade_desc`** — whether the level really appears as `(N)`, which
-  is how Calibrate Cargo derives capacity.
-- **Clicking a town dropdown `<a>` actually switches town.** The new fallback
-  assumes it does. Note the capture shows these anchors carry neither `href`
-  nor `onclick` — the handler is delegated — so this is worth checking rather
-  than assuming.
+- **Clicking a town dropdown `<a>` does NOT switch town** — measured 25/09
+  (every board button waited out its 15 s timeout). Towns are switched the
+  game's way: set `#js_cityIdOnChange`, submit `#changeCityForm`; the game
+  answers with a page reload. The dropdown click is kept only as the last
+  resort it always was.
+
+Still open:
+
+- **Shipyard `.upgrade_desc`** — whether the level really appears as `(N)`,
+  which is how Calibrate Cargo derives capacity (the `transportConfig` route
+  does not need it).
+- **Everything built after 04/10 as a round**, and the Chrome extension at all.
+- **Why a town switch sometimes does not land** (four times on 30/10; once on
+  02/11 the game answered without a reload). Not reproducible at will; the
+  trace in every Bug Report is what the fix waits on.
 
 ## Type strictness
 
@@ -801,8 +923,18 @@ in with it.
 - **Buttons in string-built HTML:** use `data-ika-action="name"` and register it
   in `registerActions`. Do **not** use `onclick="fn()"` — after bundling the
   function lives in module scope and `window.fn` does not exist.
-- **The original sources** live in `legacy/` for reference; nothing builds
-  from them. Delete that directory once the port is confirmed in-game.
+- **The original sources** (`Send Resources V2.js`, `Quản lý Ika Perseus -VN-
+V2.js`) were at the repository root until `888dc29` (20/09/2026) and can be
+  read from any earlier commit. `legacy/` is a gitignored name for a local
+  copy; nothing builds from it and it has never been tracked.
+- **Measured facts first.** Before changing how anything talks to the game,
+  read §2 of `docs/session-handover.md`: the token rotation, the view-scoped
+  model, the gross wine figure, the `expandable` menu class and the reload on
+  a town switch each cost rounds to find, and the code is shaped by them.
+- **A new stored key** goes into `core/data-transfer.ts`'s classification, or
+  its test fails. **A new user-facing string** goes into `messages.ts`.
+- **A new crawl** is a radio button in `CRAWL_DIALOG.kinds` plus a run in
+  `app.ts`'s `CRAWLS` — the `Record` type will not compile without both.
 - **Initialisation order:** the models assign `X.prototype = {…}` at top level and
   import each other cyclically. The current bundle orders them correctly (every
   prototype is assigned before the first `new`), but verify this again if you add
