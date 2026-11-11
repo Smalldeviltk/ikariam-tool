@@ -9,7 +9,9 @@ import {
   GROUP_COLLAPSED_CLASS,
   LAUNCHER_CLASS,
   NOTIFICATION_SWITCH_ATTR,
+  PIRATE_HOLD_ID,
   PIRATE_POINTS_ID,
+  refreshPirateHold,
   refreshPirateCapturePoints,
   setAutoBuildButtonLabel,
   setQueueButtonLabel,
@@ -661,5 +663,41 @@ describe("the Pirate group's capture points", () => {
     expect(classifyKey("testerikaPirateCapturePoints")?.group).toBe(
       "measurements",
     );
+  });
+});
+
+describe("the Pirate group's captcha hold line", () => {
+  const line = () => document.querySelector<HTMLElement>(`#${PIRATE_HOLD_ID}`)!;
+  const hold = (pending: boolean) =>
+    getState().account.setJSON("ikaPirateRun", {
+      running: false,
+      nextAt: 0,
+      failingSince: null,
+      captchaPending: pending,
+    });
+
+  it("appears when a captcha starts holding the queue with the panel open", () => {
+    buildPanel();
+    expect(line().hidden).toBe(true);
+
+    hold(true);
+    refreshPirateHold();
+    expect(line().hidden).toBe(false);
+  });
+
+  it("is hidden while nothing holds the queue", () => {
+    buildPanel();
+    expect(line().hidden).toBe(true);
+  });
+
+  it("says so while the captcha holds the queue, and goes once it is lifted", () => {
+    hold(true);
+    buildPanel();
+    expect(line().hidden).toBe(false);
+    expect(line().textContent).toContain("Queue held");
+
+    hold(false);
+    refreshPirateHold();
+    expect(line().hidden).toBe(true);
   });
 });

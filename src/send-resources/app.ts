@@ -39,11 +39,13 @@ import {
   WINE_DIALOG,
 } from "./messages";
 import {
+  clearPirateCaptchaHold,
   fetchFortressView,
   fortressPosition,
   isPirateCaptchaPending,
   isPirateCaptureInFlight,
   isPirateRunning,
+  openPendingFortress,
   pirateCaptureTraces,
   pirateSettingsOrDefault,
   resumePirate,
@@ -167,6 +169,7 @@ import {
   refreshNotificationSwitch,
   refreshPirateButton,
   refreshPirateCapturePoints,
+  refreshPirateHold,
   setAutoBuildButtonLabel,
   setQueueButtonLabel,
   setTransferInfo,
@@ -253,7 +256,8 @@ function captchaHoldsQueue(): boolean {
   }
   if (!waitingForCaptchaLogged) {
     logInfo(
-      "Pirate waits for the security word - the queue holds until Start Pirate",
+      "Pirate waits for the security word - the queue holds until Pirate or " +
+        "the queue is started",
     );
     waitingForCaptchaLogged = true;
   }
@@ -384,10 +388,22 @@ function allowsTaskType(type: TaskType): boolean {
   }
 }
 
+/**
+ * The player started the queue by hand: lift Pirate's captcha hold, which
+ * would otherwise refuse every tick while the buttons say the queue runs.
+ * Said in the log and a toast, since Pirate itself stays stopped.
+ */
+function releaseCaptchaHoldOnStart(): void {
+  if (!clearPirateCaptchaHold()) return;
+  logInfo("The queue was started: Pirate's captcha hold lifted");
+  showToast(PIRATE.holdReleased);
+}
+
 function toggleQueueRunner(): void {
   // Read the flag, not `runner.isRunning` — the runner may well be up for Auto
   // Build's sake while this switch is off.
   const running = isAutoStart();
+  if (!running) releaseCaptchaHoldOnStart();
   setAutoStart(!running);
   setQueueButtonLabel(!running);
   syncRunnerToFlags();
@@ -427,6 +443,8 @@ async function runAutoWine(fromTown: string | null): Promise<void> {
   }
   saveMeasuredReceivers();
   if (!queueWineRun(source)) return;
+  // A start, even with Transport's timer already on.
+  releaseCaptchaHoldOnStart();
   if (!isAutoStart()) toggleQueueRunner();
 }
 
@@ -526,6 +544,7 @@ async function queueWineTransport(fromTown: string | null): Promise<void> {
   }
   if (enqueueWineTransport(file, source) === 0) return;
   refreshQueueView();
+  releaseCaptchaHoldOnStart();
   if (!isAutoStart()) toggleQueueRunner();
 }
 
@@ -798,11 +817,13 @@ function registerUiActions(): void {
     "build.save": closeDialog,
     "build.startNow": () => {
       if (enqueueAutoBuild() === 0) return;
+      releaseCaptchaHoldOnStart();
       addOneOffRunType("upgradeBuilding");
       syncRunnerToFlags();
     },
     "build.toggleTimer": () => {
       const running = isFlagTrue(FLAG.isAutoBuildStart);
+      if (!running) releaseCaptchaHoldOnStart();
       setFlag(FLAG.isAutoBuildStart, !running);
       setAutoBuildButtonLabel(!running);
       // Stopping has to take the upgrades back out of the queue as well. The
@@ -1092,6 +1113,9 @@ export function start(): void {
   setPirateStateListener(() => {
     refreshPirateButton();
     refreshPirateCapturePoints();
+    refreshPirateHold();
   });
   resumePirate();
+  // A captcha on an earlier page switched town to open the fortress here.
+  openPendingFortress();
 }

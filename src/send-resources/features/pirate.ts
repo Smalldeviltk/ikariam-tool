@@ -20,10 +20,12 @@
  * player says): the answer's fortress view holds a captcha form in place of
  * the capture table (`answerAsksForCaptcha`). Trying again cannot get past
  * it, so Pirate sends a desktop notice at once, stops, and opens the
- * fortress on screen; the player types the word in, presses Capture there,
+ * fortress on screen — switching to its town first when the page is in
+ * another one, since the fortress view opens only in its own town; the player types the word in, presses Capture there,
  * and presses Start Pirate again. Until then the task queue and the
  * keep-alive reload wait (`isPirateCaptchaPending`), or the next task would
- * replace the form. Nothing here reads or answers the word.
+ * replace the form; starting the queue by hand lifts that wait too
+ * (`clearPirateCaptchaHold`). Nothing here reads or answers the word.
  *
  * Anything else is a failure: an answer without a mission, or a request that
  * failed. It is tried again every `PIRATE_RETRY_MS`; after
@@ -36,7 +38,7 @@
  */
 
 import { errorMessage, parseGameNumber } from "@core/format";
-import { pageWindow } from "@core/ikariam/globals";
+import { getCurrentTownName, pageWindow } from "@core/ikariam/globals";
 import {
   actionRequestToken,
   ikariamRequest,
@@ -50,7 +52,13 @@ import { empireKeyPrefix } from "@core/storage";
 import { TabLock } from "@core/task-queue";
 import { showToast } from "@core/ui/window";
 import { PIRATE } from "../messages";
-import { getTownList, isTownSwitchInFlight, townCityId } from "../navigation";
+import { modelCurrentCityId } from "@core/ikariam/model";
+import {
+  getTownList,
+  gotoTown,
+  isTownSwitchInFlight,
+  townCityId,
+} from "../navigation";
 import { getState } from "../state";
 
 /** The town and capture level Settings chose. */
@@ -560,6 +568,21 @@ export function isPirateCaptchaPending(): boolean {
   return readRun().captchaPending === true;
 }
 
+/**
+ * Lift the captcha hold on the task queue, leaving Pirate itself stopped.
+ * Called when the player starts the queue by hand: a start pressed while
+ * the hold was on used to do nothing at all, the button reading "Stop
+ * Timer" while every tick was refused (bug report of 11/11). Returns
+ * whether there was a hold to lift.
+ */
+export function clearPirateCaptchaHold(): boolean {
+  const run = readRun();
+  if (run.captchaPending !== true) return false;
+  writeRun({ ...run, captchaPending: false });
+  onStateChange?.();
+  return true;
+}
+
 let timer: ReturnType<typeof setTimeout> | null = null;
 let lock: TabLock | null = null;
 let onStateChange: (() => void) | null = null;
@@ -712,21 +735,101 @@ const OPEN_FORTRESS_WAIT_MS = 60_000;
 /**
  * Open the town's Pirate Fortress on screen with the game's own call, as a
  * click on the building does, so the security-word form is there to fill
- * in. Not while the queue is in a task or a town switch is landing: the
- * view would land in the middle of it. Given up after a minute of waiting.
+ * in. The view opens only in the fortress's own town, so from another town
+ * the page switches there first (`switchTownToOpenFortress`). Not while the
+ * queue is in a task or a town switch is landing: the view would land in the
+ * middle of it. Given up after a minute of waiting.
  */
-function openFortressWhenIdle(settings: PirateSettings, waited = 0): void {
+function openFortressWhenIdle(
+  settings: Pick<PirateSettings, "cityId" | "position">,
+  waited = 0,
+  maySwitchTown = true,
+): void {
   if (isTownSwitchInFlight() || holdCheck()) {
     if (waited >= OPEN_FORTRESS_WAIT_MS) {
+      forgetPendingFortress();
       logInfo("Pirate: the queue stayed busy; Pirate Fortress not opened");
       return;
     }
     setTimeout(
-      () => openFortressWhenIdle(settings, waited + OPEN_FORTRESS_POLL_MS),
+      () =>
+        openFortressWhenIdle(
+          settings,
+          waited + OPEN_FORTRESS_POLL_MS,
+          maySwitchTown,
+        ),
       OPEN_FORTRESS_POLL_MS,
     );
     return;
   }
+  if (isInTown(settings.cityId)) {
+    forgetPendingFortress();
+    openFortressNow(settings);
+    return;
+  }
+  const town = townNameOfCity(settings.cityId);
+  if (!maySwitchTown) {
+    // Already switched once for this: a switch that did not land is not sent
+    // again from here, or a refused switch would reload for ever.
+    forgetPendingFortress();
+    logInfo(
+      `Pirate: not in ${town} after the town switch; Pirate Fortress not opened`,
+    );
+    return;
+  }
+  switchTownToOpenFortress(settings, town);
+}
+
+/**
+ * The fortress opened on the next page, once the game has switched to its
+ * town. A town switch reloads the page (measured 02/10, `gotoTown`), so what
+ * is left to do is kept in `sessionStorage` — this tab only, like the
+ * pending town switch itself — and picked up by `openPendingFortress`.
+ */
+export const PENDING_FORTRESS_KEY = "ika_pirateOpenFortress";
+/** A pending open older than this is dropped: the switch did not happen. */
+export const PENDING_FORTRESS_MAX_AGE_MS = 60_000;
+
+interface PendingFortress {
+  cityId: string;
+  position: number;
+  /** Epoch ms the switch was sent. */
+  at: number;
+}
+
+function readPendingFortress(): PendingFortress | null {
+  try {
+    const raw = sessionStorage.getItem(PENDING_FORTRESS_KEY);
+    const pending = raw ? (JSON.parse(raw) as PendingFortress) : null;
+    return pending && typeof pending.cityId === "string" ? pending : null;
+  } catch {
+    return null;
+  }
+}
+
+function forgetPendingFortress(): void {
+  try {
+    sessionStorage.removeItem(PENDING_FORTRESS_KEY);
+  } catch {
+    // Nothing kept, nothing to forget.
+  }
+}
+
+/**
+ * Whether the page is in the town with this city id: the model's selected
+ * city, or — without a model — the breadcrumb against the town list.
+ */
+function isInTown(cityId: string): boolean {
+  const selected = modelCurrentCityId();
+  if (selected !== null) return String(selected) === cityId;
+  const current = getCurrentTownName().trim();
+  return current !== "" && current === townNameOfCity(cityId);
+}
+
+/** Open the fortress view with the game's own call, as a click on it does. */
+function openFortressNow(
+  settings: Pick<PirateSettings, "cityId" | "position">,
+): void {
   const ajaxHandlerCall = (
     pageWindow as { ajaxHandlerCall?: (url: string) => void }
   ).ajaxHandlerCall;
@@ -738,6 +841,66 @@ function openFortressWhenIdle(settings: PirateSettings, waited = 0): void {
     `?view=pirateFortress&activeTab=tabBootyQuest&cityId=${settings.cityId}` +
       `&position=${settings.position}`,
   );
+}
+
+/**
+ * Switch to the fortress's town, keeping what is left to do for the page the
+ * switch loads. Should the game answer without a reload and the page land
+ * there anyway, the fortress opens on this page.
+ */
+function switchTownToOpenFortress(
+  settings: Pick<PirateSettings, "cityId" | "position">,
+  town: string,
+): void {
+  const townNumber = getTownList().find(
+    (entry) => townCityId(entry.townNumber) === settings.cityId,
+  )?.townNumber;
+  if (townNumber === undefined) {
+    logInfo(
+      `Pirate: ${town} is not in the town list; Pirate Fortress not opened`,
+    );
+    return;
+  }
+  try {
+    sessionStorage.setItem(
+      PENDING_FORTRESS_KEY,
+      JSON.stringify({
+        cityId: settings.cityId,
+        position: settings.position,
+        at: Date.now(),
+      } satisfies PendingFortress),
+    );
+  } catch {
+    // Without sessionStorage the next page cannot open it; the switch still
+    // puts the player in the right town.
+  }
+  logInfo(`Pirate: switching to ${town} to open the Pirate Fortress`);
+  gotoTown(townNumber).then(
+    () => openFortressWhenIdle(settings, 0, false),
+    (e: unknown) => {
+      forgetPendingFortress();
+      logInfo(
+        `Pirate: the switch to ${town} failed (${errorMessage(e)}); ` +
+          "Pirate Fortress not opened",
+      );
+    },
+  );
+}
+
+/**
+ * On page load: open the fortress an earlier page switched town for, if the
+ * page is in that town now. Dropped when it is older than
+ * `PENDING_FORTRESS_MAX_AGE_MS` or the switch did not land; never switches
+ * again.
+ */
+export function openPendingFortress(): void {
+  const pending = readPendingFortress();
+  if (!pending) return;
+  if (Date.now() - pending.at > PENDING_FORTRESS_MAX_AGE_MS) {
+    forgetPendingFortress();
+    return;
+  }
+  openFortressWhenIdle(pending, 0, false);
 }
 
 /** Start sending captures now, from the saved or default settings. */

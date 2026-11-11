@@ -39,7 +39,11 @@ import {
   wineStatus,
   type TownWineStatus,
 } from "../features/wine-warning";
-import { isPirateRunning, lastCapturePoints } from "../features/pirate";
+import {
+  isPirateCaptchaPending,
+  isPirateRunning,
+  lastCapturePoints,
+} from "../features/pirate";
 import { getActionPoints, getFreeShips } from "../game-state";
 import {
   BUTTON,
@@ -136,7 +140,8 @@ function windowContent(): string {
       "pirate",
       `<button class="button" id="${PIRATE_BUTTON_ID}" ${action("pirate.toggle")}>${pirateButtonLabel()}</button>` +
         `<button class="button" ${action("pirate.settings")}>${BUTTON.settings}</button>` +
-        `<div id="${PIRATE_POINTS_ID}" title="${escapeHtml(PIRATE.capturePointsTitle)}">${escapeHtml(pirateCapturePointsText())}</div>`,
+        `<div id="${PIRATE_POINTS_ID}" title="${escapeHtml(PIRATE.capturePointsTitle)}">${escapeHtml(pirateCapturePointsText())}</div>` +
+        `<div id="${PIRATE_HOLD_ID}" class="ika-pirate-hold"${isPirateCaptchaPending() ? "" : " hidden"}>${escapeHtml(PIRATE.holdLine)}</div>`,
     ) +
     group("queue", `<div id="${QUEUE_LIST_ID}"></div>`) +
     group(
@@ -201,6 +206,19 @@ function pirateCapturePointsText(): string {
 export function refreshPirateCapturePoints(): void {
   const line = qs(`#${PIRATE_POINTS_ID}`);
   if (line) line.textContent = pirateCapturePointsText();
+}
+
+/**
+ * The line saying the queue is held for Pirate's security word. Shown only
+ * while it is: the hold used to be visible nowhere but the log, and the
+ * Transport button read "Stop Timer" over a queue that did not move.
+ */
+export const PIRATE_HOLD_ID = "ikaPirateHold";
+
+/** Show or hide the hold line after Pirate's state changed. */
+export function refreshPirateHold(): void {
+  const line = qs(`#${PIRATE_HOLD_ID}`);
+  if (line) line.hidden = !isPirateCaptchaPending();
 }
 
 /** Redraw the Pirate button's label after Pirate started or stopped. */

@@ -289,11 +289,20 @@ export const PIRATE = {
   captchaNoticeTitle: (town: string) => `Pirate needs a captcha in ${town}`,
   captchaNoticeBody:
     "The Pirate Fortress asks for the security word. Type it in and press " +
-    "Capture, then press Start Pirate: the queue waits until then.",
+    "Capture, then press Start Pirate. The queue waits until Pirate or the " +
+    "queue is started again.",
   captchaToast: (town: string) =>
     `Pirate stopped: the Pirate Fortress in ${town} asks for the security ` +
     "word.\n\nType it in and press Capture, then press Start Pirate. The " +
-    "Transport and Build queue waits until then.",
+    "Transport and Build queue waits until Pirate or the queue is started " +
+    "again.",
+  /** Under the Pirate buttons while the captcha holds the queue. */
+  holdLine:
+    "Queue held: Pirate waits for the security word. Start Pirate, or start " +
+    "the queue, to go on.",
+  holdReleased:
+    "The queue was held for Pirate's security word; starting it lifted the " +
+    "hold. Pirate stays stopped until Start Pirate.",
   failedNoticeTitle: (town: string) => `Pirate stopped in ${town}`,
   failedNoticeBody: (reason: string) =>
     `No capture could be started for 30s (${reason}). Solve the captcha, ` +

@@ -676,6 +676,46 @@ describe("Auto Wine", () => {
     },
   );
 
+  it(
+    "REGRESSION: Start with Transport's timer already on lifts Pirate's " +
+      "captcha hold — the queue stood still while the button read Stop " +
+      "Timer (bug report of 11/11)",
+    async () => {
+      // Pirate stopped for the security word on an earlier page.
+      localStorage.setItem(
+        "testerikaPirateRun",
+        JSON.stringify({
+          running: false,
+          nextAt: 0,
+          failingSince: null,
+          captchaPending: true,
+        }),
+      );
+      await startWith({ transport: true });
+      document.body.insertAdjacentHTML("beforeend", DROPDOWN);
+      const state = await appState();
+      state.saveSenders(["0"]);
+      const pirate = await import("./features/pirate");
+      const holdLine = () =>
+        document.querySelector<HTMLElement>("#ikaPirateHold")!;
+      expect(holdLine().hidden).toBe(false);
+
+      await actions["wine.autoRun"](document.body);
+      await settle();
+
+      expect(queuedWine(state)).toEqual(["0 -> 1: wine"]);
+      expect(state.isAutoStart()).toBe(true);
+      expect(pirate.isPirateCaptchaPending()).toBe(false);
+      expect(pirate.isPirateRunning()).toBe(false);
+      expect(holdLine().hidden).toBe(true);
+      expect(
+        showToast.mock.calls.some(([text]) =>
+          String(text).includes("starting it lifted the hold"),
+        ),
+      ).toBe(true);
+    },
+  );
+
   it("Start stops when the scan refuses to run, and queues nothing", async () => {
     scanBuildings.mockResolvedValue(false);
     const state = await startWithSource();
@@ -931,6 +971,32 @@ describe("Auto Wine", () => {
           this.dispatchEvent(new Event("change"));
         });
     }
+
+    it("lifts Pirate's captcha hold, even with Transport's timer already on", async () => {
+      localStorage.setItem(
+        "testerikaPirateRun",
+        JSON.stringify({
+          running: false,
+          nextAt: 0,
+          failingSince: null,
+          captchaPending: true,
+        }),
+      );
+      await startWith({ transport: true });
+      document.body.insertAdjacentHTML("beforeend", DROPDOWN);
+      const state = await appState();
+      state.saveSenders(["0"]);
+      const pirate = await import("./features/pirate");
+      const picker = pickFile(transportFile("tester"));
+      try {
+        await actions["wine.import"](document.body);
+        await vi.waitFor(() => expect(queuedWine(state)).toHaveLength(1));
+      } finally {
+        picker.mockRestore();
+      }
+
+      expect(pirate.isPirateCaptchaPending()).toBe(false);
+    });
 
     it("Auto Wine Settings has an Import button that runs it", async () => {
       await startWithSource();
@@ -1556,6 +1622,42 @@ describe("Auto Build after the queue runs dry", () => {
       expect(timers()).toBe(IDLE);
     },
   );
+
+  it("Build's Start lifts Pirate's captcha hold", async () => {
+    localStorage.setItem(
+      "testerikaPirateRun",
+      JSON.stringify({
+        running: false,
+        nextAt: 0,
+        failingSince: null,
+        captchaPending: true,
+      }),
+    );
+    saveAutoBuild([
+      {
+        accountName: "tester",
+        townList: [
+          {
+            townName: "Nowhere",
+            queue: [
+              {
+                positionId: "js_CityPosition4Link",
+                buildingName: "Warehouse 3",
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+    installCityLink();
+    await startWith({});
+    const pirate = await import("./features/pirate");
+    expect(pirate.isPirateCaptchaPending()).toBe(true);
+
+    await actions["build.startNow"](document.body);
+
+    expect(pirate.isPirateCaptchaPending()).toBe(false);
+  });
 
   it(
     "REGRESSION: Build's Start carries its lap across a page load - every " +
@@ -2367,6 +2469,99 @@ describe("Pirate", () => {
       await actions["pirate.toggle"](document.body);
       await vi.advanceTimersByTimeAsync(1_100);
       expect(reloads).toBeGreaterThan(0);
+    },
+  );
+
+  describe("starting the queue by hand lifts the captcha hold", () => {
+    function holdForCaptcha(): void {
+      localStorage.setItem(
+        "testerikaPirateRun",
+        JSON.stringify({
+          running: false,
+          nextAt: 0,
+          failingSince: null,
+          captchaPending: true,
+        }),
+      );
+    }
+
+    it("Transport's Start Timer: the hold goes and the runner runs", async () => {
+      vi.useFakeTimers({ now: new Date("2026-09-26T10:01:00Z") });
+      let reloads = 0;
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<div id="js_cityLink"><a href="#"></a></div>`,
+      );
+      document
+        .querySelector("#js_cityLink > a")!
+        .addEventListener("click", (event) => {
+          event.preventDefault();
+          reloads++;
+        });
+      holdForCaptcha();
+      await startWith({});
+      const pirate = await import("./features/pirate");
+
+      await actions["queue.toggle"](document.body);
+      await vi.advanceTimersByTimeAsync(1_100);
+
+      expect(pirate.isPirateCaptchaPending()).toBe(false);
+      // The empty queue drained, which reloads: the runner was let through.
+      expect(reloads).toBeGreaterThan(0);
+      expect(String(showToast.mock.calls[0][0])).toContain(
+        "starting it lifted the hold",
+      );
+    });
+
+    it("Build's Start Timer", async () => {
+      holdForCaptcha();
+      await startWith({});
+      const pirate = await import("./features/pirate");
+
+      await actions["build.toggleTimer"](document.body);
+
+      expect(pirate.isPirateCaptchaPending()).toBe(false);
+    });
+
+    it("not a Stop: switching a timer off keeps the hold", async () => {
+      holdForCaptcha();
+      await startWith({ transport: true, build: true });
+      const pirate = await import("./features/pirate");
+
+      await actions["queue.toggle"](document.body);
+      await actions["build.toggleTimer"](document.body);
+
+      expect(pirate.isPirateCaptchaPending()).toBe(true);
+      expect(showToast).not.toHaveBeenCalled();
+    });
+  });
+
+  it(
+    "on the page a captcha's town switch loaded, opens the Pirate Fortress " +
+      "for the security word",
+    async () => {
+      const ajaxHandlerCall = vi.fn();
+      sessionStorage.setItem(
+        "ika_pirateOpenFortress",
+        JSON.stringify({ cityId: "297057", position: 17, at: Date.now() }),
+      );
+      Object.assign(window, {
+        ajaxHandlerCall,
+        ikariam: {
+          model: { relatedCityData: { selectedCity: "city_297057" } },
+        },
+      });
+      try {
+        await startWith({});
+      } finally {
+        delete (window as { ajaxHandlerCall?: unknown }).ajaxHandlerCall;
+        delete window.ikariam;
+      }
+
+      expect(ajaxHandlerCall).toHaveBeenCalledWith(
+        "?view=pirateFortress&activeTab=tabBootyQuest&cityId=297057&position=17",
+      );
+      expect(sessionStorage.getItem("ika_pirateOpenFortress")).toBeNull();
     },
   );
 

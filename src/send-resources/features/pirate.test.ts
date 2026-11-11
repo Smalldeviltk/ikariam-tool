@@ -26,12 +26,14 @@ vi.mock("@core/logger", async (importOriginal) => ({
   logInfo: () => {},
 }));
 
-const { switchInFlight } = vi.hoisted(() => ({
+const { switchInFlight, gotoTown } = vi.hoisted(() => ({
   switchInFlight: vi.fn(() => false),
+  gotoTown: vi.fn(async (_townNumber: number | string) => {}),
 }));
 vi.mock("../navigation", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../navigation")>()),
   isTownSwitchInFlight: switchInFlight,
+  gotoTown,
 }));
 
 import {
@@ -42,6 +44,9 @@ import {
   isPirateRunning,
   lastCapturePoints,
   loadPirateSettings,
+  openPendingFortress,
+  PENDING_FORTRESS_KEY,
+  PENDING_FORTRESS_MAX_AGE_MS,
   openCaptureLevels,
   PIRATE_CAPTURE_TRACE_KEY,
   PIRATE_FORTRESS_POSITION,
@@ -57,6 +62,7 @@ import {
   resumePirate,
   savePirateSettings,
   answerAsksForCaptcha,
+  clearPirateCaptchaHold,
   sendCapture,
   setPirateHoldCheck,
   setPirateStateListener,
@@ -656,6 +662,16 @@ describe("the schedule", () => {
   });
 });
 
+/** Put the page in the town with this city id, as the game's model says. */
+function standIn(cityId: string): void {
+  Object.assign(window, {
+    ikariam: { model: { relatedCityData: { selectedCity: `city_${cityId}` } } },
+  });
+}
+
+const FORTRESS_URL =
+  "?view=pirateFortress&activeTab=tabBootyQuest&cityId=297057&position=17";
+
 describe("the security word", () => {
   const ajaxHandlerCall = vi.fn();
 
@@ -663,10 +679,15 @@ describe("the security word", () => {
     savePirateSettings(SETTINGS);
     ajaxHandlerCall.mockReset();
     Object.assign(window, { ajaxHandlerCall });
+    // In the fortress's own town; the town switch has its own tests below.
+    standIn("297057");
+    gotoTown.mockReset();
+    sessionStorage.clear();
   });
 
   afterEach(() => {
     delete (window as { ajaxHandlerCall?: unknown }).ajaxHandlerCall;
+    delete (window as { ikariam?: unknown }).ikariam;
   });
 
   it("is seen in the captcha form, and nowhere else", () => {
@@ -795,6 +816,24 @@ describe("the security word", () => {
     expect(isPirateCaptchaPending()).toBe(false);
   });
 
+  it("lifts the hold on demand, leaving Pirate stopped, and says whether there was one", async () => {
+    const redraw = vi.fn();
+    setPirateStateListener(redraw);
+    ikariamRequest.mockResolvedValue(captchaAnswer());
+    startPirate();
+    await advance(0);
+    expect(isPirateCaptchaPending()).toBe(true);
+    redraw.mockClear();
+
+    expect(clearPirateCaptchaHold()).toBe(true);
+    expect(isPirateCaptchaPending()).toBe(false);
+    expect(isPirateRunning()).toBe(false);
+    expect(redraw).toHaveBeenCalledTimes(1);
+
+    expect(clearPirateCaptchaHold()).toBe(false);
+    expect(redraw).toHaveBeenCalledTimes(1);
+  });
+
   it("gives each captcha its own notice key", async () => {
     ikariamRequest.mockResolvedValue(captchaAnswer());
 
@@ -807,5 +846,125 @@ describe("the security word", () => {
     const keys = notify.mock.calls.map(([notice]) => notice.key);
     expect(keys).toHaveLength(2);
     expect(new Set(keys).size).toBe(2);
+  });
+});
+
+describe("opening the fortress from another town", () => {
+  const ajaxHandlerCall = vi.fn();
+  const pending = () => sessionStorage.getItem(PENDING_FORTRESS_KEY);
+
+  beforeEach(() => {
+    savePirateSettings(SETTINGS);
+    ajaxHandlerCall.mockReset();
+    Object.assign(window, { ajaxHandlerCall });
+    gotoTown.mockReset();
+    sessionStorage.clear();
+    // In Saigon-B (297058); the fortress is in Saigon-A (297057).
+    standIn("297058");
+  });
+
+  afterEach(() => {
+    delete (window as { ajaxHandlerCall?: unknown }).ajaxHandlerCall;
+    delete (window as { ikariam?: unknown }).ikariam;
+  });
+
+  it(
+    "REGRESSION: switches to the fortress's town first, keeping the open " +
+      "for the page the switch loads — the view would not open from " +
+      "another town",
+    async () => {
+      // The game answers a switch with a reload: the promise never settles.
+      gotoTown.mockImplementation(() => new Promise(() => {}));
+      ikariamRequest.mockResolvedValue(captchaAnswer());
+
+      startPirate();
+      await advance(0);
+
+      expect(gotoTown).toHaveBeenCalledWith(0);
+      expect(ajaxHandlerCall).not.toHaveBeenCalled();
+      expect(JSON.parse(pending()!)).toEqual({
+        cityId: "297057",
+        position: 17,
+        at: Date.now(),
+      });
+    },
+  );
+
+  it("opens it on the page the switch loaded, once in the town, and forgets it", async () => {
+    gotoTown.mockImplementation(() => new Promise(() => {}));
+    ikariamRequest.mockResolvedValue(captchaAnswer());
+    startPirate();
+    await advance(0);
+
+    // The next page, in the fortress's town.
+    resetPirateForTests();
+    standIn("297057");
+    await advance(3_000);
+    openPendingFortress();
+
+    expect(ajaxHandlerCall).toHaveBeenCalledWith(FORTRESS_URL);
+    expect(pending()).toBeNull();
+  });
+
+  it("opens it on this page when the switch lands without a reload", async () => {
+    gotoTown.mockImplementation(async () => standIn("297057"));
+    ikariamRequest.mockResolvedValue(captchaAnswer());
+
+    startPirate();
+    await advance(0);
+
+    expect(ajaxHandlerCall).toHaveBeenCalledWith(FORTRESS_URL);
+    expect(pending()).toBeNull();
+  });
+
+  it("does not switch again when the page did not land in the town", async () => {
+    gotoTown.mockImplementation(() => new Promise(() => {}));
+    ikariamRequest.mockResolvedValue(captchaAnswer());
+    startPirate();
+    await advance(0);
+    expect(gotoTown).toHaveBeenCalledTimes(1);
+
+    // The next page, still in Saigon-B.
+    resetPirateForTests();
+    openPendingFortress();
+
+    expect(gotoTown).toHaveBeenCalledTimes(1);
+    expect(ajaxHandlerCall).not.toHaveBeenCalled();
+    expect(pending()).toBeNull();
+  });
+
+  it("drops an open kept longer than a minute ago", () => {
+    sessionStorage.setItem(
+      PENDING_FORTRESS_KEY,
+      JSON.stringify({
+        cityId: "297057",
+        position: 17,
+        at: Date.now() - PENDING_FORTRESS_MAX_AGE_MS - 1,
+      }),
+    );
+    standIn("297057");
+
+    openPendingFortress();
+
+    expect(ajaxHandlerCall).not.toHaveBeenCalled();
+    expect(pending()).toBeNull();
+  });
+
+  it("forgets the open when the switch fails, without throwing", async () => {
+    gotoTown.mockRejectedValue(new Error("gotoTown(0) timed out"));
+    ikariamRequest.mockResolvedValue(captchaAnswer());
+
+    startPirate();
+    await advance(0);
+
+    expect(gotoTown).toHaveBeenCalledTimes(1);
+    expect(ajaxHandlerCall).not.toHaveBeenCalled();
+    expect(pending()).toBeNull();
+  });
+
+  it("does nothing on a page load with nothing kept", () => {
+    openPendingFortress();
+    expect(gotoTown).not.toHaveBeenCalled();
+    expect(ajaxHandlerCall).not.toHaveBeenCalled();
   });
 });
