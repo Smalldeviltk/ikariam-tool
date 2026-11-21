@@ -335,6 +335,7 @@ describe("every key the scripts write is classified", () => {
       KEY.globalTaskQueue,
       KEY.routeTimes,
       KEY.queueNoteBase,
+      KEY.runnerBusy,
       TOWN_STATS_KEY,
     ];
     for (const key of accountKeys) {

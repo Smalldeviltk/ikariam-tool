@@ -26,6 +26,7 @@ import {
   queueChanged,
   queueNoteAllowsRunning,
   resetQueueNoteState,
+  setChangeSyncHold,
   startQueueNoteSync,
   syncQueueNote,
   syncQueueNoteFromScan,
@@ -869,6 +870,111 @@ describe("claiming before acting", () => {
 /* ─────────────────────────── Page wiring ───────────────────────────────── */
 
 describe("on the page", () => {
+  it(
+    "holds a change's sync while this tab's runner is busy - a write then " +
+      "hands out a new token while a building or shipment form is open - " +
+      "and syncs once it is free",
+    async () => {
+      setQueueChangeListener(queueChanged);
+      let runnerBusy = false;
+      setChangeSyncHold(() => runnerBusy);
+      await startQueueNoteSync();
+      const reads = notepad.reads;
+      runnerBusy = true;
+
+      queueShipment();
+      await vi.advanceTimersByTimeAsync(CHANGE_SYNC_DELAY_MS * 3);
+      expect(notepad.reads).toBe(reads);
+
+      runnerBusy = false;
+      await vi.advanceTimersByTimeAsync(CHANGE_SYNC_DELAY_MS);
+      expect(notepad.reads).toBe(reads + 1);
+      expect(noteEntries()).toHaveLength(1);
+    },
+  );
+
+  it(
+    "the page-load sync waits while a runner is on a task - a tab opened " +
+      "then moved the token under the other tab's open building - and " +
+      "the queue here waits with it",
+    async () => {
+      let runnerBusy = true;
+      setChangeSyncHold(() => runnerBusy);
+
+      const pending = startQueueNoteSync();
+      await vi.advanceTimersByTimeAsync(CHANGE_SYNC_DELAY_MS * 3);
+      expect(notepad.reads).toBe(0);
+      expect(queueNoteAllowsRunning()).toBe(false);
+
+      runnerBusy = false;
+      await vi.advanceTimersByTimeAsync(CHANGE_SYNC_DELAY_MS);
+      await pending;
+      expect(notepad.reads).toBe(1);
+      expect(queueNoteAllowsRunning()).toBe(true);
+    },
+  );
+
+  it("Scan's sync waits while a runner is on a task", async () => {
+    let runnerBusy = true;
+    setChangeSyncHold(() => runnerBusy);
+
+    const pending = syncQueueNoteFromScan();
+    await vi.advanceTimersByTimeAsync(CHANGE_SYNC_DELAY_MS * 3);
+    expect(notepad.reads).toBe(0);
+
+    runnerBusy = false;
+    await vi.advanceTimersByTimeAsync(CHANGE_SYNC_DELAY_MS);
+    await pending;
+    expect(notepad.reads).toBe(1);
+  });
+
+  it(
+    "a claim never waits on the hold - it is the busy runner's own " +
+      "write, and waiting would hold the task up for ever",
+    async () => {
+      saveUpgrades({ "T-Sparta": [["js_CityPosition8Link", "Warehouse 21"]] });
+      await syncQueueNote();
+      setChangeSyncHold(() => true);
+
+      const result = await claimUpgrade(
+        "T-Sparta",
+        "js_CityPosition8Link",
+        "Warehouse 21",
+      );
+
+      expect(result).toEqual({ status: "go" });
+      expect(noteEntries()).toEqual([]);
+    },
+  );
+
+  it(
+    "writes nothing more after a claim made within the change delay - " +
+      "Auto Build removes levels already built, then claims, and a later " +
+      "write would hand out a new token while the building is open",
+    async () => {
+      setQueueChangeListener(queueChanged);
+      saveUpgrades({
+        "T-Sparta": [
+          ["js_CityPosition8Link", "Warehouse 20"],
+          ["js_CityPosition8Link", "Warehouse 21"],
+        ],
+      });
+      await startQueueNoteSync();
+      await vi.advanceTimersByTimeAsync(CHANGE_SYNC_DELAY_MS);
+
+      // The level already built comes off the saved list...
+      saveUpgrades({ "T-Sparta": [["js_CityPosition8Link", "Warehouse 21"]] });
+      // ...and the next one is claimed before the change delay is over.
+      await claimUpgrade("T-Sparta", "js_CityPosition8Link", "Warehouse 21");
+      const savesAfterClaim = notepad.saves.length;
+      expect(noteEntries()).toEqual([]);
+
+      await vi.advanceTimersByTimeAsync(CHANGE_SYNC_DELAY_MS * 2);
+
+      expect(notepad.saves).toHaveLength(savesAfterClaim);
+    },
+  );
+
   it("keeps the runner waiting until the page-load sync is over, however it went", async () => {
     notepad.readError = new Error("offline");
     expect(queueNoteAllowsRunning()).toBe(false);

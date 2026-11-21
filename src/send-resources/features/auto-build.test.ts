@@ -6,14 +6,28 @@ import {
   buildingsFromPositions,
   enqueueAutoBuild,
   getTownQueue,
+  hasConfiguredUpgrades,
+  plannedLevels,
   positionsFromResponse,
   handleUpgradeBuilding,
   listBuildingsInCurrentTown,
   moveBuildingInQueue,
+  pruneCompletedInCurrentTown,
+  readTownSlots,
+  removeCompletedUpgrades,
+  removeHighestLevel,
+  removeUpgradeAndLater,
   scanBuildings,
   showBuildingLevels,
+  slotStatesFromPositions,
   startBuildingLevelObserver,
 } from "./auto-build";
+import {
+  completedUpgrades,
+  splitRunnableTowns,
+  type SavedUpgrade,
+  type SlotState,
+} from "./build-queue-validation";
 import { resetHttpState } from "@core/ikariam/http";
 import type { Task } from "@core/task-queue";
 
@@ -86,6 +100,12 @@ beforeEach(() => {
 });
 
 describe("handleUpgradeBuilding", () => {
+  // The visit's own upgrade (`upgradeTask`), saved as a lap leaves it: a
+  // visit whose upgrade is no longer saved ends without opening anything.
+  beforeEach(() => {
+    saveWAthens([upgrade(5, "Warehouse 26")]);
+  });
+
   it(
     "REGRESSION: ignores an upgrade button belonging to a different slot — a " +
       "live capture found a stale one whose href pointed at another building",
@@ -279,6 +299,12 @@ describe("handleUpgradeBuilding", () => {
 });
 
 describe("handleUpgradeBuilding and the game's notepad", () => {
+  // The visit's own upgrade (`upgradeTask`), saved as a lap leaves it: a
+  // visit whose upgrade is no longer saved ends without opening anything.
+  beforeEach(() => {
+    saveWAthens([upgrade(5, "Warehouse 26")]);
+  });
+
   /**
    * A town whose slot 5 starts building when its button is clicked. Counts
    * how often the building was opened and its Upgrade button clicked.
@@ -555,6 +581,559 @@ describe("addBuildingToQueue", () => {
         getTownQueue("M-Corinth").map((entry) => entry.buildingName),
       ).toEqual(["Academy 8", "Academy 9"]);
       expect(getTownQueue("W-Athens")).toEqual([]);
+    },
+  );
+});
+
+/* ─────────────────────── Checks on the saved queue ─────────────────────── */
+
+function upgrade(slot: number, label: string): SavedUpgrade {
+  return { positionId: `js_CityPosition${slot}Link`, buildingName: label };
+}
+
+function slotState(
+  slot: number,
+  name: string,
+  level: number | null,
+  upgrading = false,
+): SlotState {
+  return { positionId: `js_CityPosition${slot}Link`, name, level, upgrading };
+}
+
+/** Saved upgrades of Smalldevil's W-Athens. */
+function saveWAthens(queue: SavedUpgrade[]): void {
+  saveAutoBuild([
+    { accountName: "Smalldevil", townList: [{ townName: "W-Athens", queue }] },
+  ]);
+}
+
+function labels(queue: readonly SavedUpgrade[]): string[] {
+  return queue.map((entry) => entry.buildingName);
+}
+
+describe("completedUpgrades", () => {
+  const TAVERN_13_TO_16 = [
+    upgrade(9, "Tavern 13"),
+    upgrade(9, "Tavern 14"),
+    upgrade(9, "Tavern 15"),
+    upgrade(9, "Tavern 16"),
+  ];
+
+  it(
+    "counts every level up to the one built as done: a tavern upgraded by " +
+      "hand to 15 has its saved 13, 14 and 15 done, and 16 still to build",
+    () => {
+      expect(
+        labels(
+          completedUpgrades(TAVERN_13_TO_16, [slotState(9, "Tavern", 15)]),
+        ),
+      ).toEqual(["Tavern 13", "Tavern 14", "Tavern 15"]);
+    },
+  );
+
+  it("at level 14, only 13 and 14 are done", () => {
+    expect(
+      labels(completedUpgrades(TAVERN_13_TO_16, [slotState(9, "Tavern", 14)])),
+    ).toEqual(["Tavern 13", "Tavern 14"]);
+  });
+
+  it("below the first saved level, nothing is done", () => {
+    expect(
+      completedUpgrades(TAVERN_13_TO_16, [slotState(9, "Tavern", 12)]),
+    ).toEqual([]);
+  });
+
+  it(
+    "does not count a level still being built: at 14 going on 15, the " +
+      "saved 15 stays until the game has finished it",
+    () => {
+      expect(
+        labels(
+          completedUpgrades(TAVERN_13_TO_16, [
+            slotState(9, "Tavern", 14, true),
+          ]),
+        ),
+      ).toEqual(["Tavern 13", "Tavern 14"]);
+    },
+  );
+
+  it("keeps an upgrade whose slot was not read", () => {
+    expect(
+      completedUpgrades(TAVERN_13_TO_16, [slotState(8, "Tavern", 20)]),
+    ).toEqual([]);
+  });
+
+  it(
+    "keeps an upgrade whose slot now holds another building - the reading " +
+      "may be another town's, or the building was replaced",
+    () => {
+      expect(
+        completedUpgrades(TAVERN_13_TO_16, [slotState(9, "Warehouse", 20)]),
+      ).toEqual([]);
+    },
+  );
+
+  it(
+    "keeps an upgrade copied from another computer's notepad, which has " +
+      "no building name to check",
+    () => {
+      expect(
+        completedUpgrades(
+          [upgrade(9, "Position 9 13")],
+          [slotState(9, "Tavern", 20)],
+        ),
+      ).toEqual([]);
+    },
+  );
+
+  it("keeps an upgrade when the slot's level could not be read", () => {
+    expect(
+      completedUpgrades(TAVERN_13_TO_16, [slotState(9, "Tavern", null)]),
+    ).toEqual([]);
+  });
+
+  it("keeps an upgrade whose label carries no level", () => {
+    expect(
+      completedUpgrades([upgrade(9, "Tavern")], [slotState(9, "Tavern", 20)]),
+    ).toEqual([]);
+  });
+
+  it(
+    "judges each slot by its own level: two warehouses, one at 20, one " +
+      "at 10, and the saved 15 belongs to the one at 10",
+    () => {
+      expect(
+        completedUpgrades(
+          [upgrade(5, "Warehouse 15")],
+          [slotState(4, "Warehouse", 20), slotState(5, "Warehouse", 10)],
+        ),
+      ).toEqual([]);
+    },
+  );
+
+  it("reads names with spaces and levels in the hundreds", () => {
+    expect(
+      labels(
+        completedUpgrades(
+          [upgrade(0, "Town Hall 12"), upgrade(0, "Town Hall 100")],
+          [slotState(0, "Town Hall", 12)],
+        ),
+      ),
+    ).toEqual(["Town Hall 12"]);
+  });
+});
+
+describe("splitRunnableTowns", () => {
+  const towns = [{ townName: "W-Athens" }, { townName: "Gone" }];
+
+  it("does not run a town the game's town list does not have", () => {
+    expect(splitRunnableTowns(towns, ["W-Athens", "M-Corinth"])).toEqual({
+      runnable: [{ townName: "W-Athens" }],
+      notInDropdown: [{ townName: "Gone" }],
+    });
+  });
+
+  it("matches names whatever the spaces around them", () => {
+    expect(
+      splitRunnableTowns([{ townName: " W-Athens " }], ["W-Athens"]).runnable,
+    ).toEqual([{ townName: " W-Athens " }]);
+  });
+
+  it(
+    "holds nothing back when the page has no town list at all - an " +
+      "unloaded page is not a reason to stop building",
+    () => {
+      expect(splitRunnableTowns(towns, [])).toEqual({
+        runnable: towns,
+        notInDropdown: [],
+      });
+    },
+  );
+});
+
+describe("the town's slots as Auto Build checks them", () => {
+  function slotHtml(position: number, title: string, building = false): string {
+    return (
+      `<div id="position${position}" class="building${building ? " constructionSite" : ""}">` +
+      `<a class="hoverable" id="js_CityPosition${position}Link" title="${title}"></a></div>`
+    );
+  }
+
+  it("reads the city view: name, level built, and a level going up", () => {
+    document.body.innerHTML =
+      slotHtml(9, "Tavern (15)") +
+      slotHtml(4, "Warehouse (7)", true) +
+      slotHtml(3, "Museum (Under construction)", true);
+
+    expect(readTownSlots()).toEqual([
+      slotState(9, "Tavern", 15),
+      slotState(4, "Warehouse", 7, true),
+      slotState(3, "Museum", 0, true),
+    ]);
+  });
+
+  it("reads the game's position array the same way", () => {
+    expect(
+      slotStatesFromPositions([
+        { name: "Town Hall", level: 12, building: "townHall" },
+        { buildingId: null, building: "buildingGround land" },
+        { name: "Tavern", level: "15", isBusy: true, building: "tavern" },
+      ]),
+    ).toEqual([
+      slotState(0, "Town Hall", 12),
+      slotState(2, "Tavern", 15, true),
+    ]);
+  });
+
+  it("removes the saved upgrades already reached, and only those", () => {
+    saveWAthens([
+      upgrade(9, "Tavern 14"),
+      upgrade(4, "Warehouse 8"),
+      upgrade(9, "Tavern 15"),
+      upgrade(9, "Tavern 16"),
+    ]);
+
+    const removed = removeCompletedUpgrades("W-Athens", [
+      slotState(9, "Tavern", 15),
+      slotState(4, "Warehouse", 7),
+    ]);
+
+    expect(labels(removed)).toEqual(["Tavern 14", "Tavern 15"]);
+    expect(labels(getTownQueue("W-Athens"))).toEqual([
+      "Warehouse 8",
+      "Tavern 16",
+    ]);
+  });
+
+  it(
+    "checks the town on screen only when the breadcrumb names it - " +
+      "another town's tavern would otherwise clear this one's",
+    () => {
+      saveWAthens([upgrade(9, "Tavern 14")]);
+      document.body.innerHTML =
+        `<div id="js_cityBread">M-Corinth</div>` + slotHtml(9, "Tavern (20)");
+
+      expect(pruneCompletedInCurrentTown("W-Athens")).toEqual([]);
+      expect(labels(getTownQueue("W-Athens"))).toEqual(["Tavern 14"]);
+
+      document.getElementById("js_cityBread")!.textContent = "W-Athens";
+      expect(labels(pruneCompletedInCurrentTown("W-Athens"))).toEqual([
+        "Tavern 14",
+      ]);
+      expect(getTownQueue("W-Athens")).toEqual([]);
+    },
+  );
+});
+
+describe("removeHighestLevel", () => {
+  it(
+    "takes off the highest saved level of that slot only: 26 27, and 26 " +
+      "is left",
+    () => {
+      saveWAthens([
+        upgrade(5, "Warehouse 26"),
+        upgrade(6, "Warehouse 30"),
+        upgrade(5, "Warehouse 27"),
+      ]);
+
+      removeHighestLevel("js_CityPosition5Link", "W-Athens");
+
+      expect(labels(getTownQueue("W-Athens"))).toEqual([
+        "Warehouse 26",
+        "Warehouse 30",
+      ]);
+    },
+  );
+
+  it("takes off the highest even when it is not last in the list", () => {
+    saveWAthens([upgrade(5, "Warehouse 27"), upgrade(5, "Warehouse 26")]);
+
+    removeHighestLevel("js_CityPosition5Link", "W-Athens");
+
+    expect(labels(getTownQueue("W-Athens"))).toEqual(["Warehouse 26"]);
+  });
+
+  it("changes nothing for a slot with nothing saved", () => {
+    saveWAthens([upgrade(6, "Warehouse 30")]);
+
+    removeHighestLevel("js_CityPosition5Link", "W-Athens");
+
+    expect(labels(getTownQueue("W-Athens"))).toEqual(["Warehouse 30"]);
+  });
+});
+
+describe("removeUpgradeAndLater", () => {
+  it(
+    "removing a level also removes the later levels of that building: " +
+      "11 12 13 14, remove 13, and 11 12 are left",
+    () => {
+      saveWAthens([
+        upgrade(9, "Tavern 11"),
+        upgrade(4, "Warehouse 8"),
+        upgrade(9, "Tavern 12"),
+        upgrade(9, "Tavern 13"),
+        upgrade(5, "Warehouse 13"),
+        upgrade(9, "Tavern 14"),
+      ]);
+
+      removeUpgradeAndLater("js_CityPosition9Link", "Tavern 13", "W-Athens");
+
+      expect(labels(getTownQueue("W-Athens"))).toEqual([
+        "Tavern 11",
+        "Warehouse 8",
+        "Tavern 12",
+        "Warehouse 13",
+      ]);
+    },
+  );
+
+  it("leaves another town's same slot alone", () => {
+    saveAutoBuild([
+      {
+        accountName: "Smalldevil",
+        townList: [
+          { townName: "W-Athens", queue: [upgrade(9, "Tavern 13")] },
+          { townName: "M-Corinth", queue: [upgrade(9, "Tavern 14")] },
+        ],
+      },
+    ]);
+
+    removeUpgradeAndLater("js_CityPosition9Link", "Tavern 13", "W-Athens");
+
+    expect(getTownQueue("W-Athens")).toEqual([]);
+    expect(labels(getTownQueue("M-Corinth"))).toEqual(["Tavern 14"]);
+  });
+});
+
+describe("handleUpgradeBuilding and the saved levels already reached", () => {
+  /** W-Athens' warehouse in slot 5 at level 25, ready to be upgraded. */
+  function readyWarehouse(): { clicks: () => number } {
+    document.body.innerHTML = townView(
+      "W-Athens",
+      "?action=UpgradeExistingBuilding&cityId=297034&position=5&level=25",
+    );
+    let clicks = 0;
+    document
+      .getElementById("js_buildingUpgradeButton")!
+      .addEventListener("click", () => {
+        clicks++;
+        document.getElementById("position5")!.className =
+          "position5 building constructionSite animated";
+      });
+    return { clicks: () => clicks };
+  }
+
+  async function runTask(buildingName: string) {
+    const promise = handleUpgradeBuilding({
+      id: "t1",
+      type: "upgradeBuilding",
+      data: {
+        townName: "W-Athens",
+        positionId: "js_CityPosition5Link",
+        buildingName,
+      },
+    });
+    await vi.advanceTimersByTimeAsync(20_000);
+    return promise;
+  }
+
+  it(
+    "skips the levels the warehouse already has and builds the next one " +
+      "saved: at 25, saved 24 25 26 27, it claims and builds 26",
+    async () => {
+      const town = readyWarehouse();
+      saveWAthens([
+        upgrade(5, "Warehouse 24"),
+        upgrade(5, "Warehouse 25"),
+        upgrade(5, "Warehouse 26"),
+        upgrade(5, "Warehouse 27"),
+      ]);
+
+      const result = await runTask("Warehouse 24");
+
+      expect(result.status).toBe("done");
+      expect(claimUpgrade).toHaveBeenCalledWith(
+        "W-Athens",
+        "js_CityPosition5Link",
+        "Warehouse 26",
+      );
+      expect(town.clicks()).toBe(1);
+      expect(labels(getTownQueue("W-Athens"))).toEqual(["Warehouse 27"]);
+    },
+  );
+
+  it(
+    "builds nothing when its own upgrade was removed in the dialog after " +
+      "the lap was queued - the old code still claimed and built it",
+    async () => {
+      const town = readyWarehouse();
+      // The lap was queued for 26; the player then removed 26, and 27 with it.
+      saveWAthens([]);
+
+      const result = await runTask("Warehouse 26");
+
+      expect(result.status).toBe("done");
+      expect(claimUpgrade).not.toHaveBeenCalled();
+      expect(town.clicks()).toBe(0);
+    },
+  );
+
+  it(
+    "goes to the town's next saved upgrade when its own was removed in " +
+      "the dialog",
+    async () => {
+      readyWarehouse();
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<div id="position6" class="position6 building tavern level3">` +
+          `<a class="hoverable" id="js_CityPosition6Link" title="Tavern (3)"></a></div>`,
+      );
+      saveWAthens([upgrade(6, "Tavern 4")]);
+
+      await runTask("Warehouse 26");
+
+      expect(claimUpgrade).toHaveBeenCalledWith(
+        "W-Athens",
+        "js_CityPosition6Link",
+        "Tavern 4",
+      );
+    },
+  );
+
+  it("clicks nothing when every saved level is already reached", async () => {
+    const town = readyWarehouse();
+    saveWAthens([upgrade(5, "Warehouse 24"), upgrade(5, "Warehouse 25")]);
+
+    const result = await runTask("Warehouse 24");
+
+    expect(result.status).toBe("done");
+    expect(claimUpgrade).not.toHaveBeenCalled();
+    expect(town.clicks()).toBe(0);
+    expect(getTownQueue("W-Athens")).toEqual([]);
+  });
+
+  it(
+    "a finished upgrade removes its own level only, not the later ones " +
+      "of the same building",
+    async () => {
+      readyWarehouse();
+      saveWAthens([
+        upgrade(5, "Warehouse 26"),
+        upgrade(5, "Warehouse 27"),
+        upgrade(5, "Warehouse 28"),
+      ]);
+
+      await runTask("Warehouse 26");
+
+      expect(labels(getTownQueue("W-Athens"))).toEqual([
+        "Warehouse 27",
+        "Warehouse 28",
+      ]);
+    },
+  );
+});
+
+describe("towns missing from the game's town list", () => {
+  const DROPDOWN =
+    `<div id="dropDown_js_citySelectContainer"><div class="bg"><ul>` +
+    `<li selectvalue="297034" class="ownCity"><a title="W-Athens"> W-Athens</a></li>` +
+    `</ul></div></div>`;
+
+  function saveTowns(names: string[]): void {
+    saveAutoBuild([
+      {
+        accountName: "Smalldevil",
+        townList: names.map((townName) => ({
+          townName,
+          queue: [upgrade(5, "Warehouse 26")],
+        })),
+      },
+    ]);
+  }
+
+  function queuedTownNames(): string[] {
+    return getState()
+      .queue.listOfType("upgradeBuilding")
+      .map((task) => task.data.townName);
+  }
+
+  beforeEach(() => {
+    getState().queue.removeType("upgradeBuilding");
+  });
+
+  it("queues no visit to a town the town list does not have, and keeps its saved upgrades", () => {
+    document.body.innerHTML = DROPDOWN;
+    saveTowns(["W-Athens", "Old Name"]);
+
+    expect(enqueueAutoBuild()).toBe(1);
+    expect(queuedTownNames()).toEqual(["W-Athens"]);
+    expect(labels(getTownQueue("Old Name"))).toEqual(["Warehouse 26"]);
+  });
+
+  it(
+    "does not count such a town as something left to build, so Build's " +
+      "timer goes off when it is all that is left",
+    () => {
+      document.body.innerHTML = DROPDOWN;
+      saveTowns(["Old Name"]);
+
+      expect(hasConfiguredUpgrades()).toBe(false);
+      expect(enqueueAutoBuild()).toBe(0);
+    },
+  );
+
+  it(
+    "with no town list on the page, queues every town and still counts " +
+      "them, so an unloaded page does not switch Build's timer off",
+    () => {
+      document.body.innerHTML = "";
+      saveTowns(["W-Athens", "Old Name"]);
+
+      expect(hasConfiguredUpgrades()).toBe(true);
+      expect(enqueueAutoBuild()).toBe(2);
+    },
+  );
+});
+
+describe("plannedLevels", () => {
+  it(
+    "gives each slot the highest level saved for it, by slot rather than " +
+      "by name, so two warehouses do not share one plan",
+    () => {
+      saveAutoBuild([
+        {
+          accountName: "Smalldevil",
+          townList: [
+            {
+              townName: "W-Athens",
+              queue: [
+                {
+                  positionId: "js_CityPosition4Link",
+                  buildingName: "Warehouse 21",
+                },
+                {
+                  positionId: "js_CityPosition9Link",
+                  buildingName: "Tavern 16",
+                },
+                {
+                  positionId: "js_CityPosition4Link",
+                  buildingName: "Warehouse 22",
+                },
+                {
+                  positionId: "js_CityPosition9Link",
+                  buildingName: "Tavern 17",
+                },
+              ],
+            },
+          ],
+        },
+      ]);
+
+      expect(Object.fromEntries(plannedLevels("W-Athens"))).toEqual({
+        js_CityPosition4Link: 22,
+        js_CityPosition9Link: 17,
+      });
+      expect(plannedLevels("M-Corinth").size).toBe(0);
     },
   );
 });

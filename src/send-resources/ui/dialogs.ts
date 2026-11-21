@@ -31,10 +31,14 @@ import {
 } from "../navigation";
 import {
   type BuildingSlot,
-  fetchTownBuildings,
+  buildingSlotsOf,
+  fetchTownSlots,
   getTownQueue,
-  listBuildingsInCurrentTown,
+  plannedLevels,
+  readTownSlots,
+  removeCompletedUpgrades,
 } from "../features/auto-build";
+import type { SlotState } from "../features/build-queue-validation";
 import {
   measuredStats,
   planWineRun,
@@ -561,24 +565,58 @@ export function renderWinePlanPreview(fromTown: string): void {
 export const BUILD_TOWN_SELECT_ID = "autoBuildTown";
 const BUILD_TABLE_HOLDER_ID = "autoBuildTableHolder";
 
-/** One line per building, each with a + that saves it to `townName`. */
+/**
+ * The buildings the dialog lists right now, and whose they are; null while
+ * the list shows a note instead. Kept so a + or - can redraw the planned
+ * levels without asking the game for the town again.
+ */
+let listedBuildings: {
+  townName: string;
+  slots: readonly BuildingSlot[];
+} | null = null;
+
+/**
+ * One line per building, each with a + that saves one more level to
+ * `townName` and a - that takes the highest saved one off (greyed out when
+ * nothing is saved). A building with upgrades saved shows, in red, the level
+ * it will reach: `Tavern 15 (17)`.
+ */
 function renderBuildingList(
   slots: readonly BuildingSlot[],
   townName: string,
 ): string {
+  const planned = plannedLevels(townName);
   return slots
-    .map(
-      (slot) =>
-        `<span>${escapeHtml(slot.buildingName)}<button class="button" ${action(
-          "build.add",
-          {
-            "ika-position": slot.positionId,
-            "ika-building": slot.buildingName,
-            "ika-town": townName,
-          },
-        )}>+</button></span><br/>`,
-    )
+    .map((slot) => {
+      const level = planned.get(slot.positionId);
+      const plannedLabel =
+        level === undefined ? "" : ` <span style="color:red">(${level})</span>`;
+      const plus = `<button class="button" ${action("build.add", {
+        "ika-position": slot.positionId,
+        "ika-building": slot.buildingName,
+        "ika-town": townName,
+      })}>+</button>`;
+      const minus = `<button class="button"${level === undefined ? " disabled" : ""} ${action(
+        "build.decrease",
+        { "ika-position": slot.positionId, "ika-town": townName },
+      )}>-</button>`;
+      return `<span>${escapeHtml(slot.buildingName)}${plannedLabel}${plus}${minus}</span><br/>`;
+    })
     .join("");
+}
+
+/**
+ * The list for a town's slots, remembered for the redraw after a + or -.
+ *
+ * The saved levels the slots have already reached come off the town's list
+ * first, so the queue drawn beside it, and the planned levels, start from
+ * what is really left to build. Call it before the queue cell is rendered.
+ */
+function listBuildings(slots: readonly SlotState[], townName: string): string {
+  removeCompletedUpgrades(townName, slots);
+  const listed = buildingSlotsOf(slots);
+  listedBuildings = { townName, slots: listed };
+  return renderBuildingList(listed, townName);
 }
 
 /**
@@ -600,6 +638,7 @@ function setBuildTable(townName: string, buildingList: string): void {
 
 /** A line in place of the building list. */
 function buildingListNote(text: string): string {
+  listedBuildings = null;
   return `<i>${escapeHtml(text)}</i>`;
 }
 
@@ -614,10 +653,7 @@ function buildingListNote(text: string): string {
 async function showBuildTown(townNumber: string): Promise<void> {
   const townName = getTownNameFromList(townNumber);
   if (townName === getCurrentTownName()) {
-    setBuildTable(
-      townName,
-      renderBuildingList(listBuildingsInCurrentTown(), townName),
-    );
+    setBuildTable(townName, listBuildings(readTownSlots(), townName));
     return;
   }
 
@@ -628,21 +664,28 @@ async function showBuildTown(townNumber: string): Promise<void> {
   }
   setBuildTable(townName, buildingListNote(BUILD_DIALOG.loadingBuildings));
 
-  let list: string;
+  let slots: SlotState[] | null;
+  let failure: string | null = null;
   try {
-    const slots = await fetchTownBuildings(cityId);
-    list =
-      slots === null
-        ? buildingListNote(BUILD_DIALOG.noBuildings)
-        : renderBuildingList(slots, townName);
+    slots = await fetchTownSlots(cityId);
   } catch (e) {
-    list = buildingListNote(BUILD_DIALOG.buildingsFailed(errorMessage(e)));
+    slots = null;
+    failure = errorMessage(e);
   }
   // Another town was picked while this one was read.
   if (qs<HTMLSelectElement>(`#${BUILD_TOWN_SELECT_ID}`)?.value !== townNumber) {
     return;
   }
-  setBuildTable(townName, list);
+  setBuildTable(
+    townName,
+    slots !== null
+      ? listBuildings(slots, townName)
+      : buildingListNote(
+          failure === null
+            ? BUILD_DIALOG.noBuildings
+            : BUILD_DIALOG.buildingsFailed(failure),
+        ),
+  );
 }
 
 export function renderTownQueue(townName: string): string {
@@ -689,7 +732,7 @@ export function openAutoBuildDialog(): void {
     `<div><span>${BUILD_DIALOG.town}</span><select id="${BUILD_TOWN_SELECT_ID}">${options}</select></div><br/>
      <div id="${BUILD_TABLE_HOLDER_ID}">${renderBuildTable(
        currentTown,
-       renderBuildingList(listBuildingsInCurrentTown(), currentTown),
+       listBuildings(readTownSlots(), currentTown),
      )}</div><br/>
      <p style="font-size:11px">${BUILD_DIALOG.savedAsYouGo}</p>
      <button style="margin-right:20px" class="button" ${action("build.save")}>${BUTTON.save}</button>
@@ -715,7 +758,13 @@ export function refreshTownQueueCell(townName: string): void {
   const cell = qsa("[data-ika-town-cell]").find(
     (element) => element.dataset.ikaTownCell === townName,
   );
-  if (cell) cell.innerHTML = renderTownQueue(townName);
+  if (!cell) return;
+  cell.innerHTML = renderTownQueue(townName);
+  // The planned levels beside the buildings follow the queue.
+  const list = qs("#tdListBuilding");
+  if (list && listedBuildings?.townName === townName) {
+    list.innerHTML = renderBuildingList(listedBuildings.slots, townName);
+  }
 }
 
 /* ─────────────────────────── Crawl dialog ──────────────────────────────── */

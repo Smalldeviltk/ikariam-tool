@@ -25,7 +25,7 @@ import { qs, qsa } from "@core/dom";
 import { sleep, waitFor } from "@core/async";
 import { compareValues, errorMessage, MS_PER_SECOND } from "@core/format";
 import { fetchTown } from "@core/ikariam/http";
-import { readTownName } from "@core/ikariam/globals";
+import { getCurrentTownName, readTownName } from "@core/ikariam/globals";
 import { SEL } from "@core/ikariam/selectors";
 import { logInfo } from "@core/logger";
 import type { Task, TaskResult } from "@core/task-queue";
@@ -50,6 +50,13 @@ import { claimUpgrade } from "../queue-note";
 import { recordCurrentTown } from "../town-cache";
 import { ownTownIds, syncAllTowns } from "./sync-towns";
 import type { AutoBuildAccount, AutoBuildTown } from "../types";
+import {
+  completedUpgrades,
+  type SavedUpgrade,
+  type SlotState,
+  splitRunnableTowns,
+  splitUpgradeLabel,
+} from "./build-queue-validation";
 
 /** How long to wait for the upgrade button before assuming it will not appear. */
 const UPGRADE_BUTTON_TIMEOUT_MS = 15_000;
@@ -117,6 +124,24 @@ export function getTownQueue(townName: string): AutoBuildTown["queue"] {
 }
 
 /**
+ * The level each slot of a town will reach once its saved upgrades are done:
+ * the highest level saved for it, keyed by slot id (`js_CityPosition8Link`).
+ * By slot, not by name: a town can have several warehouses of one level.
+ * Slots with nothing saved are absent.
+ */
+export function plannedLevels(townName: string): Map<string, number> {
+  const levels = new Map<string, number>();
+  for (const entry of getTownQueue(townName)) {
+    const level = levelOf(entry.buildingName);
+    if (!Number.isFinite(level)) continue;
+    const known = levels.get(entry.positionId);
+    if (known === undefined || level > known)
+      levels.set(entry.positionId, level);
+  }
+  return levels;
+}
+
+/**
  * Append one upgrade level to a town's configured queue.
  *
  * Displayed levels stack: with N entries already queued for the same slot, the
@@ -173,6 +198,95 @@ export function removeBuildingFromQueue(
   saveAutoBuild(list);
 }
 
+/**
+ * Remove a saved upgrade the player took out, with every later level of the
+ * same building: of 11 12 13 14, removing 13 leaves 11 12. A later level
+ * cannot be built without the one removed, and left on its own it would be
+ * built in its place, one level short of the label.
+ *
+ * The same slot, compared by level rather than place in the list. Not for a
+ * finished upgrade: that removes its own level only
+ * (`removeBuildingFromQueue`), or the rest of the plan would go with it.
+ */
+export function removeUpgradeAndLater(
+  positionId: string,
+  buildingName: string,
+  townName: string,
+): void {
+  const removedLevel = splitUpgradeLabel(buildingName)?.level;
+  if (removedLevel === undefined) {
+    removeBuildingFromQueue(positionId, buildingName, townName);
+    return;
+  }
+  const { accountName } = getState();
+  const list = loadAutoBuild();
+  const town = findTown(findAccount(list, accountName), townName);
+  if (!town) return;
+
+  town.queue = town.queue.filter((entry) => {
+    if (entry.positionId !== positionId) return true;
+    const level = splitUpgradeLabel(entry.buildingName)?.level;
+    return level === undefined || level < removedLevel;
+  });
+  saveAutoBuild(list);
+}
+
+/**
+ * Take off the highest saved level of one slot: the list's - beside +. With
+ * nothing saved for the slot, nothing changes.
+ */
+export function removeHighestLevel(positionId: string, townName: string): void {
+  let highest: { buildingName: string; level: number } | null = null;
+  for (const entry of getTownQueue(townName)) {
+    if (entry.positionId !== positionId) continue;
+    const level = splitUpgradeLabel(entry.buildingName)?.level;
+    if (level === undefined) continue;
+    if (highest === null || level > highest.level) {
+      highest = { buildingName: entry.buildingName, level };
+    }
+  }
+  // Nothing sits above the highest level, so this removes that one only.
+  if (highest)
+    removeUpgradeAndLater(positionId, highest.buildingName, townName);
+}
+
+/**
+ * Remove a town's saved upgrades whose level its slots have already reached
+ * (`completedUpgrades` decides which), and return them. Nothing is saved when
+ * nothing is removed.
+ */
+export function removeCompletedUpgrades(
+  townName: string,
+  slots: readonly SlotState[],
+): SavedUpgrade[] {
+  const { accountName } = getState();
+  const list = loadAutoBuild();
+  const town = findTown(findAccount(list, accountName), townName);
+  if (!town) return [];
+
+  const done = completedUpgrades(town.queue, slots);
+  if (done.length === 0) return [];
+  const doneEntries = new Set(done);
+  town.queue = town.queue.filter((entry) => !doneEntries.has(entry));
+  saveAutoBuild(list);
+  logInfo(
+    `Auto Build: ${townName} already has ${done
+      .map((entry) => entry.buildingName)
+      .join(", ")} - removed from the saved list`,
+  );
+  return done;
+}
+
+/**
+ * `removeCompletedUpgrades` against the town on screen, only when the
+ * breadcrumb names `townName`: another town's slots, read by mistake, would
+ * otherwise clear this town's plan. Returns what was removed.
+ */
+export function pruneCompletedInCurrentTown(townName: string): SavedUpgrade[] {
+  if (getCurrentTownName() !== townName) return [];
+  return removeCompletedUpgrades(townName, readTownSlots());
+}
+
 /** Move one saved upgrade one place up or down in its town's list. */
 export function moveBuildingInQueue(
   positionId: string,
@@ -212,10 +326,25 @@ export function cleanAutoBuildConfig(): void {
   saveAutoBuild(cleaned);
 }
 
-/** Whether the logged-in account still has upgrades in its saved build list. */
+/** Every town name in the game's dropdown; empty when the page has none. */
+function dropdownTownNames(): string[] {
+  const names: string[] = [];
+  for (let i = 0; i < getTownCount(); i++) {
+    const name = getTownNameFromList(i);
+    if (name) names.push(name);
+  }
+  return names;
+}
+
+/**
+ * Whether the logged-in account still has upgrades that can run: saved, in a
+ * town the game's town list has (`splitRunnableTowns`).
+ */
 export function hasConfiguredUpgrades(): boolean {
   const account = findAccount(loadAutoBuild(), getState().accountName);
-  return account?.townList.some((town) => town.queue.length > 0) ?? false;
+  if (!account) return false;
+  const saved = account.townList.filter((town) => town.queue.length > 0);
+  return splitRunnableTowns(saved, dropdownTownNames()).runnable.length > 0;
 }
 
 /* ────────────────────────── Loading into the queue ─────────────────────── */
@@ -265,14 +394,25 @@ export function enqueueAutoBuild(): number {
   }
 
   const boardNames = qsa(SEL.buildTabTownNames).map(readTownName);
-  const towns = account.townList
-    .filter((town) => town.queue.length > 0)
-    .sort(
-      (a, b) =>
-        townLapRank(a.townName, boardNames) -
-          townLapRank(b.townName, boardNames) ||
-        a.townName.localeCompare(b.townName),
+  // A town the game's town list does not have cannot be visited. Its saved
+  // upgrades are kept, not run.
+  const { runnable, notInDropdown } = splitRunnableTowns(
+    account.townList.filter((town) => town.queue.length > 0),
+    dropdownTownNames(),
+  );
+  if (notInDropdown.length > 0) {
+    logInfo(
+      `Auto Build: not running ${notInDropdown
+        .map((town) => town.townName)
+        .join(", ")} - not in the town list`,
     );
+  }
+  const towns = runnable.sort(
+    (a, b) =>
+      townLapRank(a.townName, boardNames) -
+        townLapRank(b.townName, boardNames) ||
+      a.townName.localeCompare(b.townName),
+  );
   for (const town of towns) {
     const [first] = town.queue;
     queue.push({
@@ -346,7 +486,8 @@ function endTownTurn(reason: string): TaskResult {
 export async function handleUpgradeBuilding(
   task: Extract<Task, { type: "upgradeBuilding" }>,
 ): Promise<TaskResult> {
-  const { townName, positionId, buildingName } = task.data;
+  const { townName } = task.data;
+  let { positionId, buildingName } = task.data;
 
   // Upgrades are only reachable from the town view.
   if (!qs(SEL.cityBread)) {
@@ -365,6 +506,26 @@ export async function handleUpgradeBuilding(
   await gotoTown(townNumber);
   closeGamePopup();
   await sleep(TOWN_SETTLE_MS);
+
+  // Levels the town already has, built by hand or from another computer,
+  // come off the saved list here.
+  pruneCompletedInCurrentTown(townName);
+  // The visit was queued for the town's first saved upgrade at the start of
+  // the lap. When that upgrade is no longer saved (already built, or taken
+  // out in the dialog since), the visit goes to the town's next saved
+  // upgrade instead, and ends when there is none.
+  const townQueue = getTownQueue(townName);
+  const ownStillSaved = townQueue.some(
+    (entry) =>
+      entry.positionId === positionId && entry.buildingName === buildingName,
+  );
+  if (!ownStillSaved) {
+    const [next] = townQueue;
+    if (!next) {
+      return endTownTurn(`${townName}: no saved upgrade left to build`);
+    }
+    ({ positionId, buildingName } = next);
+  }
 
   // A town can only build one thing at a time. The original moved on to the
   // next town here ("This town is inprogress, Next>>"); holding the head
@@ -650,15 +811,27 @@ function slotLabel({ name, level, upgrading }: SlotReading): string {
   return upgrading ? withLevel(label, levelOf(label) + 1) : label;
 }
 
+/** What each building slot of the town on screen holds, in page order. */
+export function readTownSlots(): SlotState[] {
+  return qsa(SEL.buildings).map((element) => ({
+    positionId: qs(SEL.buildingHover, element)?.id.trim() ?? "",
+    ...readBuildingSlot(element),
+  }));
+}
+
+/** The settings dialog's list for these slots, sorted by label. */
+export function buildingSlotsOf(slots: readonly SlotState[]): BuildingSlot[] {
+  const listed: BuildingSlot[] = slots.map((slot) => ({
+    buildingName: slotLabel(slot),
+    positionId: slot.positionId,
+  }));
+  listed.sort(compareValues<BuildingSlot>("buildingName"));
+  return listed;
+}
+
 /** Buildings in the currently open town, for the settings dialog. */
 export function listBuildingsInCurrentTown(): BuildingSlot[] {
-  const slots: BuildingSlot[] = qsa(SEL.buildings).map((element) => ({
-    buildingName: slotLabel(readBuildingSlot(element)),
-    positionId: qs(SEL.buildingHover, element)?.id.trim() ?? "",
-  }));
-
-  slots.sort(compareValues<BuildingSlot>("buildingName"));
-  return slots;
+  return buildingSlotsOf(readTownSlots());
 }
 
 /**
@@ -705,23 +878,27 @@ function readPositionEntry(entry: unknown): SlotReading | null {
 }
 
 /**
+ * What each slot holds, from the `position` array the game sends with a
+ * town: the same readings `readTownSlots` takes from the city view.
+ */
+export function slotStatesFromPositions(positions: unknown): SlotState[] {
+  if (!Array.isArray(positions)) return [];
+  const slots: SlotState[] = [];
+  positions.forEach((entry, slotNumber) => {
+    const reading = readPositionEntry(entry);
+    if (reading === null) return;
+    slots.push({ positionId: positionLinkId(slotNumber), ...reading });
+  });
+  return slots;
+}
+
+/**
  * A town's buildings from the `position` array the game sends with it, as
  * the settings dialog lists them: the same labels and ids as
  * `listBuildingsInCurrentTown` reads from the city view.
  */
 export function buildingsFromPositions(positions: unknown): BuildingSlot[] {
-  if (!Array.isArray(positions)) return [];
-  const slots: BuildingSlot[] = [];
-  positions.forEach((entry, slotNumber) => {
-    const reading = readPositionEntry(entry);
-    if (reading === null) return;
-    slots.push({
-      buildingName: slotLabel(reading),
-      positionId: positionLinkId(slotNumber),
-    });
-  });
-  slots.sort(compareValues<BuildingSlot>("buildingName"));
-  return slots;
+  return buildingSlotsOf(slotStatesFromPositions(positions));
 }
 
 /**
@@ -754,15 +931,15 @@ export function positionsFromResponse(
 }
 
 /**
- * Ask the game for town `cityId` and list its buildings, without leaving the
+ * Ask the game for town `cityId` and read its slots, without leaving the
  * town on screen: a town switch reloads the page, and the dialog with it.
  * Null when the answer carries no buildings for that town.
  */
-export async function fetchTownBuildings(
+export async function fetchTownSlots(
   cityId: string,
-): Promise<BuildingSlot[] | null> {
+): Promise<SlotState[] | null> {
   const positions = positionsFromResponse(await fetchTown(cityId), cityId);
-  return positions === null ? null : buildingsFromPositions(positions);
+  return positions === null ? null : slotStatesFromPositions(positions);
 }
 
 /* ─────────────────── Building levels on the city view ──────────────────── */

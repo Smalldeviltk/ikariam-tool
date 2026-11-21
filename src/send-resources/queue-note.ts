@@ -38,6 +38,7 @@
  * Plan: `docs/improvement-plan.md` §2.AE.
  */
 
+import { sleep } from "@core/async";
 import { errorMessage } from "@core/format";
 import { readAvatarNotes, saveAvatarNotes } from "@core/ikariam/http";
 import { logInfo } from "@core/logger";
@@ -872,6 +873,12 @@ function claim(
   findTarget: (snapshot: LocalSnapshot) => NoteEntry | null,
   after: (target: NoteEntry) => NoteEntry | null,
 ): Promise<ClaimResult> {
+  // A change saved just before (Auto Build removing levels a town already
+  // has) armed a sync for a moment later. The claim's own exchange carries
+  // every local change, so that sync has nothing left to do but harm: it
+  // wrote the claimed entry back while the building was open, and the write
+  // handed out a new session token the open Upgrade button did not carry.
+  cancelPendingChangeSync();
   return oneAtATime(async (): Promise<ClaimResult> => {
     const read = await readForExchange(false);
     if (read.kind === "stopped") {
@@ -1049,6 +1056,7 @@ function report(result: SyncResult, when: string, toast: boolean): void {
  */
 export async function startQueueNoteSync(): Promise<SyncResult> {
   try {
+    await waitWhileHeld("on page load");
     const result = await syncQueueNote();
     report(result, "on page load", false);
     return result;
@@ -1057,12 +1065,55 @@ export async function startQueueNoteSync(): Promise<SyncResult> {
   }
 }
 
+/** Drop the sync a change armed, if it has not run yet. */
+function cancelPendingChangeSync(): void {
+  if (changeTimer === null) return;
+  window.clearTimeout(changeTimer);
+  changeTimer = null;
+}
+
+/**
+ * Whether a change's sync must wait: set by the page to "the task runner is
+ * on a task". A task opens a building or a shipment form whose button
+ * carries the session token of that moment, and the notepad's save hands out
+ * a new one, so the game refused the click. Held, the sync is tried again a
+ * moment later; a page load in between syncs on its own.
+ */
+let changeSyncHold: (() => boolean) | null = null;
+
+export function setChangeSyncHold(hold: (() => boolean) | null): void {
+  changeSyncHold = hold;
+}
+
+/**
+ * How often a held sync on page load or after Scan looks again. Short: the
+ * runner is idle for up to a second between two tasks, and the sync has to
+ * fall in that gap.
+ */
+const HOLD_POLL_MS = 250;
+
+/**
+ * Wait until no task runner, in this tab or another, is on a task
+ * (`changeSyncHold`). For the page-load sync and Scan's, which are started
+ * by the player or the page; never for a claim, which is the busy runner's
+ * own write and would wait on itself.
+ */
+async function waitWhileHeld(when: string): Promise<void> {
+  if (!changeSyncHold?.()) return;
+  logInfo(`Notepad ${when}: waiting for the task in progress`);
+  while (changeSyncHold?.()) await sleep(HOLD_POLL_MS);
+}
+
 /** Sync a little after the queue or the build list changed. */
 export function queueChanged(): void {
   if (applying) return;
   if (changeTimer !== null) window.clearTimeout(changeTimer);
   changeTimer = window.setTimeout(() => {
     changeTimer = null;
+    if (changeSyncHold?.()) {
+      queueChanged();
+      return;
+    }
     if (localSignature() === lastSyncedSignature) return;
     void syncQueueNote().then((result) => {
       report(result, "after a change", true);
@@ -1075,6 +1126,7 @@ export function queueChanged(): void {
  * Every outcome is told.
  */
 export async function syncQueueNoteFromScan(): Promise<SyncResult> {
+  await waitWhileHeld("after Scan");
   let result = await syncQueueNote();
   if (result.status === "foreign" && confirm(QUEUE_NOTE.confirmTakeOver)) {
     result = await syncQueueNote({ takeOver: true });
@@ -1097,6 +1149,7 @@ export async function syncQueueNoteFromScan(): Promise<SyncResult> {
 export function resetQueueNoteState(): void {
   if (changeTimer !== null) window.clearTimeout(changeTimer);
   changeTimer = null;
+  changeSyncHold = null;
   firstSyncDone = false;
   applying = false;
   lastSyncedSignature = null;

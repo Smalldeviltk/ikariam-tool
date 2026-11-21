@@ -57,17 +57,20 @@ import {
   townNameOfCity,
 } from "./features/pirate";
 import {
+  clearOwnRunnerBusyMark,
   FLAG,
   getFlag,
   getState,
   initState,
   isAutoStart,
   isFlagTrue,
+  isRunnerBusyInAnyTab,
   loadSenders,
   migrateLegacyQueues,
   saveReceivers,
   saveSenders,
   setAutoStart,
+  runWhileMarkedBusy,
   setFlag,
   setQueueChangeListener,
 } from "./state";
@@ -103,7 +106,8 @@ import {
   hasConfiguredUpgrades,
   handleUpgradeBuilding,
   moveBuildingInQueue,
-  removeBuildingFromQueue,
+  removeHighestLevel,
+  removeUpgradeAndLater,
   scanBuildings,
   startBuildingLevelObserver,
 } from "./features/auto-build";
@@ -133,6 +137,7 @@ import { notifyLowWine } from "./features/wine-warning";
 import {
   queueChanged,
   queueNoteAllowsRunning,
+  setChangeSyncHold,
   startQueueNoteSync,
   syncQueueNoteFromScan,
 } from "./queue-note";
@@ -806,7 +811,15 @@ function registerUiActions(): void {
     "build.remove": (element) => {
       const { ikaPosition, ikaBuilding, ikaTown } = element.dataset;
       if (!ikaPosition || !ikaBuilding || !ikaTown) return;
-      removeBuildingFromQueue(ikaPosition, ikaBuilding, ikaTown);
+      // With the later levels of that building, which cannot be built
+      // without it.
+      removeUpgradeAndLater(ikaPosition, ikaBuilding, ikaTown);
+      refreshTownQueueCell(ikaTown);
+    },
+    "build.decrease": (element) => {
+      const { ikaPosition, ikaTown } = element.dataset;
+      if (!ikaPosition || !ikaTown) return;
+      removeHighestLevel(ikaPosition, ikaTown);
       refreshTownQueueCell(ikaTown);
     },
     "build.moveUp": (element) => moveSavedUpgrade(element, "up"),
@@ -1062,8 +1075,15 @@ export function start(): void {
       });
     },
   })
-    .register("sendResource", handleSendResource)
-    .register("upgradeBuilding", handleUpgradeBuilding);
+    // Marked busy in storage while on a task, so another tab holds its
+    // notepad sync too (`setChangeSyncHold` below).
+    .register("sendResource", (task) =>
+      runWhileMarkedBusy(() => handleSendResource(task)),
+    )
+    .register("upgradeBuilding", (task) =>
+      runWhileMarkedBusy(() => handleUpgradeBuilding(task)),
+    );
+  window.addEventListener("pagehide", clearOwnRunnerBusyMark);
 
   // Never let the keep-alive reload interrupt a task in flight, nor wipe the
   // Pirate Fortress opened for the security word.
@@ -1071,6 +1091,9 @@ export function start(): void {
   // Nor a Pirate capture: an Upgrade button or shipment form opened by the
   // task carries the session token of that moment, and a capture moves it.
   setPirateHoldCheck(() => runner.isBusy);
+  // Nor a notepad sync after a change: its save moves the token the same way.
+  // This tab's runner, or the one in another tab of the same account.
+  setChangeSyncHold(() => runner.isBusy || isRunnerBusyInAnyTab());
   // The queue's ▶ and the status line follow the task the runner is on.
   setCurrentTaskSource(() => runner.currentTaskId);
 

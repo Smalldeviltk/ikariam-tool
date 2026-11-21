@@ -35,6 +35,8 @@ export const KEY = {
   routeTimes: "ikaRouteTimes",
   /** The queue as last agreed with the game's notepad — see `queue-note.ts`. */
   queueNoteBase: "ikaQueueNoteBase",
+  /** When some tab's task runner started its task — see `markRunnerBusy`. */
+  runnerBusy: "ikaRunnerBusy",
 } as const;
 
 /** Flat keys with no account prefix — the old code read/wrote `localStorage.x`. */
@@ -181,6 +183,67 @@ export function loadAutoBuild(): AutoBuildAccount[] {
 export function saveAutoBuild(list: AutoBuildAccount[]): void {
   getState().global.setJSON(KEY.listAutoBuild, list);
   queueChangeListener?.();
+}
+
+/* ─────────────────────────── Runner busy mark ──────────────────────────── */
+
+/**
+ * How long a busy mark counts. Longer than any task takes (the upgrade's
+ * waits add up to well under a minute), so a mark left by a tab closed in
+ * the middle of a task stops holding the other tabs back on its own.
+ */
+export const RUNNER_BUSY_MAX_AGE_MS = 2 * 60 * 1000;
+
+/** Whether the mark in storage is this tab's own. */
+let markedByThisTab = false;
+
+/**
+ * Mark the account as having a task runner on a task, or clear the mark.
+ *
+ * Kept in storage, which every tab of the game shares: a task opens a
+ * building or a shipment form whose button carries the session token of
+ * that moment, and a notepad save from ANY tab hands out a new one, so the
+ * game refused the click. Only one tab runs the queue (`TabLock`), so one
+ * mark per account is enough.
+ */
+export function markRunnerBusy(busy: boolean): void {
+  const store = getState().account;
+  if (busy) {
+    store.setJSON(KEY.runnerBusy, { since: Date.now() });
+  } else {
+    store.remove(KEY.runnerBusy);
+  }
+  markedByThisTab = busy;
+}
+
+/** Whether some tab's task runner is on a task for this account now. */
+export function isRunnerBusyInAnyTab(now = Date.now()): boolean {
+  const mark = getState().account.getJSON<{ since?: unknown } | null>(
+    KEY.runnerBusy,
+    null,
+  );
+  const since = mark?.since;
+  return typeof since === "number" && now - since < RUNNER_BUSY_MAX_AGE_MS;
+}
+
+/**
+ * Clear the mark when this tab set it: the page is going away, perhaps in
+ * the middle of a task (a town switch reloads it). Another tab's is left.
+ */
+export function clearOwnRunnerBusyMark(): void {
+  if (markedByThisTab) markRunnerBusy(false);
+}
+
+/** Run one task with the account marked busy, the mark cleared after. */
+export async function runWhileMarkedBusy<T>(
+  work: () => Promise<T>,
+): Promise<T> {
+  markRunnerBusy(true);
+  try {
+    return await work();
+  } finally {
+    markRunnerBusy(false);
+  }
 }
 
 /* ─────────────────────────────── Migration ─────────────────────────────── */

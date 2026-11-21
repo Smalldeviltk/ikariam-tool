@@ -42,14 +42,14 @@ vi.mock("./ui/data-transfer-ui", async (importOriginal) => ({
 // needs to know whether one ran, and what it brought back.
 // Reading another town's buildings is a request, tested in
 // `auto-build.test.ts`; here only what the dialog does with its answer.
-const { scanBuildings, fetchTownBuildings } = vi.hoisted(() => ({
+const { scanBuildings, fetchTownSlots } = vi.hoisted(() => ({
   scanBuildings: vi.fn(),
-  fetchTownBuildings: vi.fn(),
+  fetchTownSlots: vi.fn(),
 }));
 vi.mock("./features/auto-build", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./features/auto-build")>()),
   scanBuildings,
-  fetchTownBuildings,
+  fetchTownSlots,
 }));
 
 // The fortress request is tested in `pirate.test.ts`; here only what the
@@ -77,8 +77,10 @@ const queueNote = vi.hoisted(() => ({
     status: "failed" as const,
     reason: "not in tests",
   })),
+  setChangeSyncHold: vi.fn(),
 }));
 vi.mock("./queue-note", () => ({
+  setChangeSyncHold: queueNote.setChangeSyncHold,
   queueChanged: queueNote.queueChanged,
   queueNoteAllowsRunning: () => queueNote.allowsRunning,
   startQueueNoteSync: queueNote.startQueueNoteSync,
@@ -1478,10 +1480,15 @@ describe("the Auto Build settings dialog", () => {
       `<li selectvalue="297035" class="ownCity"><a title="M-Corinth"> M-Corinth</a></li>` +
       `</ul></div></div>`;
 
-    /** The open town, W-Athens, has one building on screen. */
+    /**
+     * The open town, W-Athens, has two warehouses of the same level on
+     * screen; only the one in slot 5 has an upgrade saved.
+     */
     const CITY_VIEW =
       `<div id="position5" class="building">` +
-      `<a class="hoverable" id="js_CityPosition5Link" title="Warehouse (25)"></a></div>`;
+      `<a class="hoverable" id="js_CityPosition5Link" title="Warehouse (25)"></a></div>` +
+      `<div id="position6" class="building">` +
+      `<a class="hoverable" id="js_CityPosition6Link" title="Warehouse (25)"></a></div>`;
 
     const TOWN_SELECT = "#autoBuildTown";
 
@@ -1498,33 +1505,38 @@ describe("the Auto Build settings dialog", () => {
     }
 
     /** Open the dialog as the game's popup would draw it. */
-    async function openDialog(): Promise<void> {
+    /** A slot as `fetchTownSlots` reports it. */
+    function slotState(slot: number, name: string, level: number) {
+      return {
+        positionId: `js_CityPosition${slot}Link`,
+        name,
+        level,
+        upgrading: false,
+      };
+    }
+
+    /** Saved upgrades by town: `[slot, label]` pairs. */
+    type SavedQueues = Record<string, [number, string][]>;
+
+    const DEFAULT_QUEUES: SavedQueues = {
+      "W-Athens": [[5, "Warehouse 26"]],
+      "M-Corinth": [[9, "Academy 8"]],
+    };
+
+    async function openDialog(queues = DEFAULT_QUEUES): Promise<void> {
       await startWith({});
       localStorage.setItem(
         "listAutoBuild",
         JSON.stringify([
           {
             accountName: "tester",
-            townList: [
-              {
-                townName: "W-Athens",
-                queue: [
-                  {
-                    positionId: "js_CityPosition5Link",
-                    buildingName: "Warehouse 26",
-                  },
-                ],
-              },
-              {
-                townName: "M-Corinth",
-                queue: [
-                  {
-                    positionId: "js_CityPosition9Link",
-                    buildingName: "Academy 8",
-                  },
-                ],
-              },
-            ],
+            townList: Object.entries(queues).map(([townName, queue]) => ({
+              townName,
+              queue: queue.map(([slot, buildingName]) => ({
+                positionId: `js_CityPosition${slot}Link`,
+                buildingName,
+              })),
+            })),
           },
         ]),
       );
@@ -1559,7 +1571,7 @@ describe("the Auto Build settings dialog", () => {
     }
 
     beforeEach(() => {
-      fetchTownBuildings.mockReset();
+      fetchTownSlots.mockReset();
     });
 
     it("offers every town in a dropdown, with the open town picked", async () => {
@@ -1589,15 +1601,13 @@ describe("the Auto Build settings dialog", () => {
       "picking another town shows its buildings, read from the game, " +
         "and its saved queue",
       async () => {
-        fetchTownBuildings.mockResolvedValue([
-          { buildingName: "Academy 7", positionId: "js_CityPosition9Link" },
-        ]);
+        fetchTownSlots.mockResolvedValue([slotState(9, "Academy", 7)]);
         await openDialog();
 
         pickTown("1");
         await vi.advanceTimersByTimeAsync(0);
 
-        expect(fetchTownBuildings).toHaveBeenCalledWith("297035");
+        expect(fetchTownSlots).toHaveBeenCalledWith("297035");
         expect(buildingListText()).toContain("Academy 7");
         expect(buildingListText()).not.toContain("Warehouse 25");
         expect(queueCells().map((cell) => cell.dataset.ikaTownCell)).toEqual([
@@ -1611,9 +1621,7 @@ describe("the Auto Build settings dialog", () => {
       "+ on another town's building saves it to that town, not to the " +
         "town on screen",
       async () => {
-        fetchTownBuildings.mockResolvedValue([
-          { buildingName: "Academy 7", positionId: "js_CityPosition9Link" },
-        ]);
+        fetchTownSlots.mockResolvedValue([slotState(9, "Academy", 7)]);
         await openDialog();
         pickTown("1");
         await vi.advanceTimersByTimeAsync(0);
@@ -1633,7 +1641,7 @@ describe("the Auto Build settings dialog", () => {
 
     it("does not show an answer for a town that is no longer picked", async () => {
       let answer: (slots: unknown[]) => void = () => {};
-      fetchTownBuildings.mockReturnValue(
+      fetchTownSlots.mockReturnValue(
         new Promise((resolve) => {
           answer = resolve;
         }),
@@ -1642,9 +1650,7 @@ describe("the Auto Build settings dialog", () => {
 
       pickTown("1");
       pickTown("0");
-      answer([
-        { buildingName: "Academy 7", positionId: "js_CityPosition9Link" },
-      ]);
+      answer([slotState(9, "Academy", 7)]);
       await vi.advanceTimersByTimeAsync(0);
 
       expect(buildingListText()).toContain("Warehouse 25");
@@ -1653,7 +1659,7 @@ describe("the Auto Build settings dialog", () => {
     });
 
     it("says so when the town's buildings could not be read", async () => {
-      fetchTownBuildings.mockRejectedValue(new Error("HTTP 500"));
+      fetchTownSlots.mockRejectedValue(new Error("HTTP 500"));
       await openDialog();
 
       pickTown("1");
@@ -1661,6 +1667,270 @@ describe("the Auto Build settings dialog", () => {
 
       expect(buildingListText()).toContain("HTTP 500");
       expect(queueCells()[0].textContent).toContain("1.Academy 8");
+    });
+
+    describe("the level each building will reach", () => {
+      interface ListedLine {
+        position: string;
+        text: string;
+        /** The bracketed level, or null when nothing is saved for the slot. */
+        planned: string | null;
+        plannedColor: string | null;
+      }
+
+      function listedLines(): ListedLine[] {
+        return Array.from(
+          document.querySelectorAll<HTMLElement>("#tdListBuilding > span"),
+        ).map((line) => {
+          const button = line.querySelector<HTMLElement>(
+            '[data-ika-action="build.add"]',
+          )!;
+          const planned = line.querySelector<HTMLElement>("span");
+          return {
+            position: button.dataset.ikaPosition!,
+            text: Array.from(line.childNodes)
+              .filter((node) => node.nodeName !== "BUTTON")
+              .map((node) => node.textContent)
+              .join("")
+              .trim(),
+            planned: planned?.textContent ?? null,
+            plannedColor: planned?.style.color ?? null,
+          };
+        });
+      }
+
+      function line(position: string): ListedLine {
+        return listedLines().find((entry) => entry.position === position)!;
+      }
+
+      function plusOn(position: string): HTMLElement {
+        return document.querySelector<HTMLElement>(
+          `#tdListBuilding [data-ika-action="build.add"][data-ika-position="${position}"]`,
+        )!;
+      }
+
+      function minusOn(position: string): HTMLButtonElement {
+        return document.querySelector<HTMLButtonElement>(
+          `#tdListBuilding [data-ika-action="build.decrease"][data-ika-position="${position}"]`,
+        )!;
+      }
+
+      it(
+        "- beside + takes off the highest saved level: 26 27, and (26) " +
+          "is shown",
+        async () => {
+          await openDialog({
+            "W-Athens": [
+              [5, "Warehouse 26"],
+              [5, "Warehouse 27"],
+            ],
+          });
+
+          await actions["build.decrease"](minusOn("js_CityPosition5Link"));
+
+          expect(savedQueues()["W-Athens"]).toEqual(["Warehouse 26"]);
+          expect(line("js_CityPosition5Link").text).toBe("Warehouse 25 (26)");
+          expect(queueCells()[0].textContent).not.toContain("Warehouse 27");
+        },
+      );
+
+      it("- on the last saved level takes the brackets away", async () => {
+        await openDialog();
+
+        await actions["build.decrease"](minusOn("js_CityPosition5Link"));
+
+        expect(savedQueues()["W-Athens"]).toEqual([]);
+        expect(line("js_CityPosition5Link").text).toBe("Warehouse 25");
+      });
+
+      it(
+        "- is greyed out on a building with nothing saved, and saves " +
+          "nothing if pressed anyway",
+        async () => {
+          await openDialog();
+
+          const minus = minusOn("js_CityPosition6Link");
+          expect(minus.disabled).toBe(true);
+          expect(minusOn("js_CityPosition5Link").disabled).toBe(false);
+          await actions["build.decrease"](minus);
+
+          expect(savedQueues()["W-Athens"]).toEqual(["Warehouse 26"]);
+        },
+      );
+
+      it("- in a town read from the game saves to that town", async () => {
+        fetchTownSlots.mockResolvedValue([slotState(9, "Academy", 7)]);
+        await openDialog();
+        pickTown("1");
+        await vi.advanceTimersByTimeAsync(0);
+
+        await actions["build.decrease"](minusOn("js_CityPosition9Link"));
+
+        expect(savedQueues()).toEqual({
+          "W-Athens": ["Warehouse 26"],
+          "M-Corinth": [],
+        });
+        expect(line("js_CityPosition9Link").text).toBe("Academy 7");
+      });
+
+      it(
+        "shows it in red beside a building with upgrades saved, by slot: " +
+          "the other warehouse of the same level gets none",
+        async () => {
+          await openDialog();
+
+          expect(line("js_CityPosition5Link")).toEqual({
+            position: "js_CityPosition5Link",
+            text: "Warehouse 25 (26)",
+            planned: "(26)",
+            plannedColor: "red",
+          });
+          expect(line("js_CityPosition6Link").text).toBe("Warehouse 25");
+          expect(line("js_CityPosition6Link").planned).toBeNull();
+        },
+      );
+
+      it("shows it for a town read from the game too", async () => {
+        fetchTownSlots.mockResolvedValue([
+          slotState(9, "Academy", 7),
+          slotState(6, "Tavern", 3),
+        ]);
+        await openDialog();
+        pickTown("1");
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(line("js_CityPosition9Link").text).toBe("Academy 7 (8)");
+        expect(line("js_CityPosition6Link").planned).toBeNull();
+      });
+
+      it(
+        "goes up as soon as + is pressed, and + still saves the next " +
+          "level, not the bracketed one",
+        async () => {
+          await openDialog();
+
+          await actions["build.add"](plusOn("js_CityPosition5Link"));
+          expect(line("js_CityPosition5Link").text).toBe("Warehouse 25 (27)");
+          await actions["build.add"](plusOn("js_CityPosition5Link"));
+
+          expect(line("js_CityPosition5Link").text).toBe("Warehouse 25 (28)");
+          expect(savedQueues()["W-Athens"]).toEqual([
+            "Warehouse 26",
+            "Warehouse 27",
+            "Warehouse 28",
+          ]);
+        },
+      );
+
+      it(
+        "goes up on + in a town read from the game, without asking the " +
+          "game again",
+        async () => {
+          fetchTownSlots.mockResolvedValue([slotState(9, "Academy", 7)]);
+          await openDialog();
+          pickTown("1");
+          await vi.advanceTimersByTimeAsync(0);
+
+          await actions["build.add"](plusOn("js_CityPosition9Link"));
+          await vi.advanceTimersByTimeAsync(0);
+
+          expect(line("js_CityPosition9Link").text).toBe("Academy 7 (9)");
+          expect(fetchTownSlots).toHaveBeenCalledTimes(1);
+        },
+      );
+
+      it("goes away when the slot's last saved upgrade is removed", async () => {
+        await openDialog();
+
+        const minus = document.querySelector<HTMLElement>(
+          '[data-ika-town-cell] [data-ika-action="build.remove"]',
+        )!;
+        await actions["build.remove"](minus);
+
+        expect(line("js_CityPosition5Link").text).toBe("Warehouse 25");
+        expect(line("js_CityPosition5Link").planned).toBeNull();
+      });
+
+      it(
+        "- on a level also removes the later levels of that building: " +
+          "26 27 28, remove 27, and 26 is left",
+        async () => {
+          await openDialog({
+            "W-Athens": [
+              [5, "Warehouse 26"],
+              [5, "Warehouse 27"],
+              [6, "Warehouse 26"],
+              [5, "Warehouse 28"],
+            ],
+          });
+
+          const minus = Array.from(
+            document.querySelectorAll<HTMLElement>(
+              '[data-ika-town-cell] [data-ika-action="build.remove"]',
+            ),
+          ).find(
+            (button) =>
+              button.dataset.ikaBuilding === "Warehouse 27" &&
+              button.dataset.ikaPosition === "js_CityPosition5Link",
+          )!;
+          await actions["build.remove"](minus);
+
+          expect(savedQueues()["W-Athens"]).toEqual([
+            "Warehouse 26",
+            "Warehouse 26",
+          ]);
+          expect(line("js_CityPosition5Link").text).toBe("Warehouse 25 (26)");
+          expect(queueCells()[0].textContent).not.toContain("Warehouse 28");
+        },
+      );
+    });
+
+    describe("saved levels already reached", () => {
+      it(
+        "are removed when the town on screen is shown: the warehouse is " +
+          "at 25, so the saved 24 and 25 go and 26 stays",
+        async () => {
+          await openDialog({
+            "W-Athens": [
+              [5, "Warehouse 24"],
+              [5, "Warehouse 25"],
+              [5, "Warehouse 26"],
+            ],
+          });
+
+          expect(savedQueues()["W-Athens"]).toEqual(["Warehouse 26"]);
+          expect(queueCells()[0].textContent).toContain("1.Warehouse 26");
+          expect(queueCells()[0].textContent).not.toContain("Warehouse 24");
+        },
+      );
+
+      it("are removed when a town read from the game is shown", async () => {
+        fetchTownSlots.mockResolvedValue([slotState(9, "Academy", 8)]);
+        await openDialog({
+          "W-Athens": [[5, "Warehouse 26"]],
+          "M-Corinth": [
+            [9, "Academy 8"],
+            [9, "Academy 9"],
+          ],
+        });
+
+        pickTown("1");
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(savedQueues()["M-Corinth"]).toEqual(["Academy 9"]);
+        expect(queueCells()[0].textContent).toContain("1.Academy 9");
+        expect(buildingListText()).toContain("Academy 8 (9)");
+      });
+
+      it("are kept when the town's buildings could not be read", async () => {
+        fetchTownSlots.mockRejectedValue(new Error("HTTP 500"));
+        await openDialog();
+
+        pickTown("1");
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(savedQueues()["M-Corinth"]).toEqual(["Academy 8"]);
+      });
     });
   });
 });
@@ -2790,4 +3060,125 @@ describe("Pirate", () => {
       failedCaptures: [],
     });
   });
+});
+
+describe("the notepad sync and the runner", () => {
+  it(
+    "gives the notepad sync a hold check, which lets a sync through " +
+      "while the runner is idle",
+    async () => {
+      queueNote.setChangeSyncHold.mockClear();
+      await startWith({});
+
+      expect(queueNote.setChangeSyncHold).toHaveBeenCalledTimes(1);
+      const hold = queueNote.setChangeSyncHold.mock
+        .calls[0][0] as () => boolean;
+      expect(hold()).toBe(false);
+    },
+  );
+
+  /** This account's "a runner is on a task" mark, as every tab stores it. */
+  const RUNNER_BUSY_STORAGE_KEY = "testerikaRunnerBusy";
+
+  async function startAndTakeHold(): Promise<() => boolean> {
+    queueNote.setChangeSyncHold.mockClear();
+    await startWith({});
+    return queueNote.setChangeSyncHold.mock.calls[0][0] as () => boolean;
+  }
+
+  it(
+    "holds the sync in a tab with no runner while another tab's runner " +
+      "is on a task - a dialog edit there moved the token under the " +
+      "building the other tab had open",
+    async () => {
+      const hold = await startAndTakeHold();
+
+      localStorage.setItem(
+        RUNNER_BUSY_STORAGE_KEY,
+        JSON.stringify({ since: Date.now() }),
+      );
+
+      expect(hold()).toBe(true);
+    },
+  );
+
+  it(
+    "lets the sync through when that mark is too old - the tab was " +
+      "closed in the middle of a task",
+    async () => {
+      const hold = await startAndTakeHold();
+      const { RUNNER_BUSY_MAX_AGE_MS } = await appState();
+
+      localStorage.setItem(
+        RUNNER_BUSY_STORAGE_KEY,
+        JSON.stringify({ since: Date.now() - RUNNER_BUSY_MAX_AGE_MS - 1 }),
+      );
+
+      expect(hold()).toBe(false);
+    },
+  );
+
+  it(
+    "the runner marks the account busy while it is on a task, and clears " +
+      "the mark when the task is over",
+    async () => {
+      // A town the dropdown does not have: the task runs and is dropped.
+      saveAutoBuild([
+        {
+          accountName: "tester",
+          townList: [
+            {
+              townName: "Nowhere",
+              queue: [
+                {
+                  positionId: "js_CityPosition4Link",
+                  buildingName: "Warehouse 3",
+                },
+              ],
+            },
+          ],
+        },
+      ]);
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<div id="js_cityLink"><a href="#"></a></div>`,
+      );
+      document
+        .querySelector("#js_cityLink > a")!
+        .addEventListener("click", (event) => event.preventDefault());
+      await startWith({});
+      const writes = vi.spyOn(localStorage, "setItem");
+      try {
+        await actions["build.startNow"](document.body);
+        await vi.advanceTimersByTimeAsync(3_000);
+
+        expect(
+          writes.mock.calls.some(([key]) => key === RUNNER_BUSY_STORAGE_KEY),
+        ).toBe(true);
+        expect(localStorage.getItem(RUNNER_BUSY_STORAGE_KEY)).toBeNull();
+      } finally {
+        writes.mockRestore();
+      }
+    },
+  );
+
+  it(
+    "a page left in the middle of a task clears its own mark, never " +
+      "another tab's",
+    async () => {
+      await startWith({});
+      const { markRunnerBusy } = await appState();
+
+      markRunnerBusy(true);
+      window.dispatchEvent(new Event("pagehide"));
+      expect(localStorage.getItem(RUNNER_BUSY_STORAGE_KEY)).toBeNull();
+
+      localStorage.setItem(
+        RUNNER_BUSY_STORAGE_KEY,
+        JSON.stringify({ since: Date.now() }),
+      );
+      window.dispatchEvent(new Event("pagehide"));
+      expect(localStorage.getItem(RUNNER_BUSY_STORAGE_KEY)).not.toBeNull();
+    },
+  );
 });
