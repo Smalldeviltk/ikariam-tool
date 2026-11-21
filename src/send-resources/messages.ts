@@ -316,9 +316,15 @@ export const PIRATE = {
 } as const;
 
 export const BUILD_DIALOG = {
+  town: "Town: ",
   buildingList: "List Building",
   emptyTown: "-empty-",
   savedAsYouGo: "Changes are saved as you add or remove entries.",
+  loadingBuildings: "Loading this town's buildings…",
+  noTownId: "This town has no id in the town list.",
+  noBuildings: "The game sent no buildings for this town.",
+  buildingsFailed: (reason: string) =>
+    `Could not load this town's buildings: ${reason}`,
 } as const;
 
 export const SCAN = {

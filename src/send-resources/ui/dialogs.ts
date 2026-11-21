@@ -19,16 +19,19 @@ import {
   formatInteger,
   formatTimeLengthToStr,
 } from "@core/format";
-import {
-  getCurrentTownName,
-  getIkariam,
-  readTownName,
-} from "@core/ikariam/globals";
-import { DIALOG_ID, SEL } from "@core/ikariam/selectors";
+import { getCurrentTownName, getIkariam } from "@core/ikariam/globals";
+import { DIALOG_ID } from "@core/ikariam/selectors";
 import { showToast } from "@core/ui/window";
 import { readStoredStock } from "../game-state";
-import { getTownList, getTownNameFromList, townCityId } from "../navigation";
 import {
+  getTownList,
+  getTownNameFromList,
+  getTownNumberByName,
+  townCityId,
+} from "../navigation";
+import {
+  type BuildingSlot,
+  fetchTownBuildings,
   getTownQueue,
   listBuildingsInCurrentTown,
 } from "../features/auto-build";
@@ -555,8 +558,15 @@ export function renderWinePlanPreview(fromTown: string): void {
 
 /* ──────────────────────────── Auto build dialog ────────────────────────── */
 
-function renderBuildingList(): string {
-  return listBuildingsInCurrentTown()
+export const BUILD_TOWN_SELECT_ID = "autoBuildTown";
+const BUILD_TABLE_HOLDER_ID = "autoBuildTableHolder";
+
+/** One line per building, each with a + that saves it to `townName`. */
+function renderBuildingList(
+  slots: readonly BuildingSlot[],
+  townName: string,
+): string {
+  return slots
     .map(
       (slot) =>
         `<span>${escapeHtml(slot.buildingName)}<button class="button" ${action(
@@ -564,10 +574,75 @@ function renderBuildingList(): string {
           {
             "ika-position": slot.positionId,
             "ika-building": slot.buildingName,
+            "ika-town": townName,
           },
         )}>+</button></span><br/>`,
     )
     .join("");
+}
+
+/**
+ * The picked town's table: its buildings on the left, its saved queue on the
+ * right. `buildingList` is already HTML: the list, or a line saying why
+ * there is none yet.
+ */
+function renderBuildTable(townName: string, buildingList: string): string {
+  return `<table id="autoBuildTable" class="fullTable fixTable" border="1" cellpadding="5">
+       <tr><th>${BUILD_DIALOG.buildingList}</th><th>${escapeHtml(townName)}</th></tr>
+       <tr><td id="tdListBuilding">${buildingList}</td><td class="tdQueue" data-ika-town-cell="${escapeHtml(townName)}">${renderTownQueue(townName)}</td></tr>
+     </table>`;
+}
+
+function setBuildTable(townName: string, buildingList: string): void {
+  const holder = qs(`#${BUILD_TABLE_HOLDER_ID}`);
+  if (holder) holder.innerHTML = renderBuildTable(townName, buildingList);
+}
+
+/** A line in place of the building list. */
+function buildingListNote(text: string): string {
+  return `<i>${escapeHtml(text)}</i>`;
+}
+
+/**
+ * Show the town picked in the dropdown (an index into the game's town list).
+ *
+ * The town on screen is read from the page, as before. Any other town is
+ * asked for with a request, because switching to it reloads the page and
+ * would close the dialog. Its saved queue shows straight away; its buildings
+ * once the game answers, unless another town has been picked by then.
+ */
+async function showBuildTown(townNumber: string): Promise<void> {
+  const townName = getTownNameFromList(townNumber);
+  if (townName === getCurrentTownName()) {
+    setBuildTable(
+      townName,
+      renderBuildingList(listBuildingsInCurrentTown(), townName),
+    );
+    return;
+  }
+
+  const cityId = townCityId(townNumber);
+  if (cityId === null) {
+    setBuildTable(townName, buildingListNote(BUILD_DIALOG.noTownId));
+    return;
+  }
+  setBuildTable(townName, buildingListNote(BUILD_DIALOG.loadingBuildings));
+
+  let list: string;
+  try {
+    const slots = await fetchTownBuildings(cityId);
+    list =
+      slots === null
+        ? buildingListNote(BUILD_DIALOG.noBuildings)
+        : renderBuildingList(slots, townName);
+  } catch (e) {
+    list = buildingListNote(BUILD_DIALOG.buildingsFailed(errorMessage(e)));
+  }
+  // Another town was picked while this one was read.
+  if (qs<HTMLSelectElement>(`#${BUILD_TOWN_SELECT_ID}`)?.value !== townNumber) {
+    return;
+  }
+  setBuildTable(townName, list);
 }
 
 export function renderTownQueue(townName: string): string {
@@ -594,27 +669,37 @@ export function renderTownQueue(townName: string): string {
     .join("");
 }
 
+/**
+ * Auto Build Settings: a town dropdown, like Transport Settings, and the
+ * picked town's buildings and saved queue. It opens on the town on screen.
+ */
 export function openAutoBuildDialog(): void {
-  const townNames = qsa<HTMLElement>(SEL.buildTabTownNames).map(readTownName);
-
-  const headers = headerCells(townNames.map(escapeHtml));
-  const cells = townNames
+  const currentTown = getCurrentTownName();
+  const currentNumber = getTownNumberByName(currentTown);
+  const options = getTownList()
     .map(
-      (name) =>
-        `<td class="tdQueue" data-ika-town-cell="${escapeHtml(name)}">${renderTownQueue(name)}</td>`,
+      (town) =>
+        `<option value="${town.townNumber}"${town.townNumber === currentNumber ? " selected" : ""}>` +
+        `${escapeHtml(town.townName)}</option>`,
     )
     .join("");
 
   openPopup(
-    getCurrentTownName(),
-    `<table id="autoBuildTable" class="fullTable fixTable" border="1" cellpadding="5">
-       <tr><th>${BUILD_DIALOG.buildingList}</th>${headers}</tr>
-       <tr><td id="tdListBuilding">${renderBuildingList()}</td>${cells}</tr>
-     </table><br/>
+    currentTown,
+    `<div><span>${BUILD_DIALOG.town}</span><select id="${BUILD_TOWN_SELECT_ID}">${options}</select></div><br/>
+     <div id="${BUILD_TABLE_HOLDER_ID}">${renderBuildTable(
+       currentTown,
+       renderBuildingList(listBuildingsInCurrentTown(), currentTown),
+     )}</div><br/>
      <p style="font-size:11px">${BUILD_DIALOG.savedAsYouGo}</p>
      <button style="margin-right:20px" class="button" ${action("build.save")}>${BUTTON.save}</button>
      <button class="button" ${action("dialog.close")}>${BUTTON.close}</button><br/><br/>`,
   );
+
+  const townSelect = qs<HTMLSelectElement>(`#${BUILD_TOWN_SELECT_ID}`);
+  townSelect?.addEventListener("change", () => {
+    void showBuildTown(townSelect.value);
+  });
 }
 
 /**

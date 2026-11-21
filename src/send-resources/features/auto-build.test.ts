@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getState, initState, saveAutoBuild } from "../state";
 import {
+  addBuildingToQueue,
   BUILDING_LEVEL_CLASS,
+  buildingsFromPositions,
   enqueueAutoBuild,
   getTownQueue,
+  positionsFromResponse,
   handleUpgradeBuilding,
   listBuildingsInCurrentTown,
   moveBuildingInQueue,
@@ -458,6 +461,100 @@ describe("listBuildingsInCurrentTown", () => {
       expect(
         listBuildingsInCurrentTown().map((entry) => entry.buildingName),
       ).toEqual(["Academy 6", "Museum 1", "Tavern 1", "Warehouse 12"]);
+    },
+  );
+});
+
+describe("buildingsFromPositions", () => {
+  it(
+    "reads another town's buildings from the position array the game " +
+      "sends, with the ids and labels the city view gives them",
+    () => {
+      const positions = [
+        { buildingId: 0, name: "Town Hall", level: 12, building: "townHall" },
+        { buildingId: 3, name: "Trading Port", level: "7", building: "port" },
+        { buildingId: null, building: "buildingGround land" },
+        {
+          buildingId: 7,
+          name: "Warehouse",
+          level: 9,
+          isBusy: true,
+          building: "warehouse",
+        },
+        {
+          buildingId: 4,
+          name: "Academy",
+          level: 0,
+          completed: 1_800_000_000,
+          building: "academy",
+        },
+      ];
+
+      expect(buildingsFromPositions(positions)).toEqual([
+        { buildingName: "Academy 1", positionId: "js_CityPosition4Link" },
+        { buildingName: "Town Hall 12", positionId: "js_CityPosition0Link" },
+        { buildingName: "Trading Port 7", positionId: "js_CityPosition1Link" },
+        { buildingName: "Warehouse 10", positionId: "js_CityPosition3Link" },
+      ]);
+    },
+  );
+
+  it("finds no buildings in something that is not a position array", () => {
+    expect(buildingsFromPositions(null)).toEqual([]);
+    expect(buildingsFromPositions({ 0: { name: "Town Hall" } })).toEqual([]);
+  });
+});
+
+describe("positionsFromResponse", () => {
+  const POSITIONS = [{ name: "Town Hall", level: 3, building: "townHall" }];
+
+  it("takes the position array of the town that was asked for", () => {
+    const entries = [
+      [
+        "updateGlobalData",
+        { backgroundData: { id: "297035", position: POSITIONS } },
+      ],
+    ];
+    expect(positionsFromResponse(entries, "297035")).toEqual(POSITIONS);
+  });
+
+  it("falls back on updateBackgroundData when the global entry has none", () => {
+    const entries = [
+      ["updateGlobalData", { headerData: {} }],
+      ["updateBackgroundData", { id: 297035, position: POSITIONS }],
+    ];
+    expect(positionsFromResponse(entries, "297035")).toEqual(POSITIONS);
+  });
+
+  it(
+    "refuses another town's buildings, so their slots are not saved " +
+      "under the town that was asked for",
+    () => {
+      const entries = [
+        [
+          "updateGlobalData",
+          { backgroundData: { id: "297034", position: POSITIONS } },
+        ],
+      ];
+      expect(positionsFromResponse(entries, "297035")).toBeNull();
+    },
+  );
+});
+
+describe("addBuildingToQueue", () => {
+  it(
+    "saves the upgrade under the town it is given, not the town on " +
+      "screen, counting levels up within that town",
+    () => {
+      document.body.innerHTML = `<div id="js_cityBread">W-Athens</div>`;
+
+      addBuildingToQueue("js_CityPosition9Link", "Academy 7", "M-Corinth");
+      addBuildingToQueue("js_CityPosition9Link", "Academy 7", "M-Corinth");
+
+      expect(
+        getTownQueue("M-Corinth").map((entry) => entry.buildingName),
+      ).toEqual(["Academy 8", "Academy 9"]);
+      expect(getTownQueue("W-Athens")).toEqual([]);
     },
   );
 });

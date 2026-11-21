@@ -16,7 +16,7 @@
 
 import { isTypingTarget, qs } from "@core/dom";
 import { errorMessage } from "@core/format";
-import { getAccountName, getCurrentTownName } from "@core/ikariam/globals";
+import { getAccountName } from "@core/ikariam/globals";
 import { DIALOG_ID, SEL } from "@core/ikariam/selectors";
 import { installErrorHandlers } from "@core/bug-report";
 import { clearLog, initLogger, logInfo } from "@core/logger";
@@ -798,10 +798,10 @@ function registerUiActions(): void {
     /* ── Auto build ── */
     "build.settings": openAutoBuildDialog,
     "build.add": (element) => {
-      const { ikaPosition, ikaBuilding } = element.dataset;
-      if (!ikaPosition || !ikaBuilding) return;
-      addBuildingToQueue(ikaPosition, ikaBuilding);
-      refreshTownQueueCell(getCurrentTownName());
+      const { ikaPosition, ikaBuilding, ikaTown } = element.dataset;
+      if (!ikaPosition || !ikaBuilding || !ikaTown) return;
+      addBuildingToQueue(ikaPosition, ikaBuilding, ikaTown);
+      refreshTownQueueCell(ikaTown);
     },
     "build.remove": (element) => {
       const { ikaPosition, ikaBuilding, ikaTown } = element.dataset;

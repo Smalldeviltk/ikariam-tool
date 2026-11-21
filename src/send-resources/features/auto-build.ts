@@ -24,7 +24,8 @@
 import { qs, qsa } from "@core/dom";
 import { sleep, waitFor } from "@core/async";
 import { compareValues, errorMessage, MS_PER_SECOND } from "@core/format";
-import { getCurrentTownName, readTownName } from "@core/ikariam/globals";
+import { fetchTown } from "@core/ikariam/http";
+import { readTownName } from "@core/ikariam/globals";
 import { SEL } from "@core/ikariam/selectors";
 import { logInfo } from "@core/logger";
 import type { Task, TaskResult } from "@core/task-queue";
@@ -116,18 +117,22 @@ export function getTownQueue(townName: string): AutoBuildTown["queue"] {
 }
 
 /**
- * Append one upgrade level to the configured queue.
+ * Append one upgrade level to a town's configured queue.
  *
  * Displayed levels stack: with N entries already queued for the same slot, the
  * new entry shows `current + N + 1`. Same arithmetic as the original.
+ *
+ * The town is passed in rather than read from the breadcrumb: the settings
+ * dialog lists the buildings of whichever town is picked in its dropdown,
+ * which need not be the town on screen.
  */
 export function addBuildingToQueue(
   positionId: string,
   buildingName: string,
+  townName: string,
 ): void {
   const { accountName } = getState();
   const list = loadAutoBuild();
-  const townName = getCurrentTownName();
 
   const account = findAccount(list, accountName);
   const town = findTown(account, townName);
@@ -638,24 +643,126 @@ function readBuildingSlot(element: Element): SlotReading {
   };
 }
 
+/** The label a slot is listed and saved under: `"Warehouse 12"`. */
+function slotLabel({ name, level, upgrading }: SlotReading): string {
+  const label = level === null ? name : `${name} ${level}`;
+  // While upgrading, the level shown is still the old one — add one.
+  return upgrading ? withLevel(label, levelOf(label) + 1) : label;
+}
+
 /** Buildings in the currently open town, for the settings dialog. */
 export function listBuildingsInCurrentTown(): BuildingSlot[] {
-  const slots: BuildingSlot[] = qsa(SEL.buildings).map((element) => {
-    const { name, level, upgrading } = readBuildingSlot(element);
-    let buildingName = level === null ? name : `${name} ${level}`;
-
-    // While upgrading, the title still shows the old level — add one.
-    if (upgrading) {
-      buildingName = withLevel(buildingName, levelOf(buildingName) + 1);
-    }
-    return {
-      buildingName,
-      positionId: qs(SEL.buildingHover, element)?.id.trim() ?? "",
-    };
-  });
+  const slots: BuildingSlot[] = qsa(SEL.buildings).map((element) => ({
+    buildingName: slotLabel(readBuildingSlot(element)),
+    positionId: qs(SEL.buildingHover, element)?.id.trim() ?? "",
+  }));
 
   slots.sort(compareValues<BuildingSlot>("buildingName"));
   return slots;
+}
+
+/**
+ * The id the city view gives slot N's hoverable: `js_CityPosition8Link`.
+ * Saved upgrades store this id, and the task handler clicks it.
+ */
+function positionLinkId(slotNumber: number): string {
+  return `js_CityPosition${slotNumber}Link`;
+}
+
+/**
+ * One entry of the `position` array the game sends with a town:
+ * `{ name: "Warehouse", level: 20, isBusy: false, building: "warehouse" }`,
+ * or `{ buildingId: null, building: "buildingGround land" }` for an empty slot.
+ * The entry's index in the array is its slot number.
+ */
+interface PositionEntry {
+  name?: unknown;
+  level?: unknown;
+  building?: unknown;
+  isBusy?: unknown;
+  completed?: unknown;
+}
+
+/** What a `position` entry says about its slot; null for an empty slot. */
+function readPositionEntry(entry: unknown): SlotReading | null {
+  if (entry === null || typeof entry !== "object") return null;
+  const { name, level, building, isBusy, completed } = entry as PositionEntry;
+  if (typeof name !== "string" || name.trim() === "") return null;
+  // The same slots the city view's selector leaves out.
+  if (typeof building === "string" && building.startsWith("buildingGround")) {
+    return null;
+  }
+  const levelNumber = Number(level);
+  return {
+    name: name.trim(),
+    level: Number.isInteger(levelNumber) && levelNumber >= 0 ? levelNumber : 0,
+    // `completed` is the end time of a level being built, the field the
+    // Empire Overview board reads; `isBusy` is sent alongside it.
+    upgrading:
+      isBusy === true ||
+      (completed !== undefined && completed !== null && Number(completed) > 0),
+  };
+}
+
+/**
+ * A town's buildings from the `position` array the game sends with it, as
+ * the settings dialog lists them: the same labels and ids as
+ * `listBuildingsInCurrentTown` reads from the city view.
+ */
+export function buildingsFromPositions(positions: unknown): BuildingSlot[] {
+  if (!Array.isArray(positions)) return [];
+  const slots: BuildingSlot[] = [];
+  positions.forEach((entry, slotNumber) => {
+    const reading = readPositionEntry(entry);
+    if (reading === null) return;
+    slots.push({
+      buildingName: slotLabel(reading),
+      positionId: positionLinkId(slotNumber),
+    });
+  });
+  slots.sort(compareValues<BuildingSlot>("buildingName"));
+  return slots;
+}
+
+/**
+ * The `position` array of town `cityId` in a response, or null when the
+ * response carries none for that town.
+ *
+ * Read from `updateGlobalData.backgroundData`, else from
+ * `updateBackgroundData`, the two places the board reads buildings from. The
+ * town's id is checked, so another town's slots are never listed, and saved,
+ * under this one.
+ */
+export function positionsFromResponse(
+  entries: readonly unknown[],
+  cityId: string,
+): unknown[] | null {
+  const backgrounds: unknown[] = [];
+  for (const entry of entries) {
+    if (!Array.isArray(entry)) continue;
+    const payload = entry[1] as { backgroundData?: unknown } | null | undefined;
+    if (entry[0] === "updateGlobalData")
+      backgrounds.push(payload?.backgroundData);
+    if (entry[0] === "updateBackgroundData") backgrounds.push(payload);
+  }
+  for (const background of backgrounds) {
+    if (background === null || typeof background !== "object") continue;
+    const { id, position } = background as { id?: unknown; position?: unknown };
+    if (String(id) === cityId && Array.isArray(position)) return position;
+  }
+  return null;
+}
+
+/**
+ * Ask the game for town `cityId` and list its buildings, without leaving the
+ * town on screen: a town switch reloads the page, and the dialog with it.
+ * Null when the answer carries no buildings for that town.
+ */
+export async function fetchTownBuildings(
+  cityId: string,
+): Promise<BuildingSlot[] | null> {
+  const positions = positionsFromResponse(await fetchTown(cityId), cityId);
+  return positions === null ? null : buildingsFromPositions(positions);
 }
 
 /* ─────────────────── Building levels on the city view ──────────────────── */

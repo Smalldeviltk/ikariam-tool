@@ -40,10 +40,16 @@ vi.mock("./ui/data-transfer-ui", async (importOriginal) => ({
 
 // The scan is tested in `auto-build.test.ts`; here Auto Wine's Start only
 // needs to know whether one ran, and what it brought back.
-const { scanBuildings } = vi.hoisted(() => ({ scanBuildings: vi.fn() }));
+// Reading another town's buildings is a request, tested in
+// `auto-build.test.ts`; here only what the dialog does with its answer.
+const { scanBuildings, fetchTownBuildings } = vi.hoisted(() => ({
+  scanBuildings: vi.fn(),
+  fetchTownBuildings: vi.fn(),
+}));
 vi.mock("./features/auto-build", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./features/auto-build")>()),
   scanBuildings,
+  fetchTownBuildings,
 }));
 
 // The fortress request is tested in `pirate.test.ts`; here only what the
@@ -1444,11 +1450,12 @@ describe("the Auto Build settings dialog", () => {
       document.getElementById("js_cityBread")!.textContent = "A & B";
       document.body.insertAdjacentHTML(
         "beforeend",
-        `<div id="BuildTab"><div class="city_name">` +
-          `<span class="clickable">A &amp; B</span></div></div>`,
+        `<div id="dropDown_js_citySelectContainer"><div class="bg"><ul>` +
+          `<li selectvalue="297034" class="ownCity"><a title="A &amp; B"> A &amp; B</a></li>` +
+          `</ul></div></div>`,
       );
       const { addBuildingToQueue } = await import("./features/auto-build");
-      addBuildingToQueue("5", "Academy 4");
+      addBuildingToQueue("5", "Academy 4", "A & B");
 
       Object.assign(window, { ikariam: { createPopup } });
       try {
@@ -1463,6 +1470,199 @@ describe("the Auto Build settings dialog", () => {
       expect(html).toContain("1.Academy 5");
     },
   );
+
+  describe("one town at a time", () => {
+    const DROPDOWN =
+      `<div id="dropDown_js_citySelectContainer"><div class="bg"><ul>` +
+      `<li selectvalue="297034" class="ownCity"><a title="W-Athens"> W-Athens</a></li>` +
+      `<li selectvalue="297035" class="ownCity"><a title="M-Corinth"> M-Corinth</a></li>` +
+      `</ul></div></div>`;
+
+    /** The open town, W-Athens, has one building on screen. */
+    const CITY_VIEW =
+      `<div id="position5" class="building">` +
+      `<a class="hoverable" id="js_CityPosition5Link" title="Warehouse (25)"></a></div>`;
+
+    const TOWN_SELECT = "#autoBuildTown";
+
+    function savedQueues(): Record<string, string[]> {
+      const list = JSON.parse(localStorage.getItem("listAutoBuild") ?? "[]");
+      const towns: { townName: string; queue: { buildingName: string }[] }[] =
+        list[0]?.townList ?? [];
+      return Object.fromEntries(
+        towns.map((town) => [
+          town.townName,
+          town.queue.map((entry) => entry.buildingName),
+        ]),
+      );
+    }
+
+    /** Open the dialog as the game's popup would draw it. */
+    async function openDialog(): Promise<void> {
+      await startWith({});
+      localStorage.setItem(
+        "listAutoBuild",
+        JSON.stringify([
+          {
+            accountName: "tester",
+            townList: [
+              {
+                townName: "W-Athens",
+                queue: [
+                  {
+                    positionId: "js_CityPosition5Link",
+                    buildingName: "Warehouse 26",
+                  },
+                ],
+              },
+              {
+                townName: "M-Corinth",
+                queue: [
+                  {
+                    positionId: "js_CityPosition9Link",
+                    buildingName: "Academy 8",
+                  },
+                ],
+              },
+            ],
+          },
+        ]),
+      );
+      document.body.insertAdjacentHTML("beforeend", DROPDOWN + CITY_VIEW);
+      const createPopup = (id: string, _title: string, html: string) =>
+        document.body.insertAdjacentHTML(
+          "beforeend",
+          `<div id="${id}">${html}</div>`,
+        );
+      Object.assign(window, { ikariam: { createPopup } });
+      try {
+        await actions["build.settings"](document.body);
+      } finally {
+        delete window.ikariam;
+      }
+    }
+
+    function pickTown(townNumber: string): void {
+      const select = document.querySelector<HTMLSelectElement>(TOWN_SELECT)!;
+      select.value = townNumber;
+      select.dispatchEvent(new Event("change"));
+    }
+
+    function buildingListText(): string {
+      return document.querySelector("#tdListBuilding")!.textContent ?? "";
+    }
+
+    function queueCells(): HTMLElement[] {
+      return Array.from(
+        document.querySelectorAll<HTMLElement>("[data-ika-town-cell]"),
+      );
+    }
+
+    beforeEach(() => {
+      fetchTownBuildings.mockReset();
+    });
+
+    it("offers every town in a dropdown, with the open town picked", async () => {
+      await openDialog();
+
+      const select = document.querySelector<HTMLSelectElement>(TOWN_SELECT)!;
+      expect(
+        Array.from(select.options)
+          .map((option) => option.textContent)
+          .sort(),
+      ).toEqual(["M-Corinth", "W-Athens"]);
+      expect(select.selectedOptions[0].textContent).toBe("W-Athens");
+      expect(buildingListText()).toContain("Warehouse 25");
+    });
+
+    it("shows the saved queue of the picked town only", async () => {
+      await openDialog();
+
+      expect(queueCells().map((cell) => cell.dataset.ikaTownCell)).toEqual([
+        "W-Athens",
+      ]);
+      expect(queueCells()[0].textContent).toContain("1.Warehouse 26");
+      expect(queueCells()[0].textContent).not.toContain("Academy 8");
+    });
+
+    it(
+      "picking another town shows its buildings, read from the game, " +
+        "and its saved queue",
+      async () => {
+        fetchTownBuildings.mockResolvedValue([
+          { buildingName: "Academy 7", positionId: "js_CityPosition9Link" },
+        ]);
+        await openDialog();
+
+        pickTown("1");
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(fetchTownBuildings).toHaveBeenCalledWith("297035");
+        expect(buildingListText()).toContain("Academy 7");
+        expect(buildingListText()).not.toContain("Warehouse 25");
+        expect(queueCells().map((cell) => cell.dataset.ikaTownCell)).toEqual([
+          "M-Corinth",
+        ]);
+        expect(queueCells()[0].textContent).toContain("1.Academy 8");
+      },
+    );
+
+    it(
+      "+ on another town's building saves it to that town, not to the " +
+        "town on screen",
+      async () => {
+        fetchTownBuildings.mockResolvedValue([
+          { buildingName: "Academy 7", positionId: "js_CityPosition9Link" },
+        ]);
+        await openDialog();
+        pickTown("1");
+        await vi.advanceTimersByTimeAsync(0);
+
+        const plus = document.querySelector<HTMLElement>(
+          '#tdListBuilding [data-ika-action="build.add"]',
+        )!;
+        await actions["build.add"](plus);
+
+        expect(savedQueues()).toEqual({
+          "W-Athens": ["Warehouse 26"],
+          "M-Corinth": ["Academy 8", "Academy 9"],
+        });
+        expect(queueCells()[0].textContent).toContain("2.Academy 9");
+      },
+    );
+
+    it("does not show an answer for a town that is no longer picked", async () => {
+      let answer: (slots: unknown[]) => void = () => {};
+      fetchTownBuildings.mockReturnValue(
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+      );
+      await openDialog();
+
+      pickTown("1");
+      pickTown("0");
+      answer([
+        { buildingName: "Academy 7", positionId: "js_CityPosition9Link" },
+      ]);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(buildingListText()).toContain("Warehouse 25");
+      expect(buildingListText()).not.toContain("Academy 7");
+      expect(queueCells()[0].dataset.ikaTownCell).toBe("W-Athens");
+    });
+
+    it("says so when the town's buildings could not be read", async () => {
+      fetchTownBuildings.mockRejectedValue(new Error("HTTP 500"));
+      await openDialog();
+
+      pickTown("1");
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(buildingListText()).toContain("HTTP 500");
+      expect(queueCells()[0].textContent).toContain("1.Academy 8");
+    });
+  });
 });
 
 describe("Auto Build after the queue runs dry", () => {
