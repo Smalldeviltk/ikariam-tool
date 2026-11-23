@@ -56,7 +56,8 @@ th { font-weight: bold; }
 .ika-move:disabled { opacity: 0.4; cursor: default; }
 .ika-queue-empty { font-style: italic; color: #6b5433; margin: 2px 0 4px; }
 
-/* The two lists capped at ten rows (capVisibleRows): their header row
+/* The panel's queue (capped at ten rows by capVisibleRows) and Transport
+   Settings' table (capped at the form's height): their header row
    stays in place while the rows scroll. .fullTable hides its overflow,
    which would make the table itself the scroll container that sticky
    holds to; inside these boxes it is let through to the box. */
@@ -82,9 +83,13 @@ th { font-weight: bold; }
   font: bold 11px/14px Arial, sans-serif; white-space: nowrap;
 }
 
-/* Popup styles — declared but never attached in the original. */
-#${DIALOG_ID} .popupContent,
-#${DIALOG_ID} .popupMessage { width: max-content !important; }
+/* Popup styles — declared but never attached in the original. The popup's
+   frame is itself the .popupMessage (\`<div id="${DIALOG_ID}"
+   class="popupMessage">\`), so the selector has no space: with one it named a
+   .popupMessage inside the frame, matched nothing, and the frame kept the
+   game's 480px (measured) while its content grew past it. */
+#${DIALOG_ID}.popupMessage,
+#${DIALOG_ID} .popupContent { width: max-content !important; }
 /* One column per town: past 1250px, the table scrolls sideways instead of
    widening the popup. The table
    element is a block (.fullTable) and only the scroll box; its rows lay
@@ -98,7 +103,9 @@ th { font-weight: bold; }
 }
 #${DIALOG_ID} #autoBuildTable th:first-child { background: #f8e7b3; }
 #${DIALOG_ID} #autoBuildTable button { float: right; }
-#${DIALOG_ID} #autoBuildTable span { float: left; width: 100%; border-bottom: 1px dotted gray; }
+/* One rule per line of a cell. Only the cell's own lines: a span inside a
+   line (the red planned level) would otherwise take the line's full width. */
+#${DIALOG_ID} #autoBuildTable td > span { float: left; width: 100%; border-bottom: 1px dotted gray; }
 #${DIALOG_ID} #autoBuildTable th { padding: 2px; }
 #${DIALOG_ID} #tdListBuilding,
 #${DIALOG_ID} .tdQueue { vertical-align: top; padding: 1px 1px 0 1px; text-align: left; }

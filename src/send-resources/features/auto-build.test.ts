@@ -24,6 +24,7 @@ import {
 } from "./auto-build";
 import {
   completedUpgrades,
+  nameNotepadCopies,
   splitRunnableTowns,
   type SavedUpgrade,
   type SlotState,
@@ -96,7 +97,10 @@ beforeEach(() => {
   localStorage.clear();
   initState("Smalldevil");
   vi.useFakeTimers();
-  claimUpgrade.mockClear();
+  // Reset, not clear: a one-off answer a test left unused (a visit that
+  // ended before its claim) would otherwise answer the next test's claim.
+  claimUpgrade.mockReset();
+  claimUpgrade.mockResolvedValue({ status: "go" });
 });
 
 describe("handleUpgradeBuilding", () => {
@@ -304,6 +308,31 @@ describe("handleUpgradeBuilding and the game's notepad", () => {
   beforeEach(() => {
     saveWAthens([upgrade(5, "Warehouse 26")]);
   });
+
+  it(
+    "a switch to the town that did not land ends the visit rather than " +
+      "throwing - thrown, the runner dropped it with a 'task dropped' notice",
+    async () => {
+      const town = readyTown();
+      // The page landed in another town moments after the switch was sent.
+      document.getElementById("js_cityBread")!.textContent = "M-Corinth";
+      sessionStorage.setItem(
+        "ika_pendingTownSwitch",
+        JSON.stringify({ target: "W-Athens", sentAt: Date.now() }),
+      );
+      try {
+        await expect(
+          handleUpgradeBuilding(upgradeTask("js_CityPosition5Link")),
+        ).resolves.toEqual({ status: "done" });
+      } finally {
+        sessionStorage.clear();
+      }
+
+      expect(claimUpgrade).not.toHaveBeenCalled();
+      expect(town.opens()).toBe(0);
+      expect(labels(getTownQueue("W-Athens"))).toEqual(["Warehouse 26"]);
+    },
+  );
 
   /**
    * A town whose slot 5 starts building when its button is clicked. Counts
@@ -723,6 +752,49 @@ describe("completedUpgrades", () => {
   });
 });
 
+describe("nameNotepadCopies", () => {
+  const placeholder = (slot: number, level: number) =>
+    `Position ${slot} ${level}`;
+
+  it("names a notepad copy after the building its slot holds", () => {
+    const { queue, named } = nameNotepadCopies(
+      [upgrade(9, "Position 9 13"), upgrade(4, "Warehouse 8")],
+      [slotState(9, "Tavern", 12), slotState(4, "Warehouse", 7)],
+      placeholder,
+    );
+
+    expect(labels(queue)).toEqual(["Tavern 13", "Warehouse 8"]);
+    expect(labels(named)).toEqual(["Tavern 13"]);
+  });
+
+  it("leaves a copy whose slot was not read, or has no name", () => {
+    const queue = [upgrade(9, "Position 9 13"), upgrade(4, "Position 4 8")];
+
+    const result = nameNotepadCopies(
+      queue,
+      [slotState(4, "  ", 7)],
+      placeholder,
+    );
+
+    expect(labels(result.queue)).toEqual(["Position 9 13", "Position 4 8"]);
+    expect(result.named).toEqual([]);
+  });
+
+  it("never renames an entry that is not a copy of its own slot", () => {
+    // "Position 4 8" saved under slot 9 is not slot 9's placeholder.
+    const queue = [upgrade(9, "Position 4 8"), upgrade(9, "Tavern 13")];
+
+    const result = nameNotepadCopies(
+      queue,
+      [slotState(9, "Tavern", 12)],
+      placeholder,
+    );
+
+    expect(labels(result.queue)).toEqual(["Position 4 8", "Tavern 13"]);
+    expect(result.named).toEqual([]);
+  });
+});
+
 describe("splitRunnableTowns", () => {
   const towns = [{ townName: "W-Athens" }, { townName: "Gone" }];
 
@@ -803,6 +875,30 @@ describe("the town's slots as Auto Build checks them", () => {
       "Warehouse 8",
       "Tavern 16",
     ]);
+  });
+
+  it(
+    "names the notepad's copies first, so a level already built comes off " +
+      "and the rest keep the building's name",
+    () => {
+      saveWAthens([upgrade(9, "Position 9 15"), upgrade(9, "Position 9 16")]);
+
+      const removed = removeCompletedUpgrades("W-Athens", [
+        slotState(9, "Tavern", 15),
+      ]);
+
+      expect(labels(removed)).toEqual(["Tavern 15"]);
+      expect(labels(getTownQueue("W-Athens"))).toEqual(["Tavern 16"]);
+    },
+  );
+
+  it("saves a rename even when nothing is removed; a level being built is not done", () => {
+    saveWAthens([upgrade(9, "Position 9 16")]);
+
+    expect(
+      removeCompletedUpgrades("W-Athens", [slotState(9, "Tavern", 15, true)]),
+    ).toEqual([]);
+    expect(labels(getTownQueue("W-Athens"))).toEqual(["Tavern 16"]);
   });
 
   it(
@@ -936,6 +1032,22 @@ describe("handleUpgradeBuilding and the saved levels already reached", () => {
     await vi.advanceTimersByTimeAsync(20_000);
     return promise;
   }
+
+  it(
+    "does not upgrade a level the warehouse already has that came from the " +
+      "notepad without a name: at 25, a copy of 25 comes off, nothing is clicked",
+    async () => {
+      const town = readyWarehouse();
+      saveWAthens([upgrade(5, "Position 5 25")]);
+
+      const result = await runTask("Position 5 25");
+
+      expect(result.status).toBe("done");
+      expect(claimUpgrade).not.toHaveBeenCalled();
+      expect(town.clicks()).toBe(0);
+      expect(getTownQueue("W-Athens")).toEqual([]);
+    },
+  );
 
   it(
     "skips the levels the warehouse already has and builds the next one " +
@@ -1352,6 +1464,32 @@ describe("scanBuildings", () => {
       "W-Athens",
     );
   });
+
+  it(
+    "tells a caller that asks why it refused, and leaves the toast to it - " +
+      "Crawl Wine showed the same words twice",
+    async () => {
+      const reasons: string[] = [];
+      expect(
+        await scanBuildings(
+          undefined,
+          () => true,
+          (reason) => reasons.push(reason),
+        ),
+      ).toBe(false);
+      document.body.innerHTML = "";
+      expect(
+        await scanBuildings(undefined, undefined, (reason) =>
+          reasons.push(reason),
+        ),
+      ).toBe(false);
+
+      expect(reasons).toHaveLength(2);
+      expect(reasons[0]).toContain("task queue is running");
+      expect(reasons[1]).toContain("No town list");
+      expect(showToast).not.toHaveBeenCalled();
+    },
+  );
 
   it("says so when there is no town list to walk", async () => {
     document.body.innerHTML = "";

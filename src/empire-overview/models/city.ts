@@ -12,7 +12,7 @@ import { Military } from "../models/military";
 import { Population } from "../models/population";
 import { Resource } from "../models/resource";
 import { trace } from "../ajax-trace";
-import { Utils } from "../utils";
+import { readGameCount, Utils } from "../utils";
 import { database } from "../database";
 import { empire } from "../empire";
 import { events } from "../events";
@@ -231,7 +231,8 @@ export function City(id) {
           );
         } else {
           changes.actionPoints = this.updateActionPoints(
-            parseInt($actionPointElem.text()) || 0,
+            // Fixed: was a bare parseInt, which stops at the thousands separator (1,234 read as 1).
+            readGameCount($actionPointElem.text()) || 0,
           );
         }
         changes.coordinates = this.updateCoordinates(

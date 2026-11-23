@@ -103,6 +103,7 @@ const ACCOUNT_SUFFIXES: Record<string, DataGroup> = {
   ikaPirateRun: "runtime",
   ikaPirateCapturePoints: "measurements",
   ikaPirateCaptureTrace: "diagnostics",
+  ikaPirateCaptureOut: "runtime",
   ikaGlobalTaskQueue: "runtime",
   ikaQueueNoteBase: "runtime",
   ikaRunnerBusy: "runtime",

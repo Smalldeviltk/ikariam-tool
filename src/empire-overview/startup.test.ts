@@ -282,6 +282,22 @@ describe("Empire Overview startup", () => {
     },
   );
 
+  it(
+    "do not throw when the game's object is not there yet - a bug report " +
+      "of 20/11 caught \"reading 'model'\" at load",
+    async () => {
+      await boot();
+      const { ResourceProduction } = await import("./resource-production");
+      const game = (window as any).ikariam;
+      (window as any).ikariam = undefined;
+      try {
+        expect(() => ResourceProduction.updateProd()).not.toThrow();
+      } finally {
+        (window as any).ikariam = game;
+      }
+    },
+  );
+
   describe("the town tables' height", () => {
     const HEADER = 30;
     const ROW = 20;
@@ -909,6 +925,61 @@ describe("Empire Overview startup", () => {
     );
 
     it(
+      "reads a training batch past a thousand - the units' count went " +
+        "through parseInt of a match array and read 1,234 as 1",
+      async () => {
+        await boot();
+        const { database } = await import("./database");
+        const { events } = await import("./events");
+        document.body.insertAdjacentHTML(
+          "beforeend",
+          `<div id="unitConstructionList"><div class="army_wrapper">` +
+            `<div class="army s301"></div><div class="unitcounttextlabel">1,234</div>` +
+            `</div></div><div id="unitBuildCountDown">5m 10s</div>`,
+        );
+
+        events("ajaxResponse").pub([
+          townData(297034),
+          ["changeView", ["barracks", ""]],
+          ["updateTemplateData", {}],
+        ]);
+
+        const training = database.getCityFromId(297034).military.armyTraining;
+        expect(training.map((task: { units: unknown }) => task.units)).toEqual([
+          { slinger: 1234 },
+        ]);
+      },
+    );
+
+    it(
+      "reads a Town Hall's scientists past a thousand - a bare parseInt " +
+        "stopped at the separator and read 1,234 as 1",
+      async () => {
+        await boot();
+        const { database } = await import("./database");
+
+        announceFetched([
+          townData(297034),
+          ["changeView", ["townHall", ""]],
+          [
+            "updateTemplateData",
+            {
+              js_TownHallSatisfactionOverviewCultureBoniTreatyBonusValue: {
+                text: "0",
+              },
+              js_TownHallPopulationGraphPriestCount: { text: "5" },
+              js_TownHallPopulationGraphScientistCount: { text: "1,234" },
+            },
+          ],
+        ]);
+
+        expect(database.getCityFromId(297034)._research._researchers).toBe(
+          1234,
+        );
+      },
+    );
+
+    it(
       "REGRESSION: a fetched town does not become the board's current " +
         "town - after a scan the board took the last town scanned for the " +
         "one on screen, after a quick upgrade the town upgraded",
@@ -982,6 +1053,43 @@ describe("Empire Overview startup", () => {
     const raw = localStorage.getItem("ikaBugReports");
     const reports = raw ? JSON.parse(raw) : [];
     expect(reports).toEqual([]);
+  });
+});
+
+describe("readGameCount", () => {
+  it("reads a count as the game writes it", async () => {
+    await boot();
+    const { readGameCount } = await import("./utils");
+
+    expect(readGameCount("12")).toBe(12);
+    expect(readGameCount("1,234")).toBe(1234);
+    expect(readGameCount("  1,234\n")).toBe(1234);
+    // Text before the number, as the training list's cells may carry.
+    expect(readGameCount("x 1,234")).toBe(1234);
+    // The menu bar abbreviates: the dot is a decimal point there.
+    expect(readGameCount("1.2k")).toBe(1200);
+    expect(readGameCount("12.3K")).toBe(12300);
+  });
+
+  it("gives NaN for no number, as parseInt did, so a caller's || 0 holds", async () => {
+    await boot();
+    const { readGameCount } = await import("./utils");
+
+    expect(readGameCount("")).toBeNaN();
+    expect(readGameCount("—")).toBeNaN();
+    expect(readGameCount(undefined)).toBeNaN();
+  });
+
+  it("takes the game's own thousands separator when it is known", async () => {
+    await boot();
+    const { readGameCount } = await import("./utils");
+    const { database } = await import("./database");
+
+    database.getGlobalData.addLocalisedString("thousandSeperator", ".");
+
+    expect(readGameCount("1.234")).toBe(1234);
+    // There the comma is the decimal mark.
+    expect(readGameCount("1,2k")).toBe(1200);
   });
 });
 

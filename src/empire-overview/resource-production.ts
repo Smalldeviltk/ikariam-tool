@@ -57,6 +57,10 @@ export const ResourceProduction: any = new (function () {
     return net === null ? unsafeWindow.ikariam.model.wineSpendings : net;
   }
   this.updateProd = function () {
+    // Added (not in the original): at load the game's object can be missing
+    // (a bug report of 20/11: "reading 'model'" here); there is nothing to
+    // show until it is there.
+    if (!unsafeWindow.ikariam?.model) return;
     addProd(0, unsafeWindow.ikariam.model.resourceProduction * 3600);
     if (unsafeWindow.ikariam.model.cityProducesWine) {
       addProd(

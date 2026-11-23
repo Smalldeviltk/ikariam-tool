@@ -34,8 +34,6 @@
  * minutes after a switch, and its writes made the session's token stale.
  * Format 1 (`Q1`, with the lease) is still read, so a notepad written by it
  * carries over.
- *
- * Plan: `docs/improvement-plan.md` §2.AE.
  */
 
 import { sleep } from "@core/async";
@@ -687,6 +685,24 @@ function loadBase(): NoteEntry[] {
 
 function saveBase(entries: readonly NoteEntry[]): void {
   getState().account.setJSON(KEY.queueNoteBase, entries);
+}
+
+/**
+ * Forget what was last agreed with the notepad about saved upgrades, after
+ * an Import has replaced the saved build list.
+ *
+ * Without this, the next sync reads every upgrade the imported file lacks,
+ * but the base still holds, as deleted on this computer, and deletes it from
+ * the notepad and so from the other computers. With no upgrade in the base,
+ * the file's upgrades and the notepad's are joined instead (`mergeEntries`:
+ * an entry the base lacks is copied to the side that lacks it).
+ *
+ * Shipments keep their base: an Import does not touch the task queue, and a
+ * shipment run elsewhere since the last sync must still be dropped here, not
+ * copied back and sent again.
+ */
+export function forgetBuildListBase(): void {
+  saveBase(loadBase().filter((entry) => entry.kind !== "upgrade"));
 }
 
 /** The fingerprint of the town dropdown, or `null` when it is not readable. */

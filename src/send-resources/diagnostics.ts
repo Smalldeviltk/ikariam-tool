@@ -23,7 +23,10 @@ import { qs, qsa } from "@core/dom";
 import { errorMessage } from "@core/format";
 import { getCurrentTownName, pageWindow } from "@core/ikariam/globals";
 import {
+  actionRequestToken,
   quickUpgradeTraces,
+  redactTokens,
+  toolNewestToken,
   toolRequestTraces,
   townSwitchTraces,
 } from "@core/ikariam/http";
@@ -31,6 +34,7 @@ import { recentLogLines } from "@core/logger";
 import { hasModel, modelCurrentCityName } from "@core/ikariam/model";
 import { DIALOG_ID, SEL } from "@core/ikariam/selectors";
 import { pirateCaptureTraces } from "./features/pirate";
+import { ELEMENT_CRAWL } from "./messages";
 import { getState } from "./state";
 import { LAUNCHER_CLASS, WINDOW_ID } from "./ui/panel";
 
@@ -257,6 +261,497 @@ export function installDiagnostics(): void {
     clearBugs();
     console.log("[ika] bug reports cleared");
   };
+}
+
+/* ──────────────────── Crawl by id: an element, or JS code ───────────────── */
+
+/** How many elements an HTML crawl describes: the target, then its descendants. */
+const ELEMENT_CRAWL_MAX_ELEMENTS = 300;
+
+/**
+ * The computed properties an HTML crawl records for each element: the ones
+ * that decide where a box goes and how wide it is.
+ */
+const LAYOUT_PROPERTIES = [
+  "display",
+  "position",
+  "top",
+  "right",
+  "bottom",
+  "left",
+  "width",
+  "height",
+  "minWidth",
+  "maxWidth",
+  "minHeight",
+  "maxHeight",
+  "margin",
+  "padding",
+  "border",
+  "boxSizing",
+  "overflowX",
+  "overflowY",
+  "float",
+  "clear",
+  "zIndex",
+  "flex",
+  "flexDirection",
+  "flexWrap",
+  "alignItems",
+  "justifyContent",
+  "gap",
+  "gridTemplateColumns",
+  "whiteSpace",
+  "textOverflow",
+  "tableLayout",
+  "verticalAlign",
+  "visibility",
+  "opacity",
+  "transform",
+  "fontSize",
+  "lineHeight",
+  "color",
+  "backgroundColor",
+] as const;
+
+/**
+ * Why a crawl, or one part of it, could not be done: where it stopped, and
+ * the error as thrown, stack included. Written to the file in place of what
+ * could not be read, so a failed crawl still says why.
+ */
+export interface CrawlError {
+  /** The step that failed: `find`, `selector`, `sheet`, `element`, `compile`, `run`, `save`... */
+  stage: string;
+  name: string;
+  message: string;
+  stack?: string;
+  /** The error that stopped it, when the step reported it in its own words. */
+  cause?: CrawlError;
+}
+
+/**
+ * A crawl that cannot go on, thrown to the code that saves its error file:
+ * the step, the reason in the player's words, and the error behind it when
+ * there is one.
+ */
+export class CrawlStopped extends Error {
+  constructor(
+    readonly stage: string,
+    message: string,
+    readonly reason?: unknown,
+  ) {
+    super(message);
+    this.name = "CrawlStopped";
+  }
+}
+
+/** Record what was thrown; a `CrawlStopped` keeps its own step. */
+export function crawlErrorOf(stage: string, error: unknown): CrawlError {
+  if (error instanceof CrawlStopped) {
+    return {
+      stage: error.stage,
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      ...(error.reason === undefined
+        ? {}
+        : { cause: crawlErrorOf(error.stage, error.reason) }),
+    };
+  }
+  if (error instanceof Error) {
+    return {
+      stage,
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+  return { stage, name: typeof error, message: errorMessage(error) };
+}
+
+/**
+ * One element as an HTML crawl records it. When reading it threw, `error`
+ * says why and the parts not read are missing.
+ */
+export interface CrawledElement {
+  /** `div#holder.a.b`. */
+  element: string;
+  /** How deep below the target: 0 is the target itself. */
+  depth: number;
+  rect?: { left: number; top: number; width: number; height: number };
+  style?: Record<string, string>;
+  /** Indexes into the crawl's `rules`: the style rules that match it. */
+  rules?: number[];
+  error?: CrawlError;
+}
+
+export interface ElementCrawl {
+  ok: true;
+  target: string;
+  /** How many elements the target matches; the first is the one crawled. */
+  matches: number;
+  html: string;
+  elements: CrawledElement[];
+  /** More elements below the target than `ELEMENT_CRAWL_MAX_ELEMENTS`. */
+  elementsCut: boolean;
+  /** Every rule that matches at least one crawled element, once each. */
+  rules: string[];
+  /**
+   * Stylesheets whose rules the page would not hand over (another origin's,
+   * as the game's own sheets may be), with the error it gave: a rule missing
+   * from `rules` may sit in one of these. `style` still shows their effect.
+   */
+  unreadableSheets: { sheet: string; error: CrawlError }[];
+}
+
+/** An HTML crawl that could not be done, and why. */
+export interface FailedElementCrawl {
+  ok: false;
+  target: string;
+  error: CrawlError;
+}
+
+/** `div#id.class1.class2`. */
+function describeElement(element: Element): string {
+  const id = element.id ? `#${element.id}` : "";
+  const classes = Array.from(element.classList)
+    .map((name) => `.${name}`)
+    .join("");
+  return `${element.tagName.toLowerCase()}${id}${classes}`;
+}
+
+/** The style rules of every sheet, nested @media and @supports included. */
+function readableStyleRules(): {
+  rules: CSSStyleRule[];
+  unreadable: ElementCrawl["unreadableSheets"];
+} {
+  const rules: CSSStyleRule[] = [];
+  const unreadable: ElementCrawl["unreadableSheets"] = [];
+  const walk = (list: CSSRuleList): void => {
+    for (const rule of Array.from(list)) {
+      if ("selectorText" in rule && "style" in rule) {
+        rules.push(rule as CSSStyleRule);
+      } else if ("cssRules" in rule) {
+        walk((rule as CSSGroupingRule).cssRules);
+      }
+    }
+  };
+  for (const sheet of Array.from(document.styleSheets)) {
+    let list: CSSRuleList;
+    try {
+      list = sheet.cssRules;
+    } catch (e) {
+      unreadable.push({
+        sheet: sheet.href ?? "(inline sheet)",
+        error: crawlErrorOf("sheet", e),
+      });
+      continue;
+    }
+    walk(list);
+  }
+  return { rules, unreadable };
+}
+
+/**
+ * Whether a rule applies to the element. A selector list matches when any of
+ * its parts does, and a part naming a pseudo-element (`::before`) never
+ * does. Should the engine refuse the whole list, each part is tried alone.
+ */
+function ruleMatches(rule: CSSStyleRule, element: Element): boolean {
+  try {
+    return element.matches(rule.selectorText);
+  } catch {
+    return rule.selectorText.split(",").some((part) => {
+      try {
+        return element.matches(part.trim());
+      } catch {
+        return false;
+      }
+    });
+  }
+}
+
+/**
+ * Find what a crawl names: an element id first, as typed, then a CSS
+ * selector. A crawl error when nothing matches, or when the text is not an
+ * id on the page and not a valid selector either.
+ */
+function findCrawlTarget(
+  target: string,
+): { element: Element; matches: number } | CrawlError {
+  const byId = document.getElementById(target);
+  if (byId) return { element: byId, matches: 1 };
+  let all: NodeListOf<Element>;
+  try {
+    all = document.querySelectorAll(target);
+  } catch (e) {
+    return crawlErrorOf("selector", e);
+  }
+  if (all.length === 0) {
+    return {
+      stage: "find",
+      name: "NotFound",
+      message: ELEMENT_CRAWL.notFound(target),
+    };
+  }
+  return { element: all[0], matches: all.length };
+}
+
+/** One element's box, layout properties and matching rules. */
+function crawlOne(
+  element: Element,
+  depth: number,
+  allRules: readonly CSSStyleRule[],
+  addRule: (rule: CSSStyleRule) => number,
+): CrawledElement {
+  const label = describeElement(element);
+  try {
+    const box = element.getBoundingClientRect();
+    const computed = getComputedStyle(element);
+    const style: Record<string, string> = {};
+    for (const property of LAYOUT_PROPERTIES) {
+      style[property] = computed[property];
+    }
+    const rules = allRules
+      .filter((rule) => ruleMatches(rule, element))
+      .map(addRule);
+    return {
+      element: label,
+      depth,
+      rect: {
+        left: Math.round(box.left),
+        top: Math.round(box.top),
+        width: Math.round(box.width),
+        height: Math.round(box.height),
+      },
+      style,
+      rules,
+    };
+  } catch (e) {
+    return { element: label, depth, error: crawlErrorOf("element", e) };
+  }
+}
+
+/**
+ * An element's HTML, and for it and each element below it, its box, its
+ * layout properties as computed, and the rules that match it.
+ *
+ * Never throws: what stops the whole crawl comes back as `ok: false` with
+ * the error, and what fails for one element or one sheet is recorded beside
+ * it while the rest is still read.
+ */
+export function crawlElement(
+  target: string,
+): ElementCrawl | FailedElementCrawl {
+  try {
+    const found = findCrawlTarget(target);
+    if (!("element" in found)) return { ok: false, target, error: found };
+    const { rules: allRules, unreadable } = readableStyleRules();
+    const ruleIndex = new Map<CSSStyleRule, number>();
+    const rules: string[] = [];
+    const addRule = (rule: CSSStyleRule): number => {
+      let index = ruleIndex.get(rule);
+      if (index === undefined) {
+        index = rules.push(rule.cssText) - 1;
+        ruleIndex.set(rule, index);
+      }
+      return index;
+    };
+
+    const descendants = Array.from(found.element.querySelectorAll("*"));
+    const elements = [found.element, ...descendants]
+      .slice(0, ELEMENT_CRAWL_MAX_ELEMENTS)
+      .map((element) => {
+        let depth = 0;
+        for (
+          let node: Element | null = element;
+          node && node !== found.element;
+          node = node.parentElement
+        ) {
+          depth++;
+        }
+        return crawlOne(element, depth, allRules, addRule);
+      });
+
+    return {
+      ok: true,
+      target,
+      matches: found.matches,
+      html: found.element.outerHTML,
+      elements,
+      elementsCut: descendants.length + 1 > ELEMENT_CRAWL_MAX_ELEMENTS,
+      rules,
+      unreadableSheets: unreadable,
+    };
+  } catch (e) {
+    return { ok: false, target, error: crawlErrorOf("crawl", e) };
+  }
+}
+
+/** Limits on what a JS crawl writes out of its result. */
+const RESULT_MAX_DEPTH = 6;
+const RESULT_MAX_ITEMS = 500;
+const RESULT_MAX_STRING = 100_000;
+const RESULT_ELEMENT_HTML = 2_000;
+
+/**
+ * A value made safe for JSON: depth, list length and text length capped,
+ * repeated objects, functions and elements replaced by a short note, and a
+ * getter that throws recorded rather than thrown. Returning `window` or the
+ * game's model would otherwise freeze the tab or write a huge file.
+ */
+function toJsonSafe(value: unknown): unknown {
+  const seen = new WeakSet<object>();
+  const convert = (item: unknown, depth: number): unknown => {
+    if (item === undefined) return "[undefined]";
+    if (item === null || typeof item === "boolean") return item;
+    if (typeof item === "number") {
+      return Number.isFinite(item) ? item : String(item);
+    }
+    if (typeof item === "string") {
+      return item.length > RESULT_MAX_STRING
+        ? `${item.slice(0, RESULT_MAX_STRING)}… [${item.length} chars]`
+        : item;
+    }
+    if (typeof item === "bigint") return `${item}n`;
+    if (typeof item === "symbol") return item.toString();
+    if (typeof item === "function") {
+      return `[Function ${item.name || "anonymous"}]`;
+    }
+    const object = item as object;
+    if (object instanceof Element) {
+      return {
+        element: describeElement(object),
+        html: object.outerHTML.slice(0, RESULT_ELEMENT_HTML),
+      };
+    }
+    if (seen.has(object)) return "[Circular]";
+    if (depth >= RESULT_MAX_DEPTH) return "[Too deep]";
+    seen.add(object);
+    try {
+      if (object instanceof Error) {
+        return {
+          name: object.name,
+          message: object.message,
+          stack: object.stack,
+        };
+      }
+      if (object instanceof Map) {
+        return convert(Array.from(object.entries()), depth);
+      }
+      if (object instanceof Set) {
+        return convert(Array.from(object.values()), depth);
+      }
+      if (Array.isArray(object) || object instanceof NodeList) {
+        const list = Array.from(object as ArrayLike<unknown>);
+        const kept = list
+          .slice(0, RESULT_MAX_ITEMS)
+          .map((entry) => convert(entry, depth + 1));
+        if (list.length > RESULT_MAX_ITEMS) {
+          kept.push(`… [${list.length - RESULT_MAX_ITEMS} more]`);
+        }
+        return kept;
+      }
+      const out: Record<string, unknown> = {};
+      const keys = Object.keys(object);
+      for (const key of keys.slice(0, RESULT_MAX_ITEMS)) {
+        try {
+          out[key] = convert(
+            (object as Record<string, unknown>)[key],
+            depth + 1,
+          );
+        } catch (e) {
+          out[key] = `[Threw: ${errorMessage(e)}]`;
+        }
+      }
+      if (keys.length > RESULT_MAX_ITEMS) {
+        out["…"] = `[${keys.length - RESULT_MAX_ITEMS} more keys]`;
+      }
+      return out;
+    } finally {
+      seen.delete(object);
+    }
+  };
+  return convert(value, 0);
+}
+
+export type CodeCrawl =
+  /** What the code returned, made safe for JSON (`toJsonSafe`). */
+  | { code: string; ok: true; result: unknown }
+  /** `compile`: not valid JS; `run`: it threw or rejected; `save`: its result could not be written out. */
+  | { code: string; ok: false; error: CrawlError };
+
+type AsyncCode = () => Promise<unknown>;
+
+/**
+ * Compile what was typed: as one expression when it is one (`1 + 2`, a
+ * console snippet), otherwise as a function body, which needs its own
+ * `return`. `await` works in both. Throws when it is neither, or when the
+ * page forbids compiling code.
+ */
+function compileCode(code: string): AsyncCode {
+  const AsyncFunction = Object.getPrototypeOf(async () => {})
+    .constructor as new (body: string) => AsyncCode;
+  const expression = code.trim().replace(/;+\s*$/, "");
+  try {
+    return new AsyncFunction(`return (\n${expression}\n);`);
+  } catch (e) {
+    if (!(e instanceof SyntaxError)) throw e;
+    return new AsyncFunction(code);
+  }
+}
+
+/**
+ * Run JS typed into the crawl box and record what it returned, or where and
+ * why it failed. Never throws.
+ */
+export async function crawlCode(code: string): Promise<CodeCrawl> {
+  let compiled: AsyncCode;
+  try {
+    compiled = compileCode(code);
+  } catch (e) {
+    return { code, ok: false, error: crawlErrorOf("compile", e) };
+  }
+  let result: unknown;
+  try {
+    result = await compiled();
+  } catch (e) {
+    return { code, ok: false, error: crawlErrorOf("run", e) };
+  }
+  try {
+    return { code, ok: true, result: toJsonSafe(result) };
+  } catch (e) {
+    return { code, ok: false, error: crawlErrorOf("save", e) };
+  }
+}
+
+/**
+ * Every session token the page holds now: the model's, the newest a request
+ * of the tool's was answered with, and any form field named `actionRequest`
+ * (the town switch form has one, `#js_ChangeCityActionRequest`).
+ */
+function pageSessionTokens(): Set<string> {
+  const tokens = new Set<string>();
+  const candidates = [
+    actionRequestToken(),
+    toolNewestToken(),
+    ...qsa<HTMLInputElement>('input[name="actionRequest"]').map(
+      (input) => input.value,
+    ),
+  ];
+  for (const token of candidates) {
+    if (typeof token === "string" && token) tokens.add(token);
+  }
+  return tokens;
+}
+
+/**
+ * The text of a crawl's file, with every session token taken out, as Bug
+ * Report does: the player sends these files on, and an element's HTML, a
+ * value read by JS, or the page's address can carry the live token.
+ */
+export function crawlFileText(payload: unknown): string {
+  return redactTokens(JSON.stringify(payload, null, 2), pageSessionTokens());
 }
 
 export { clearBugs, getBugs, summariseBugs };

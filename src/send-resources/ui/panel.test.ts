@@ -340,6 +340,31 @@ describe("the queue group", () => {
     );
   });
 
+  it(
+    "floats only a build table cell's own lines, not the planned level " +
+      "inside a line",
+    () => {
+      const css = [...document.querySelectorAll("style")]
+        .map((style) => style.textContent)
+        .join("\n");
+      expect(css).toMatch(
+        /#autoBuildTable td > span \{ float: left; width: 100%;/,
+      );
+      expect(css).not.toMatch(/#autoBuildTable span \{/);
+    },
+  );
+
+  it("lets the tool's popup frame grow with its content", () => {
+    const css = [...document.querySelectorAll("style")]
+      .map((style) => style.textContent)
+      .join("\n");
+    // The frame is itself the .popupMessage: no space between the two.
+    expect(css).toMatch(
+      /#ikaMationTransporterDialog\.popupMessage,\s*#ikaMationTransporterDialog \.popupContent \{ width: max-content !important; \}/,
+    );
+    expect(css).not.toMatch(/#ikaMationTransporterDialog \.popupMessage/);
+  });
+
   it("is drawn as soon as the window is built", () => {
     expect(document.querySelector("#ikaQueueList")).toBeTruthy();
     expect(document.querySelector("#ikaQueueList")!.textContent).toContain(

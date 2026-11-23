@@ -24,7 +24,7 @@ import {
 
 /**
  * A response shaped like the one the live probe returned, trimmed to the parts
- * this module cares about. See `docs/improvement-plan.md` §1 for the capture.
+ * this module cares about.
  */
 const TOWN_RESPONSE = [
   [

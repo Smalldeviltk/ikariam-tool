@@ -41,6 +41,8 @@ import {
   fortressPosition,
   isPirateCaptchaPending,
   isPirateCaptureInFlight,
+  isPirateCaptureOutInAnyTab,
+  PIRATE_CAPTURE_MARK_MAX_AGE_MS,
   isPirateRunning,
   lastCapturePoints,
   loadPirateSettings,
@@ -636,6 +638,28 @@ describe("the schedule", () => {
     startPirate();
     await advance(0);
     expect(isPirateCaptureInFlight()).toBe(false);
+    expect(isPirateCaptureOutInAnyTab()).toBe(false);
+  });
+
+  it("marks the account for the other tabs while a capture is out, and clears it after", async () => {
+    let answer: (entries: unknown[]) => void = () => {};
+    ikariamRequest.mockImplementation(
+      () => new Promise((resolve) => (answer = resolve)),
+    );
+
+    startPirate();
+    expect(isPirateCaptureOutInAnyTab()).toBe(false);
+    await advance(0);
+    expect(localStorage.getItem("testerikaPirateCaptureOut")).not.toBeNull();
+    expect(isPirateCaptureOutInAnyTab()).toBe(true);
+    // A mark this old belongs to a tab that went away mid-capture.
+    expect(
+      isPirateCaptureOutInAnyTab(Date.now() + PIRATE_CAPTURE_MARK_MAX_AGE_MS),
+    ).toBe(false);
+    answer(UNDER_WAY);
+    await advance(0);
+    expect(localStorage.getItem("testerikaPirateCaptureOut")).toBeNull();
+    expect(isPirateCaptureOutInAnyTab()).toBe(false);
   });
 
   it("sends nothing more once stopped, even with a request out", async () => {

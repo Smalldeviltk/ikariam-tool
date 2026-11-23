@@ -22,6 +22,7 @@
 import { qs, qsa } from "@core/dom";
 import { logInfo } from "@core/logger";
 import { showToast } from "@core/ui/window";
+import { CrawlStopped } from "../diagnostics";
 import { BUILDING_CRAWL } from "../messages";
 import { downloadJson } from "../ui/data-transfer-ui";
 
@@ -141,13 +142,14 @@ function readBuildingHelp(dialog: Element): BuildingHelpCapture {
   };
 }
 
-/** Crawl's building part, run when Building is ticked in the Crawl dialog. */
+/**
+ * Crawl's building part, run when Building is ticked in the Crawl dialog.
+ * Throws `CrawlStopped` when the help dialog is not open; the caller saves
+ * that as the crawl's error file.
+ */
 export function saveBuildingHelpToFile(): void {
   const dialog = qs(HELP_DIALOG_SELECTOR);
-  if (!dialog) {
-    showToast(BUILDING_CRAWL.noDialog);
-    return;
-  }
+  if (!dialog) throw new CrawlStopped("find", BUILDING_CRAWL.noDialog);
 
   const capture = readBuildingHelp(dialog);
   const label = capture.buildingClass ?? "unknown";

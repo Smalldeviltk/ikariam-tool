@@ -20,7 +20,8 @@ import { errorMessage } from "@core/format";
 import { logInfo } from "@core/logger";
 import { showToast } from "@core/ui/window";
 import { DATA_TRANSFER } from "../messages";
-import { getState } from "../state";
+import { forgetBuildListBase } from "../queue-note";
+import { getState, KEY } from "../state";
 
 /** Groups the user can move, with the wording shown in the confirmations. */
 const GROUP_LABELS: Readonly<Record<DataGroup, string>> =
@@ -155,6 +156,15 @@ export function importDataFromFile(): void {
           overwrite: true,
         });
 
+        // An imported build list must not read as upgrades deleted here.
+        // Only then: an import of other settings leaves the base alone, so
+        // upgrades run or deleted elsewhere still drop here.
+        if (
+          result.imported > 0 &&
+          bundle.entries.some((entry) => entry?.key === KEY.listAutoBuild)
+        ) {
+          forgetBuildListBase();
+        }
         logInfo(
           `Imported ${result.imported} entries (${result.skipped} skipped)`,
         );

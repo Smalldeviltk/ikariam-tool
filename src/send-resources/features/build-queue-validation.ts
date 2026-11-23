@@ -47,7 +47,8 @@ export function splitUpgradeLabel(
  * holds another building (the reading may be another town's, or the
  * building was replaced), whose label carries no level, or whose slot's level
  * could not be read. A notepad copy from another computer is named
- * `"Position 9 13"`, which never matches a building, so it is kept too.
+ * `"Position 9 13"`, which never matches a building, so it is kept too —
+ * until `nameNotepadCopies` gives it its building's name.
  */
 export function completedUpgrades(
   queue: readonly SavedUpgrade[],
@@ -61,6 +62,40 @@ export function completedUpgrades(
     if (!saved || saved.name !== slot.name.trim()) return false;
     return saved.level <= slot.level;
   });
+}
+
+/**
+ * Saved upgrades received from the game's notepad, which carries no building
+ * names, named after the building their slot holds: `"Position 8 22"` (the
+ * label `placeholderLabel(8, 22)` gives) becomes `"Warehouse 22"` when slot 8
+ * was read and holds a Warehouse.
+ *
+ * Unnamed, `completedUpgrades` could never count such an upgrade as done, and
+ * a level already built was upgraded once more. Left as it is: an entry that
+ * is not a notepad copy, or whose slot was not read or has no name.
+ * Returns a new list, and the entries it named.
+ */
+export function nameNotepadCopies(
+  queue: readonly SavedUpgrade[],
+  slots: readonly SlotState[],
+  placeholderLabel: (slot: number, level: number) => string,
+): { queue: SavedUpgrade[]; named: SavedUpgrade[] } {
+  const slotById = new Map(slots.map((slot) => [slot.positionId, slot]));
+  const named: SavedUpgrade[] = [];
+  const renamed = queue.map((entry) => {
+    const slotNumber = entry.positionId.match(/\d+/)?.[0];
+    const level = splitUpgradeLabel(entry.buildingName)?.level;
+    if (slotNumber === undefined || level === undefined) return entry;
+    if (entry.buildingName !== placeholderLabel(Number(slotNumber), level)) {
+      return entry;
+    }
+    const name = slotById.get(entry.positionId)?.name.trim();
+    if (!name) return entry;
+    const result = { ...entry, buildingName: `${name} ${level}` };
+    named.push(result);
+    return result;
+  });
+  return { queue: renamed, named };
 }
 
 /**

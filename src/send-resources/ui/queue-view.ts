@@ -33,7 +33,7 @@ export const QUEUE_LIST_ID = "ikaQueueList";
 const MAX_ROWS = 50;
 
 /** Tasks shown before the list scrolls (the user's choice). */
-export const VISIBLE_ROWS = 10;
+const VISIBLE_ROWS = 10;
 
 /** The box around the table that scrolls past `VISIBLE_ROWS`. */
 export const QUEUE_SCROLL_CLASS = "ika-queue-scroll";

@@ -642,8 +642,41 @@ export async function openShipmentForm(
  * over and over also says who did it. Five places call this, and the reload
  * loops of 26/09 could not be told apart without it.
  */
-export function backToCity(reason: string): void {
-  if (clickIfPresent(SEL.cityLink)) logInfo(`Back to the town view: ${reason}`);
+/**
+ * How long the page counts as leaving after the tool clicks back to the town
+ * view. The click reloads the page 1-3 s later (measured after a shipment); past
+ * this, no reload came and the page carries on.
+ */
+export const PAGE_LEAVING_HOLD_MS = 8_000;
+
+/** When the tool last clicked away from this page; null when it did not. */
+let leavingSince: number | null = null;
+
+/**
+ * Whether the page is about to reload because the tool clicked back to the
+ * town view. Nothing new may start on it meanwhile: a town switch sent then
+ * is lost to the reload (four in a row in the bug report of 23/11, each sent
+ * within a second of "Back to the town view"), and a notepad claim started
+ * then is cut off. In memory: the reload is what ends it.
+ */
+export function isPageLeaving(now = Date.now()): boolean {
+  return leavingSince !== null && now - leavingSince < PAGE_LEAVING_HOLD_MS;
+}
+
+/**
+ * Click back to the town view. The page counts as leaving afterwards
+ * (`isPageLeaving`), unless the caller waits for the town view on this same
+ * page (`expectsReload` false) — it then carries on there itself.
+ */
+export function backToCity(reason: string, expectsReload = true): void {
+  if (!clickIfPresent(SEL.cityLink)) return;
+  if (expectsReload) leavingSince = Date.now();
+  logInfo(`Back to the town view: ${reason}`);
+}
+
+/** Forget the leaving mark; for tests. */
+export function resetPageLeavingForTests(): void {
+  leavingSince = null;
 }
 
 /** Whether neither the element nor any of its ancestors is `display: none`. */

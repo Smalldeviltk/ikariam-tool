@@ -22,11 +22,15 @@ vi.mock("@core/logger", async (importOriginal) => ({
 
 const ME = "tester";
 
-/** An export taken in another browser, from `account`'s data. */
-function bundleOf(account: string): string {
+/**
+ * An export taken in another browser, from `account`'s data; with its
+ * saved build list when `buildList` is given.
+ */
+function bundleOf(account: string, buildList?: string): string {
   localStorage.clear();
   localStorage.setItem(`${account}listSender`, '["0"]');
   localStorage.setItem("ika_perShipCapacity", "620");
+  if (buildList !== undefined) localStorage.setItem("listAutoBuild", buildList);
   const json = JSON.stringify(exportData());
   localStorage.clear();
   return json;
@@ -80,6 +84,56 @@ describe("importDataFromFile", () => {
     expect(confirm).toHaveBeenCalledTimes(1);
     expect(localStorage.getItem(`${ME}listSender`)).toBe('["0"]');
     expect(localStorage.getItem("ika_perShipCapacity")).toBe("620");
+  });
+
+  describe("the notepad's agreed upgrades", () => {
+    const shipment = {
+      kind: "shipment",
+      id: "k7",
+      origin: 0,
+      destination: 1,
+      resource: "wood",
+      amount: 500,
+    };
+    const upgrade = { kind: "upgrade", town: 1, slot: 8, level: 22 };
+
+    function base(): unknown {
+      return JSON.parse(
+        localStorage.getItem(`${ME}ikaQueueNoteBase`) ?? "null",
+      );
+    }
+
+    it(
+      "are forgotten after a build list is imported, so it does not read as " +
+        "upgrades deleted here; shipments keep theirs",
+      async () => {
+        pickFile(bundleOf(ME, "[]"));
+        localStorage.setItem(
+          `${ME}ikaQueueNoteBase`,
+          JSON.stringify([shipment, upgrade]),
+        );
+        answer(true);
+
+        importDataFromFile();
+        await imported();
+
+        expect(base()).toEqual([shipment]);
+      },
+    );
+
+    it("are kept by an import without a build list", async () => {
+      pickFile(bundleOf(ME));
+      localStorage.setItem(
+        `${ME}ikaQueueNoteBase`,
+        JSON.stringify([shipment, upgrade]),
+      );
+      answer(true);
+
+      importDataFromFile();
+      await imported();
+
+      expect(base()).toEqual([shipment, upgrade]);
+    });
   });
 
   it("moves another account's entries onto this one when asked to", async () => {

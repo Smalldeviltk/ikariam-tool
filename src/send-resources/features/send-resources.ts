@@ -189,7 +189,8 @@ export async function handleSendResource(
   // exactly one shipment and then deferred every tick after it, until the
   // player opened a town by hand.
   if (!qs(SEL.position(1)) && !qs(SEL.position(2))) {
-    backToCity("shipment needs the town view to find the port");
+    // Waited for on this page: not a page about to be left.
+    backToCity("shipment needs the town view to find the port", false);
     await waitForElement(SEL.position(1), {
       timeoutMs: BACK_TO_TOWN_TIMEOUT_MS,
     }).catch(() => null);
@@ -228,7 +229,7 @@ export async function handleSendResource(
   }
   // Straight to the form for this destination, the way the game's transport
   // panel opens it. It replaces clicking the port and then the destination in
-  // a town list the game no longer draws (improvement-plan.md §2.A).
+  // a town list the game no longer draws.
   //
   // A sea slot under construction may be the port being upgraded, or the
   // shipyard — the slot does not say. When that is all the town has and no

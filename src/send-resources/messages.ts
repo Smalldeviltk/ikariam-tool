@@ -129,6 +129,7 @@ export const SEND_DIALOG = {
   amount: "Amount",
   removeFirst: "Remove First",
   removeLast: "Remove Last",
+  clearAll: "Clear All",
   columns: ["Origin", "Destination", "Resource", "Amount", "Source", ""],
   /** Beside an amount when the source town's stock is not known. */
   stockUnknown: "—",
@@ -319,6 +320,8 @@ export const BUILD_DIALOG = {
   town: "Town: ",
   buildingList: "List Building",
   emptyTown: "-empty-",
+  /** Empties the saved list of the town picked in the dropdown only. */
+  clearTown: "Clear All",
   savedAsYouGo: "Changes are saved as you add or remove entries.",
   loadingBuildings: "Loading this town's buildings…",
   noTownId: "This town has no id in the town list.",
@@ -474,11 +477,39 @@ export const CRAWL_DIALOG = {
     building: "Building — the one open in Help > building details",
     wine: "Wine — Auto Wine's receiving towns (scans every town first)",
     pirate: "Pirate — the Pirate Fortress view, and the last failed captures",
+    element: "By id — an element's HTML and CSS, or what a piece of JS returns",
   },
   run: "Crawl",
   nothingChosen: "Pick what to crawl.",
+  /** A crawl failed; the file holds the error in full. */
+  failed: (message: string, filename: string) =>
+    `Could not crawl: ${message}\nThe details are saved in ${filename}`,
+  notSaved: (message: string) => `Could not save the crawl's file: ${message}`,
+  /** Wine's scan refused to start without saying why. */
+  scanRefused: "The scan of every town did not start.",
   wineSaved: (rows: number, filename: string) =>
     `Saved the wine figures of ${rows} towns.\n${filename}`,
+} as const;
+
+export const ELEMENT_CRAWL = {
+  title: "Crawl by id",
+  target: "Element id or CSS selector, or JS code:",
+  placeholder:
+    "autoBuildTable  |  #ikaMationTransporterDialog .popupContent  |  ikariam.model",
+  modes: {
+    html: "HTML — the element's HTML, and its CSS and its children's",
+    js: "JS — run the code and save what it returns",
+  },
+  hint:
+    "Stays open beside the game's dialogs: open the dialog to look at, then " +
+    "press Crawl here. JS: one expression, or statements with a return.",
+  run: "Crawl",
+  nothingTyped: "Type an element id, a CSS selector or some JS first.",
+  notFound: (target: string) =>
+    `No element has the id "${target}", and no element matches it as a CSS selector.`,
+  savedHtml: (elements: number, filename: string) =>
+    `Saved the HTML and CSS of ${elements} elements.\n${filename}`,
+  savedJs: (filename: string) => `Saved what the code returned.\n${filename}`,
 } as const;
 
 export const BUILDING_CRAWL = {

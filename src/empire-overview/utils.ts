@@ -17,6 +17,54 @@ export function languageText(): Record<string, string> {
   return Constant.LanguageData[database.settings?.languageChange?.value];
 }
 
+/** The key the game's thousands separator is stored under. */
+const THOUSANDS_SEPARATOR_KEY = "thousandSeperator";
+
+/**
+ * The game's thousands separator, from its localisation strings; `","` while
+ * they are not loaded. `getLocalisedString` answers with the key itself when
+ * it has no value, so that answer means "not known" too.
+ */
+function thousandsSeparator(): string {
+  try {
+    const value = database.getGlobalData.getLocalisedString(
+      THOUSANDS_SEPARATOR_KEY,
+    );
+    return value && value !== THOUSANDS_SEPARATOR_KEY ? value : ",";
+  } catch {
+    return ",";
+  }
+}
+
+/**
+ * Added (not in the original): a count as the game writes it — `"12"`,
+ * `"1,234"` with the game's own thousands separator, or the menu bar's
+ * `"1.2k"`, where the mark that is not the thousands separator is the
+ * decimal point (`"1,2k"` where the separator is a dot). Text before the
+ * first digit is skipped. `NaN` when there is no number, as `parseInt` gives, so a
+ * caller's `|| 0` reads the same as before.
+ *
+ * Several counts went through a bare `parseInt`, which stops at the
+ * separator: 1,234 units in training, available, on the move, scientists or
+ * idle ships all read as 1.
+ */
+export function readGameCount(text: unknown): number {
+  const raw = String(text ?? "");
+  const start = raw.search(/\d/);
+  if (start < 0) return NaN;
+  const fromDigit = raw.slice(start).trim();
+  const separator = thousandsSeparator();
+  const abbreviated = fromDigit.match(/^([\d.,]+)\s*k/i);
+  if (abbreviated) {
+    const decimalMark = separator === "." ? "," : ".";
+    const thousands = Number.parseFloat(
+      abbreviated[1].split(separator).join("").replace(decimalMark, "."),
+    );
+    return Number.isFinite(thousands) ? Math.round(thousands * 1000) : NaN;
+  }
+  return parseInt(fromDigit.split(separator).join(""), 10);
+}
+
 export const Utils: any = {
   wrapInClosure: function (obj) {
     return (function (x) {

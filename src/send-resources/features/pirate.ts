@@ -591,7 +591,7 @@ let holdCheck: () => boolean = () => false;
 
 /**
  * What else must not be under way when a capture goes out: the app passes
- * whether the task runner is in the middle of a task. A task opens a
+ * whether a task runner, in this tab or another, is in the middle of a task. A task opens a
  * building or a shipment form whose button carries the session token of
  * that moment, and a capture, being an action, moves the token.
  */
@@ -599,9 +599,43 @@ export function setPirateHoldCheck(check: () => boolean): void {
   holdCheck = check;
 }
 
-/** Whether a capture request is out, for the runner to wait on. */
+/** Whether a capture request is out from this tab, for the runner to wait on. */
 export function isPirateCaptureInFlight(): boolean {
   return captureInFlight;
+}
+
+/**
+ * Per account: when the capture now out was sent (epoch ms), by whichever
+ * tab sends the captures. Pirate's lock and the task runner's are separate,
+ * so the tab sending captures need not be the one running the queue, and a
+ * capture moves the session token under a building or shipment form the
+ * other tab has open.
+ */
+export const PIRATE_CAPTURE_OUT_KEY = "ikaPirateCaptureOut";
+
+/**
+ * How long a capture mark counts. Well past the longest a capture request
+ * can take (the 15 s timeout of the game's requests, `core/ikariam/http.ts`),
+ * so a capture still out always holds the queue; a tab closed mid-capture
+ * stops holding the others back on its own after this.
+ */
+export const PIRATE_CAPTURE_MARK_MAX_AGE_MS = 60_000;
+
+function markCaptureOut(out: boolean): void {
+  const store = getState().account;
+  if (out) store.setJSON(PIRATE_CAPTURE_OUT_KEY, Date.now());
+  else store.remove(PIRATE_CAPTURE_OUT_KEY);
+}
+
+/** Whether a capture is out from any tab of this account. */
+export function isPirateCaptureOutInAnyTab(now = Date.now()): boolean {
+  const sentAt = getState().account.getJSON<unknown>(
+    PIRATE_CAPTURE_OUT_KEY,
+    null,
+  );
+  return (
+    typeof sentAt === "number" && now - sentAt < PIRATE_CAPTURE_MARK_MAX_AGE_MS
+  );
 }
 
 /**
@@ -658,11 +692,13 @@ async function tick(): Promise<void> {
   }
 
   captureInFlight = true;
+  markCaptureOut(true);
   let outcome: CaptureOutcome;
   try {
     outcome = await sendCapture(settings);
   } finally {
     captureInFlight = false;
+    markCaptureOut(false);
   }
   // Stopped while the request was out.
   if (!readRun().running) return;

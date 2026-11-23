@@ -32,6 +32,7 @@ import {
   AUTO_WINE,
   BUG_REPORT,
   CRAWL_DIALOG,
+  ELEMENT_CRAWL,
   NOTIFICATIONS,
   QUEUE_VIEW,
   SEND_DIALOG,
@@ -44,6 +45,7 @@ import {
   fortressPosition,
   isPirateCaptchaPending,
   isPirateCaptureInFlight,
+  isPirateCaptureOutInAnyTab,
   isPirateRunning,
   openPendingFortress,
   pirateCaptureTraces,
@@ -77,6 +79,7 @@ import {
 
 import {
   backToCity,
+  isPageLeaving,
   openSpyBuilding,
   sendAllArmy,
   watchTownSwitchResponses,
@@ -107,6 +110,7 @@ import {
   handleUpgradeBuilding,
   moveBuildingInQueue,
   removeHighestLevel,
+  clearTownQueue,
   removeUpgradeAndLater,
   scanBuildings,
   startBuildingLevelObserver,
@@ -128,6 +132,15 @@ import {
 } from "./features/transport-buttons";
 import {
   clearBugs,
+  crawlCode,
+  crawlElement,
+  crawlErrorOf,
+  crawlFileText,
+  CrawlStopped,
+  type CodeCrawl,
+  type CrawlError,
+  type ElementCrawl,
+  type FailedElementCrawl,
   exportFullBugReport,
   getBugs,
   installDiagnostics,
@@ -158,12 +171,16 @@ import {
   openAutoBuildDialog,
   openAutoWineDialog,
   openCrawlDialog,
+  openElementCrawlBox,
+  closeElementCrawlBox,
+  readElementCrawlForm,
   openSendResourcesDialog,
   openWineSourceDialog,
   readCrawlChoice,
   type CrawlKind,
   readSendForm,
   refreshTownQueueCell,
+  pickedBuildTown,
   renderResourceTable,
   renderWinePlanPreview,
   openPirateDialog,
@@ -239,10 +256,14 @@ function stopRunner(): void {
 function mayRunQueue(): boolean {
   // Not while a Pirate capture is out: it moves the session token, and a
   // building or shipment form opened meanwhile would carry the old one.
+  // Nor on a page the tool has just clicked away from: what starts there
+  // (a town switch, a notepad claim) dies with the reload.
   return (
+    !isPageLeaving() &&
     holdsTabLock() &&
     queueNoteAllowsRunning() &&
     !isPirateCaptureInFlight() &&
+    !isPirateCaptureOutInAnyTab() &&
     !captchaHoldsQueue()
   );
 }
@@ -466,11 +487,18 @@ async function runAutoWine(fromTown: string | null): Promise<void> {
  * file feeds a split across accounts, which needs each town's figures.
  */
 async function crawlWine(fromTown: string | null): Promise<void> {
-  if (!(await scanBuildings(undefined, () => runner.isRunning))) return;
+  let refusal: string | null = null;
+  const scanned = await scanBuildings(
+    undefined,
+    () => runner.isRunning,
+    (reason) => (refusal = reason),
+  );
+  if (!scanned) {
+    throw new CrawlStopped("scan", refusal ?? CRAWL_DIALOG.scanRefused);
+  }
   const source = fromTown ?? pickWineSource();
   if (source === null) {
-    showToast(WINE_DIALOG.noSourceTicked);
-    return;
+    throw new CrawlStopped("source", WINE_DIALOG.noSourceTicked);
   }
   saveMeasuredReceivers();
   const { accountName } = getState();
@@ -586,16 +614,12 @@ async function togglePirate(): Promise<void> {
  */
 async function crawlPirate(): Promise<void> {
   const settings = pirateSettingsOrDefault();
-  if (!settings) {
-    showToast(PIRATE.noTown);
-    return;
-  }
+  if (!settings) throw new CrawlStopped("settings", PIRATE.noTown);
   let view;
   try {
     view = await fetchFortressView(settings.cityId, settings.position);
   } catch (e) {
-    showToast(PIRATE.levelsFailed(errorMessage(e)));
-    return;
+    throw new CrawlStopped("fetch", PIRATE.levelsFailed(errorMessage(e)), e);
   }
   const { accountName } = getState();
   const filename = timestampedFilename(accountName, "ikariam-pirate", "json");
@@ -625,17 +649,146 @@ async function crawlPirate(): Promise<void> {
  * crawl added to `CRAWL_DIALOG.kinds` without a run here does not compile.
  */
 const CRAWLS: Record<CrawlKind, () => void> = {
-  building: saveBuildingHelpToFile,
+  building: () => void runCrawlSavingErrors("building", saveBuildingHelpToFile),
   wine: () => {
     // None ticked: picked after the scan, from fresh figures, as Start does.
     if (loadSenders().length === 0) {
-      void crawlWine(null);
+      void runCrawlSavingErrors("wine", () => crawlWine(null));
       return;
     }
-    withWineSource("crawl.wineFrom", (town) => void crawlWine(town));
+    withWineSource(
+      "crawl.wineFrom",
+      (town) => void runCrawlSavingErrors("wine", () => crawlWine(town)),
+    );
   },
-  pirate: () => void crawlPirate(),
+  pirate: () => void runCrawlSavingErrors("pirate", crawlPirate),
+  element: openElementCrawlBox,
 };
+
+/**
+ * Run a crawl, and when it cannot be done, save why to a file instead:
+ * `ok: false`, the crawl's name, and the error (the step that failed, its
+ * name, message and stack, and the error behind it). A crawl stops by
+ * throwing, `CrawlStopped` for the reasons it knows, anything else for those
+ * it does not.
+ */
+async function runCrawlSavingErrors(
+  crawl: CrawlKind,
+  run: () => void | Promise<void>,
+): Promise<void> {
+  try {
+    await run();
+  } catch (e) {
+    saveCrawlFailure(crawl, crawlErrorOf("unexpected", e));
+  }
+}
+
+function saveCrawlFailure(crawl: CrawlKind, error: CrawlError): void {
+  const { accountName } = getState();
+  const filename = timestampedFilename(
+    accountName,
+    `ikariam-crawl-${crawl}-failed`,
+    "json",
+  );
+  const saved = saveCrawlFile(filename, `Crawl ${crawl}`, {
+    ok: false,
+    crawl,
+    savedAt: new Date().toISOString(),
+    url: location.href,
+    error,
+  });
+  if (!saved) return;
+  logInfo(
+    `Crawl ${crawl} failed (${error.stage}: ${error.name}: ${error.message}) - details in ${filename}`,
+  );
+  showToast(CRAWL_DIALOG.failed(error.message, filename));
+}
+
+/**
+ * Save a file of Crawl by id or of a failed crawl, every session token taken
+ * out (`crawlFileText`). False when the browser would not take it, which is
+ * said on screen and in the log.
+ */
+function saveCrawlFile(
+  filename: string,
+  what: string,
+  payload: object,
+): boolean {
+  try {
+    downloadJson(filename, crawlFileText(payload));
+    return true;
+  } catch (e) {
+    const message = errorMessage(e);
+    logInfo(`${what}: could not save ${filename}: ${message}`);
+    showToast(CRAWL_DIALOG.notSaved(message));
+    return false;
+  }
+}
+
+/**
+ * The Crawl by id box's button: the HTML and CSS of the element typed, or
+ * what the JS typed returns, saved to a file. The box stays open, for the
+ * next look.
+ *
+ * A crawl that fails still saves a file, with `ok: false` and the error:
+ * where it stopped, its name, message and stack. Only an empty box saves
+ * nothing, and a file the browser would not take is reported on screen and
+ * in the log.
+ */
+async function runElementCrawl(): Promise<void> {
+  const form = readElementCrawlForm();
+  if (!form) return;
+  if (form.target === "") {
+    showToast(ELEMENT_CRAWL.nothingTyped);
+    return;
+  }
+  const { accountName } = getState();
+  const filename = timestampedFilename(
+    accountName,
+    `ikariam-crawl-${form.mode}`,
+    "json",
+  );
+
+  let capture: ElementCrawl | FailedElementCrawl | CodeCrawl;
+  try {
+    capture =
+      form.mode === "js"
+        ? await crawlCode(form.target)
+        : crawlElement(form.target);
+  } catch (e) {
+    // Neither crawl throws by design; this is the net under that.
+    const failed: FailedElementCrawl = {
+      ok: false,
+      target: form.target,
+      error: crawlErrorOf("unexpected", e),
+    };
+    capture = failed;
+  }
+
+  const saved = saveCrawlFile(filename, "Crawl by id", {
+    savedAt: new Date().toISOString(),
+    url: location.href,
+    mode: form.mode,
+    ...capture,
+  });
+  if (!saved) return;
+
+  // A failed crawl, of either kind, is the one that carries an error.
+  if ("error" in capture) {
+    const { error } = capture;
+    logInfo(
+      `Crawl by id failed (${error.stage}: ${error.name}: ${error.message}) - details in ${filename}`,
+    );
+    showToast(CRAWL_DIALOG.failed(error.message, filename));
+    return;
+  }
+  logInfo(`Crawl by id: saved ${filename}`);
+  showToast(
+    "elements" in capture
+      ? ELEMENT_CRAWL.savedHtml(capture.elements.length, filename)
+      : ELEMENT_CRAWL.savedJs(filename),
+  );
+}
 
 /** The Crawl dialog's button: the one crawl picked. */
 function runCrawl(): void {
@@ -745,6 +898,11 @@ function registerUiActions(): void {
       if (last) queue.removeById(last.id);
       renderResourceTable();
     },
+    // Every shipment the dialog's table lists, Auto Wine's included.
+    "send.clearAll": () => {
+      getState().queue.removeType("sendResource");
+      renderResourceTable();
+    },
     "send.moveUp": (element) => moveShipment(element, "up"),
     "send.moveDown": (element) => moveShipment(element, "down"),
     "queue.toggle": toggleQueueRunner,
@@ -821,6 +979,13 @@ function registerUiActions(): void {
       if (!ikaPosition || !ikaTown) return;
       removeHighestLevel(ikaPosition, ikaTown);
       refreshTownQueueCell(ikaTown);
+    },
+    // The town picked in the dropdown only; the other towns keep theirs.
+    "build.clearTown": () => {
+      const townName = pickedBuildTown();
+      if (!townName) return;
+      clearTownQueue(townName);
+      refreshTownQueueCell(townName);
     },
     "build.moveUp": (element) => moveSavedUpgrade(element, "up"),
     "build.moveDown": (element) => moveSavedUpgrade(element, "down"),
@@ -950,11 +1115,13 @@ function registerUiActions(): void {
       showToast(PIRATE.saved(townNameOfCity(chosen.cityId), chosen.level));
     },
     "crawl.run": runCrawl,
+    "crawl.element.run": runElementCrawl,
+    "crawl.element.close": closeElementCrawlBox,
     "crawl.wineFrom": (element) => {
       const town = element.dataset.ikaTown;
       if (!town) return;
       closeDialog();
-      void crawlWine(town);
+      void runCrawlSavingErrors("wine", () => crawlWine(town));
     },
   });
 
@@ -1087,13 +1254,24 @@ export function start(): void {
 
   // Never let the keep-alive reload interrupt a task in flight, nor wipe the
   // Pirate Fortress opened for the security word.
-  setReloadGuard(() => !runner.isBusy && !isPirateCaptchaPending());
+  setReloadGuard(
+    () => !runner.isBusy && !isPirateCaptchaPending() && !isPageLeaving(),
+  );
   // Nor a Pirate capture: an Upgrade button or shipment form opened by the
   // task carries the session token of that moment, and a capture moves it.
-  setPirateHoldCheck(() => runner.isBusy);
+  // This tab's runner, or the one in another tab: Pirate's lock and the
+  // runner's are taken separately, so the two can sit in different tabs.
+  setPirateHoldCheck(
+    () => runner.isBusy || isRunnerBusyInAnyTab() || isPageLeaving(),
+  );
   // Nor a notepad sync after a change: its save moves the token the same way.
   // This tab's runner, or the one in another tab of the same account.
-  setChangeSyncHold(() => runner.isBusy || isRunnerBusyInAnyTab());
+  // Nor on a page the tool has just clicked away from: a finished task's
+  // change arms a sync that would land as the page reloads, and the next
+  // page's own sync carries the change.
+  setChangeSyncHold(
+    () => runner.isBusy || isRunnerBusyInAnyTab() || isPageLeaving(),
+  );
   // The queue's ▶ and the status line follow the task the runner is on.
   setCurrentTaskSource(() => runner.currentTaskId);
 

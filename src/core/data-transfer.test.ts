@@ -11,6 +11,7 @@ import {
 } from "./data-transfer";
 import { FLAG, KEY } from "../send-resources/state";
 import { TOWN_STATS_KEY } from "../send-resources/town-cache";
+import { PIRATE_CAPTURE_OUT_KEY } from "../send-resources/features/pirate";
 import { BUG_REPORT_STORAGE_KEY } from "./bug-report";
 import { LOGGER_STORAGE_KEY } from "./logger";
 import {
@@ -336,6 +337,7 @@ describe("every key the scripts write is classified", () => {
       KEY.routeTimes,
       KEY.queueNoteBase,
       KEY.runnerBusy,
+      PIRATE_CAPTURE_OUT_KEY,
       TOWN_STATS_KEY,
     ];
     for (const key of accountKeys) {

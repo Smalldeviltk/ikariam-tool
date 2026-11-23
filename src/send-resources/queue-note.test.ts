@@ -15,6 +15,7 @@ import {
   claimUpgrade,
   encodeEntry,
   encodeNote,
+  forgetBuildListBase,
   isWritable,
   mergeEntries,
   NOTE_MAX_CHARS,
@@ -556,6 +557,73 @@ describe("syncing with the notepad", () => {
       "T-Sparta": ["js_CityPosition8Link|Warehouse 22"],
     });
     expect(getState().queue.listOfType("upgradeBuilding")).toEqual([]);
+  });
+
+  it(
+    "after an Import replaced the build list, keeps the upgrades the file " +
+      "lacks in the notepad instead of deleting them elsewhere",
+    async () => {
+      saveUpgrades({
+        "T-Sparta": [
+          ["js_CityPosition8Link", "Warehouse 21"],
+          ["js_CityPosition8Link", "Warehouse 22"],
+        ],
+      });
+      await syncQueueNote();
+      expect(noteEntries()).toEqual([upgrade(1, 8, 21), upgrade(1, 8, 22)]);
+
+      // An Import writes the file's list over the saved one: 22 is missing.
+      saveUpgrades({ "T-Sparta": [["js_CityPosition8Link", "Warehouse 21"]] });
+      forgetBuildListBase();
+      await syncQueueNote();
+
+      expect(noteEntries()).toEqual([upgrade(1, 8, 21), upgrade(1, 8, 22)]);
+      // Back from the notepad, under the name a copy carries.
+      expect(savedUpgrades()).toEqual({
+        "T-Sparta": [
+          "js_CityPosition8Link|Warehouse 21",
+          "js_CityPosition8Link|Position 8 22",
+        ],
+      });
+    },
+  );
+
+  it(
+    "a notepad copy renamed after its building is not written back - the " +
+      "notepad carries no names, and a save would move the session token",
+    async () => {
+      notepad.text = noteText([upgrade(1, 8, 22)]);
+      await syncQueueNote();
+      expect(savedUpgrades()).toEqual({
+        "T-Sparta": ["js_CityPosition8Link|Position 8 22"],
+      });
+      const savesBefore = notepad.saves.length;
+
+      // Auto Build names the copy once it has read the town's slots.
+      saveUpgrades({ "T-Sparta": [["js_CityPosition8Link", "Warehouse 22"]] });
+      await syncQueueNote();
+
+      expect(notepad.saves).toHaveLength(savesBefore);
+      expect(noteEntries()).toEqual([upgrade(1, 8, 22)]);
+      expect(savedUpgrades()).toEqual({
+        "T-Sparta": ["js_CityPosition8Link|Warehouse 22"],
+      });
+    },
+  );
+
+  it("forgetting the build list's base still drops a shipment run elsewhere", async () => {
+    queueShipment();
+    await syncQueueNote();
+    expect(shipmentTasks()).toHaveLength(1);
+    // Run on another computer: gone from the notepad.
+    expect(base()).toHaveLength(1);
+    notepad.text = noteText([]);
+    forgetBuildListBase();
+    expect(base()).toHaveLength(1);
+
+    await syncQueueNote();
+
+    expect(shipmentTasks()).toEqual([]);
   });
 
   it("leaves tasks the notepad does not carry alone", async () => {

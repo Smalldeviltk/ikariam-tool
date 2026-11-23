@@ -15,7 +15,7 @@ import $, { pageJQuery } from "./jquery";
 import { Constant } from "./constants";
 import { MilitaryUnits } from "./models/military";
 import { Movement } from "./models/movement";
-import { languageText, Utils } from "./utils";
+import { languageText, readGameCount, Utils } from "./utils";
 import { database } from "./database";
 import { empire } from "./empire";
 import { events } from "./events";
@@ -825,9 +825,12 @@ export const ikariam: any = {
     var i = 14;
     while (i--) {
       if (tData["js_barracksUnitUnitsAvailable" + (i - 1)]) {
+        // Fixed: was a bare parseInt, which stops at the thousands separator (1,234 read as 1).
         currentUnits[
           tData["js_barracksUnitClass" + (i - 1)]["class"].split(" ").pop()
-        ] = parseInt(tData["js_barracksUnitUnitsAvailable" + (i - 1)].text);
+        ] = readGameCount(
+          tData["js_barracksUnitUnitsAvailable" + (i - 1)].text,
+        );
       }
     }
     var changes = city.military.updateUnits(currentUnits);
@@ -858,8 +861,10 @@ export const ikariam: any = {
     function parseUnits(element) {
       var units = {};
       element.each(function () {
+        // Fixed: was parseInt of a match array — "1,234" gave ["1", "234"],
+        // which parseInt read as 1.
         units[Constant.unitIds[this.classList.toString().match(/(\d+)/g)]] =
-          parseInt(this.nextElementSibling.textContent.match(/(\d+)/g));
+          readGameCount(this.nextElementSibling.textContent);
       });
       return units;
     }
@@ -1296,8 +1301,9 @@ export const ikariam: any = {
           .split(database.getGlobalData.getLocalisedString("thousandSeperator"))
           .join(""),
       ) || 0;
+    // Fixed: was a bare parseInt, which stops at the thousands separator (1,234 read as 1).
     var researchers =
-      parseInt(data.js_TownHallPopulationGraphScientistCount.text) || 0;
+      readGameCount(data.js_TownHallPopulationGraphScientistCount.text) || 0;
     changes.culturalGoods = city.updateCulturalGoods(cultBon / 50);
     changes.priests = city.updatePriests(priests);
     changes.research = city.updateResearchers(researchers);
@@ -1470,7 +1476,11 @@ export const ikariam: any = {
                     Constant.UnitData,
                     function findIsUnit(val: string, info: any) {
                       if (Utils.existsIn(item["class"], " " + val)) {
-                        transport._military.setUnit(val, parseInt(item.text));
+                        // Fixed: was a bare parseInt, which stops at the thousands separator (1,234 read as 1).
+                        transport._military.setUnit(
+                          val,
+                          readGameCount(item.text),
+                        );
                         return false;
                       }
                     },
@@ -1793,7 +1803,8 @@ export const ikariam: any = {
     if (this.$freeTransporters == undefined) {
       this.$freeTransporters = $("#js_GlobalMenu_freeTransporters");
     }
-    return parseInt(this.$freeTransporters.text());
+    // Fixed: was a bare parseInt, which stops at the thousands separator (1,234 read as 1).
+    return readGameCount(this.$freeTransporters.text());
   },
 };
 

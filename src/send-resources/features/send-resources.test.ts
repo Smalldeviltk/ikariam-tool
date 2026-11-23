@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initState, routeSeconds } from "../state";
 import { describeCurrentTransfer, handleSendResource } from "./send-resources";
+import { isPageLeaving, resetPageLeavingForTests } from "../navigation";
 import type { Task } from "@core/task-queue";
 
 // Silence the logger, but keep its other exports (its storage key is read by
@@ -176,7 +177,10 @@ beforeEach(() => {
   localStorage.clear();
   initState("tester");
   vi.useFakeTimers();
-  claimShipment.mockClear();
+  // Reset, not clear: a one-off answer a test left unused (a shipment that
+  // stopped before its claim) would otherwise answer the next test's claim.
+  claimShipment.mockReset();
+  claimShipment.mockResolvedValue({ status: "go" });
 });
 
 afterEach(() => {
@@ -295,6 +299,23 @@ describe("handleSendResource", () => {
       expect(game.state.cityLinkClickedAt).toBeGreaterThan(0);
       // Nothing between the click and the result may wait on a timer.
       expect(resolvedAt - game.state.cityLinkClickedAt).toBe(0);
+    },
+  );
+
+  it(
+    "going back to the town view to find the port waits on this page, so " +
+      "the page does not count as being left",
+    async () => {
+      resetPageLeavingForTests();
+      const game = installGame({ afterSubmit: "town", noPort: true });
+      game.render("elsewhere");
+
+      await expect(run(shipment(1000))).resolves.toMatchObject({
+        status: "defer",
+      });
+      expect(game.state.cityLinkClickedAt).toBeGreaterThan(0);
+      // Asked as of the click: the run lets the clock pass the hold.
+      expect(isPageLeaving(game.state.cityLinkClickedAt)).toBe(false);
     },
   );
 

@@ -8,6 +8,7 @@ import {
   setAutoStart,
   setFlag,
 } from "./state";
+import type { CrawlError } from "./diagnostics";
 
 // Silence the logger, but keep its other exports (its storage key is read by
 // the data export).
@@ -56,13 +57,40 @@ vi.mock("./features/auto-build", async (importOriginal) => ({
 // dialog and the crawl make of its answer.
 const { fetchFortressView, pirateCapture } = vi.hoisted(() => ({
   fetchFortressView: vi.fn(),
-  pirateCapture: { inFlight: false },
+  pirateCapture: {
+    inFlight: false,
+    /** What the app handed Pirate as its hold check. */
+    holdCheck: null as (() => boolean) | null,
+  },
 }));
-vi.mock("./features/pirate", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./features/pirate")>()),
-  fetchFortressView,
-  isPirateCaptureInFlight: () => pirateCapture.inFlight,
+// What the app hands the keep-alive as its reload guard.
+const keepAlive = vi.hoisted(() => ({
+  guard: null as (() => boolean) | null,
 }));
+vi.mock("./features/summary-account", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("./features/summary-account")>();
+  return {
+    ...actual,
+    setReloadGuard: (guard: () => boolean) => {
+      keepAlive.guard = guard;
+      actual.setReloadGuard(guard);
+    },
+  };
+});
+
+vi.mock("./features/pirate", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./features/pirate")>();
+  return {
+    ...actual,
+    fetchFortressView,
+    isPirateCaptureInFlight: () => pirateCapture.inFlight,
+    setPirateHoldCheck: (check: () => boolean) => {
+      pirateCapture.holdCheck = check;
+      actual.setPirateHoldCheck(check);
+    },
+  };
+});
 
 // The notepad copy is tested in `queue-note.test.ts`; here only how the app
 // drives it. Its debounce timer would also throw off the timer counts below.
@@ -422,42 +450,173 @@ describe("the Transport settings dialog", () => {
     });
   });
 
-  it("shows ten shipments in its table and scrolls the rest", async () => {
-    await startWith({});
-    const { getState: appGetState } = await appState();
-    for (let i = 0; i < 12; i++) {
-      appGetState().queue.push({
-        type: "sendResource",
-        data: { origin: "0", destination: "1", resource: "wine", amount: i },
-      });
-    }
-    document.body.insertAdjacentHTML(
-      "beforeend",
-      `<div id="resourceTableScroll"><table><thead><tr><th></th></tr></thead>` +
-        `<tbody id="resourceTableBody"></tbody></table></div>`,
-    );
-    // happy-dom has no layout: 20px per row, the header row first.
-    const spy = vi
-      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
-      .mockImplementation(function (this: HTMLElement) {
-        if (!this.matches("tbody > tr")) {
-          return { top: 0, bottom: 0, height: 0 } as DOMRect;
-        }
-        const index = [...this.parentElement!.children].indexOf(this) + 1;
-        return { top: index * 20, bottom: (index + 1) * 20 } as DOMRect;
-      });
-    try {
-      const { renderResourceTable } = await import("./ui/dialogs");
-      renderResourceTable();
-    } finally {
-      spy.mockRestore();
+  describe("form on the left, queued shipments on the right", () => {
+    /** Open the dialog as the game's popup would draw it. */
+    async function openDialog(): Promise<void> {
+      const createPopup = (id: string, _title: string, html: string) =>
+        document.body.insertAdjacentHTML(
+          "beforeend",
+          `<div id="${id}">${html}</div>`,
+        );
+      Object.assign(window, { ikariam: { createPopup } });
+      await actions["send.settings"](document.body);
+      delete window.ikariam;
     }
 
-    // Header (20px) + ten shipments of 20px: the tenth ends at 220px.
-    expect(
-      document.querySelector<HTMLElement>("#resourceTableScroll")!.style
-        .maxHeight,
-    ).toBe("220px");
+    async function queueShipments(count: number): Promise<void> {
+      const { getState: appGetState } = await appState();
+      for (let i = 0; i < count; i++) {
+        appGetState().queue.push({
+          type: "sendResource",
+          data: { origin: "0", destination: "1", resource: "wine", amount: i },
+        });
+      }
+    }
+
+    /** happy-dom has no layout: give the form a height of its own. */
+    function withFormHeight<T>(height: number, run: () => T): T {
+      const spy = vi
+        .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+        .mockImplementation(function (this: HTMLElement) {
+          const tall = this.id === "transporterSendForm" ? height : 0;
+          return { top: 0, bottom: tall, height: tall } as DOMRect;
+        });
+      try {
+        return run();
+      } finally {
+        spy.mockRestore();
+      }
+    }
+
+    function tableBox(): HTMLElement {
+      return document.querySelector<HTMLElement>("#resourceTableScroll")!;
+    }
+
+    it("puts the table to the right of the form, in one row", async () => {
+      await startWith({});
+      await openDialog();
+
+      const layout = document.querySelector<HTMLElement>(".ika-send-layout")!;
+      expect(Array.from(layout.children).map((child) => child.id)).toEqual([
+        "transporterSendForm",
+        "resourceTableScroll",
+      ]);
+      const form = layout.children[0];
+      expect(form.querySelector("#transporterSendFromTown")).not.toBeNull();
+      expect(form.querySelector("#transporterSendDestination")).not.toBeNull();
+      expect(form.querySelector('[data-ika-action="send.add"]')).not.toBeNull();
+      expect(
+        form.querySelector('[data-ika-action="dialog.close"]'),
+      ).not.toBeNull();
+      expect(tableBox().querySelector("#resourceTable")).not.toBeNull();
+
+      const sheet = document.getElementById(
+        "ika-send-amounts-style",
+      )!.textContent!;
+      expect(sheet).toMatch(/\.ika-send-layout \{\s*display: flex;/);
+      // Below the popup header's floats, not beside them.
+      expect(sheet).toMatch(/\.ika-send-layout \{[^}]*clear: both;/);
+      expect(sheet).toMatch(
+        /\.ika-send-layout > #resourceTableScroll \{\s*overflow-y: auto;/,
+      );
+    });
+
+    it("Clear All empties the shipments, Auto Wine's too, and leaves other tasks", async () => {
+      await startWith({});
+      await queueShipments(3);
+      const { getState: appGetState } = await appState();
+      appGetState().queue.push({
+        type: "sendResource",
+        data: {
+          origin: "0",
+          destination: "1",
+          resource: "wine",
+          amount: 50,
+          label: "Auto Wine",
+        },
+      });
+      appGetState().queue.push({
+        type: "upgradeBuilding",
+        data: {
+          townName: "W-Athens",
+          positionId: "js_CityPosition5Link",
+          buildingName: "Warehouse 26",
+        },
+      });
+      await openDialog();
+      expect(document.querySelectorAll("#resourceTableBody > tr")).toHaveLength(
+        4,
+      );
+      const clearAll = document.querySelector<HTMLElement>(
+        '#transporterSendForm [data-ika-action="send.clearAll"]',
+      )!;
+      expect(clearAll.textContent).toBe("Clear All");
+
+      await actions["send.clearAll"](clearAll);
+
+      expect(appGetState().queue.listOfType("sendResource")).toEqual([]);
+      expect(
+        appGetState()
+          .queue.listOfType("upgradeBuilding")
+          .map((task) => task.data.buildingName),
+      ).toEqual(["Warehouse 26"]);
+      expect(document.querySelectorAll("#resourceTableBody > tr")).toHaveLength(
+        0,
+      );
+    });
+
+    it("caps the Amount block at twice its narrowest and cuts a long sum with ...", async () => {
+      await startWith({});
+      await openDialog();
+
+      const sheet = document.getElementById(
+        "ika-send-amounts-style",
+      )!.textContent!;
+      const rule = (selector: string): string =>
+        sheet.match(new RegExp(`\\${selector} \\{([^}]*)\\}`))![1];
+      expect(rule(".ika-send-amounts")).toContain("min-width: 260px;");
+      expect(rule(".ika-send-amounts")).toContain("max-width: 520px;");
+      expect(rule(".ika-send-amounts-row")).toContain(
+        "grid-template-columns: 65px 150px minmax(0, 1fr);",
+      );
+      const stock = rule(".ika-send-stock");
+      expect(stock).toContain("white-space: nowrap;");
+      expect(stock).toContain("overflow: hidden;");
+      expect(stock).toContain("text-overflow: ellipsis;");
+    });
+
+    it("caps the table at the form's height, so a long queue scrolls", async () => {
+      await startWith({});
+      await queueShipments(30);
+      await openDialog();
+      const { renderResourceTable } = await import("./ui/dialogs");
+
+      withFormHeight(312.4, () => renderResourceTable());
+
+      expect(tableBox().style.maxHeight).toBe("313px");
+      expect(document.querySelectorAll("#resourceTableBody > tr")).toHaveLength(
+        30,
+      );
+    });
+
+    it("caps it the same with one shipment: the cap is the form's, not the queue's", async () => {
+      await startWith({});
+      await queueShipments(1);
+      await openDialog();
+      const { renderResourceTable } = await import("./ui/dialogs");
+
+      withFormHeight(300, () => renderResourceTable());
+
+      expect(tableBox().style.maxHeight).toBe("300px");
+    });
+
+    it("leaves the table uncapped while the form has no height yet", async () => {
+      await startWith({});
+      await queueShipments(30);
+      await openDialog();
+
+      expect(tableBox().style.maxHeight).toBe("");
+    });
   });
 
   it("names the resources in its table as the game does, not by DOM id", async () => {
@@ -1158,6 +1317,83 @@ describe("Auto Wine", () => {
       downloadText.mockClear();
     });
 
+    it("a scan that refuses to start saves why, as the scan said it", async () => {
+      await startWithSource();
+      scanBuildings.mockImplementation(
+        async (
+          _maxTowns?: number,
+          _queueIsRunning?: () => boolean,
+          onRefused?: (reason: string) => void,
+        ) => {
+          onRefused?.("A scan is already walking the towns.");
+          return false;
+        },
+      );
+      downloadJson.mockClear();
+      pickWineInCrawlDialog();
+
+      await actions["crawl.run"](document.body);
+      await settle();
+
+      const file = savedCrawlFailure("wine");
+      expect(file.error).toMatchObject({
+        stage: "scan",
+        name: "CrawlStopped",
+        message: "A scan is already walking the towns.",
+      });
+      expect(file.error.stack).toBeTypeOf("string");
+      expect(downloadText).not.toHaveBeenCalled();
+      expect(showToast).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "Could not crawl: A scan is already walking the towns.",
+        ),
+      );
+    });
+
+    it("a scan that refuses without a reason still saves a file", async () => {
+      await startWithSource();
+      scanBuildings.mockResolvedValue(false);
+      downloadJson.mockClear();
+      pickWineInCrawlDialog();
+
+      await actions["crawl.run"](document.body);
+      await settle();
+
+      expect(savedCrawlFailure("wine").error).toMatchObject({
+        stage: "scan",
+        message: "The scan of every town did not start.",
+      });
+    });
+
+    it("no source town to ship from saves why", async () => {
+      await startWithSource([]);
+      scanBuildings.mockResolvedValue(true);
+      downloadJson.mockClear();
+      pickWineInCrawlDialog();
+
+      await actions["crawl.run"](document.body);
+      await settle();
+
+      expect(savedCrawlFailure("wine").error).toMatchObject({
+        stage: "source",
+        name: "CrawlStopped",
+      });
+      expect(downloadText).not.toHaveBeenCalled();
+    });
+
+    it("from the source picked in the popup, a failure saves a file too", async () => {
+      await startWithSource();
+      scanBuildings.mockResolvedValue(false);
+      downloadJson.mockClear();
+      const button = document.createElement("button");
+      button.dataset.ikaTown = "0";
+
+      await actions["crawl.wineFrom"](button);
+      await settle();
+
+      expect(savedCrawlFailure("wine").error.stage).toBe("scan");
+    });
+
     it(
       "REGRESSION: scans, takes each town's measured consumption as Load " +
         "then Save would, then saves the receiving towns' figures as a " +
@@ -1299,6 +1535,50 @@ describe("Auto Wine", () => {
   });
 });
 
+/**
+ * A crawl's file as these tests read it: every field one of the crawls
+ * writes, typed as it is read here, so a misspelt field does not compile.
+ */
+interface SavedCrawlFile {
+  ok: boolean;
+  crawl: string;
+  mode: string;
+  savedAt: string;
+  url: string;
+  target: string;
+  matches: number;
+  html: string;
+  elements: {
+    element: string;
+    depth: number;
+    style: Record<string, string>;
+    rules: number[];
+    error: CrawlError;
+  }[];
+  elementsCut: boolean;
+  rules: string[];
+  unreadableSheets: { sheet: string; error: CrawlError }[];
+  code: string;
+  result: unknown;
+  error: CrawlError;
+}
+
+/** The one error file a failed crawl saved, parsed. */
+function savedCrawlFailure(crawl: string): SavedCrawlFile {
+  expect(downloadJson).toHaveBeenCalledTimes(1);
+  const [filename, json] = downloadJson.mock.calls[0];
+  expect(filename).toMatch(
+    new RegExp(
+      `^ikariam-crawl-${crawl}-failed-tester-\\d{4}-\\d{2}-\\d{2}-\\d{2}-\\d{2}-\\d{2}\\.json$`,
+    ),
+  );
+  const file = JSON.parse(json);
+  expect(file).toMatchObject({ ok: false, crawl });
+  expect(file.savedAt).toBeTypeOf("string");
+  expect(file.url).toBeTypeOf("string");
+  return file;
+}
+
 describe("the Crawl dialog", () => {
   /** Draw the dialog the way the game's popup would. */
   async function openCrawl(): Promise<void> {
@@ -1319,7 +1599,9 @@ describe("the Crawl dialog", () => {
   beforeEach(() => {
     showToast.mockClear();
     scanBuildings.mockReset();
-    downloadJson.mockClear();
+    // Reset, not clear: a one-off implementation a test left unused would
+    // otherwise answer the next test's download.
+    downloadJson.mockReset();
     downloadText.mockClear();
   });
 
@@ -1335,7 +1617,7 @@ describe("the Crawl dialog", () => {
       // Every crawl the messages declare, so a new one is covered too.
       const { CRAWL_DIALOG } = await import("./messages");
       const kinds = Object.keys(CRAWL_DIALOG.kinds);
-      expect(kinds).toEqual(["building", "wine", "pirate"]);
+      expect(kinds).toEqual(["building", "wine", "pirate", "element"]);
       const choices = kinds.map((kind) =>
         document.querySelector<HTMLInputElement>(`#ikaCrawl_${kind}`)!,
       );
@@ -1385,6 +1667,534 @@ describe("the Crawl dialog", () => {
       rows: [["1"], ["2"]],
     });
     expect(scanBuildings).not.toHaveBeenCalled();
+  });
+
+  it("with Building picked and no help dialog open, saves why", async () => {
+    await openCrawl();
+    (document.querySelector("#ikaCrawl_building") as HTMLInputElement).checked =
+      true;
+
+    await actions["crawl.run"](document.body);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const file = savedCrawlFailure("building");
+    expect(file.error).toMatchObject({
+      stage: "find",
+      name: "CrawlStopped",
+    });
+    expect(file.error.message).toContain("Open Help > building details first");
+    expect(file.error.stack).toBeTypeOf("string");
+    expect(showToast.mock.calls[0][0]).toContain(
+      "Could not crawl: Open Help > building details first",
+    );
+  });
+
+  it("an error nobody planned for is saved too, with what was thrown", async () => {
+    await openCrawl();
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="buildingDetail"><h3 class="header">Academy</h3>` +
+        `<div class="content"><table class="table01">` +
+        `<tr><th>Level</th></tr><tr><td>1</td></tr></table></div></div>`,
+    );
+    (document.querySelector("#ikaCrawl_building") as HTMLInputElement).checked =
+      true;
+    // The building's own file is refused; the error file is not.
+    downloadJson.mockImplementationOnce(() => {
+      throw new TypeError("quota exceeded");
+    });
+
+    await actions["crawl.run"](document.body);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(downloadJson).toHaveBeenCalledTimes(2);
+    const [filename, json] = downloadJson.mock.calls[1];
+    expect(filename).toContain("ikariam-crawl-building-failed");
+    expect(JSON.parse(json).error).toMatchObject({
+      stage: "unexpected",
+      name: "TypeError",
+      message: "quota exceeded",
+    });
+  });
+
+  it("a failed crawl's file does not carry a token from the page's address", async () => {
+    await openCrawl();
+    (document.querySelector("#ikaCrawl_building") as HTMLInputElement).checked =
+      true;
+    const before = location.href;
+    history.replaceState(
+      null,
+      "",
+      "/?view=city&actionRequest=f3c9a1b2e7d64400",
+    );
+    try {
+      await actions["crawl.run"](document.body);
+      await vi.advanceTimersByTimeAsync(0);
+    } finally {
+      history.replaceState(null, "", before);
+    }
+
+    const file = savedCrawlFailure("building");
+    expect(file.url).toContain("actionRequest=<actionRequest>");
+    expect(downloadJson.mock.calls[0][1]).not.toContain("f3c9a1b2e7d64400");
+  });
+
+  it("an error file the browser will not take is reported on screen", async () => {
+    await openCrawl();
+    (document.querySelector("#ikaCrawl_building") as HTMLInputElement).checked =
+      true;
+    downloadJson.mockImplementationOnce(() => {
+      throw new Error("blocked");
+    });
+
+    await actions["crawl.run"](document.body);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(showToast).toHaveBeenCalledWith(
+      "Could not save the crawl's file: blocked",
+    );
+  });
+
+  describe("Crawl by id", () => {
+    /** A tool dialog open in the game's popup, and a sheet styling it. */
+    const GAME_DIALOG =
+      `<style id="probeSheet">#probe .inner { color: red; } ` +
+      `#elsewhere { color: blue; } #probe::before { content: "x"; }</style>` +
+      `<div id="ikaMationTransporterDialog"><div id="probe" style="float: left">` +
+      `<span class="inner">one</span><span class="inner">two</span>` +
+      `</div></div>`;
+
+    /** Crawl > By id > Crawl, as the player picks it. */
+    async function openBox(): Promise<void> {
+      await openCrawl();
+      (
+        document.querySelector("#ikaCrawl_element") as HTMLInputElement
+      ).checked = true;
+      await actions["crawl.run"](document.body);
+    }
+
+    function box(): HTMLElement | null {
+      return document.querySelector<HTMLElement>("#ikaElementCrawl");
+    }
+
+    /** Type into the box, pick the mode and press its own Crawl button. */
+    async function crawl(text: string, mode: "html" | "js"): Promise<void> {
+      box()!.querySelector<HTMLTextAreaElement>("textarea")!.value = text;
+      box()!.querySelector<HTMLInputElement>(
+        `input[type="radio"][value="${mode}"]`,
+      )!.checked = true;
+      // The app's dispatcher is stubbed here; it listens on `document`, so
+      // the box's buttons reach it from outside the panel and the popup.
+      const run = box()!.querySelector<HTMLElement>(
+        '[data-ika-action="crawl.element.run"]',
+      )!;
+      await actions["crawl.element.run"](run);
+      await vi.advanceTimersByTimeAsync(0);
+    }
+
+    function savedFile(): SavedCrawlFile {
+      expect(downloadJson).toHaveBeenCalledTimes(1);
+      return JSON.parse(downloadJson.mock.calls[0][1]);
+    }
+
+    afterEach(() => {
+      box()?.remove();
+    });
+
+    it("opens a box of its own, outside the game's popup, HTML picked", async () => {
+      await openBox();
+
+      expect(document.querySelector("#ikaMationTransporterDialog")).toBeNull();
+      expect(box()).not.toBeNull();
+      expect(box()!.parentElement).toBe(document.body);
+      expect(box()!.querySelector("textarea")).not.toBeNull();
+      const modes = Array.from(
+        box()!.querySelectorAll<HTMLInputElement>('input[type="radio"]'),
+      );
+      expect(modes.map((input) => input.value)).toEqual(["html", "js"]);
+      expect(
+        modes.filter((input) => input.checked).map((i) => i.value),
+      ).toEqual(["html"]);
+    });
+
+    it(
+      "HTML: saves the element's HTML, each element's style, and the rules " +
+        "that match it, leaving the dialog open",
+      async () => {
+        await openBox();
+        document.body.insertAdjacentHTML("beforeend", GAME_DIALOG);
+
+        await crawl("probe", "html");
+
+        const file = savedFile();
+        expect(downloadJson.mock.calls[0][0]).toContain("ikariam-crawl-html");
+        expect(file.ok).toBe(true);
+        expect(file.mode).toBe("html");
+        expect(file.target).toBe("probe");
+        expect(file.matches).toBe(1);
+        expect(file.html).toBe(document.querySelector("#probe")!.outerHTML);
+        expect(
+          file.elements.map((e: { element: string; depth: number }) => [
+            e.element,
+            e.depth,
+          ]),
+        ).toEqual([
+          ["div#probe", 0],
+          ["span.inner", 1],
+          ["span.inner", 1],
+        ]);
+        expect(file.elements[0].style.float).toBe("left");
+        // Each rule once, and only those that match an element itself.
+        expect(file.rules).toEqual(["#probe .inner { color: red; }"]);
+        expect(file.elements[0].rules).toEqual([]);
+        expect(file.elements[1].rules).toEqual([0]);
+        expect(file.elements[2].rules).toEqual([0]);
+        expect(file.unreadableSheets).toEqual([]);
+        expect(file.elementsCut).toBe(false);
+        // The dialog looked at, and the box, are both still open.
+        expect(
+          document.querySelector("#ikaMationTransporterDialog"),
+        ).not.toBeNull();
+        expect(box()).not.toBeNull();
+      },
+    );
+
+    it("HTML: takes a CSS selector too, and says how many it matched", async () => {
+      await openBox();
+      document.body.insertAdjacentHTML("beforeend", GAME_DIALOG);
+
+      await crawl("#ikaMationTransporterDialog .inner", "html");
+
+      const file = savedFile();
+      expect(file.matches).toBe(2);
+      expect(file.html).toBe('<span class="inner">one</span>');
+    });
+
+    it(
+      "HTML: nothing matching, or not a selector, still saves a file with " +
+        "the error in full",
+      async () => {
+        await openBox();
+
+        await crawl("noSuchElement", "html");
+        await crawl("[[", "html");
+
+        expect(downloadJson).toHaveBeenCalledTimes(2);
+        const [missing, invalid] = downloadJson.mock.calls.map((call) =>
+          JSON.parse(call[1]),
+        );
+        expect(missing).toMatchObject({
+          ok: false,
+          mode: "html",
+          target: "noSuchElement",
+          error: {
+            stage: "find",
+            name: "NotFound",
+            message:
+              'No element has the id "noSuchElement", and no element ' +
+              "matches it as a CSS selector.",
+          },
+        });
+        expect(invalid).toMatchObject({
+          ok: false,
+          target: "[[",
+          error: { stage: "selector" },
+        });
+        expect(invalid.error.name).toBeTruthy();
+        expect(invalid.error.message).toBeTruthy();
+        expect(showToast.mock.calls[0][0]).toContain(
+          "Could not crawl: No element has the id",
+        );
+        expect(showToast.mock.calls[0][0]).toContain("ikariam-crawl-html");
+      },
+    );
+
+    it("an empty box says so and saves nothing", async () => {
+      await openBox();
+
+      await crawl("   ", "html");
+
+      expect(downloadJson).not.toHaveBeenCalled();
+      expect(showToast).toHaveBeenCalledWith(
+        "Type an element id, a CSS selector or some JS first.",
+      );
+    });
+
+    it(
+      "HTML: an element that cannot be read gets its error, and the rest " +
+        "is still read",
+      async () => {
+        await openBox();
+        document.body.insertAdjacentHTML("beforeend", GAME_DIALOG);
+        const realComputed = window.getComputedStyle;
+        const spy = vi
+          .spyOn(window, "getComputedStyle")
+          .mockImplementation((element, pseudo) => {
+            if ((element as Element).textContent === "two") {
+              throw new TypeError("cannot read this one");
+            }
+            return realComputed.call(window, element, pseudo);
+          });
+        try {
+          await crawl("probe", "html");
+        } finally {
+          spy.mockRestore();
+        }
+
+        const file = savedFile();
+        expect(file.ok).toBe(true);
+        expect(file.elements[1].style).toBeDefined();
+        expect(file.elements[2]).toMatchObject({
+          element: "span.inner",
+          depth: 1,
+          error: {
+            stage: "element",
+            name: "TypeError",
+            message: "cannot read this one",
+          },
+        });
+        expect(file.elements[2].error.stack).toBeTypeOf("string");
+        expect(file.elements[2].style).toBeUndefined();
+      },
+    );
+
+    it("HTML: a stylesheet the page will not hand over is listed with its error", async () => {
+      await openBox();
+      document.body.insertAdjacentHTML("beforeend", GAME_DIALOG);
+      const sheet = (document.getElementById("probeSheet") as HTMLStyleElement)
+        .sheet!;
+      Object.defineProperty(sheet, "cssRules", {
+        configurable: true,
+        get() {
+          throw new DOMException("not this origin", "SecurityError");
+        },
+      });
+
+      await crawl("probe", "html");
+
+      const file = savedFile();
+      expect(file.ok).toBe(true);
+      expect(file.rules).toEqual([]);
+      expect(file.unreadableSheets).toEqual([
+        {
+          sheet: "(inline sheet)",
+          error: expect.objectContaining({
+            stage: "sheet",
+            name: "SecurityError",
+            message: "not this origin",
+          }),
+        },
+      ]);
+    });
+
+    it("a file the browser will not take is reported on screen", async () => {
+      await openBox();
+      document.body.insertAdjacentHTML("beforeend", GAME_DIALOG);
+      downloadJson.mockImplementationOnce(() => {
+        throw new Error("blocked");
+      });
+
+      await crawl("probe", "html");
+
+      expect(showToast).toHaveBeenCalledWith(
+        "Could not save the crawl's file: blocked",
+      );
+    });
+
+    it("JS: saves what the code returns", async () => {
+      await openBox();
+      document.body.insertAdjacentHTML("beforeend", GAME_DIALOG);
+
+      await crawl("document.querySelectorAll('#probe .inner').length;", "js");
+
+      const file = savedFile();
+      expect(downloadJson.mock.calls[0][0]).toContain("ikariam-crawl-js");
+      expect(file).toMatchObject({
+        mode: "js",
+        code: "document.querySelectorAll('#probe .inner').length;",
+        ok: true,
+        result: 2,
+      });
+    });
+
+    it("JS: saves the error when the code throws", async () => {
+      await openBox();
+
+      await crawl("null.missing", "js");
+
+      const file = savedFile();
+      expect(file.ok).toBe(false);
+      expect(file.error).toMatchObject({ stage: "run", name: "TypeError" });
+      expect(file.error.message).toBeTruthy();
+      expect(file.error.stack).toBeTypeOf("string");
+      expect(showToast.mock.calls[0][0]).toContain("Could not crawl: ");
+      expect(showToast.mock.calls[0][0]).toContain("ikariam-crawl-js");
+    });
+
+    describe("what the JS mode writes", () => {
+      async function run(code: string) {
+        const { crawlCode } = await import("./diagnostics");
+        return crawlCode(code);
+      }
+
+      it("one expression, with or without a trailing ;", async () => {
+        expect(await run("1 + 2")).toMatchObject({ ok: true, result: 3 });
+        expect(await run("1 + 2;  ")).toMatchObject({ ok: true, result: 3 });
+      });
+
+      it("statements, with their own return", async () => {
+        expect(await run("const a = 2;\nreturn a * 3;")).toMatchObject({
+          ok: true,
+          result: 6,
+        });
+      });
+
+      it("awaits a promise, and await works", async () => {
+        expect(await run("Promise.resolve('done')")).toMatchObject({
+          result: "done",
+        });
+        expect(
+          await run("const v = await Promise.resolve(4); return v + 1;"),
+        ).toMatchObject({ result: 5 });
+      });
+
+      it("an error, thrown or rejected, is kept with its name and message", async () => {
+        const thrown = await run("throw new RangeError('too far')");
+        expect(thrown).toMatchObject({
+          ok: false,
+          error: { stage: "run", name: "RangeError", message: "too far" },
+        });
+        expect("error" in thrown && thrown.error.stack).toBeTypeOf("string");
+        expect(await run("Promise.reject(new Error('no'))")).toMatchObject({
+          ok: false,
+          error: { stage: "run", message: "no" },
+        });
+        expect(await run("Promise.reject('plain text')")).toMatchObject({
+          ok: false,
+          error: { stage: "run", name: "string", message: "plain text" },
+        });
+        expect(await run("const = ;")).toMatchObject({
+          ok: false,
+          error: { stage: "compile", name: "SyntaxError" },
+        });
+      });
+
+      it("a result that cannot be written out is a save error", async () => {
+        const saved = await run(
+          "new Proxy({}, { ownKeys() { throw new Error('no keys'); } })",
+        );
+        expect(saved).toMatchObject({
+          ok: false,
+          error: { stage: "save", message: "no keys" },
+        });
+      });
+
+      it(
+        "makes the result safe to save: repeats, elements, functions, " +
+          "throwing getters, long lists and deep nesting",
+        async () => {
+          document.body.insertAdjacentHTML(
+            "beforeend",
+            `<div id="probeResult" class="a">text</div>`,
+          );
+          const crawled = await run(`(() => {
+            const loop = { name: "loop" };
+            loop.self = loop;
+            const shared = { x: 1 };
+            const tricky = {};
+            Object.defineProperty(tricky, "bad", {
+              enumerable: true,
+              get() { throw new Error("getter"); },
+            });
+            let deep = { end: true };
+            for (let i = 0; i < 10; i++) deep = { deep };
+            return {
+              loop,
+              both: [shared, shared],
+              element: document.getElementById("probeResult"),
+              fn: function named() {},
+              tricky,
+              long: Array.from({ length: 502 }, (_, i) => i),
+              deep,
+              nothing: undefined,
+              notANumber: NaN,
+              map: new Map([["k", 1]]),
+            };
+          })()`);
+          const saved = ("result" in crawled ? crawled.result : null) as Record<
+            string,
+            unknown
+          >;
+          expect(saved.loop).toEqual({ name: "loop", self: "[Circular]" });
+          // The same object twice is not a loop.
+          expect(saved.both).toEqual([{ x: 1 }, { x: 1 }]);
+          expect(saved.element).toEqual({
+            element: "div#probeResult.a",
+            html: '<div id="probeResult" class="a">text</div>',
+          });
+          expect(saved.fn).toBe("[Function named]");
+          expect(saved.tricky).toEqual({ bad: "[Threw: getter]" });
+          expect(saved.long).toHaveLength(501);
+          expect((saved.long as unknown[])[500]).toBe("… [2 more]");
+          expect(JSON.stringify(saved.deep)).toContain('"[Too deep]"');
+          expect(saved.nothing).toBe("[undefined]");
+          expect(saved.notANumber).toBe("NaN");
+          expect(saved.map).toEqual([["k", 1]]);
+          // And it survives JSON as written.
+          expect(() => JSON.stringify(saved)).not.toThrow();
+        },
+      );
+    });
+
+    describe("session tokens in the files", () => {
+      const TOKEN = "f3c9a1b2e7d64400";
+      /** A town switch form as the game draws it, inside the dialog. */
+      const FORM_WITH_TOKEN =
+        `<div id="ikaMationTransporterDialog"><div id="probe">` +
+        `<form id="changeCityForm"><input type="hidden" name="actionRequest" ` +
+        `id="js_ChangeCityActionRequest" value="${TOKEN}"></form>` +
+        `</div></div>`;
+
+      it("HTML: the token in a form field is taken out of the file", async () => {
+        await openBox();
+        document.body.insertAdjacentHTML("beforeend", FORM_WITH_TOKEN);
+
+        await crawl("probe", "html");
+
+        const json = downloadJson.mock.calls[0][1];
+        expect(json).not.toContain(TOKEN);
+        expect(savedFile().html).toContain('value="<actionRequest>"');
+      });
+
+      it("JS: a token the code returns is taken out of the file", async () => {
+        await openBox();
+        document.body.insertAdjacentHTML("beforeend", FORM_WITH_TOKEN);
+
+        await crawl(
+          "document.getElementById('js_ChangeCityActionRequest').value",
+          "js",
+        );
+
+        expect(downloadJson.mock.calls[0][1]).not.toContain(TOKEN);
+        expect(savedFile().result).toBe("<actionRequest>");
+      });
+    });
+
+    it("Close removes the box and leaves the game's popup alone", async () => {
+      await openBox();
+      document.body.insertAdjacentHTML("beforeend", GAME_DIALOG);
+
+      await actions["crawl.element.close"](
+        box()!.querySelector<HTMLElement>(
+          '[data-ika-action="crawl.element.close"]',
+        )!,
+      );
+
+      expect(box()).toBeNull();
+      expect(
+        document.querySelector("#ikaMationTransporterDialog"),
+      ).not.toBeNull();
+    });
   });
 });
 
@@ -1597,6 +2407,82 @@ describe("the Auto Build settings dialog", () => {
       expect(queueCells()[0].textContent).not.toContain("Academy 8");
     });
 
+    describe("Clear All", () => {
+      function clearAllButton(): HTMLElement {
+        return document.querySelector<HTMLElement>(
+          '[data-ika-action="build.clearTown"]',
+        )!;
+      }
+
+      it("empties the open town's saved list only", async () => {
+        await openDialog();
+        expect(clearAllButton().textContent).toBe("Clear All");
+
+        await actions["build.clearTown"](clearAllButton());
+
+        expect(savedQueues()).toEqual({
+          "W-Athens": [],
+          "M-Corinth": ["Academy 8"],
+        });
+        expect(queueCells()[0].textContent).toBe("-empty-");
+        // The planned level beside the building goes with it.
+        expect(
+          document.querySelector('#tdListBuilding span[style="color:red"]'),
+        ).toBeNull();
+      });
+
+      it("empties the town picked in the dropdown, not the town on screen", async () => {
+        fetchTownSlots.mockResolvedValue([slotState(9, "Academy", 7)]);
+        await openDialog();
+        pickTown("1");
+        await vi.advanceTimersByTimeAsync(0);
+
+        await actions["build.clearTown"](clearAllButton());
+
+        expect(savedQueues()).toEqual({
+          "W-Athens": ["Warehouse 26"],
+          "M-Corinth": [],
+        });
+        expect(queueCells().map((cell) => cell.dataset.ikaTownCell)).toEqual([
+          "M-Corinth",
+        ]);
+        expect(queueCells()[0].textContent).toBe("-empty-");
+      });
+
+      it(
+        "empties the dropdown's town even when the table still shows " +
+          "another",
+        async () => {
+          await openDialog();
+          // The dropdown moved without its change being handled: the table
+          // still shows W-Athens.
+          document.querySelector<HTMLSelectElement>(TOWN_SELECT)!.value = "1";
+          expect(queueCells().map((cell) => cell.dataset.ikaTownCell)).toEqual([
+            "W-Athens",
+          ]);
+
+          await actions["build.clearTown"](clearAllButton());
+
+          expect(savedQueues()).toEqual({
+            "W-Athens": ["Warehouse 26"],
+            "M-Corinth": [],
+          });
+        },
+      );
+
+      it("does nothing with the dialog closed", async () => {
+        await openDialog();
+        document.querySelector("#ikaMationTransporterDialog")!.remove();
+
+        await actions["build.clearTown"](document.body);
+
+        expect(savedQueues()).toEqual({
+          "W-Athens": ["Warehouse 26"],
+          "M-Corinth": ["Academy 8"],
+        });
+      });
+    });
+
     it(
       "picking another town shows its buildings, read from the game, " +
         "and its saved queue",
@@ -1714,6 +2600,29 @@ describe("the Auto Build settings dialog", () => {
           `#tdListBuilding [data-ika-action="build.decrease"][data-ika-position="${position}"]`,
         )!;
       }
+
+      it("lays out name, planned level, + then - on one row per building", async () => {
+        await openDialog({ "W-Athens": [[5, "Warehouse 26"]] });
+
+        const lines = Array.from(
+          document.querySelectorAll<HTMLElement>("#tdListBuilding > span"),
+        );
+        expect(lines.length).toBeGreaterThan(0);
+        expect(document.querySelectorAll("#tdListBuilding br")).toHaveLength(0);
+        for (const listed of lines) {
+          expect(listed.style.display).toBe("flex");
+          expect(listed.style.whiteSpace).toBe("nowrap");
+          // The dialog's sheet floats a cell's lines; floated lines with no
+          // <br/> between them widened the column to thousands of px.
+          expect(listed.getAttribute("style")).toContain("float:none");
+          const actionsInOrder = Array.from(
+            listed.querySelectorAll<HTMLElement>("button"),
+          ).map((button) => button.dataset.ikaAction);
+          expect(actionsInOrder).toEqual(["build.add", "build.decrease"]);
+        }
+        const warehouse = line("js_CityPosition5Link");
+        expect(warehouse.planned).toBe("(26)");
+      });
 
       it(
         "- beside + takes off the highest saved level: 26 27, and (26) " +
@@ -2891,6 +3800,153 @@ describe("Pirate", () => {
     }
   });
 
+  it("holds the task runner back while another tab's capture is out, until its mark is cleared", async () => {
+    vi.useFakeTimers({ now: new Date("2026-09-26T10:01:00Z") });
+    let reloads = 0;
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="js_cityLink"><a href="#"></a></div>`,
+    );
+    document
+      .querySelector("#js_cityLink > a")!
+      .addEventListener("click", (event) => {
+        event.preventDefault();
+        reloads++;
+      });
+    // Written by the tab that sends the captures.
+    localStorage.setItem("testerikaPirateCaptureOut", String(Date.now()));
+
+    await startWith({ build: true });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(reloads).toBe(0);
+
+    localStorage.removeItem("testerikaPirateCaptureOut");
+    await vi.advanceTimersByTimeAsync(1_100);
+    expect(reloads).toBe(1);
+  });
+
+  it("a capture mark left by a closed tab stops holding the runner once too old", async () => {
+    vi.useFakeTimers({ now: new Date("2026-09-26T10:01:00Z") });
+    let reloads = 0;
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="js_cityLink"><a href="#"></a></div>`,
+    );
+    document
+      .querySelector("#js_cityLink > a")!
+      .addEventListener("click", (event) => {
+        event.preventDefault();
+        reloads++;
+      });
+    const { PIRATE_CAPTURE_MARK_MAX_AGE_MS } =
+      await import("./features/pirate");
+    localStorage.setItem(
+      "testerikaPirateCaptureOut",
+      String(Date.now() - PIRATE_CAPTURE_MARK_MAX_AGE_MS - 1),
+    );
+
+    await startWith({ build: true });
+    await vi.advanceTimersByTimeAsync(1_100);
+    expect(reloads).toBe(1);
+  });
+
+  it("Pirate waits for a task runner on a task in another tab, as the notepad sync does", async () => {
+    await startWith({});
+    expect(pirateCapture.holdCheck).not.toBeNull();
+    expect(pirateCapture.holdCheck!()).toBe(false);
+
+    // Another tab's runner marks the account busy.
+    localStorage.setItem(
+      "testerikaRunnerBusy",
+      JSON.stringify({ since: Date.now() }),
+    );
+    expect(pirateCapture.holdCheck!()).toBe(true);
+  });
+
+  describe("a page the tool has just clicked away from", () => {
+    /** The town view link, counting the clicks (each a reload on the game). */
+    function cityLink(): { reloads: () => number } {
+      let reloads = 0;
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<div id="js_cityLink"><a href="#"></a></div>`,
+      );
+      document
+        .querySelector("#js_cityLink > a")!
+        .addEventListener("click", (event) => {
+          event.preventDefault();
+          reloads++;
+        });
+      return { reloads: () => reloads };
+    }
+
+    it(
+      "starts nothing on it until the reload - a town switch sent in that " +
+        "second was lost to it, four times in the bug report of 23/11",
+      async () => {
+        // An odd minute: no keep-alive.
+        vi.useFakeTimers({ now: new Date("2026-09-26T10:01:00Z") });
+        const link = cityLink();
+        await startWith({ build: true });
+        const navigation = await import("./navigation");
+
+        navigation.backToCity("shipment sent");
+        expect(link.reloads()).toBe(1);
+
+        // The queue is empty: once the runner may run, it drains and
+        // goes back to the town view itself.
+        await vi.advanceTimersByTimeAsync(5_000);
+        expect(link.reloads()).toBe(1);
+
+        await vi.advanceTimersByTimeAsync(
+          navigation.PAGE_LEAVING_HOLD_MS - 5_000 + 1_100,
+        );
+        expect(link.reloads()).toBe(2);
+      },
+    );
+
+    it("holds the keep-alive reload too - it clicked a second time a second after a shipment's", async () => {
+      cityLink();
+      await startWith({});
+      const navigation = await import("./navigation");
+      expect(keepAlive.guard).not.toBeNull();
+      expect(keepAlive.guard!()).toBe(true);
+
+      navigation.backToCity("shipment sent");
+
+      expect(keepAlive.guard!()).toBe(false);
+    });
+
+    it(
+      "holds the notepad sync too - a finished task's change armed one that " +
+        "would land as the page reloads",
+      async () => {
+        cityLink();
+        queueNote.setChangeSyncHold.mockClear();
+        await startWith({});
+        const navigation = await import("./navigation");
+        const hold = queueNote.setChangeSyncHold.mock
+          .calls[0][0] as () => boolean;
+        expect(hold()).toBe(false);
+
+        navigation.backToCity("shipment sent");
+
+        expect(hold()).toBe(true);
+      },
+    );
+
+    it("Pirate waits too: a capture sent then would die with the reload", async () => {
+      cityLink();
+      await startWith({});
+      const navigation = await import("./navigation");
+      expect(pirateCapture.holdCheck!()).toBe(false);
+
+      navigation.backToCity("shipment sent");
+
+      expect(pirateCapture.holdCheck!()).toBe(true);
+    });
+  });
+
   it(
     "after a captcha, holds the queue and the keep-alive reload until Start " +
       "Pirate",
@@ -3032,6 +4088,54 @@ describe("Pirate", () => {
         "?view=pirateFortress&activeTab=tabBootyQuest&cityId=297057&position=17",
       );
       expect(sessionStorage.getItem("ika_pirateOpenFortress")).toBeNull();
+    },
+  );
+
+  it("Crawl with Pirate picked and no fortress town known saves why", async () => {
+    await startWith({});
+    drawPopups();
+    actions["crawl.open"](document.body);
+    (document.querySelector("#ikaCrawl_pirate") as HTMLInputElement).checked =
+      true;
+
+    await actions["crawl.run"](document.body);
+    await vi.waitFor(() => expect(downloadJson).toHaveBeenCalledTimes(1));
+
+    expect(savedCrawlFailure("pirate").error).toMatchObject({
+      stage: "settings",
+      name: "CrawlStopped",
+      message: expect.stringContaining("No town with a Pirate Fortress"),
+    });
+    expect(fetchFortressView).not.toHaveBeenCalled();
+  });
+
+  it(
+    "Crawl with Pirate picked saves the game's error, stack included, " +
+      "when the fortress cannot be read",
+    async () => {
+      await startWithFortress();
+      const timeout = new Error("request timed out");
+      fetchFortressView.mockRejectedValue(timeout);
+      drawPopups();
+      actions["crawl.open"](document.body);
+      (document.querySelector("#ikaCrawl_pirate") as HTMLInputElement).checked =
+        true;
+
+      await actions["crawl.run"](document.body);
+      await vi.waitFor(() => expect(downloadJson).toHaveBeenCalledTimes(1));
+
+      const { error } = savedCrawlFailure("pirate");
+      expect(error).toMatchObject({
+        stage: "fetch",
+        name: "CrawlStopped",
+        message: "Could not read the Pirate Fortress: request timed out",
+        cause: {
+          stage: "fetch",
+          name: "Error",
+          message: "request timed out",
+          stack: timeout.stack,
+        },
+      });
     },
   );
 

@@ -8,8 +8,11 @@ import {
   getTownNameFromList,
   getTownNumberByName,
   gotoTown,
+  isPageLeaving,
   isTownSwitchInFlight,
   openShipmentForm,
+  PAGE_LEAVING_HOLD_MS,
+  resetPageLeavingForTests,
   townHasPort,
   watchTownSwitchResponses,
 } from "./navigation";
@@ -922,6 +925,58 @@ describe("backToCity", () => {
     backToCity("keep-alive (even minute)");
 
     expect(log).not.toHaveBeenCalled();
+  });
+
+  describe("the page left behind", () => {
+    beforeEach(() => {
+      resetPageLeavingForTests();
+      vi.spyOn(console, "log").mockImplementation(() => {});
+    });
+
+    function townLink(): void {
+      document.body.innerHTML = `<div id="js_cityLink"><a href="#"></a></div>`;
+      document
+        .querySelector("#js_cityLink > a")!
+        .addEventListener("click", (event) => event.preventDefault());
+    }
+
+    it(
+      "counts as leaving once the click is made, for a while - the reload " +
+        "follows 1-3 s later, and a town switch sent meanwhile was lost to it",
+      () => {
+        vi.useFakeTimers({ now: new Date("2026-11-23T04:44:02Z") });
+        try {
+          townLink();
+          expect(isPageLeaving()).toBe(false);
+
+          backToCity("shipment sent");
+
+          const now = Date.now();
+          expect(isPageLeaving(now)).toBe(true);
+          expect(isPageLeaving(now + PAGE_LEAVING_HOLD_MS - 1)).toBe(true);
+          // No reload came: the page carries on.
+          expect(isPageLeaving(now + PAGE_LEAVING_HOLD_MS)).toBe(false);
+        } finally {
+          vi.useRealTimers();
+        }
+      },
+    );
+
+    it("does not count as leaving when the caller waits for the town view on this page", () => {
+      townLink();
+
+      backToCity("shipment needs the town view to find the port", false);
+
+      expect(isPageLeaving()).toBe(false);
+    });
+
+    it("does not count as leaving when there was no link to click", () => {
+      document.body.innerHTML = "";
+
+      backToCity("keep-alive (even minute)");
+
+      expect(isPageLeaving()).toBe(false);
+    });
   });
 });
 

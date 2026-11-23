@@ -30,7 +30,7 @@ import { SEL } from "@core/ikariam/selectors";
 import { logInfo } from "@core/logger";
 import type { Task, TaskResult } from "@core/task-queue";
 import { showToast } from "@core/ui/window";
-import { SCAN } from "../messages";
+import { QUEUE_NOTE, SCAN } from "../messages";
 import {
   backToCity,
   closeGamePopup,
@@ -38,6 +38,7 @@ import {
   getTownNameFromList,
   getTownNumberByName,
   gotoTown,
+  TownSwitchPendingError,
 } from "../navigation";
 import {
   getState,
@@ -52,6 +53,7 @@ import { ownTownIds, syncAllTowns } from "./sync-towns";
 import type { AutoBuildAccount, AutoBuildTown } from "../types";
 import {
   completedUpgrades,
+  nameNotepadCopies,
   type SavedUpgrade,
   type SlotState,
   splitRunnableTowns,
@@ -232,6 +234,20 @@ export function removeUpgradeAndLater(
 }
 
 /**
+ * Empty one town's saved list: Clear All in Auto Build Settings, for the town
+ * picked there. Other towns keep theirs. With nothing saved, nothing is
+ * written.
+ */
+export function clearTownQueue(townName: string): void {
+  const { accountName } = getState();
+  const list = loadAutoBuild();
+  const town = findTown(findAccount(list, accountName), townName);
+  if (!town || town.queue.length === 0) return;
+  town.queue = [];
+  saveAutoBuild(list);
+}
+
+/**
  * Take off the highest saved level of one slot: the list's - beside +. With
  * nothing saved for the slot, nothing changes.
  */
@@ -252,8 +268,12 @@ export function removeHighestLevel(positionId: string, townName: string): void {
 
 /**
  * Remove a town's saved upgrades whose level its slots have already reached
- * (`completedUpgrades` decides which), and return them. Nothing is saved when
- * nothing is removed.
+ * (`completedUpgrades` decides which), and return them.
+ *
+ * Copies received from the game's notepad are named after their slot's
+ * building first (`nameNotepadCopies`), so their levels are checked too.
+ * Nothing is saved when nothing is named or removed. A rename alone does not
+ * write the notepad: it carries no names, so its text stays the same.
  */
 export function removeCompletedUpgrades(
   townName: string,
@@ -264,8 +284,24 @@ export function removeCompletedUpgrades(
   const town = findTown(findAccount(list, accountName), townName);
   if (!town) return [];
 
+  const { queue, named } = nameNotepadCopies(
+    town.queue,
+    slots,
+    QUEUE_NOTE.placeholderBuilding,
+  );
+  town.queue = queue;
+  if (named.length > 0) {
+    logInfo(
+      `Auto Build: ${townName}: named ${named
+        .map((entry) => entry.buildingName)
+        .join(", ")} from the town's slots`,
+    );
+  }
   const done = completedUpgrades(town.queue, slots);
-  if (done.length === 0) return [];
+  if (done.length === 0) {
+    if (named.length > 0) saveAutoBuild(list);
+    return [];
+  }
   const doneEntries = new Set(done);
   town.queue = town.queue.filter((entry) => !doneEntries.has(entry));
   saveAutoBuild(list);
@@ -503,7 +539,21 @@ export async function handleUpgradeBuilding(
   }
 
   logInfo(`Going to town ${townName}`);
-  await gotoTown(townNumber);
+  try {
+    await gotoTown(townNumber);
+  } catch (error) {
+    // The switch to this town was sent moments ago and the page landed
+    // elsewhere. Thrown, the runner gave up on the visit after a few ticks
+    // and told the player a task was dropped. The visit ends instead, the
+    // way a busy town's does (`endTownTurn`, not `defer`, which would take
+    // it round the queue switching town each time); the saved upgrade waits
+    // for the next lap. The shipment handler defers here instead, since a
+    // shipment is the player's order and has no next lap.
+    if (error instanceof TownSwitchPendingError) {
+      return endTownTurn(`${townName}: ${error.message}`);
+    }
+    throw error;
+  }
   closeGamePopup();
   await sleep(TOWN_SETTLE_MS);
 
@@ -697,24 +747,26 @@ export async function scanBuildings(
    * runner is owned by `app.ts`; the queue itself does not know.
    */
   queueIsRunning: () => boolean = () => false,
+  /**
+   * Told why, when the scan refuses to start. A caller that passes it shows
+   * the reason itself (Crawl Wine, in its "could not crawl" toast); without
+   * it the reason is shown here. Both used to show, the same words twice.
+   */
+  onRefused?: (reason: string) => void,
 ): Promise<boolean> {
-  if (scanning) {
-    showToast(SCAN.alreadyRunning);
+  const refuse = (reason: string): false => {
+    if (onRefused) onRefused(reason);
+    else showToast(reason);
     return false;
-  }
+  };
+  if (scanning) return refuse(SCAN.alreadyRunning);
 
   const limit = Math.min(getTownCount(), maxTowns);
-  if (limit === 0) {
-    showToast(SCAN.noTownList);
-    return false;
-  }
+  if (limit === 0) return refuse(SCAN.noTownList);
 
   // The queue runner navigates too. Two of them steering the same page means
   // whichever loses the race times out.
-  if (queueIsRunning()) {
-    showToast(SCAN.queueRunning);
-    return false;
-  }
+  if (queueIsRunning()) return refuse(SCAN.queueRunning);
 
   // Ask the game for every town instead of walking to each one, when the
   // model is readable. Measured: 2367 ms per town walking, 328-841 ms per

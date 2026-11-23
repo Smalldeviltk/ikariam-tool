@@ -6,14 +6,7 @@
  */
 
 import { reportSelectorMiss } from "@core/bug-report";
-import {
-  ensureStyle,
-  capVisibleRows,
-  escapeHtml,
-  qs,
-  qsa,
-  removeElement,
-} from "@core/dom";
+import { ensureStyle, escapeHtml, qs, qsa, removeElement } from "@core/dom";
 import {
   errorMessage,
   formatInteger,
@@ -55,6 +48,7 @@ import {
   BUILD_DIALOG,
   BUTTON,
   CRAWL_DIALOG,
+  ELEMENT_CRAWL,
   DURATION,
   MISC,
   PIRATE,
@@ -65,10 +59,15 @@ import {
 import { getState, loadReceivers, loadSenders } from "../state";
 import { RESOURCE_OPTIONS, resourceLabel } from "../types";
 import { action, moveButtons } from "./actions";
-import { VISIBLE_ROWS } from "./queue-view";
 
-/** The box around the Transport Settings table that scrolls past `VISIBLE_ROWS`. */
+/**
+ * The box around the Transport Settings table, to the right of the form. It
+ * is no taller than the form and scrolls the rest.
+ */
 export const RESOURCE_TABLE_SCROLL_ID = "resourceTableScroll";
+
+/** The Transport Settings form: towns, amounts and buttons, left of the table. */
+const SEND_FORM_COLUMN_ID = "transporterSendForm";
 
 function openPopup(title: string, html: string): void {
   const api = getIkariam();
@@ -128,11 +127,24 @@ export function renderResourceTable(): void {
   if (body) body.innerHTML = rows;
   // What is left at the source changes with every row added or removed.
   renderSendStock();
-  // At most `VISIBLE_ROWS` shipments, the rest scroll — like the panel's queue.
+  matchTableToFormHeight();
+}
+
+/**
+ * Cap the table's box at the form's height, so the dialog is as tall as the
+ * form and a long queue scrolls instead of growing it.
+ *
+ * Measured rather than written into the sheet: the form's height comes from
+ * the game's fonts and buttons. A form with no height (not laid out yet)
+ * leaves the box as it was.
+ */
+function matchTableToFormHeight(): void {
   const scroll = qs(`#${RESOURCE_TABLE_SCROLL_ID}`);
-  if (scroll) {
-    capVisibleRows(scroll, "#resourceTableBody > tr", VISIBLE_ROWS);
-  }
+  const form = qs(`#${SEND_FORM_COLUMN_ID}`);
+  if (!scroll || !form) return;
+  const height = form.getBoundingClientRect().height;
+  if (height <= 0) return;
+  scroll.style.maxHeight = `${Math.ceil(height)}px`;
 }
 
 /** Id of the amount field for one resource in the send dialog. */
@@ -142,11 +154,42 @@ function amountFieldId(resource: string): string {
 
 const SEND_AMOUNTS_STYLE_ID = "ika-send-amounts-style";
 
-/** Labels in one column, right-aligned amounts in the next. */
+/**
+ * The Amount block's width range. It grows with the stock beside each field,
+ * `1,234 (1,834-500-100)`, up to twice its narrowest; past that the sum is
+ * cut with "...". The stock left comes first, so it always shows in full.
+ */
+const SEND_AMOUNTS_MIN_WIDTH_PX = 260;
+const SEND_AMOUNTS_MAX_WIDTH_PX = 2 * SEND_AMOUNTS_MIN_WIDTH_PX;
+
+/**
+ * The form on the left, the queued shipments on the right; labels in one
+ * column, right-aligned amounts in the next.
+ *
+ * `clear: both` because something at the top of the popup floats, 480px
+ * wide (the popup's own width), with the popup's content starting level with
+ * it. A flex row starts beside a float rather than under it: measured in the
+ * game, it started at the popup's right edge, 359px wide, with the form
+ * spilling out and the table squeezed to 0px. Text in plain blocks, as the
+ * form had when it stood alone, drops under the float by itself.
+ */
 function sendAmountsStyles(): string {
   return `
+.ika-send-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  clear: both;
+}
+.ika-send-layout > #${SEND_FORM_COLUMN_ID} {
+  flex: none;
+}
+.ika-send-layout > #${RESOURCE_TABLE_SCROLL_ID} {
+  overflow-y: auto;
+}
 .ika-send-amounts {
-  min-width: 260px;
+  min-width: ${SEND_AMOUNTS_MIN_WIDTH_PX}px;
+  max-width: ${SEND_AMOUNTS_MAX_WIDTH_PX}px;
   width: max-content;
   padding: 10px 12px;
   background: #f5ead0;
@@ -162,7 +205,9 @@ function sendAmountsStyles(): string {
 }
 .ika-send-amounts-row {
   display: grid;
-  grid-template-columns: 65px 150px auto;
+  /* minmax(0, ...): the stock column may be narrower than its text, so the
+     block stops at its max-width and the text ends in "..." instead. */
+  grid-template-columns: 65px 150px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   margin-bottom: 5px;
@@ -191,6 +236,8 @@ function sendAmountsStyles(): string {
   font-size: 12px;
   color: #4b4030;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .ika-send-amounts-row input:focus {
   border-color: #8b6f3d;
@@ -219,7 +266,9 @@ export function openSendResourcesDialog(): void {
   installSendAmountsStyles();
   openPopup(
     SEND_DIALOG.title,
-    `<div><span>${SEND_DIALOG.from}</span><select id="transporterSendFromTown">${towns}</select></div><br/>
+    `<div class="ika-send-layout">
+     <div id="${SEND_FORM_COLUMN_ID}">
+     <div><span>${SEND_DIALOG.from}</span><select id="transporterSendFromTown">${towns}</select></div><br/>
      <div><span>${SEND_DIALOG.destination}</span><select id="transporterSendDestination">${towns}</select></div><br/>
      <div class="ika-send-amounts">
        <div class="ika-send-amounts-title">${SEND_DIALOG.amount}</div>
@@ -228,12 +277,15 @@ export function openSendResourcesDialog(): void {
      <button style="margin-right:5px" class="button" ${action("send.add")}>${BUTTON.add}</button>
      <button style="margin-right:5px" class="button" ${action("send.removeFirst")}>${SEND_DIALOG.removeFirst}</button>
      <button style="margin-right:5px" class="button" ${action("send.removeLast")}>${SEND_DIALOG.removeLast}</button>
-     <button class="button" ${action("dialog.close")}>${BUTTON.close}</button><br/>
+     <button style="margin-right:5px" class="button" ${action("send.clearAll")}>${SEND_DIALOG.clearAll}</button>
+     <button class="button" ${action("dialog.close")}>${BUTTON.close}</button>
+     </div>
      <div id="${RESOURCE_TABLE_SCROLL_ID}">
      <table id="resourceTable" class="fullTable" border="1" cellpadding="5">
        <thead>${headerCells(SEND_DIALOG.columns)}</thead>
        <tbody id="resourceTableBody"></tbody>
      </table>
+     </div>
      </div>`,
   );
   qs("#transporterSendFromTown")?.addEventListener("change", renderSendStock);
@@ -576,6 +628,21 @@ let listedBuildings: {
 } | null = null;
 
 /**
+ * A building's line: name, planned level, + then -, on one row in that order.
+ * A flex row lays its children out left to right whatever a stylesheet says
+ * about floats (the dialog's own, in `styles.ts`, floats its buttons right,
+ * which put - left of +), and never wraps; being a block, each line starts on
+ * its own row without a `<br/>`.
+ *
+ * `float:none` because the dialog's sheet floats every line of the table
+ * (`styles.ts`). Floated lines with no `<br/>` between them were all counted
+ * on one row when the column's width was worked out: measured in the game,
+ * 24 lines made it 3,518px wide and pushed the queue column out of view.
+ */
+const BUILDING_LINE_STYLE =
+  "display:flex;align-items:center;gap:4px;white-space:nowrap;float:none";
+
+/**
  * One line per building, each with a + that saves one more level to
  * `townName` and a - that takes the highest saved one off (greyed out when
  * nothing is saved). A building with upgrades saved shows, in red, the level
@@ -600,7 +667,7 @@ function renderBuildingList(
         "build.decrease",
         { "ika-position": slot.positionId, "ika-town": townName },
       )}>-</button>`;
-      return `<span>${escapeHtml(slot.buildingName)}${plannedLabel}${plus}${minus}</span><br/>`;
+      return `<span style="${BUILDING_LINE_STYLE}">${escapeHtml(slot.buildingName)}${plannedLabel}${plus}${minus}</span>`;
     })
     .join("");
 }
@@ -736,6 +803,7 @@ export function openAutoBuildDialog(): void {
      )}</div><br/>
      <p style="font-size:11px">${BUILD_DIALOG.savedAsYouGo}</p>
      <button style="margin-right:20px" class="button" ${action("build.save")}>${BUTTON.save}</button>
+     <button style="margin-right:20px" class="button" ${action("build.clearTown")}>${BUILD_DIALOG.clearTown}</button>
      <button class="button" ${action("dialog.close")}>${BUTTON.close}</button><br/><br/>`,
   );
 
@@ -743,6 +811,20 @@ export function openAutoBuildDialog(): void {
   townSelect?.addEventListener("change", () => {
     void showBuildTown(townSelect.value);
   });
+}
+
+/**
+ * The town picked in Auto Build Settings' dropdown, as the player chose for
+ * Clear All. Null when the dialog is not open.
+ *
+ * The dropdown, not the table: the two differ only when the town on screen
+ * is missing from the dropdown, where the dialog shows that town while the
+ * dropdown shows its first entry, and it is the dropdown's town that goes.
+ */
+export function pickedBuildTown(): string | null {
+  const select = qs<HTMLSelectElement>(`#${BUILD_TOWN_SELECT_ID}`);
+  if (!select) return null;
+  return getTownNameFromList(select.value) || null;
 }
 
 /**
@@ -801,6 +883,78 @@ export function openCrawlDialog(): void {
      <button style="margin-right:20px" class="button" ${action("crawl.run")}>${CRAWL_DIALOG.run}</button>
      <button class="button" ${action("dialog.close")}>${BUTTON.close}</button><br/><br/>`,
   );
+}
+
+/** The Crawl by id box: the tool's own, apart from the game's popup. */
+const ELEMENT_CRAWL_BOX_ID = "ikaElementCrawl";
+const ELEMENT_CRAWL_INPUT_ID = "ikaElementCrawlTarget";
+const ELEMENT_CRAWL_MODE_NAME = "ikaElementCrawlMode";
+
+/**
+ * The Crawl by id box's stacking order: above the game's popup it stands
+ * beside (the popup measured `z-index: 20000` in the game) and the tool's
+ * window (1000), below the toasts (100000), so a crawl's toast is not hidden
+ * behind the box that started it.
+ */
+const ELEMENT_CRAWL_BOX_Z_INDEX = 30000;
+
+type ElementCrawlMode = keyof typeof ELEMENT_CRAWL.modes;
+
+/**
+ * Crawl by id: a box for an element id, a CSS selector or JS code, and
+ * whether to save the element's HTML and CSS or what the code returns.
+ *
+ * Not the game's popup: every settings dialog of the tool is drawn in that
+ * one popup, so opening this there would close the very dialog it is meant
+ * to look at. This box stays open beside it until its Close is pressed.
+ */
+export function openElementCrawlBox(): void {
+  if (qs(`#${ELEMENT_CRAWL_BOX_ID}`)) return;
+  const modes = (Object.keys(ELEMENT_CRAWL.modes) as ElementCrawlMode[])
+    .map(
+      (mode, index) =>
+        `<label style="display:block; margin:4px 0">` +
+        `<input type="radio" name="${ELEMENT_CRAWL_MODE_NAME}" value="${mode}"${index === 0 ? " checked" : ""}/> ` +
+        `${ELEMENT_CRAWL.modes[mode]}</label>`,
+    )
+    .join("");
+  const box = document.createElement("div");
+  box.id = ELEMENT_CRAWL_BOX_ID;
+  box.setAttribute(
+    "style",
+    `position:fixed; top:80px; right:20px; z-index:${ELEMENT_CRAWL_BOX_Z_INDEX}; width:380px; ` +
+      "padding:10px 12px; background:#fdf7dd; border:1px solid #7e4a21; " +
+      "border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,0.3); " +
+      "font-size:12px; color:#542c0f; text-align:left",
+  );
+  box.innerHTML =
+    `<div style="font-weight:bold; margin-bottom:6px">${ELEMENT_CRAWL.title}</div>` +
+    `<label for="${ELEMENT_CRAWL_INPUT_ID}">${ELEMENT_CRAWL.target}</label>` +
+    `<textarea id="${ELEMENT_CRAWL_INPUT_ID}" rows="4" placeholder="${escapeHtml(ELEMENT_CRAWL.placeholder)}" ` +
+    `style="display:block; width:100%; box-sizing:border-box; margin:4px 0; font-family:monospace"></textarea>` +
+    modes +
+    `<p style="font-size:11px; margin:6px 0">${ELEMENT_CRAWL.hint}</p>` +
+    `<button style="margin-right:10px" class="button" ${action("crawl.element.run")}>${ELEMENT_CRAWL.run}</button>` +
+    `<button class="button" ${action("crawl.element.close")}>${BUTTON.close}</button>`;
+  document.body.appendChild(box);
+}
+
+export function closeElementCrawlBox(): void {
+  removeElement(`#${ELEMENT_CRAWL_BOX_ID}`);
+}
+
+/** What the Crawl by id box holds: the text typed, and the mode picked. */
+export function readElementCrawlForm(): {
+  target: string;
+  mode: ElementCrawlMode;
+} | null {
+  const input = qs<HTMLTextAreaElement>(`#${ELEMENT_CRAWL_INPUT_ID}`);
+  if (!input) return null;
+  const picked = qs<HTMLInputElement>(
+    `input[name="${ELEMENT_CRAWL_MODE_NAME}"]:checked`,
+  )?.value;
+  const mode: ElementCrawlMode = picked === "js" ? "js" : "html";
+  return { target: input.value.trim(), mode };
 }
 
 /** The crawl picked in the dialog, or `null` when none is. */
