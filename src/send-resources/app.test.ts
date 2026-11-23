@@ -2619,6 +2619,12 @@ describe("the Auto Build settings dialog", () => {
             listed.querySelectorAll<HTMLElement>("button"),
           ).map((button) => button.dataset.ikaAction);
           expect(actionsInOrder).toEqual(["build.add", "build.decrease"]);
+          // + takes the free space, so + and - sit at the right edge.
+          const [plus, minus] = Array.from(
+            listed.querySelectorAll<HTMLElement>("button"),
+          );
+          expect(plus.style.marginLeft).toBe("auto");
+          expect(minus.style.marginLeft).toBe("");
         }
         const warehouse = line("js_CityPosition5Link");
         expect(warehouse.planned).toBe("(26)");

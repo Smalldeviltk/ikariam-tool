@@ -634,6 +634,9 @@ let listedBuildings: {
  * which put - left of +), and never wraps; being a block, each line starts on
  * its own row without a `<br/>`.
  *
+ * The + carries `margin-left:auto` (`BUILDING_BUTTONS_STYLE`), so + and -
+ * sit together at the right edge of the column, the name at the left.
+ *
  * `float:none` because the dialog's sheet floats every line of the table
  * (`styles.ts`). Floated lines with no `<br/>` between them were all counted
  * on one row when the column's width was worked out: measured in the game,
@@ -641,6 +644,9 @@ let listedBuildings: {
  */
 const BUILDING_LINE_STYLE =
   "display:flex;align-items:center;gap:4px;white-space:nowrap;float:none";
+
+/** On the + of a building's line: takes the free space, so + and - go right. */
+const BUILDING_BUTTONS_STYLE = "margin-left:auto";
 
 /**
  * One line per building, each with a + that saves one more level to
@@ -658,11 +664,14 @@ function renderBuildingList(
       const level = planned.get(slot.positionId);
       const plannedLabel =
         level === undefined ? "" : ` <span style="color:red">(${level})</span>`;
-      const plus = `<button class="button" ${action("build.add", {
-        "ika-position": slot.positionId,
-        "ika-building": slot.buildingName,
-        "ika-town": townName,
-      })}>+</button>`;
+      const plus = `<button class="button" style="${BUILDING_BUTTONS_STYLE}" ${action(
+        "build.add",
+        {
+          "ika-position": slot.positionId,
+          "ika-building": slot.buildingName,
+          "ika-town": townName,
+        },
+      )}>+</button>`;
       const minus = `<button class="button"${level === undefined ? " disabled" : ""} ${action(
         "build.decrease",
         { "ika-position": slot.positionId, "ika-town": townName },
