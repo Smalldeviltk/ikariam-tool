@@ -1,8 +1,12 @@
 # Kế hoạch cải thiện — UI và tính năng
 
-> Trạng thái: **đang thực hiện.** Cập nhật 23/11/2026.
+> Trạng thái: **đang thực hiện.** Cập nhật 25/11/2026.
 >
-> **Mới nhất (§2.AN — 22–23/11, commit `1c62a7c` (code + test, 30 file `src`) và `7105b25` (tài liệu + prompt mới), rồi `349d8f3` (căn phải `+ −`) và `4560372` (tài liệu chi tiết) — tất cả đã push (xem dòng Git 23/11); có trong `dist/` 23/11 15:40 của người dùng (grep `isPageLeaving`, `forgetBuildListBase`, `readGameCount` — §2.AN đầu mục); chưa thử trên game):** list building một hàng (lỗi 3.521 px do float của chính tool, đã sửa); Transport Settings bảng bên phải cao bằng form (`clear: both` sau số đo người dùng gửi), block Amount ≤ 520 px; Clear All ở hai dialog (Auto Build: town chọn ở dropdown); Crawl by id (HTML/JS) và file lỗi cho mọi crawl, file đã lọc token; khung popup rộng theo nội dung; prompt `docs/prompts/review-source-workflow.md`; review toàn `src` và sửa F1–F5, R1–R3, Q1–Q5; mục tên tạm từ notepad đặt theo tên building; scan Wine bị từ chối chỉ còn một toast; Empire Overview đọc đúng số ≥ 1.000 (`readGameCount`); bug report 23/11: không bắt đầu gì trên trang vừa bấm về town view (đổi town hỏng 4/4 lần sau thao tác đó). 1044 → 1116 test.
+> **Mới nhất (§2.AP — 25/11, CHƯA commit: 6 file `src` + hai tài liệu; có trong `dist/` người dùng build 25/11 17:01–17:02 (grep `ikaPageCrawl` 1 / 1, `researchTracks` 5 / 5); người dùng đã chạy cả hai crawl trên game):** Crawl có thêm **Page** (box riêng: mở màn hình của game rồi bấm Crawl — lưu mọi form kèm đủ trường, cả trường ẩn, control đang hiện, HTML trang không có phần của tool) và **Research** (tự gửi request: Town Hall, Academy, Temple từng town; Palace, Research Advisor, **mọi nhánh research**, Finances một lần; lưu response thô, lọc mọi token). **V đối chiếu trên 1 account (6 town): code khớp game** ở dân số tối đa, vàng scientist, hài lòng (tavern, phục vụ rượu, museum, hiệp ước, research, capital) — không cần sửa. **Lỗi của mình:** báo nhầm board thiếu 250 hài lòng ở town không có Palace — dòng "+250 capital" có class `invisible` ở đó, game không cộng. **L: không làm** (người dùng: cần chiến thuật, tự điền); **P: bỏ** (game đã bắt nhập captcha khi phá thuộc địa). **Còn mở:** `wineSpendings` — số đo 26/09 (model, gộp) và 25/11 (`headerData` của response fetch, đã trừ press) ngược nhau. 1116 → 1127 test.
+>
+> **§2.AO — 24/11, chỉ `build/build-extension.mjs` +4 dòng, CHƯA commit; `dist/` lúc viết chưa build lại cho thay đổi này — người dùng build 25/11 17:01, §2.AP):** người dùng hỏi vì sao file `dist` càng ngày càng dài. Đo: **code thật** của Send Resources + core (đã bỏ comment) tăng 162 → 272 KB từ 04/10 (+68%), userscript đã bỏ comment nên `dist` tăng theo gần 1:1 (151 → 260 KB); Empire Overview gần như đứng yên (~505 KB). Hai userscript trong `dist/` của người dùng còn **bị prettier format lại** (+11% / +7.6%, chưa biết do đâu). Bản extension giữ toàn bộ JSDoc. Người dùng chọn **A: extension bỏ comment** (`comments: false`) — đo trên bản copy: `send-resources.js` 408.595 → 261.589 byte (−36%), `empire-overview.js` 563.848 → 509.513 (−10%). Không chọn minify (stack trace trong bug report sẽ không đọc được). 1116 test vẫn xanh. **Sửa lời mình 23/11:** `dist/` hiện tại (23/11 16:00, thay bản 15:40) **đã có** `+ −` căn phải — các bước thử của §2.AN dùng bản này.
+>
+> **§2.AN — 22–23/11, commit `1c62a7c` (code + test, 30 file `src`) và `7105b25` (tài liệu + prompt mới), rồi `349d8f3` (căn phải `+ −`) và `4560372` (tài liệu chi tiết) — tất cả đã push (xem dòng Git 23/11); có trong `dist/` 23/11 15:40 của người dùng (grep `isPageLeaving`, `forgetBuildListBase`, `readGameCount` — §2.AN đầu mục); chưa thử trên game):** list building một hàng (lỗi 3.521 px do float của chính tool, đã sửa); Transport Settings bảng bên phải cao bằng form (`clear: both` sau số đo người dùng gửi), block Amount ≤ 520 px; Clear All ở hai dialog (Auto Build: town chọn ở dropdown); Crawl by id (HTML/JS) và file lỗi cho mọi crawl, file đã lọc token; khung popup rộng theo nội dung; prompt `docs/prompts/review-source-workflow.md`; review toàn `src` và sửa F1–F5, R1–R3, Q1–Q5; mục tên tạm từ notepad đặt theo tên building; scan Wine bị từ chối chỉ còn một toast; Empire Overview đọc đúng số ≥ 1.000 (`readGameCount`); bug report 23/11: không bắt đầu gì trên trang vừa bấm về town view (đổi town hỏng 4/4 lần sau thao tác đó). 1044 → 1116 test.
 >
 > **§2.AM — 21/11, commit `d9e42ac` + `44eb873`, đã push (kiểm 21/11: `origin/refactor` = `44eb873`); tài liệu commit cùng §2.AN; **có trong `dist/` 23/11 13:20 và 15:40** — người dùng build, không build trong phiên (grep `autoBuildTown` 2 / 2 trong userscript / extension lúc 13:20; lúc viết §2.AM thì còn là build 11/11, 0 / 0); chưa thử trên game):** Auto Build Settings. (1) **Dropdown chọn town** như Transport Settings; bảng chỉ hiện building + queue của town đã chọn; town khác đọc bằng request (`fetchTown`), không đổi town. (2) **Level dự kiến màu đỏ** cạnh từng building: `Tavern 15 (17)`, theo ô chứ không theo tên. (3) **`−` ở cột queue xoá dây chuyền** (11 12 13 14, xoá 13 → còn 11 12); **nút `−` cạnh `+`** bỏ level cao nhất (mờ khi ô chưa có gì). (4) **Tự kiểm queue đã xong** (file mới `features/build-queue-validation.ts`, người dùng đồng ý): level ô đã xây xong ≥ level lưu thì xoá, lúc Auto Build tới town và lúc dialog hiện town; nghi ngờ thì giữ. (5) **Town không có trong dropdown thì không chạy**, queue giữ nguyên. (6) Lượt có mục đã bị xoá → chạy mục kế tiếp của town. (7) **Notepad không ghi khi building đang mở**: claim huỷ lần đồng bộ đang hẹn (đã đo: nó đưa mục vừa claim trở lại notepad), đồng bộ sau thay đổi / lúc tải trang / sau Scan chờ khi runner của account (tab này hoặc tab khác — mốc `ikaRunnerBusy` trong storage, hết hạn 2 phút) đang làm task. 977 → 1044 test.
 >
@@ -42,9 +46,12 @@
 > nút ▲ (E) người dùng đã bấm thử và báo lỗi, sửa ở §2.V. **Bản extension
 > Chrome chưa từng load được** cho tới §2.W (manifest sai từ đầu) — mọi lần
 > thử trên game tới nay là bản userscript.
-> Còn lại: P, L (chờ capture) · 2.7 (chỉ làm khi có lỗi cụ thể) · V (◐) ·
+> Còn lại: 2.7 (chỉ làm khi có lỗi cụ thể) · V (◐: khớp game trên 1 account, §2.AP) ·
 > phần U còn thiếu số (§2.U phần 4) · R: kênh cập nhật riêng (chờ người
 > dùng). **Không làm lúc này** (người dùng chọn 04/10): F, G, I, M, N, O, Q.
+> **Không làm** (người dùng chọn 25/11, §2.AP): L (tự điền tàu khi tấn công — cần chiến thuật), P (bỏ — game đã có captcha).
+>
+> Git (25/11, đã kiểm): `git fetch` rồi `origin/refactor` = `HEAD` = `07275df`, ahead 0 / behind 0 — mọi commit của §2.AN đã push. **Chưa commit: §2.AO** — `build/build-extension.mjs` (`git diff --stat`: 1 file, +4) và hai tài liệu này. **Sau đó cùng ngày (không fetch lại): §2.AP cũng chưa commit** — `src/core/ikariam/http.ts`, `src/send-resources/app.ts` (+ `app.test.ts`), `diagnostics.ts`, `messages.ts`, `ui/dialogs.ts` (`git diff --shortstat -- src`: 6 file, +1048/−31).
 >
 > Git (23/11, đã kiểm): trước khi commit `git fetch` cho `origin/refactor` = `HEAD` = `44eb873`. Commit `1c62a7c` (code) và `7105b25` (tài liệu) — **người dùng push** (fetch sau đó: `origin/refactor` = `7105b25`); rồi `349d8f3` (căn phải `+ −`), `4560372` (tài liệu chi tiết) và commit sửa dòng trạng thái này — push theo yêu cầu của người dùng 23/11. `4560372` từng ghi nhầm "4 commit, chưa push" vì mình không fetch trước khi viết.
 >
@@ -371,6 +378,8 @@ Wine Press**. Đo hai lần, khớp cả hai:
 | ---------- | ------ | ------------------- | ----- | ----------- |
 | W-Athens   | 35     | 584 = `wineUse[35]` | 40    | 350.4       |
 | M-Syracuse | 42     | 933 = `wineUse[42]` | 40    | 559.8 ≈ 560 |
+
+*25/11: `headerData.wineSpendings` trong response Town Hall do tool fetch lại là số **đã trừ** press ở 6 town — hai số đo ngược nhau, xem §2.AP phần 5.*
 
 Press giảm 1% mỗi cấp. Board vốn đã trừ (`models/city.ts`), nhưng
 `resource-production.ts` và town cache thì chưa — nên span trên city view hiện
@@ -3488,6 +3497,170 @@ Giữ nguyên: hai bảng lỗi lịch sử (40 dòng), "The bug that took four 
 5. Hai tab: Start Pirate ở tab không chạy queue — capture chờ khi tab kia đang mở building / form gửi hàng.
 6. Import một file export có danh sách build: các mục chỉ có ở máy khác không bị xoá.
 
+### 2.AO Kích thước `dist`: vì sao tăng, và bản extension bỏ comment (24/11/2026)
+
+**Chưa commit:** `build/build-extension.mjs` (+4 dòng) và hai tài liệu này. `git fetch` 25/11: `origin/refactor` = `HEAD` = `07275df`. `dist/` thật **chưa build lại** (project: hỏi trước khi build lại `dist/`; sau đó người dùng build 25/11 17:01 — §2.AP). Mọi phép đo dưới đây build vào thư mục tạm (bản copy `git archive` của từng commit, `node_modules` link sang), không đụng `dist/` của người dùng.
+
+**Người dùng hỏi:** "Tại sao cứ càng viết thì file dist build ra càng dài vậy, dù source thêm ko nhiều, double check lại cho tôi, xem có thể tối ưu ko". Sau báo cáo, người dùng chọn: "A".
+
+#### 1. Vì sao `dist` dài ra — code thật tăng
+
+Build lại 6 mốc bằng đúng config của project (chỉ đổi `outDir`):
+
+| Commit | Ngày | Send Resources: source | Send Resources: `dist` | Empire Overview: `dist` |
+| ------ | ---- | ---------------------- | ---------------------- | ----------------------- |
+| `180fead` | 04/10 | 351 KB | 151 KB | 503 KB |
+| `455047d` | 22/10 | 370 KB | 158 KB | 505 KB |
+| `9a03cca` | 05/11 | 497 KB | 227 KB | 507 KB |
+| `b4e420d` | 11/11 | 504 KB | 230 KB | 507 KB |
+| `44eb873` | 21/11 | 529 KB | 241 KB | 507 KB |
+| `07275df` | 23/11 | 566 KB | 260 KB | 508 KB |
+
+- Userscript **đã bỏ hết comment** (trong `dist` chỉ còn 25 dòng comment, toàn là header `==UserScript==`), nên `dist` tăng theo **code**, không theo comment.
+- Code (đã bỏ comment bằng `ts.transpileModule` với `removeComments`, bỏ thụt lề) của `src/send-resources` + `src/core`: **162.535 → 272.303 byte (+109.768, +68%)** từ `180fead` tới HEAD; source có comment +212.288 byte.
+- Đóng góp lớn nhất (code, byte):
+
+  | File | Trước → sau | Ghi chú |
+  | ---- | ----------- | ------- |
+  | `queue-note.ts` | 0 → 20.280 | mới (đồng bộ notepad) |
+  | `features/pirate.ts` | 0 → 16.403 | mới |
+  | `ui/dialogs.ts` | 10.938 → 22.512 | gần gấp đôi |
+  | `app.ts` | 13.023 → 24.003 | |
+  | `diagnostics.ts` | 3.982 → 11.695 | các kiểu Crawl |
+  | `messages.ts` | 9.538 → 17.070 | |
+  | `features/auto-build.ts` | 10.672 → 16.954 | |
+  | `features/auto-wine.ts` | 6.177 → 12.329 | |
+  | `core/ikariam/http.ts` | 6.720 → 12.444 | |
+  | `navigation.ts` | 5.756 → 10.722 | |
+
+- **Empire Overview đứng yên** (~505 KB): code port từ bản cũ — `debug.ts` 122 KB (28% code), 19 ảnh PNG base64, chuỗi template HTML/CSS dài (9 dòng > 2.000 ký tự, tổng 96 KB).
+- Các bản build cũ dùng `node_modules` hiện tại — bảng chỉ phản ánh thay đổi của source, không tính thay đổi của công cụ build.
+
+#### 2. `dist/` của người dùng bị prettier format lại sau khi build
+
+- Prettier chạy trên bản build HEAD ra file **khớp từng byte** với `dist/Ikariam Send Resources.user.js` (`diff` 0 dòng, 288.424 byte); Empire Overview cũng ra đúng 546.517 byte. Bản build thô: 259.615 / 508.016 byte (thụt lề tab).
+- Chênh lệch: **+28.809 byte (+11%)** Send Resources, **+38.501 byte (+7.6%)** Empire Overview.
+- `npm run build` không làm việc này: chạy `node build/build.mjs userscript` trên bản copy ra file trùng byte với bản build thô (tab). `npm run format` chỉ format `src/**/*.ts` và `build/**/*.ts`.
+- Giờ sửa file (`stat`, chỉ ghi nhận): extension 16:00:45, userscript Empire Overview 16:00:48, Send Resources 16:00:50 — ngược thứ tự `build.mjs` build. Riêng điều này không chứng minh gì (chạy `build:extension` rồi `build:userscript` riêng cũng ra thứ tự đó); bằng chứng là file prettier khớp từng byte. **Thứ format lại chưa biết là gì** (người dùng chưa chọn tìm — cách C).
+
+#### 3. Thay đổi: extension bỏ comment (cách A, người dùng chọn)
+
+| Thay đổi | Ở đâu |
+| -------- | ----- |
+| `comments: false` trong `rollupOptions.output` của từng entry extension, kèm comment tiếng Anh nói lý do | `build/build-extension.mjs:96-99` |
+
+- Tên option kiểm trong type của rolldown (`node_modules/rolldown/dist/shared/define-config-BhJ90aEv.d.mts:882`: `comments?: boolean | CommentsOptions`, `false` = bỏ mọi comment), không lấy theo trí nhớ.
+- **Đo trên bản copy, build bằng đúng file đã sửa:** `send-resources.js` 408.595 → **261.589 byte (−36%)**; `empire-overview.js` 563.848 → **509.513 byte (−10%)**. JSDoc còn 0 / 0 (trước: 647 dòng mở `/**` ở Send Resources); nhãn `#region` vẫn còn 41 / 36; `node --check` ok cả hai; rolldown không in cảnh báo.
+- **Không mất comment bản quyền:** bản cũ chỉ có 1 chỗ khớp `@license|/*!|//!|@preserve` — header jQuery UI CSS nằm **trong chuỗi** truyền cho `GM_addStyle`, bản mới vẫn còn (grep 1). Không có `#region node_modules` trong cả hai file — không thư viện nào bị đóng gói.
+- `npx vitest run`: **1116 passed (1116)** (thay đổi chỉ ở build, không đổi số test).
+- `prettier --check build/build-extension.mjs` báo lỗi — **có sẵn ở HEAD** (dòng 48, 158), không phải do thay đổi này.
+
+#### 4. Không chọn
+
+- **B. Minify userscript:** Send Resources 260 → 148 KB (−43%), Empire Overview 508 → 351 KB (−31%); gzip 51 KB / 113 KB (bản thường 71 / 129 KB). Đổi lại stack trace trong bug report và file lỗi Crawl gần như không đọc được (426 dòng, tên hàm bị đổi), Tampermonkey không dùng sourcemap. Mình không khuyên.
+- **C. Tìm thứ format lại `dist/`:** −29 KB / −38 KB, không cần sửa code; còn mở.
+
+#### 5. Lỗi của mình
+
+- Báo cáo 23/11 bảo người dùng build lại vì `dist/` chưa có `349d8f3`. Đúng với bản 15:40 (`ui/dialogs.ts` sửa lúc 15:58:56), nhưng người dùng đã build lại lúc 16:00, trước báo cáo đó: mình nói trạng thái `dist/` theo trí nhớ, không `stat` lại. `dist/` hiện tại có nó — `grep -c 'margin-left:auto'` = 1 (userscript) / 2 (extension) — và khớp bản build HEAD qua prettier (phần 2).
+
+#### 6. Chưa kiểm chứng
+
+- Load extension trong Chrome sau khi bỏ comment (dấu hiệu gián tiếp: userscript đã bỏ comment và chạy được — không có code nào cần comment lúc chạy, nhưng chưa thử).
+- Thời gian load / parse của bất kỳ cách nào.
+- Thứ đã format lại `dist/` sau khi build.
+
+**Cần làm:** `npm run build:extension` (hoặc `npm run build`) rồi bấm Reload trên thẻ extension ở `chrome://extensions`. Các bước thử của §2.AN (ghi "`dist/` 15:40") dùng `dist/` 23/11 16:00 hiện tại — bản 15:40 không còn.
+
+### 2.AP Crawl Page và Crawl Research; số liệu V; quyết định L và P (25/11/2026)
+
+**Chưa commit:** `src/core/ikariam/http.ts`, `src/send-resources/app.ts` (+ `app.test.ts`), `diagnostics.ts`, `messages.ts`, `ui/dialogs.ts` (`git diff --shortstat -- src`: 6 file, +1048/−31) và hai tài liệu này; §2.AO cũng còn chưa commit. Có trong `dist/` người dùng build 25/11 17:01:52–17:02:00, sau lần sửa nguồn cuối 16:57:23 (grep userscript / extension: `ikaPageCrawl` 1 / 1, `researchTracks` 5 / 5, `noViewChange` 1 / 1; extension có cả §2.AO: `/**` 0 / 0). Người dùng đã chạy cả hai crawl trên game. Bản tiếng Anh: handover §40. Mọi `file:line` dưới đây tính theo working tree chưa commit lúc 25/11 17:12. 1116 → 1125 → 1127 test, 40 file; `tsc` cả `tsconfig.json` và `tsconfig.strict.json` exit 0; prettier sạch trên các file đã sửa; `grep -rn "§" src tools` = 0.
+
+#### 1. Yêu cầu và lựa chọn
+
+Người dùng dán danh sách "chờ người dùng" (P, L, R, V, phần U còn thiếu, các bước thử §2.AN) và yêu cầu: **"sửa tính năng crawl để get các thông tin cần thiết"**. R là quyết định, các bước thử là việc trên game — crawl không lấy được. Hỏi trước, người dùng chọn:
+
+- **P, L:** thêm loại crawl **Page** — người chơi tự mở màn hình, tool lưu lại.
+- **V:** thêm loại **Research** — tool tự gửi request.
+- **U:** giữ nguyên — trang Help chỉ liệt kê 50 cấp quanh cấp hiện tại, crawl không vượt được.
+
+Sau khi xem file đầu: **"tiếp tục"** với ba việc — thêm các nhánh research, sửa hài lòng "+250 capital", đối chiếu tiếp với code (phần 4 giải thích vì sao không sửa hài lòng).
+
+#### 2. Thay đổi
+
+| Thay đổi | Ở đâu |
+| -------- | ----- |
+| Loại crawl `page`, `research`; chữ `PAGE_CRAWL`, `RESEARCH_CRAWL` | `send-resources/messages.ts:481`, `:518`, `:531` |
+| `openCrawlBox` (box nổi, dùng chung với By id, class `CRAWL_BOX_CLASS`); `openPageCrawlBox` / `closePageCrawlBox` (`#ikaPageCrawl`). **Page không chạy từ nút của dialog Crawl** (chọn ở đây, theo advisor): popup chung có thể đóng chính màn hình cần chụp | `ui/dialogs.ts:953`, `:969`, `:978` |
+| `crawlPage`: URL, tiêu đề, mọi `form` ngoài phần của tool với từng trường (`input, select, textarea, button`, cả trường ẩn — giá trị, checked, có hiện không), HTML form (20.000 ký tự), `visibleControls` (bỏ nút của tool), HTML trang bỏ `TOOL_UI` (cửa sổ, launcher, dialog, box crawl của tool, `#empireBoard`, `#ika-toast-stack`), bỏ `<script>` và ảnh `data:`, cắt ở 2.000.000 ký tự kèm cờ `truncated` | `diagnostics.ts:858`, `TOOL_UI` `:760` |
+| `visibleGameControls(leaveOut)` tách từ phần chụp form gửi hàng; Bug Report không đổi | `diagnostics.ts:147` |
+| `collectResearchViews`: mỗi town (`ownTownIds`) Town Hall (đúng request của Scan), rồi `academy`, `temple` nếu `slotOfBuilding` thấy trong `position`; một lần `palace`, `researchAdvisor`, mọi nhánh research, `finances`; request lỗi ghi lỗi và chạy tiếp; trả town đang chọn nếu bị đổi; gom token của mọi response để lọc. **Temple và Palace thêm ở đây** (cho priest và chính thể; đã báo người dùng, người dùng chưa xác nhận riêng) | `diagnostics.ts:999`, `:971` |
+| `researchTracksOf` đọc tab của Research Advisor; `askEveryResearchTrack` gửi `view=noViewChange&researchType=<nhánh>&templateView=researchAdvisor`, **nhánh đang mở gửi cuối** (người dùng chọn thêm nhánh), không có nhánh đang mở thì không đổi nhánh nào (chọn ở đây) | `diagnostics.ts:927`, `:1092` |
+| `crawlFileText(payload, moreTokens)`; `saveCrawlFile(…, moreTokens)` | `diagnostics.ts:1147`, `app.ts:812` |
+| `crawlResearch`: **từ chối** khi queue đang chạy / bận ở bất kỳ tab nào, trang đang rời đi, hay Pirate đang gửi capture (chọn ở đây — mỗi response đổi token); file + toast số view và số lỗi. `runPageCrawl`; mục `CRAWLS`; action `crawl.page.run` / `crawl.page.close` | `app.ts:663`, `:714`, `:764`, `:1221` |
+| `tokenInEntries` export | `core/ikariam/http.ts:218` |
+
+File Research `ikariam-crawl-research-<account>-<UTC>.json`: `server`, `towns[]` (`cityId`, `name`, `townHall`, `buildings.academy`, `buildings.temple`), `palace`, `researchAdvisor`, `researchTracks` (`tracks`, `active`, `restored`, `skipped`), `finances`, `selectionMoved`; mỗi view là `{ request, response }` hoặc `{ request, error }`. File Page `ikariam-crawl-page-<account>-<UTC>.json`.
+
+#### 3. Test
+
+`app.test.ts`: `describe("Crawl page")` (4) và `describe("Crawl research")` (7), trong "the Crawl dialog"; test liệt kê các loại crawl giờ có 6. Test Research giả game qua `fetch`: 2 town, mỗi response một token mới, token đó cũng nằm trong một ô ẩn của HTML, có các tab của Research Advisor.
+
+**Đã thấy đỏ, mỗi lần làm hỏng một chỗ** (`break-crawl.mjs`, `break-tracks.mjs` trong scratchpad, chạy với `-t` — chạy một phần; `md5sum -c` / `cmp` OK sau đó), **15/15**: gom token, từ chối khi bận ở tab khác, tìm ô Academy, request lỗi làm dừng crawl, trả town đang chọn, để board trong HTML, bỏ trường ẩn, để `<script>`, cờ `truncated`, để ảnh `data:`, Page chạy từ dialog thay vì box, nút của tool trong `visibleControls`, nhánh đang mở không gửi cuối, đổi nhánh khi không có nhánh đang mở, bỏ `templateView`.
+
+**Thiếu test:** chỉ test lý do từ chối "bận ở tab khác" (chưa test runner đang chạy, trang đang rời đi, Pirate); nhánh `ok: false` của Page; request Research Advisor tự lỗi; `restored: false`.
+
+#### 4. File người dùng gửi, và đối chiếu với code
+
+Account Arthas Menethil (`s303-en`, 6 town, Technocracy, Palace ở M_Strahnbrad, không có Temple). File: research `…-09-46-47`, `…-10-04-03`; page `…-09-46-53` (city view + Daily Tasks), `…-10-04-44` (dialog Barbarian Village), `…-10-08-19` (form tấn công), `…-10-09-25` (phá thuộc địa). **Không file nào lộ token** (mọi chuỗi hex dài còn lại là tên ảnh CDN hoặc `version` của `queueETA`). Lúc ghi tài liệu này (17:12) trong `sample/` chỉ còn hai file page cuối.
+
+Số đo chi tiết ở handover §2 ("Added 25/11"). Tóm tắt:
+
+- Mảng `position`: `building` là class của công trình (`"academy"`, `"palace"`, `"palaceColony"` = Governor's Residence, `"buildingGround land"` = ô trống).
+- Town Hall có đủ: dân số tối đa (`js_TownHallMaxInhabitants`), `ScientistCount`, `PriestCount`, bảng phân rã hài lòng (`js_TownHallSatisfactionOverview…`), tổng (`js_TownHallHappinessLargeValue`).
+- Research Advisor chỉ trả nhánh đang mở; mỗi nhánh lấy bằng `noViewChange&researchType=…`; danh sách nằm ở `new_js_params` (đổi nhánh) hoặc `load_js.params` (mở advisor).
+- Palace ghi chính thể ("Technocracy"); Finances ghi chi phí scientist từng town.
+
+| Công thức của board | Game, 6 town |
+| ------------------- | ------------ |
+| Dân số tối đa: `floor(10·TH^1,5)·2+40` + Holiday 50 + Economic Future 20/cấp, + Well Construction 50 + Utopia 200 khi có Palace | khớp 6/6 (+70 town thường, +320 town có Palace) |
+| Vàng scientist `6 + researcherCost − 3 × Letter Chute` | 4 = 6 + 1 − 3; Finances −488 / 122, −276 / 69 |
+| Tavern `basicBonus[cấp]`, museum `basicBonus[cấp]`, hiệp ước 50 × hàng | khớp 6/6 (448 / 430 / 266, 590, 700 = 14 × 50) |
+| Phục vụ rượu: `wineBonus[i]` với `wineUse[i]` ≈ tiêu thụ gộp (±1) | khớp 6/6 (255 → 1644, 216 → 1485, 198 → 1408, 181 → 1332) |
+| Research 25 × Holiday + 10 × Economic Future, + 250 khi có Palace | game: research +35 mọi town, capital +250 chỉ tính ở town có Palace — tổng bằng nhau |
+
+**Không sửa code.** Người dùng đã chọn "sửa hài lòng +250" theo phân tích sai của mình (bên dưới); số đo cho thấy code đúng.
+
+#### 5. `wineSpendings` — hai số đo ngược nhau (chưa sửa)
+
+- 26/09 (handover §2): `ikariam.model.wineSpendings` = 933 = `wineUse[42]` — **gộp**.
+- 25/11: `updateGlobalData.headerData.wineSpendings` trong response Town Hall do tool fetch là **đã trừ Wine Press** ở 6/6 town: 153 với press cấp 40 và mức phục vụ `wineUse[24]` = 255 (153 = 255 × 0,6); tương tự 166 / press 35, 173 / 20, 130 / 40, 145 / 27, 179 / 1.
+- Hai nguồn khác nhau, cách nhau hai tháng; chưa biết cái nào giải thích cái nào. Nếu model giờ cũng là số đã trừ, `modelWineConsumption` (`core/ikariam/model.ts`) trừ press **hai lần** → Auto Wine và town cache tính thiếu đúng bằng % của press (tới ~40% ở các town này) — **chưa đo**. Board không bị: nó kiểm `inArray(wineUse)` nên chịu được cả hai.
+- **Cách kiểm:** ở một town có Wine Press, cùng lúc: Crawl by id JS `ikariam.model.wineSpendings` trên city view, và Crawl Research — so với `headerData.wineSpendings` của town đó.
+
+#### 6. L và P
+
+- **L** (form tấn công Barbarian Village, `#plunderForm`): `function=attackBarbarianVillage`, `cargo_army_<id>` mỗi loại quân, ô tàu `transporter` (`#extraTransporter`), nút `#plunderbutton`. **Người dùng: "cái này cần chiến thuật nên để user tự điền" — không làm.**
+- **P** (phá thuộc địa, `#abolishCity_c`): form `action=DeleteColony`, `cityId`, ô `captcha` + ảnh `#js_captchaImage`. Game đã bắt nhập chữ xác nhận. **Người dùng: "bỏ".**
+- Ghi chú nhỏ, chưa sửa: comment ở `src/send-resources/features/barbarian.ts:24` gọi `li` đầu tiên là "the label" — thật ra là **vàng**; bỏ qua nó là đúng (vàng không cần tàu), chỉ comment sai.
+
+#### 7. Lỗi của chính mình
+
+- **Báo nhầm "+250".** Từ file research đầu, mình báo board thiếu 250 hài lòng ở 5 town không có Palace; người dùng chọn sửa. Dòng mình đọc có class `invisible` ở các town đó — cộng lại các dòng so với tổng của game mới thấy. Không sửa code. Bài học: đọc class của dòng, không chỉ chữ.
+- Fixture đầu thiếu `id` của town → `ownTownIds` rỗng, test không gửi gì; `openCrawl` xoá `window.ikariam` nên game giả phải dựng sau đó.
+- `.at()` trong test làm typecheck lỗi (`lib` trước es2022).
+- Một assertion về nút của box kiểm `data-ika-action`, thứ `visibleControls` không lưu — không thể đỏ; viết lại theo chữ trên nút, đã thấy đỏ.
+- `researchTracksOf` export mà không ai dùng ngoài file — bỏ `export`.
+- Ghi "30 request" cho một lần Research khi viết tài liệu; đếm lại là 20 (6 Town Hall, 6 Academy, Palace, advisor, 5 nhánh, Finances).
+
+#### 8. Chưa kiểm chứng
+
+- Đổi nhánh research có làm đổi tab người chơi thấy trong Research Advisor không, và gửi nhánh đang mở cuối có trả lại không (`restored: true` chỉ nghĩa là request đó được trả lời).
+- `wineSpendings` (phần 5).
+- Priest, malus chính thể, research cấp > 1, account khác, chính thể khác.
+- Kích thước file Research ở account khác (account này: 2.102.024 byte, 20 request).
+- Scan chạy song song với Research không bị từ chối.
+
 ---
 
 ## 3. Phase 2 — UI
@@ -3581,21 +3754,22 @@ Cột **Build** cho biết tính năng chạy được ở đâu: `US` = userscr
 | I ⬜ | **Tab Espionage.** Số điệp viên rảnh theo thành phố, đang phái đi đâu, mục tiêu. Ta không có gì tương đương. `js/page/modules/empire/espionage.js` **Người dùng 04/10: không làm lúc này.**                                                                                                                                                                                                                                                                                                                                                                                                                                  | cả hai      | Phase 1                      |
 | J ✅ | **Thông báo desktop**: xây xong, sắp xong, transport đã tải / đã đến / đã về, tuyển quân xong. Đây là thứ biến script thành công cụ chạy nền thật sự. **✅ 04/10 (§2.T phần 5):** 4 loại — xây xong, tàu tới, rượu sắp hết, task bị bỏ — mỗi loại một checkbox; `Notification` của trang, chỉ khi tab còn mở. Chưa thử trên game.                                                                                                                                                                                                                                                                                            | xem ghi chú | Phase 1                      |
 | K ✅ | **Cấp công trình hiện ngay trên city view** — khỏi rê chuột từng cái. `option.city_details` **✅ 04/10 (§2.T phần 4):** nhãn `12` / `12→13` trên mỗi công trình. Chưa thử trên game.                                                                                                                                                                                                                                                                                                                                                                                                                                         | cả hai      | —                            |
-| L ⬜ | **Chọn tàu chở tự động cho Barbarian Village.** Ta mới _hiển thị_ số tàu cần (theo sức chứa merchant ship đã Calibrate từ §2.F, trước đó hard-code 520); họ _chọn_ luôn, dùng đúng cấp nâng cấp Workshop. **Người dùng 04/10: làm khi có capture** form tấn công Barbarian Village.                                                                                                                                                                                                                                                                                                                                          | cả hai      | —                            |
+| L ⬜ | **Chọn tàu chở tự động cho Barbarian Village.** Ta mới _hiển thị_ số tàu cần (theo sức chứa merchant ship đã Calibrate từ §2.F, trước đó hard-code 520); họ _chọn_ luôn, dùng đúng cấp nâng cấp Workshop. **Người dùng 04/10: làm khi có capture** form tấn công Barbarian Village. **25/11 (§2.AP): có capture; người dùng — không làm, cần chiến thuật nên để người chơi tự điền.**                                                                                                                                                                                                                                                                                                                                          | cả hai      | —                            |
 | M ⬜ | **Tìm đảo theo tham số ở world view.** `js/page/modules/worldmap-islandSearch.js` **Người dùng 04/10: không làm lúc này.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | cả hai      | —                            |
 | N ⬜ | **Chi tiết đảo ở island view** — action point, chủ tàu, thông tin thành phố/mỏ. **Người dùng 04/10: không làm lúc này.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | cả hai      | —                            |
 | O ⬜ | **Ghi chú (notes).** Lưu trong IndexedDB theo server. `js/page/modules/notes.js` **Người dùng 04/10: chưa cần** (game đã có sổ ghi chú; O không tự động hoá gì).                                                                                                                                                                                                                                                                                                                                                                                                                                                             | cả hai      | —                            |
-| P ⬜ | **Chặn phá nhầm thuộc địa không di dời được.** Một hộp xác nhận, tránh mất trắng một thành phố. **Người dùng 04/10: làm khi có capture** màn phá thuộc địa (nút và form).                                                                                                                                                                                                                                                                                                                                                                                                                                                    | cả hai      | —                            |
+| P ⬜ | **Chặn phá nhầm thuộc địa không di dời được.** Một hộp xác nhận, tránh mất trắng một thành phố. **Người dùng 04/10: làm khi có capture** màn phá thuộc địa (nút và form). **25/11 (§2.AP): bỏ** — capture cho thấy game đã bắt nhập chữ xác nhận (captcha) trước khi phá.                                                                                                                                                                                                                                                                                                                                                                                                                                                    | cả hai      | —                            |
 | Q ⬜ | **Nút trả lời nhanh / xử lý hiệp ước trong Diplomacy.** **Người dùng 04/10: không làm lúc này.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | cả hai      | —                            |
 | R ◐  | **Kiểm tra bản mới.** Ta không có cơ chế cập nhật nào — Tampermonkey cần `@updateURL`/`@downloadURL`, extension cài tay thì không có gì. **◐ 04/10 (§2.T phần 3):** bỏ `CheckForUpdates` của board — nó trỏ tới script gốc trên greasyfork (id 764). Kênh cập nhật riêng cần URL công khai: chờ người dùng.                                                                                                                                                                                                                                                                                                                  | cả hai      | —                            |
 | S ✅ | **Auto Wine: làm tròn lượng gửi theo sức chứa tàu.** `distributeWine` chia tới từng đơn vị, nên một chuyến 621 rượu tốn 2 thương thuyền (620/tàu trên server đang test). Làm tròn theo bội số của `ship-capacity.ts` để đỡ tốn tàu, nhất là khi tàu rảnh đang thiếu; phần dư giữ lại town nguồn. **✅ 04/10 (§2.S phần 1, commit `b2e9084`):** phần ≥ 1 tàu làm tròn xuống theo tàu nguyên; phần < 1 tàu gửi nguyên.                                                                                                                                                                                                         | cả hai      | 2.A                          |
 | T ✅ | **Auto Wine: tính rượu tiêu hao trong lúc chở.** Tới lúc hàng cập bến, town nhận đã uống thêm `consume × thời gian di chuyển`, nên mức giờ thực tế thấp hơn `targetHours`. Cần thời gian di chuyển giữa hai town — Send Resources hiện chưa đọc con số này ở đâu cả. **✅ 04/10 (§2.S phần 2, commit `b2e9084`):** thời gian bốc hàng + đi biển ghi theo tuyến khi gửi thật; Auto Wine chia theo tồn kho lúc tàu tới.                                                                                                                                                                                                        | cả hai      | 2.A                          |
 | U ◐  | **Chi phí và thời gian nâng cấp đúng với game.** Đề xuất 29/09 là công thức; **01/10 đổi hướng: giữ bảng `Constant`, nạp lại số của chính game** (trang Help > building details). Đã nạp chi phí, thời gian, hiệu ứng và `maxLevel` logic; công thức giảm giá đã áp (tối đa 64%). **03/10:** thời gian tính thêm buff server và Chronos' Forge, làm tròn tới giây (§2.M phần 3). Còn: cấp vượt quá số cấp trang Help liệt kê. Ghi chú về U bên dưới. **04/10 (§2.U):** thêm 704 cấp > 50 từ trang Help của s303 (thời gian × 2, chi phí ÷ 0,86). Còn thiếu: 5 công trình không có trong s303 và các cấp quá cửa sổ đã crawl. | chỉ board   | nguồn số cho cấp > 50        |
-| V ◐  | **Hiệu ứng của research tính đúng với game.** Người dùng đề xuất 01/10, bốn điểm: giảm chi phí xây dựng, giảm chi phí vàng cho scientist, dân số tối đa, hài lòng. Hiện trạng: ghi chú về V bên dưới (17/10: đã ghi công thức hiện tại của ba điểm còn lại và danh sách số liệu cần thu thập).                                                                                                                                                                                                                                                                                                                                                                                                                        | chỉ board   | chi tiết (người dùng sẽ ghi) |
+| V ◐  | **Hiệu ứng của research tính đúng với game.** Người dùng đề xuất 01/10, bốn điểm: giảm chi phí xây dựng, giảm chi phí vàng cho scientist, dân số tối đa, hài lòng. Hiện trạng: ghi chú về V bên dưới (17/10: đã ghi công thức hiện tại của ba điểm còn lại và danh sách số liệu cần thu thập). **25/11 (§2.AP): số liệu lấy bằng Crawl Research; ba điểm còn lại khớp game trên 1 account.**                                                                                                                                                                                                                                                                                                                                                                                                                        | chỉ board   | chi tiết (người dùng sẽ ghi) |
 
 **Đã làm: A, B, C, D, E, H, J, K, S, T; R ở mức tối thiểu.** D và H ghi ở
 §2.G; S và T ở §2.S; E, J, K, R ở §2.T. **Người dùng chọn 04/10** (câu hỏi
 3): P, L làm khi có capture; F, G, I, M, N, Q không làm lúc này; O chưa cần.
+**25/11 (§2.AP):** có capture của cả hai — L không làm (người chơi tự điền), P bỏ.
 
 - **A** — `src/send-resources/features/transport-buttons.ts`. Khác plan một
   điểm có chủ đích: các bước **không** cố định 500/1k/5k/50k mà là **bội số của
@@ -3735,7 +3909,7 @@ capture `#buildingUpgrade` (chi phí + thời gian) của vài công trình ở 
 biết, để có số thật mà đối chiếu.
 
 **Ghi chú về V (hiệu ứng của research).** Người dùng sẽ cải thiện bốn điểm
-dưới đây; **chi tiết người dùng sẽ ghi sau — chưa làm gì cho tới khi có.**
+dưới đây; **chi tiết người dùng sẽ ghi sau — chưa làm gì cho tới khi có.** *(25/11: đã đo bằng Crawl Research thay cho việc người dùng ghi — xem "Kết quả 25/11" bên dưới.)*
 Hiện trạng đọc từ code ngày 01/10, bản port giống hệt legacy:
 
 - **Board chỉ biết research nào đã nghiên cứu, không biết hiệu ứng của nó.**
@@ -3811,6 +3985,8 @@ Research       : cấp hiện tại của Holiday, Economic Future, Well Constru
 
 Cách đối chiếu đề xuất: với mỗi town, so từng phần game hiển thị với `_getSatisfactionData` (và dân số tối đa, vàng scientist); phần nào lệch thì mới sửa đúng phần đó. Không đổi công thức trước khi có số game để so.
 
+**Kết quả 25/11 (§2.AP), account Arthas Menethil, 6 town, Technocracy, 1 Palace, không Temple:** dân số tối đa khớp 6/6 (Well Construction, Utopia, Relaxation holiday đã nghiên cứu, Economic Future cấp 1); vàng scientist 4 = 6 + 1 − 3 × Letter Chute (1), khớp Finances; hài lòng khớp từng phần — tavern, phục vụ rượu, museum, hiệp ước, research +35, capital +250 **chỉ ở town có Palace** (dòng đó `invisible` ở town khác). **Không sửa gì.** Hai điểm đáng nghi ở trên (Well Construction / Utopia "có / không" ở dân số, "nhân theo cấp" ở hài lòng) chưa phân biệt được: cả hai chỉ có cấp 1. Chưa có số: priest, malus của chính thể, chính thể khác.
+
 **Phạm vi của 5 công trình giảm giá** (người dùng cung cấp 01/10). Mỗi công
 trình giảm 1%/cấp, tối đa 50%, cho **mọi** chỗ trong town dùng tài nguyên của
 nó, không chỉ xây dựng. Trần 50% là `REDUCTION_BUILDING_MAX_PERCENT` trong
@@ -3884,16 +4060,21 @@ thêm, phải áp giảm giá theo bảng này.
 ✅ 05/11     §2.AI                  Crawl Wine ghi mọi town trừ town nguồn; `tools/wine-transport.js` chia rượu giữa các account (mốc chung = mức thấp nhất); Auto Wine Settings có nút Import — commit `8bf7308` (tài liệu `7816bdf`), có trong `dist/` 05/11 19:37, chưa thử trên game
 ✅ 05/11 tối §2.AJ                  Pirate: capture định kì, captcha (báo ngay, dừng, mở fortress, queue + keep-alive chờ tới Start Pirate), Capture Points trên panel, dialog rộng 400px — commit `7981e7d` (tài liệu `9a03cca`), có trong `dist/` 05/11 19:37, chưa thử trên game
 ✅ 10/11     §2.AK                  chỉ tài liệu: `project-summary.md` viết lại theo hiện trạng, `README.md` sửa 19 chỗ theo số đo trong code — commit `cda5ff0` (tài liệu `32300fb`)
-◐ 11/11     §2.AL                  bug report 11/11: Start Auto Wine không chạy queue vì cờ captcha của Pirate còn giữ — bấm bắt đầu queue giờ gỡ cờ, panel có dòng "Queue held"; Pirate đổi town trước khi mở Pirate Fortress — chưa commit, có trong `dist/` 11/11 10:18, chưa thử trên game
-⬜ Chờ người dùng thử:     §2.R → §2.AB trên game (cài lại cả hai userscript từ `dist/` build 22/10 — bản 05/10 02:03 không có §2.Y trở đi); riêng E: một lần thành công (ô phải tự chuyển sang đang nâng), một lần bị từ chối, rồi Bug Report (file không còn token); danh sách thử của §2.X ở cuối mục đó
+◐ 11/11     §2.AL                  bug report 11/11: Start Auto Wine không chạy queue vì cờ captcha của Pirate còn giữ — bấm bắt đầu queue giờ gỡ cờ, panel có dòng "Queue held"; Pirate đổi town trước khi mở Pirate Fortress — commit `58c3da4` (tài liệu `b4e420d`), chưa thử trên game
+◐ 21/11     §2.AM                  Auto Build Settings theo town, level dự kiến, kiểm queue, notepad không ghi khi building đang mở — commit `d9e42ac` + `44eb873`, chưa thử trên game
+◐ 22–23/11  §2.AN                  giao diện Auto Build / Transport, Clear All, Crawl by id, review toàn `src` và sửa, bug report 23/11 — commit `1c62a7c`, `7105b25`, `349d8f3`, `4560372`, chưa thử trên game (trừ số đo người dùng gửi)
+◐ 24/11     §2.AO                  extension bỏ comment (`comments: false`) — chưa commit; có trong `dist/` 25/11
+◐ 25/11     §2.AP                  Crawl Page + Crawl Research (mọi nhánh research); V khớp game trên 1 account; L không làm, P bỏ — chưa commit; có trong `dist/` 25/11 17:01–17:02; người dùng đã chạy crawl
+⬜ Chờ người dùng thử:     *(25/11: bản cần cài giờ là `dist/` 25/11 17:01, có tới §2.AP; chưa có lượt thử theo danh sách này)* §2.R → §2.AB trên game (cài lại cả hai userscript từ `dist/` build 22/10 — bản 05/10 02:03 không có §2.Y trở đi); riêng E: một lần thành công (ô phải tự chuyển sang đang nâng), một lần bị từ chối, rồi Bug Report (file không còn token); danh sách thử của §2.X ở cuối mục đó
 ⬜ Lượt sau của review:    các mục 💡 trong `sample/review-source/review-src-2026-10-04.md` (22/10: ba mục đã sửa ở §2.Z; còn lại cần số đo hoặc người dùng chọn — handover §7)
 ⬜ Chờ người dùng thử:     §2.W — load lại `dist/extension` trong Chrome (tắt hai userscript trước); bản extension chưa từng chạy trên game
 ✅ ~~Chờ câu hỏi 2~~:      trả lời 04/10 — 2.6 ✅, 2.8 ✅ (rút gọn); ⏸ 2.7 chỉ khi có lỗi cụ thể
 ✅ ~~Chờ câu hỏi 3~~:      trả lời 04/10 — E, J, K ✅; R ◐; O chưa cần; F, G, I, M, N, Q không làm lúc này
-⏸ Chờ capture:            P (màn phá thuộc địa), L (form tấn công Barbarian Village)
+✅ ~~Chờ capture: P, L~~ — có capture 25/11 (§2.AP): L không làm (người chơi tự điền), P bỏ (game có captcha)
 ⏸ Chờ người dùng:         R — có đặt bản build ở URL công khai (@updateURL) không
 ◐ U (01/10, 04/10):        số game trong Constant, công thức giảm giá, cấp > 50 từ s303; ⏸ phần còn thiếu ở §2.U phần 4
-◐ V (01/10):               giảm chi phí xây dựng xong; ⏸ vàng scientist, dân số tối đa, hài lòng — người dùng sẽ ghi; ghi chú về V ở §4.2
+◐ V (01/10):               giảm chi phí xây dựng xong; vàng scientist, dân số tối đa, hài lòng khớp game trên 1 account (25/11, §2.AP); chưa có số: priest, malus chính thể, chính thể khác
+⏸ Còn mở:                 `wineSpendings` gộp hay đã trừ press (§2.AP phần 5) — cần so `ikariam.model.wineSpendings` với `headerData.wineSpendings` cùng lúc
 ✅ ~~Ghi lại, chưa cần làm: S, T (Auto Wine)~~ — làm 04/10 (§2.S)
 ```
 
@@ -3928,6 +4109,10 @@ game" của từng mục.
 có §2.AH), cài lại cả hai userscript; lần đổi town nào không tới nơi → bấm
 Bug Report (lúc nào cũng được, 5 lần gần nhất được giữ), chép file vào
 `sample/`.
+**Cập nhật 25/11, sau §2.AP:** bản cần cài là `dist/` người dùng build
+25/11 17:01–17:02 (có tới §2.AP và §2.AO); P, L đã quyết (L không làm, P
+bỏ); V khớp game trên 1 account; còn mở `wineSpendings` (§2.AP phần 5) và
+việc load extension trong Chrome; các bước thử §2.AN chưa làm.
 
 **Hai việc phát sinh** (việc thứ nhất xong 02/10, §2.L phần 3):
 
