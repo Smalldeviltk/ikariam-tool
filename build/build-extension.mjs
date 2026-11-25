@@ -93,6 +93,10 @@ async function buildEntry({ name, input, version }, first) {
         output: {
           format: "iife",
           entryFileNames: `${name}.js`,
+          // Drop the source's JSDoc comments, as the userscript build already
+          // does: they were over a third of the Send Resources page file.
+          // The code stays unminified, so a bug report's stack still reads.
+          comments: false,
         },
       },
     },
