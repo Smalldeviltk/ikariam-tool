@@ -1563,6 +1563,12 @@ interface SavedCrawlFile {
   error: CrawlError;
 }
 
+/** The text of the last toast shown. */
+function lastToast(): string {
+  const calls = showToast.mock.calls;
+  return calls[calls.length - 1][0];
+}
+
 /** The one error file a failed crawl saved, parsed. */
 function savedCrawlFailure(crawl: string): SavedCrawlFile {
   expect(downloadJson).toHaveBeenCalledTimes(1);
@@ -1617,7 +1623,14 @@ describe("the Crawl dialog", () => {
       // Every crawl the messages declare, so a new one is covered too.
       const { CRAWL_DIALOG } = await import("./messages");
       const kinds = Object.keys(CRAWL_DIALOG.kinds);
-      expect(kinds).toEqual(["building", "wine", "pirate", "element"]);
+      expect(kinds).toEqual([
+        "building",
+        "wine",
+        "pirate",
+        "element",
+        "page",
+        "research",
+      ]);
       const choices = kinds.map((kind) =>
         document.querySelector<HTMLInputElement>(`#ikaCrawl_${kind}`)!,
       );
@@ -2194,6 +2207,443 @@ describe("the Crawl dialog", () => {
       expect(
         document.querySelector("#ikaMationTransporterDialog"),
       ).not.toBeNull();
+    });
+  });
+
+  describe("Crawl page", () => {
+    /** Crawl > Page > Crawl, as the player picks it: it opens the box. */
+    async function openBox(): Promise<void> {
+      await openCrawl();
+      (document.querySelector("#ikaCrawl_page") as HTMLInputElement).checked =
+        true;
+      await actions["crawl.run"](document.body);
+    }
+
+    function box(): HTMLElement | null {
+      return document.querySelector<HTMLElement>("#ikaPageCrawl");
+    }
+
+    async function pressCrawl(): Promise<void> {
+      await actions["crawl.page.run"](
+        box()!.querySelector<HTMLElement>(
+          '[data-ika-action="crawl.page.run"]',
+        )!,
+      );
+      await vi.advanceTimersByTimeAsync(0);
+    }
+
+    interface SavedPage {
+      ok: boolean;
+      url: string;
+      forms: {
+        id: string;
+        method: string | null;
+        fields: { name: string | null; type: string | null; value: string }[];
+      }[];
+      visibleControls: unknown[];
+      html: string;
+      htmlLength: number;
+      truncated: boolean;
+    }
+
+    function savedPage(): SavedPage {
+      expect(downloadJson).toHaveBeenCalledTimes(1);
+      expect(downloadJson.mock.calls[0][0]).toMatch(
+        /^ikariam-crawl-page-tester-\d{4}(-\d{2}){5}\.json$/,
+      );
+      return JSON.parse(downloadJson.mock.calls[0][1]);
+    }
+
+    /** A game screen holding a form, as an attack or abandon screen would. */
+    const GAME_SCREEN =
+      `<div id="plunder"><form id="plunderForm" method="POST">` +
+      `<input type="hidden" name="action" value="transportOperations"/>` +
+      `<input type="hidden" name="actionRequest" value="hidden-form-token-77"/>` +
+      `<input type="text" name="cargo_army_301" value="5"/>` +
+      `<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUg=="/>` +
+      `<input type="submit" id="plunderSubmit" value="Plunder!"/>` +
+      `</form><script>var leaked = 1;</script></div>` +
+      `<div id="empireBoard">the board's own table</div>`;
+
+    afterEach(() => {
+      box()?.remove();
+    });
+
+    it("opens a box of its own, outside the game's popup", async () => {
+      await openBox();
+
+      expect(document.querySelector("#ikaMationTransporterDialog")).toBeNull();
+      expect(box()).not.toBeNull();
+      expect(box()!.parentElement).toBe(document.body);
+      expect(downloadJson).not.toHaveBeenCalled();
+    });
+
+    it(
+      "saves every form with all its fields, hidden ones too, and the page's " +
+        "HTML without the tool's parts, scripts, pictures or the token",
+      async () => {
+        await openBox();
+        document.body.insertAdjacentHTML("beforeend", GAME_SCREEN);
+
+        await pressCrawl();
+
+        const file = savedPage();
+        expect(file.ok).toBe(true);
+        const form = file.forms.find((f) => f.id === "plunderForm")!;
+        expect(form.method).toBe("POST");
+        expect(form.fields.map((f) => [f.name, f.type])).toEqual([
+          ["action", "hidden"],
+          ["actionRequest", "hidden"],
+          ["cargo_army_301", "text"],
+          [null, "submit"],
+        ]);
+        expect(form.fields[0].value).toBe("transportOperations");
+        expect(file.html).toContain('id="plunderForm"');
+        // Not the board, the tool's window, nor the box that crawled.
+        expect(file.html).not.toContain("empireBoard");
+        expect(file.html).not.toContain("ikaPageCrawl");
+        expect(
+          document.querySelector("#ikaSendResourcesWindow"),
+        ).not.toBeNull();
+        expect(file.html).not.toContain("ikaSendResourcesWindow");
+        expect(file.html).not.toContain("<script");
+        // The game's submit button is listed; the box's own buttons are not.
+        const controls = file.visibleControls as { id: string; text: string }[];
+        expect(controls.map((c) => c.id)).toContain("plunderSubmit");
+        expect(controls.filter((c) => c.text === "Crawl")).toEqual([]);
+        expect(file.html).not.toContain("iVBORw0KGgo");
+        expect(file.truncated).toBe(false);
+        // Measured before the token came out, so a little longer.
+        expect(file.htmlLength).toBeGreaterThanOrEqual(file.html.length);
+        expect(downloadJson.mock.calls[0][1]).not.toContain(
+          "hidden-form-token-77",
+        );
+        // The screen and the box are still open, for the next one.
+        expect(document.querySelector("#plunder")).not.toBeNull();
+        expect(box()).not.toBeNull();
+        expect(lastToast()).toContain("forms");
+      },
+    );
+
+    it("says the HTML was cut when the page is too long for the file", async () => {
+      await openBox();
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<div id="huge">${"x".repeat(2_000_100)}</div>`,
+      );
+
+      await pressCrawl();
+
+      const file = savedPage();
+      expect(file.truncated).toBe(true);
+      expect(file.html.length).toBe(2_000_000);
+      expect(file.htmlLength).toBeGreaterThan(2_000_000);
+      expect(lastToast()).toContain("cut short");
+    });
+
+    it("Close removes the box", async () => {
+      await openBox();
+
+      await actions["crawl.page.close"](
+        box()!.querySelector<HTMLElement>(
+          '[data-ika-action="crawl.page.close"]',
+        )!,
+      );
+
+      expect(box()).toBeNull();
+    });
+  });
+
+  describe("Crawl research", () => {
+    /** Two towns: A has an Academy, a Temple and the Palace; B has none. */
+    const TOWN_A = 101;
+    const TOWN_B = 102;
+
+    interface SavedView {
+      request: Record<string, string | number>;
+      response?: unknown[];
+      error?: string;
+    }
+    interface SavedResearch {
+      ok: boolean;
+      server: string;
+      towns: {
+        cityId: number;
+        name: string;
+        townHall: SavedView;
+        buildings: { academy: SavedView | null; temple: SavedView | null };
+      }[];
+      palace: SavedView | null;
+      researchAdvisor: SavedView;
+      researchTracks: {
+        tracks: Record<string, SavedView>;
+        active: string | null;
+        restored: boolean | null;
+        skipped?: string;
+      };
+      finances: SavedView;
+      selectionMoved: boolean;
+    }
+
+    let asked: URLSearchParams[] = [];
+
+    /**
+     * The game, as the crawl's requests see it. Every answer carries a new
+     * token, also in a hidden form field of its HTML, as the game's views do.
+     */
+    function fakeGame(
+      options: {
+        failView?: string;
+        onAsked?: (params: URLSearchParams) => void;
+        /** The advisor's open track; null for an answer that names none. */
+        activeTrack?: string | null;
+      } = {},
+    ): void {
+      asked = [];
+      const activeTrack =
+        options.activeTrack === undefined ? "economy" : options.activeTrack;
+      // The advisor's tabs, as the game's answer lists them.
+      const advisorTabs = Object.fromEntries(
+        ["seafaring", "economy", "knowledge"].map((type, index) => [
+          `js_researchAdvisorChangeResearchType${index}`,
+          {
+            ajaxrequest: `?view=noViewChange&researchType=${type}`,
+            class: type === activeTrack ? "active" : "",
+          },
+        ]),
+      );
+      Object.assign(window, {
+        ikariam: {
+          model: {
+            actionRequest: "page-token-0",
+            relatedCityData: {
+              selectedCity: `city_${TOWN_A}`,
+              [`city_${TOWN_A}`]: {
+                id: TOWN_A,
+                name: "A-Town",
+                relationship: "ownCity",
+              },
+              [`city_${TOWN_B}`]: {
+                id: TOWN_B,
+                name: "B-Town",
+                relationship: "ownCity",
+              },
+            },
+          },
+        },
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string) => {
+          const params = new URL(url, "https://s1.example").searchParams;
+          asked.push(params);
+          options.onAsked?.(params);
+          const view = params.get("view");
+          if (view === options.failView) {
+            return { ok: false, status: 500, text: async () => "" };
+          }
+          const token = `rotated-token-${asked.length}`;
+          const cityId = Number(params.get("cityId"));
+          const position =
+            cityId === TOWN_A
+              ? [
+                  { name: "Town hall", level: 20, building: "townHall" },
+                  null,
+                  null,
+                  null,
+                  { name: "Academy", level: 9, building: "academy" },
+                  null,
+                  { name: "Temple", level: 4, building: "temple" },
+                  { name: "Palace", level: 6, building: "palace" },
+                ]
+              : [{ name: "Town hall", level: 8, building: "townHall" }];
+          const body = [
+            [
+              "updateGlobalData",
+              {
+                actionRequest: token,
+                backgroundData: { id: cityId, position },
+              },
+            ],
+            [
+              "changeView",
+              [
+                view,
+                `<form><input type="hidden" name="actionRequest" value="${token}"/></form>`,
+              ],
+            ],
+            ...(view === "researchAdvisor"
+              ? [["updateTemplateData", advisorTabs]]
+              : []),
+          ];
+          return {
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify(body),
+          };
+        }),
+      );
+    }
+
+    /**
+     * Crawl > Research > Crawl, letting the requests' gaps pass. The game is
+     * set up after the dialog opens: opening it takes `window.ikariam` away.
+     */
+    async function crawlResearch(
+      game: Parameters<typeof fakeGame>[0] = {},
+    ): Promise<void> {
+      await openCrawl();
+      fakeGame(game);
+      (
+        document.querySelector("#ikaCrawl_research") as HTMLInputElement
+      ).checked = true;
+      await actions["crawl.run"](document.body);
+      await vi.advanceTimersByTimeAsync(30_000);
+    }
+
+    function savedResearch(): SavedResearch {
+      expect(downloadJson).toHaveBeenCalledTimes(1);
+      expect(downloadJson.mock.calls[0][0]).toMatch(
+        /^ikariam-crawl-research-tester-\d{4}(-\d{2}){5}\.json$/,
+      );
+      return JSON.parse(downloadJson.mock.calls[0][1]);
+    }
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      delete window.ikariam;
+    });
+
+    it(
+      "asks for every town's Town Hall, the Academy and Temple where a town " +
+        "has them, the Palace once, the Research Advisor and Finances",
+      async () => {
+        await crawlResearch();
+
+        expect(
+          asked.map((p) => [p.get("view"), p.get("cityId"), p.get("position")]),
+        ).toEqual([
+          ["townHall", "101", "0"],
+          ["academy", "101", "4"],
+          ["temple", "101", "6"],
+          ["palace", "101", "7"],
+          ["townHall", "102", "0"],
+          ["researchAdvisor", null, null],
+          ["noViewChange", null, null],
+          ["noViewChange", null, null],
+          ["noViewChange", null, null],
+          ["finances", null, null],
+        ]);
+        const file = savedResearch();
+        expect(file.ok).toBe(true);
+        expect(file.towns.map((t) => [t.cityId, t.name])).toEqual([
+          [TOWN_A, "A-Town"],
+          [TOWN_B, "B-Town"],
+        ]);
+        expect(file.towns[0].buildings.academy!.response).toBeInstanceOf(Array);
+        expect(file.towns[1].buildings).toEqual({
+          academy: null,
+          temple: null,
+        });
+        expect(file.palace!.request).toMatchObject({ view: "palace" });
+        expect(file.finances.response).toBeInstanceOf(Array);
+        expect(file.selectionMoved).toBe(false);
+        expect(lastToast()).toContain("Saved 10 views");
+      },
+    );
+
+    it(
+      "asks for every research track, the open one last so the advisor is " +
+        "left on it, with the advisor's view as context",
+      async () => {
+        await crawlResearch();
+
+        const switches = asked.filter((p) => p.get("view") === "noViewChange");
+        expect(switches.map((p) => p.get("researchType"))).toEqual([
+          "seafaring",
+          "knowledge",
+          "economy",
+        ]);
+        for (const p of switches) {
+          expect(p.get("templateView")).toBe("researchAdvisor");
+        }
+        const { researchTracks } = savedResearch();
+        expect(Object.keys(researchTracks.tracks).sort()).toEqual([
+          "economy",
+          "knowledge",
+          "seafaring",
+        ]);
+        expect(researchTracks.tracks.knowledge.response).toBeInstanceOf(Array);
+        expect(researchTracks.active).toBe("economy");
+        expect(researchTracks.restored).toBe(true);
+      },
+    );
+
+    it("switches no track when the advisor's answer names no open one", async () => {
+      await crawlResearch({ activeTrack: null });
+
+      expect(asked.some((p) => p.get("view") === "noViewChange")).toBe(false);
+      const { researchTracks } = savedResearch();
+      expect(researchTracks.tracks).toEqual({});
+      expect(researchTracks.restored).toBeNull();
+      expect(researchTracks.skipped).toContain("no open track");
+    });
+
+    it("takes every token the answers carried out of the file", async () => {
+      await crawlResearch();
+
+      const text = downloadJson.mock.calls[0][1];
+      // The first answer's token is long gone from the page by the end.
+      expect(text).not.toMatch(/rotated-token-\d/);
+      expect(text).not.toContain("page-token-0");
+      expect(text).toContain("<actionRequest>");
+    });
+
+    it("writes a request that failed down with its error and goes on", async () => {
+      await crawlResearch({ failView: "temple" });
+
+      const file = savedResearch();
+      expect(file.towns[0].buildings.temple!.error).toContain("HTTP 500");
+      expect(file.towns[0].buildings.temple!.response).toBeUndefined();
+      expect(file.finances.response).toBeInstanceOf(Array);
+      expect(lastToast()).toContain("1 could not be read");
+    });
+
+    it("puts the selected town back when asking moved it", async () => {
+      await crawlResearch({
+        onAsked: (params) => {
+          if (params.get("cityId") === String(TOWN_B)) {
+            (
+              window.ikariam as unknown as {
+                model: { relatedCityData: { selectedCity: string } };
+              }
+            ).model.relatedCityData.selectedCity = `city_${TOWN_B}`;
+          }
+        },
+      });
+
+      const last = asked[asked.length - 1];
+      expect([last.get("view"), last.get("cityId")]).toEqual([
+        "townHall",
+        String(TOWN_A),
+      ]);
+      expect(savedResearch().selectionMoved).toBe(true);
+    });
+
+    it("refuses while the task queue is busy in another tab, asking nothing", async () => {
+      localStorage.setItem(
+        "testerikaRunnerBusy",
+        JSON.stringify({ since: Date.now() }),
+      );
+
+      await crawlResearch();
+
+      expect(asked).toEqual([]);
+      const file = savedCrawlFailure("research");
+      expect(file.error).toMatchObject({
+        stage: "queue",
+        name: "CrawlStopped",
+      });
     });
   });
 });

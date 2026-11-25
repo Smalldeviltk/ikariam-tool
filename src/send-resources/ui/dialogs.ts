@@ -51,11 +51,13 @@ import {
   ELEMENT_CRAWL,
   DURATION,
   MISC,
+  PAGE_CRAWL,
   PIRATE,
   SEND_DIALOG,
   WINE_DIALOG,
   WINE_PREVIEW,
 } from "../messages";
+import { CRAWL_BOX_CLASS } from "../diagnostics";
 import { getState, loadReceivers, loadSenders } from "../state";
 import { RESOURCE_OPTIONS, resourceLabel } from "../types";
 import { action, moveButtons } from "./actions";
@@ -927,8 +929,31 @@ export function openElementCrawlBox(): void {
         `${ELEMENT_CRAWL.modes[mode]}</label>`,
     )
     .join("");
+  openCrawlBox(
+    ELEMENT_CRAWL_BOX_ID,
+    `<div style="font-weight:bold; margin-bottom:6px">${ELEMENT_CRAWL.title}</div>` +
+      `<label for="${ELEMENT_CRAWL_INPUT_ID}">${ELEMENT_CRAWL.target}</label>` +
+      `<textarea id="${ELEMENT_CRAWL_INPUT_ID}" rows="4" placeholder="${escapeHtml(ELEMENT_CRAWL.placeholder)}" ` +
+      `style="display:block; width:100%; box-sizing:border-box; margin:4px 0; font-family:monospace"></textarea>` +
+      modes +
+      `<p style="font-size:11px; margin:6px 0">${ELEMENT_CRAWL.hint}</p>` +
+      `<button style="margin-right:10px" class="button" ${action("crawl.element.run")}>${ELEMENT_CRAWL.run}</button>` +
+      `<button class="button" ${action("crawl.element.close")}>${BUTTON.close}</button>`,
+  );
+}
+
+export function closeElementCrawlBox(): void {
+  removeElement(`#${ELEMENT_CRAWL_BOX_ID}`);
+}
+
+/**
+ * A crawl box of the tool's own: fixed at the top right, above the game's
+ * popup, marked so a page crawl leaves it out.
+ */
+function openCrawlBox(id: string, innerHtml: string): void {
   const box = document.createElement("div");
-  box.id = ELEMENT_CRAWL_BOX_ID;
+  box.id = id;
+  box.className = CRAWL_BOX_CLASS;
   box.setAttribute(
     "style",
     `position:fixed; top:80px; right:20px; z-index:${ELEMENT_CRAWL_BOX_Z_INDEX}; width:380px; ` +
@@ -936,20 +961,33 @@ export function openElementCrawlBox(): void {
       "border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,0.3); " +
       "font-size:12px; color:#542c0f; text-align:left",
   );
-  box.innerHTML =
-    `<div style="font-weight:bold; margin-bottom:6px">${ELEMENT_CRAWL.title}</div>` +
-    `<label for="${ELEMENT_CRAWL_INPUT_ID}">${ELEMENT_CRAWL.target}</label>` +
-    `<textarea id="${ELEMENT_CRAWL_INPUT_ID}" rows="4" placeholder="${escapeHtml(ELEMENT_CRAWL.placeholder)}" ` +
-    `style="display:block; width:100%; box-sizing:border-box; margin:4px 0; font-family:monospace"></textarea>` +
-    modes +
-    `<p style="font-size:11px; margin:6px 0">${ELEMENT_CRAWL.hint}</p>` +
-    `<button style="margin-right:10px" class="button" ${action("crawl.element.run")}>${ELEMENT_CRAWL.run}</button>` +
-    `<button class="button" ${action("crawl.element.close")}>${BUTTON.close}</button>`;
+  box.innerHTML = innerHtml;
   document.body.appendChild(box);
 }
 
-export function closeElementCrawlBox(): void {
-  removeElement(`#${ELEMENT_CRAWL_BOX_ID}`);
+/** The Crawl page box. */
+const PAGE_CRAWL_BOX_ID = "ikaPageCrawl";
+
+/**
+ * Crawl page: a box with one button, beside the game's screens. Not the
+ * game's popup, which the Crawl dialog itself uses: a screen drawn there
+ * (abandoning a colony, an attack form) could be gone by the time the
+ * dialog's button is pressed. The player opens the screen, then presses
+ * Crawl here.
+ */
+export function openPageCrawlBox(): void {
+  if (qs(`#${PAGE_CRAWL_BOX_ID}`)) return;
+  openCrawlBox(
+    PAGE_CRAWL_BOX_ID,
+    `<div style="font-weight:bold; margin-bottom:6px">${PAGE_CRAWL.title}</div>` +
+      `<p style="font-size:11px; margin:6px 0">${PAGE_CRAWL.hint}</p>` +
+      `<button style="margin-right:10px" class="button" ${action("crawl.page.run")}>${PAGE_CRAWL.run}</button>` +
+      `<button class="button" ${action("crawl.page.close")}>${BUTTON.close}</button>`,
+  );
+}
+
+export function closePageCrawlBox(): void {
+  removeElement(`#${PAGE_CRAWL_BOX_ID}`);
 }
 
 /** What the Crawl by id box holds: the text typed, and the mode picked. */

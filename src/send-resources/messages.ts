@@ -478,6 +478,9 @@ export const CRAWL_DIALOG = {
     wine: "Wine — Auto Wine's receiving towns (scans every town first)",
     pirate: "Pirate — the Pirate Fortress view, and the last failed captures",
     element: "By id — an element's HTML and CSS, or what a piece of JS returns",
+    page: "Page — the game screen open now: its forms, controls and HTML (opens a box)",
+    research:
+      "Research — Town Hall, Academy, Temple, Palace, Research Advisor and Finances views of every town",
   },
   run: "Crawl",
   nothingChosen: "Pick what to crawl.",
@@ -510,6 +513,30 @@ export const ELEMENT_CRAWL = {
   savedHtml: (elements: number, filename: string) =>
     `Saved the HTML and CSS of ${elements} elements.\n${filename}`,
   savedJs: (filename: string) => `Saved what the code returned.\n${filename}`,
+} as const;
+
+export const PAGE_CRAWL = {
+  title: "Crawl page",
+  hint:
+    "Stays open beside the game's screens: open the screen to look at, then " +
+    "press Crawl here. Saves every form on the page with all its fields, the " +
+    "controls showing, and the page's HTML. Nothing is clicked or sent.",
+  run: "Crawl",
+  saved: (forms: number, filename: string, truncated: boolean) =>
+    `Saved the page: ${forms} forms.` +
+    (truncated ? " Its HTML was too long and is cut short." : "") +
+    `\n${filename}`,
+} as const;
+
+export const RESEARCH_CRAWL = {
+  /** Refused: the requests would race the runner for the session token. */
+  queueBusy:
+    "The task queue is running or busy (in this tab or another). Stop it " +
+    "first, then crawl.",
+  saved: (views: number, failed: number, filename: string) =>
+    `Saved ${views} views of the game` +
+    (failed > 0 ? `, ${failed} could not be read (the file says why)` : "") +
+    `.\n${filename}`,
 } as const;
 
 export const BUILDING_CRAWL = {

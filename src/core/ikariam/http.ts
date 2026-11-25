@@ -215,7 +215,7 @@ function absorbToken(entries: unknown[]): void {
 }
 
 /** The first `actionRequest` carried by a response array's entries. */
-function tokenInEntries(entries: unknown[]): string | null {
+export function tokenInEntries(entries: unknown[]): string | null {
   for (const entry of entries) {
     if (!Array.isArray(entry)) continue;
     const payload = entry[1] as { actionRequest?: unknown } | null | undefined;

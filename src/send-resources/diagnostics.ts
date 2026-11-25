@@ -24,16 +24,25 @@ import { errorMessage } from "@core/format";
 import { getCurrentTownName, pageWindow } from "@core/ikariam/globals";
 import {
   actionRequestToken,
+  ikariamRequest,
   quickUpgradeTraces,
   redactTokens,
+  tokenInEntries,
   toolNewestToken,
   toolRequestTraces,
   townSwitchTraces,
 } from "@core/ikariam/http";
 import { recentLogLines } from "@core/logger";
-import { hasModel, modelCurrentCityName } from "@core/ikariam/model";
+import {
+  hasModel,
+  modelCityName,
+  modelCurrentCityId,
+  modelCurrentCityName,
+} from "@core/ikariam/model";
 import { DIALOG_ID, SEL } from "@core/ikariam/selectors";
+import { positionsFromResponse } from "./features/auto-build";
 import { pirateCaptureTraces } from "./features/pirate";
+import { ownTownIds } from "./features/sync-towns";
 import { ELEMENT_CRAWL } from "./messages";
 import { getState } from "./state";
 import { LAUNCHER_CLASS, WINDOW_ID } from "./ui/panel";
@@ -121,10 +130,26 @@ const OWN_CONTROLS = `#${WINDOW_ID}, .${LAUNCHER_CLASS}, #${DIALOG_ID}`;
  */
 function captureShipmentForm(): Record<string, unknown> {
   const wineField = qs<HTMLInputElement>(SEL.wineField);
-  const controls = qsa<HTMLElement>(SHIPMENT_CONTROLS)
+  return {
+    present: !!wineField,
+    url: location.search,
+    wineFieldForm:
+      wineField?.form?.outerHTML.slice(0, MAX_CAPTURE_CHARS) ?? null,
+    visibleControls: visibleGameControls(),
+  };
+}
+
+/**
+ * Every control of the game's that is showing — forms, fields, buttons,
+ * sliders — left out those inside `leaveOut` (this script's own by default);
+ * the first `MAX_CAPTURED_CONTROLS`.
+ */
+function visibleGameControls(
+  leaveOut: string = OWN_CONTROLS,
+): Record<string, unknown>[] {
+  return qsa<HTMLElement>(SHIPMENT_CONTROLS)
     .filter(
-      (element) =>
-        element.offsetParent !== null && !element.closest(OWN_CONTROLS),
+      (element) => element.offsetParent !== null && !element.closest(leaveOut),
     )
     .slice(0, MAX_CAPTURED_CONTROLS)
     .map((element) => {
@@ -140,13 +165,6 @@ function captureShipmentForm(): Record<string, unknown> {
         form: field.form?.id,
       };
     });
-  return {
-    present: !!wineField,
-    url: location.search,
-    wineFieldForm:
-      wineField?.form?.outerHTML.slice(0, MAX_CAPTURE_CHARS) ?? null,
-    visibleControls: controls,
-  };
 }
 
 /**
@@ -725,6 +743,380 @@ export async function crawlCode(code: string): Promise<CodeCrawl> {
   }
 }
 
+/* ──────────────── Crawl Page: the game screen open right now ───────────── */
+
+/**
+ * The class every crawl box of the tool carries, so a page crawl can leave
+ * the boxes out of what it saves.
+ */
+export const CRAWL_BOX_CLASS = "ika-crawl-box";
+
+/**
+ * The tool's own parts of the page, left out of a page crawl: this script's
+ * window, launcher, settings dialogs and crawl boxes, the toasts of both
+ * scripts, and the Empire Overview board. None of them is the game's, and the
+ * board alone is larger than most game screens.
+ */
+const TOOL_UI = `${OWN_CONTROLS}, .${CRAWL_BOX_CLASS}, #empireBoard, #ika-toast-stack`;
+
+/** Characters kept of the page's HTML; past it the file says it was cut. */
+const PAGE_CRAWL_MAX_HTML = 2_000_000;
+
+/** What counts as a field of a form. */
+const FORM_FIELDS = "input, select, textarea, button";
+
+/** Inline pictures are long and say nothing about the screen. */
+const DATA_URI = /data:[a-z]+\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]+/gi;
+const DATA_URI_PLACEHOLDER = "data:<removed>";
+
+/** One field of a form, hidden ones included: what the form would send. */
+export interface CrawledField {
+  tag: string;
+  type: string | null;
+  id: string;
+  name: string | null;
+  value: string;
+  checked?: boolean;
+  visible: boolean;
+}
+
+/** One form on the page, with every field it holds. */
+export interface CrawledForm {
+  id: string;
+  name: string | null;
+  action: string | null;
+  method: string | null;
+  onsubmit: string | null;
+  visible: boolean;
+  fields: CrawledField[];
+  html: string;
+  /** Whether `html` was cut at `MAX_CAPTURE_CHARS`. */
+  htmlTruncated: boolean;
+}
+
+/** A page crawl: the screen as the game has drawn it. */
+export interface PageCrawl {
+  url: string;
+  title: string;
+  forms: CrawledForm[];
+  visibleControls: Record<string, unknown>[];
+  /** The page's body, without the tool's parts, scripts or inline pictures. */
+  html: string;
+  /** The length of that HTML before any cut. */
+  htmlLength: number;
+  /** Whether `html` was cut at `PAGE_CRAWL_MAX_HTML`. */
+  truncated: boolean;
+}
+
+function isShowing(element: Element): boolean {
+  return (element as HTMLElement).offsetParent !== null;
+}
+
+function crawlField(element: Element): CrawledField {
+  const field = element as HTMLInputElement;
+  const type = element.getAttribute("type");
+  const checkable = type === "checkbox" || type === "radio";
+  return {
+    tag: element.tagName,
+    type,
+    id: element.id,
+    name: element.getAttribute("name"),
+    value: typeof field.value === "string" ? field.value : "",
+    ...(checkable ? { checked: field.checked } : {}),
+    visible: isShowing(element),
+  };
+}
+
+function crawlForm(form: HTMLFormElement): CrawledForm {
+  const html = form.outerHTML.replace(DATA_URI, DATA_URI_PLACEHOLDER);
+  return {
+    id: form.id,
+    name: form.getAttribute("name"),
+    action: form.getAttribute("action"),
+    method: form.getAttribute("method"),
+    onsubmit: form.getAttribute("onsubmit"),
+    visible: isShowing(form),
+    fields: qsa(FORM_FIELDS, form).map(crawlField),
+    html: html.slice(0, MAX_CAPTURE_CHARS),
+    htmlTruncated: html.length > MAX_CAPTURE_CHARS,
+  };
+}
+
+/** The page's body as HTML, the tool's parts and every script taken out. */
+function pageHtmlWithoutTool(): string {
+  const body = document.body.cloneNode(true) as HTMLElement;
+  for (const element of qsa(`${TOOL_UI}, script`, body)) element.remove();
+  return body.outerHTML.replace(DATA_URI, DATA_URI_PLACEHOLDER);
+}
+
+/**
+ * The game screen open right now, for a screen the tool does not know yet:
+ * every form with all of its fields — hidden ones too, which is what the
+ * form sends — the controls that are showing, and the page's HTML. Reads the
+ * page only; nothing is clicked or sent.
+ */
+export function crawlPage(): PageCrawl {
+  const html = pageHtmlWithoutTool();
+  return {
+    url: location.href,
+    title: document.title,
+    forms: qsa<HTMLFormElement>("form")
+      .filter((form) => !form.closest(TOOL_UI))
+      .map(crawlForm),
+    visibleControls: visibleGameControls(TOOL_UI),
+    html: html.slice(0, PAGE_CRAWL_MAX_HTML),
+    htmlLength: html.length,
+    truncated: html.length > PAGE_CRAWL_MAX_HTML,
+  };
+}
+
+/* ─────── Crawl Research: the views research, population and gold read ───── */
+
+/** One view asked of the game: what was sent, and its answer or the error. */
+export interface ViewCapture {
+  request: Record<string, string | number>;
+  response?: unknown[];
+  error?: string;
+}
+
+/** The buildings whose views a research crawl asks for, in every town. */
+const RESEARCH_TOWN_BUILDINGS = ["academy", "temple"] as const;
+type ResearchTownBuilding = (typeof RESEARCH_TOWN_BUILDINGS)[number];
+
+/** One town of a research crawl. */
+export interface ResearchTown {
+  cityId: number;
+  name: string | null;
+  townHall: ViewCapture;
+  /** Each building's view; null when the town has no such building. */
+  buildings: Record<ResearchTownBuilding, ViewCapture | null>;
+}
+
+/** A research crawl: the game's own answers, kept as they came. */
+export interface ResearchCrawl {
+  server: string;
+  towns: ResearchTown[];
+  /** The Palace's view, which shows the form of government; null with none. */
+  palace: ViewCapture | null;
+  researchAdvisor: ViewCapture;
+  /** Every research track, each asked for as the advisor's own tabs do. */
+  researchTracks: ResearchTracks;
+  finances: ViewCapture;
+  /** Whether asking moved the town the game has selected. */
+  selectionMoved: boolean;
+}
+
+/** The Research Advisor's tracks, each one's answer, and the tab put back. */
+export interface ResearchTracks {
+  /** Each track's answer, by its `researchType` (`economy`, `knowledge`...). */
+  tracks: Record<string, ViewCapture>;
+  /** The track the advisor had open, asked for last to leave it open. */
+  active: string | null;
+  /** Whether that last request was answered; null when none was sent. */
+  restored: boolean | null;
+  /** Why no track was asked for, when none was. */
+  skipped?: string;
+}
+
+/**
+ * The tracks the Research Advisor's tabs switch to, read from its answer:
+ * `js_researchAdvisorChangeResearchType<N>` carries
+ * `{ ajaxrequest: "?view=noViewChange&researchType=economy", class }`, the
+ * open one with class `active`. In tab order.
+ */
+function researchTracksOf(response: unknown[] | undefined): {
+  types: string[];
+  active: string | null;
+} {
+  const types: string[] = [];
+  let active: string | null = null;
+  const template = response?.find(
+    (entry) => Array.isArray(entry) && entry[0] === "updateTemplateData",
+  ) as [string, unknown] | undefined;
+  const data = template?.[1];
+  if (data === null || typeof data !== "object") return { types, active };
+  const tabs = Object.entries(data as Record<string, unknown>)
+    .filter(([key]) => /^js_researchAdvisorChangeResearchType\d+$/.test(key))
+    .sort(
+      ([a], [b]) =>
+        Number(a.replace(/\D+/g, "")) - Number(b.replace(/\D+/g, "")),
+    );
+  for (const [, tab] of tabs) {
+    if (tab === null || typeof tab !== "object") continue;
+    const { ajaxrequest, class: className } = tab as {
+      ajaxrequest?: unknown;
+      class?: unknown;
+    };
+    if (typeof ajaxrequest !== "string") continue;
+    const type = new URLSearchParams(ajaxrequest.replace(/^[^?]*\?/, "")).get(
+      "researchType",
+    );
+    if (!type) continue;
+    types.push(type);
+    if (
+      typeof className === "string" &&
+      className.split(/\s+/).includes("active")
+    ) {
+      active = type;
+    }
+  }
+  return { types, active };
+}
+
+/**
+ * The slot of the first building `key` in a town's `position` array, or
+ * null. An entry's `building` is the building's class first (`"academy"`),
+ * so only that first word is compared.
+ */
+function slotOfBuilding(
+  positions: unknown[] | null,
+  key: string,
+): number | null {
+  if (positions === null) return null;
+  const slot = positions.findIndex((entry) => {
+    if (entry === null || typeof entry !== "object") return false;
+    const building = (entry as { building?: unknown }).building;
+    return typeof building === "string" && building.split(/\s+/)[0] === key;
+  });
+  return slot === -1 ? null : slot;
+}
+
+/**
+ * Ask the game for the views that show research effects, population,
+ * satisfaction and the scientists' gold, and keep the answers as they come:
+ * their shapes are not known yet, so nothing is parsed.
+ *
+ * Every town: its Town Hall (the scan's request), and its Academy and Temple
+ * when it has them, found from the Town Hall's `position` array. Once: the
+ * Palace (form of government), the Research Advisor and Finances. A request
+ * that fails is written down with its error, and the crawl goes on.
+ *
+ * Each answer rotates the session token, so every token seen is handed back
+ * for the file's redaction: the page's current one does not cover the
+ * earlier ones. The game's selected town is put back if asking moved it, as
+ * the scan does.
+ */
+export async function collectResearchViews(): Promise<{
+  crawl: ResearchCrawl;
+  tokens: Set<string>;
+}> {
+  const tokens = new Set<string>();
+  const ask = async (
+    request: Record<string, string | number>,
+  ): Promise<ViewCapture> => {
+    try {
+      const response = await ikariamRequest(request);
+      const token = tokenInEntries(response);
+      if (token) tokens.add(token);
+      return { request, response };
+    } catch (e) {
+      return { request, error: errorMessage(e) };
+    }
+  };
+  const buildingRequest = (
+    view: string,
+    cityId: number,
+    position: number,
+  ): Record<string, string | number> => ({
+    view,
+    cityId,
+    position,
+    backgroundView: "city",
+    currentCityId: cityId,
+    templateView: view,
+  });
+  // The scan's own request for a town (`fetchTown`).
+  const townHallRequest = (
+    cityId: number,
+  ): Record<string, string | number> => ({
+    view: "townHall",
+    cityId,
+    position: 0,
+    backgroundView: "city",
+    currentCityId: cityId,
+  });
+
+  const before = modelCurrentCityId();
+  const towns: ResearchTown[] = [];
+  let palace: ViewCapture | null = null;
+  for (const cityId of ownTownIds()) {
+    const townHall = await ask(townHallRequest(cityId));
+    const positions = townHall.response
+      ? positionsFromResponse(townHall.response, String(cityId))
+      : null;
+    const buildings = {} as Record<ResearchTownBuilding, ViewCapture | null>;
+    for (const key of RESEARCH_TOWN_BUILDINGS) {
+      const slot = slotOfBuilding(positions, key);
+      buildings[key] =
+        slot === null ? null : await ask(buildingRequest(key, cityId, slot));
+    }
+    if (palace === null) {
+      const slot = slotOfBuilding(positions, "palace");
+      if (slot !== null)
+        palace = await ask(buildingRequest("palace", cityId, slot));
+    }
+    towns.push({ cityId, name: modelCityName(cityId), townHall, buildings });
+  }
+  const researchAdvisor = await ask({ view: "researchAdvisor" });
+  const researchTracks = await askEveryResearchTrack(researchAdvisor, ask);
+  const finances = await ask({ view: "finances" });
+
+  const after = modelCurrentCityId();
+  const selectionMoved = before !== null && after !== null && before !== after;
+  if (selectionMoved) await ask(townHallRequest(before));
+
+  return {
+    crawl: {
+      server: location.host,
+      towns,
+      palace,
+      researchAdvisor,
+      researchTracks,
+      finances,
+      selectionMoved,
+    },
+    tokens,
+  };
+}
+
+/**
+ * Each research track, as the advisor's tabs ask for it — the advisor
+ * answers for the open track only, so the levels of the others (Well
+ * Construction, Letter Chute in Science) need their own request. The open
+ * track goes last, so the advisor is left on the tab the player had; with no
+ * open track known, nothing is switched.
+ *
+ * Sent with `templateView: "researchAdvisor"`: the game's tab link goes
+ * through `ajaxHandlerCall`, which adds the view's context to the bare link.
+ */
+async function askEveryResearchTrack(
+  advisor: ViewCapture,
+  ask: (request: Record<string, string | number>) => Promise<ViewCapture>,
+): Promise<ResearchTracks> {
+  const { types, active } = researchTracksOf(advisor.response);
+  const tracks: Record<string, ViewCapture> = {};
+  if (active === null) {
+    return {
+      tracks,
+      active,
+      restored: null,
+      skipped: advisor.error
+        ? `the Research Advisor was not read: ${advisor.error}`
+        : "the Research Advisor's answer names no open track",
+    };
+  }
+  const request = (researchType: string) => ({
+    view: "noViewChange",
+    researchType,
+    templateView: "researchAdvisor",
+  });
+  for (const type of types) {
+    if (type !== active) tracks[type] = await ask(request(type));
+  }
+  tracks[active] = await ask(request(active));
+  return { tracks, active, restored: tracks[active].error === undefined };
+}
+
 /**
  * Every session token the page holds now: the model's, the newest a request
  * of the tool's was answered with, and any form field named `actionRequest`
@@ -749,9 +1141,16 @@ function pageSessionTokens(): Set<string> {
  * The text of a crawl's file, with every session token taken out, as Bug
  * Report does: the player sends these files on, and an element's HTML, a
  * value read by JS, or the page's address can carry the live token.
+ * `moreTokens` are the ones the page no longer holds — a crawl that asked
+ * the game several times saw a new token with every answer.
  */
-export function crawlFileText(payload: unknown): string {
-  return redactTokens(JSON.stringify(payload, null, 2), pageSessionTokens());
+export function crawlFileText(
+  payload: unknown,
+  moreTokens: Iterable<string> = [],
+): string {
+  const tokens = pageSessionTokens();
+  for (const token of moreTokens) if (token) tokens.add(token);
+  return redactTokens(JSON.stringify(payload, null, 2), tokens);
 }
 
 export { clearBugs, getBugs, summariseBugs };

@@ -34,7 +34,9 @@ import {
   CRAWL_DIALOG,
   ELEMENT_CRAWL,
   NOTIFICATIONS,
+  PAGE_CRAWL,
   QUEUE_VIEW,
+  RESEARCH_CRAWL,
   SEND_DIALOG,
   PIRATE,
   WINE_DIALOG,
@@ -133,9 +135,11 @@ import {
 import {
   clearBugs,
   crawlCode,
+  collectResearchViews,
   crawlElement,
   crawlErrorOf,
   crawlFileText,
+  crawlPage,
   CrawlStopped,
   type CodeCrawl,
   type CrawlError,
@@ -173,6 +177,8 @@ import {
   openCrawlDialog,
   openElementCrawlBox,
   closeElementCrawlBox,
+  openPageCrawlBox,
+  closePageCrawlBox,
   readElementCrawlForm,
   openSendResourcesDialog,
   openWineSourceDialog,
@@ -645,6 +651,98 @@ async function crawlPirate(): Promise<void> {
 }
 
 /**
+ * Crawl's Research part: the game's own views of every town that show
+ * research effects, population, satisfaction and the scientists' gold, saved
+ * as they came (`collectResearchViews`).
+ *
+ * Refused while the task queue runs or is busy in any tab, while a page is
+ * leaving, or while a Pirate capture is out: each request rotates the
+ * session token, which would race the runner's open building or shipment
+ * form, as the scan's do.
+ */
+async function crawlResearch(): Promise<void> {
+  if (
+    runner.isRunning ||
+    runner.isBusy ||
+    isRunnerBusyInAnyTab() ||
+    isPageLeaving() ||
+    isPirateCaptureInFlight() ||
+    isPirateCaptureOutInAnyTab()
+  ) {
+    throw new CrawlStopped("queue", RESEARCH_CRAWL.queueBusy);
+  }
+  const { crawl, tokens } = await collectResearchViews();
+  const captures = [
+    ...crawl.towns.flatMap((town) => [
+      town.townHall,
+      ...Object.values(town.buildings),
+    ]),
+    crawl.palace,
+    crawl.researchAdvisor,
+    ...Object.values(crawl.researchTracks.tracks),
+    crawl.finances,
+  ].filter((capture) => capture !== null);
+  const failed = captures.filter((capture) => capture.error !== undefined);
+  const { accountName } = getState();
+  const filename = timestampedFilename(
+    accountName,
+    "ikariam-crawl-research",
+    "json",
+  );
+  const saved = saveCrawlFile(
+    filename,
+    "Crawl research",
+    {
+      ok: true,
+      account: accountName,
+      savedAt: new Date().toISOString(),
+      ...crawl,
+    },
+    tokens,
+  );
+  if (!saved) return;
+  logInfo(
+    `Crawl research: saved ${captures.length} views, ${failed.length} failed - ${filename}`,
+  );
+  showToast(RESEARCH_CRAWL.saved(captures.length, failed.length, filename));
+}
+
+/**
+ * The Crawl page box's button: the game screen open now, saved to a file.
+ * The box stays open, for the next screen.
+ */
+function runPageCrawl(): void {
+  const { accountName } = getState();
+  const filename = timestampedFilename(
+    accountName,
+    "ikariam-crawl-page",
+    "json",
+  );
+  let capture;
+  try {
+    capture = { ok: true, ...crawlPage() };
+  } catch (e) {
+    const error = crawlErrorOf("unexpected", e);
+    const saved = saveCrawlFile(filename, "Crawl page", {
+      ok: false,
+      url: location.href,
+      error,
+    });
+    if (saved) showToast(CRAWL_DIALOG.failed(error.message, filename));
+    return;
+  }
+  const saved = saveCrawlFile(filename, "Crawl page", {
+    savedAt: new Date().toISOString(),
+    ...capture,
+  });
+  if (!saved) return;
+  logInfo(`Crawl page: saved ${filename}`);
+  showToast(
+    PAGE_CRAWL.saved(capture.forms.length, filename, capture.truncated),
+  );
+}
+
+/**
  * What each crawl of the Crawl dialog runs. A `Record` over every kind, so a
  * crawl added to `CRAWL_DIALOG.kinds` without a run here does not compile.
  */
@@ -663,6 +761,8 @@ const CRAWLS: Record<CrawlKind, () => void> = {
   },
   pirate: () => void runCrawlSavingErrors("pirate", crawlPirate),
   element: openElementCrawlBox,
+  page: openPageCrawlBox,
+  research: () => void runCrawlSavingErrors("research", crawlResearch),
 };
 
 /**
@@ -705,17 +805,18 @@ function saveCrawlFailure(crawl: CrawlKind, error: CrawlError): void {
 }
 
 /**
- * Save a file of Crawl by id or of a failed crawl, every session token taken
- * out (`crawlFileText`). False when the browser would not take it, which is
- * said on screen and in the log.
+ * Save a crawl's file, every session token taken out (`crawlFileText`),
+ * `moreTokens` too: the ones a crawl's own requests were answered with. False
+ * when the browser would not take it, which is said on screen and in the log.
  */
 function saveCrawlFile(
   filename: string,
   what: string,
   payload: object,
+  moreTokens: Iterable<string> = [],
 ): boolean {
   try {
-    downloadJson(filename, crawlFileText(payload));
+    downloadJson(filename, crawlFileText(payload, moreTokens));
     return true;
   } catch (e) {
     const message = errorMessage(e);
@@ -1117,6 +1218,8 @@ function registerUiActions(): void {
     "crawl.run": runCrawl,
     "crawl.element.run": runElementCrawl,
     "crawl.element.close": closeElementCrawlBox,
+    "crawl.page.run": runPageCrawl,
+    "crawl.page.close": closePageCrawlBox,
     "crawl.wineFrom": (element) => {
       const town = element.dataset.ikaTown;
       if (!town) return;
