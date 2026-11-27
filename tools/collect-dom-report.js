@@ -9,8 +9,10 @@
  * (or corrected) without guessing.
  *
  * It is READ-ONLY by default: it clicks nothing, changes nothing and sends
- * nothing. The single exception is `ikaTestTownSwitch()`, which you have to
- * invoke by hand and which does click one town in the game's own dropdown.
+ * nothing. Two exceptions, both invoked by hand: `ikaTestAjaxFetch()` sends
+ * one view request (a Town Hall view, which selects that town on the
+ * server), and `ikaTestTownSwitch()` clicks one town in the game's own
+ * dropdown.
  *
  * HOW TO USE
  *   1. Open the game, press F12, go to the Console tab.
@@ -754,8 +756,22 @@
           ? parsed.map(describeAjaxEntry)
           : null;
         // Does a fresh token come back? If it does, every caller has to re-read
-        // it or the NEXT request silently does nothing.
-        result.actionRequestRotated = currentActionRequest() !== actionRequest;
+        // it or the NEXT request silently does nothing. Compared with the
+        // token the answer carries: this probe never puts its answer into the
+        // page's model, so the model's copy cannot show a change. Null when
+        // the answer carries none.
+        const withToken = Array.isArray(parsed)
+          ? parsed.find(
+              (entry) =>
+                Array.isArray(entry) &&
+                entry[0] === "updateGlobalData" &&
+                entry[1] &&
+                typeof entry[1].actionRequest === "string",
+            )
+          : undefined;
+        result.actionRequestRotated = withToken
+          ? withToken[1].actionRequest !== actionRequest
+          : null;
       }
     } catch (e) {
       result.error = String(e && e.message);
@@ -784,10 +800,10 @@
   };
 
   /* ── Town-switch probe ───────────────────────────────────────────────────
-   * The ONLY part of this file that changes anything: it clicks a town in the
-   * game's own dropdown to confirm that doing so actually switches town. That
-   * click is the fallback `navigation.ts` relies on when the Empire Overview
-   * board is absent, and it has never been verified.
+   * One of the two parts of this file that change anything: it clicks a town
+   * in the game's own dropdown to see whether doing so switches town. Measured
+   * 25/09: it does not. `gotoTown` (`navigation.ts`) keeps that click only as
+   * its last route, after the game's own form and the board's town name.
    *
    * Must be invoked by hand (`ikaTestTownSwitch()`), never automatically.
    *
@@ -801,6 +817,15 @@
   function currentTownName() {
     const el = document.querySelector("#js_cityBread");
     return el ? el.textContent.trim() : null;
+  }
+
+  /**
+   * A dropdown name as the breadcrumb shows it. With the game's "show
+   * coordinates" option on, the dropdown's `title` reads "[42:97]  S-Clone1",
+   * and the verdict would say CHANGED-BUT-NOT-TO-TARGET on every success.
+   */
+  function withoutCoordinates(name) {
+    return name.replace(/^\[\d+:\d+\]\s*/, "").trim();
   }
 
   function townAnchorAt(index) {
@@ -856,7 +881,8 @@
       targetIndex = -1;
       for (let i = 0; i < items.length; i++) {
         const a = items[i].querySelector("a");
-        const name = a && (a.getAttribute("title") || a.innerHTML || "").trim();
+        const name =
+          a && withoutCoordinates(a.getAttribute("title") || a.innerHTML || "");
         if (name && name !== before) {
           targetIndex = i;
           break;
@@ -869,11 +895,9 @@
       say("log", "No town anchor at index " + targetIndex);
       return;
     }
-    const target = (
-      anchor.getAttribute("title") ||
-      anchor.innerHTML ||
-      ""
-    ).trim();
+    const target = withoutCoordinates(
+      anchor.getAttribute("title") || anchor.innerHTML || "",
+    );
 
     try {
       localStorage.setItem(

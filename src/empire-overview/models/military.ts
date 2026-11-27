@@ -179,7 +179,7 @@ export function MilitaryUnits(obj?) {
     return this.setUnit(unitId, this.getUnit(unitId) + count);
   },
   removeUnit: function (unitId, count) {
-    count = Math.max(0, this.getUnit[unitId] - count);
+    count = Math.max(0, this.getUnit(unitId) - count);
     return this.setUnit(unitId, count);
   },
 };

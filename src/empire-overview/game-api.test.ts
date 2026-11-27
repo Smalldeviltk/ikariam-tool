@@ -364,3 +364,57 @@ describe("loadUrl without a town switch", () => {
     expect(pageLoads[0]).toContain("backgroundView=island");
   });
 });
+
+describe("the Finances view", () => {
+  it(
+    "REGRESSION: tells the board its totals changed — they were published " +
+      "under a name nothing listened to, so they were neither redrawn nor " +
+      "saved",
+    async () => {
+      const { events } = await import("./events");
+      const { Constant } = await import("./constants");
+      const { database } = await import("./database");
+      database.cities = {};
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<div id="finances"><table><tbody>` +
+          `<tr class="bottomLine"><td></td><td>100</td></tr>`.repeat(4) +
+          `</tbody></table></div>`,
+      );
+      const told = vi.fn();
+      events(Constant.Events.GLOBAL_UPDATED).sub(told);
+
+      ikariam.parseFinances([]);
+
+      expect(told).toHaveBeenCalledWith({ finances: true });
+    },
+  );
+});
+
+describe("the cultural goods view", () => {
+  it(
+    "REGRESSION: passes over a town the board does not have — it threw, " +
+      "and the towns already updated were not redrawn",
+    async () => {
+      const { events } = await import("./events");
+      const { Constant } = await import("./constants");
+      const { database } = await import("./database");
+      database.cities = {
+        297034: { _culturalGoods: 0 },
+        297035: { _culturalGoods: 0 },
+      };
+      const told: unknown[] = [];
+      events(Constant.Events.CITY_UPDATED).sub((cityId: unknown) =>
+        told.push(cityId),
+      );
+
+      ikariam.parseCulturalPossessions(
+        "goodscity_297034 iniValue : 3 goodscity_999999 iniValue : 5 " +
+          "goodscity_297035 iniValue : 4",
+      );
+
+      expect(database.cities[297035]._culturalGoods).toBe(4);
+      expect(told).toEqual(["297034", "297035"]);
+    },
+  );
+});

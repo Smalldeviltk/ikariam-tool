@@ -25,8 +25,11 @@
  *   - ~70-73 kB per response.
  *   - `Content-Type` comes back as `text/html`, NOT `application/json`, even
  *     though the body is JSON. Never gate on the header.
- *   - The payload contains an `actionRequest`, and across two consecutive
- *     requests the model's copy did not change.
+ *   - The payload contains an `actionRequest`. The probe compared only the
+ *     page model's copy before and after, and never applied its own answer
+ *     to the model, so it could not have seen the token move. That a view
+ *     leaves the token where it was and an action moves it was measured
+ *     later (03/11), by comparing the token each answer carries.
  *
  * WHAT THIS MODULE DELIBERATELY DOES NOT DO
  * It does not apply responses to the game. It hands the parsed array to
@@ -67,7 +70,42 @@ export interface RequestOptions {
  */
 let latestToken: string | null = null;
 
+/**
+ * The slot this copy of the module last booked: when its latest request
+ * went out, or will once its wait is over.
+ */
 let lastRequestAt = 0;
+
+/**
+ * Where the two scripts' copies of this module note the time their next
+ * request is booked for. Each copy keeps its own `lastRequestAt`, so without
+ * a mark on the page the board's quick upgrade and Send Resources' scan or
+ * notepad went out with no gap between them. The slot is booked before the
+ * wait, so a copy that starts waiting meanwhile books the one after it.
+ * Holds as long as both scripts see the same page `window` (not measured in
+ * the browser).
+ */
+const SHARED_LAST_REQUEST_KEY = "ikaToolLastRequestAt";
+
+function sharedLastRequestAt(): number {
+  const value = (pageWindow as unknown as Record<string, unknown>)[
+    SHARED_LAST_REQUEST_KEY
+  ];
+  return typeof value === "number" ? value : 0;
+}
+
+function noteSharedRequestAt(time: number): void {
+  try {
+    (pageWindow as unknown as Record<string, unknown>)[
+      SHARED_LAST_REQUEST_KEY
+    ] = time;
+  } catch {
+    // A page that will not take the mark still has this copy's own.
+  }
+}
+
+/** The town switch form's own token field, which the form sends. */
+const CHANGE_CITY_TOKEN_FIELD_ID = "js_ChangeCityActionRequest";
 
 /**
  * The channel responses are announced on.
@@ -187,6 +225,11 @@ function adoptToken(token: string): void {
   } catch {
     // A frozen or foreign model: the fallback above still has the token.
   }
+  // The town switch form sends its own hidden field, not the model's copy
+  // (the game posts every named field of a form), and nothing else writes
+  // it. Whether the game refreshes it itself is not measured.
+  const field = document.getElementById(CHANGE_CITY_TOKEN_FIELD_ID);
+  if (field instanceof HTMLInputElement) field.value = token;
 }
 
 /**
@@ -201,6 +244,7 @@ export function toolNewestToken(): string | null {
 export function resetHttpState(): void {
   latestToken = null;
   lastRequestAt = 0;
+  noteSharedRequestAt(0);
 }
 
 /**
@@ -209,9 +253,12 @@ export function resetHttpState(): void {
  * The probe found it under `updateGlobalData` -> `actionRequest`, alongside
  * `headerData` and `backgroundData`.
  */
-function absorbToken(entries: unknown[]): void {
+function absorbToken(entries: unknown[], sent: string): void {
   const token = tokenInEntries(entries);
-  if (token !== null) adoptToken(token);
+  // An answer that carries the token it was sent says nothing new: a view
+  // does not move it (measured 03/11). Taking it anyway let a view answered
+  // late roll the page back over a token an action had moved on meanwhile.
+  if (token !== null && token !== sent) adoptToken(token);
 }
 
 /** The first `actionRequest` carried by a response array's entries. */
@@ -227,16 +274,23 @@ export function tokenInEntries(entries: unknown[]): string | null {
 }
 
 /**
- * Wait out the gap since the previous request, then claim the slot.
+ * Book the next free slot — the gap after the last one booked, by either
+ * script — then wait for it.
  *
  * Spacing requests out is deliberate. This is game automation; a burst is
  * more conspicuous than clicking, and there is nothing to gain from it.
  */
 async function waitForRequestSlot(options: RequestOptions): Promise<void> {
   const gap = options.minGapMs ?? DEFAULT_MIN_GAP_MS;
-  const since = Date.now() - lastRequestAt;
-  if (lastRequestAt !== 0 && since < gap) await sleep(gap - since);
-  lastRequestAt = Date.now();
+  const last = Math.max(lastRequestAt, sharedLastRequestAt());
+  const now = Date.now();
+  // Booked at once, before any wait: noted only after the wait, two
+  // requests started together — in this script or across both — each
+  // waited from the same mark and went out at the same moment.
+  const slot = last === 0 ? now : Math.max(now, last + gap);
+  lastRequestAt = slot;
+  noteSharedRequestAt(slot);
+  if (slot > now) await sleep(slot - now);
 }
 
 /** Send one request and parse its body as JSON, within the timeout. */
@@ -297,8 +351,11 @@ export async function ikariamRequest(
   params: Record<string, string | number>,
   options: RequestOptions = {},
 ): Promise<unknown[]> {
-  const token = requireToken();
+  // Fail at once when the game has not loaded, but read the token to send
+  // only when its turn has come: by then it may have moved on.
+  requireToken();
   await waitForRequestSlot(options);
+  const token = requireToken();
 
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
@@ -319,7 +376,7 @@ export async function ikariamRequest(
     throw new Error("Ikariam returned JSON that is not a response array");
   }
 
-  absorbToken(parsed);
+  absorbToken(parsed, token);
   recordToolRequest(params, token, tokenInEntries(parsed), null);
 
   publishResponse(parsed);
@@ -343,8 +400,9 @@ export async function postIkariamForm(
   form: Record<string, string>,
   options: RequestOptions = {},
 ): Promise<Record<string, unknown>> {
-  const token = requireToken();
+  requireToken();
   await waitForRequestSlot(options);
+  const token = requireToken();
 
   const body = new URLSearchParams(form);
   body.set("ajax", "1");
@@ -361,12 +419,27 @@ export async function postIkariamForm(
     recordToolRequest(query, token, null, errorMessage(e));
     throw e;
   }
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+  if (Array.isArray(parsed)) {
+    // A refusal comes as the usual response array; the token it brings is
+    // the server's current one, and the next action needs it.
+    absorbToken(parsed, token);
+    recordToolRequest(
+      query,
+      token,
+      tokenInEntries(parsed),
+      "not a response object",
+    );
+    throw new Error("Ikariam returned JSON that is not a response object");
+  }
+  if (parsed === null || typeof parsed !== "object") {
     recordToolRequest(query, token, null, "not a response object");
     throw new Error("Ikariam returned JSON that is not a response object");
   }
   const answer = parsed as Record<string, unknown>;
-  if (typeof answer.actionRequest === "string") {
+  if (
+    typeof answer.actionRequest === "string" &&
+    answer.actionRequest !== token
+  ) {
     adoptToken(answer.actionRequest);
   }
   recordToolRequest(

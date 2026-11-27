@@ -991,9 +991,9 @@ function slotOfBuilding(
  * Palace (form of government), the Research Advisor and Finances. A request
  * that fails is written down with its error, and the crawl goes on.
  *
- * Each answer rotates the session token, so every token seen is handed back
- * for the file's redaction: the page's current one does not cover the
- * earlier ones. The game's selected town is put back if asking moved it, as
+ * Every token an answer carries is handed back for the file's redaction:
+ * should any of the requests move the token, the page's current one would
+ * not cover the earlier ones. The game's selected town is put back if asking moved it, as
  * the scan does.
  */
 export async function collectResearchViews(): Promise<{

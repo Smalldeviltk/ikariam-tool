@@ -131,14 +131,17 @@ export function Building(city, pos) {
         upgraded: this.isUpgrading != !completion,
       };
     }
+    // Fixed: the level is set before the timer starts. A completion under
+    // 5 s away finishes the upgrade at once (level + 1), and writing the
+    // level after that undid it.
+    this._name = name;
+    this._level = level;
     if (completion) {
       this._completionTime = completion * 1000;
       this.startUpgradeTimer();
     } else if (this._completionTime) {
       delete this._completionTime;
     }
-    this._name = name;
-    this._level = level;
     if (changed) {
       return changes;
     }
@@ -234,18 +237,6 @@ export function Building(city, pos) {
   },
   get isUpgrading() {
     return this._completionTime > $.now();
-  },
-  subtractUpgradeResourcesFromCity: function () {
-    var cost = this.getUpgradeCost;
-    $.each(
-      Constant.Resources,
-      function (key, resourceName) {
-        this.city()
-          .getResource(resourceName)
-          .increment(cost[resourceName] * -1);
-      }.bind(this),
-    );
-    this._completionTime = $.now() + cost.time;
   },
   get isUpgradable() {
     if (this.isEmpty || this.isMaxLevel) {

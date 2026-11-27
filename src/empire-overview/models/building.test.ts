@@ -274,3 +274,60 @@ describe("the desktop notification when a building finishes", () => {
     expect(shown).toHaveLength(0);
   });
 });
+
+describe("an upgrade's completion", () => {
+  beforeEach(() => {
+    database._globalData = {
+      addLocalisedString: () => undefined,
+      getLocalisedString: (key: string) => key,
+      getGovernmentType: "Anarchy",
+      getResearchTopicLevel: () => 0,
+    };
+  });
+
+  it(
+    "REGRESSION: never hands the browser a delay past 2^31 - 1 ms - one " +
+      "that long wraps round and fires at once, finishing an upgrade weeks " +
+      "early",
+    () => {
+      vi.useFakeTimers({ now: new Date("2026-11-27T10:00:00Z") });
+      const timeout = vi.spyOn(globalThis, "setTimeout");
+      const building = makeBuilding();
+      const thirtyDays = 30 * 24 * 3600;
+
+      building.update({
+        building: "academy",
+        level: "40",
+        name: "Academy",
+        completed: String(Math.floor(Date.now() / 1000) + thirtyDays),
+      });
+
+      const delays = timeout.mock.calls.map((call) => Number(call[1] ?? 0));
+      expect(Math.max(...delays)).toBeLessThanOrEqual(2147483647);
+      expect(building.getLevel).toBe(40);
+      expect(building.isUpgrading).toBe(true);
+      timeout.mockRestore();
+    },
+  );
+
+  it(
+    "REGRESSION: a level seen in the last seconds of its upgrade ends up " +
+      "one higher - the level was written after the timer had already " +
+      "finished it, and put it back",
+    () => {
+      // Real time: the board's `$.now` is jQuery's, which keeps the real
+      // `Date.now` it was loaded with.
+      const building = makeBuilding();
+
+      building.update({
+        building: "academy",
+        level: "40",
+        name: "Academy",
+        completed: String(Math.floor(Date.now() / 1000) + 2),
+      });
+
+      expect(building.getLevel).toBe(41);
+      expect(building.isUpgrading).toBe(false);
+    },
+  );
+});

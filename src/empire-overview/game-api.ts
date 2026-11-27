@@ -110,6 +110,8 @@ export const ikariam: any = {
   _GameVersion: null,
   _TemplateView: null,
   _currentCity: null,
+  /** Whether the response being read is one the tool fetched. */
+  _fetchedResponse: false,
   url: function () {
     return "http://" + this.Host() + "/index.php";
   },
@@ -425,6 +427,11 @@ export const ikariam: any = {
     return this._GameVersion;
   },
   get CurrentCityId() {
+    // Added (not in the original): a response the tool fetched names its own
+    // town, whatever the page shows; see `_fetchedResponse`.
+    if (ikariam._fetchedResponse && ikariam._currentCity) {
+      return ikariam._currentCity;
+    }
     return unsafeWindow.ikariam.backgroundView &&
       unsafeWindow.ikariam.backgroundView.id === "city"
       ? ikariam._currentCity ||
@@ -436,18 +443,21 @@ export const ikariam: any = {
         ].id;
   },
   get viewIsCity() {
+    if (ikariam._fetchedResponse) return true;
     return (
       unsafeWindow.ikariam.backgroundView &&
       unsafeWindow.ikariam.backgroundView.id === "city"
     );
   },
   get viewIsIsland() {
+    if (ikariam._fetchedResponse) return false;
     return (
       unsafeWindow.ikariam.backgroundView &&
       unsafeWindow.ikariam.backgroundView.id === "island"
     );
   },
   get viewIsWorld() {
+    if (ikariam._fetchedResponse) return false;
     return (
       unsafeWindow.ikariam.backgroundView &&
       unsafeWindow.ikariam.backgroundView.id === "worldmap_iso"
@@ -473,18 +483,9 @@ export const ikariam: any = {
     return this._CurrentTemplateView;
   },
   getLocalizationStrings: function () {
+    // Published only once the page's global is there (`main.ts`): the
+    // original's fallback, reading it out of the page's scripts, never ran.
     var localStrings = unsafeWindow.LocalizationStrings;
-    if (!localStrings) {
-      $("script").each(function (index, script) {
-        var match = /LocalizationStrings = JSON.parse\('(.*)'\);/.exec(
-          script.innerHTML,
-        );
-        if (match) {
-          localStrings = JSON.parse(match[1]);
-          return false;
-        }
-      });
-    }
     var local = $.extend({}, localStrings);
     $.extend(local, local.timeunits.short);
     delete local.warnings;
@@ -515,6 +516,14 @@ export const ikariam: any = {
         var len = response.length;
         var oldCity = this._currentCity;
         const cityBeforeResponse = this._currentCity;
+        // Added (not in the original): a response the tool fetched was asked
+        // for with `backgroundView=city`, so it is a city view of its own
+        // town whatever the page shows. While it is read, the town is the
+        // response's and the view is the city. Off the city view the
+        // page's selected town took it: its resources, its priests and
+        // scientists, and on the island view its island id (set to the
+        // fetched town's city id).
+        this._fetchedResponse = origin === FETCHED_RESPONSE;
         while (len) {
           len--;
           var entry = response[len];
@@ -618,6 +627,7 @@ export const ikariam: any = {
         // name and transport buttons doing nothing, and `loadUrl` deciding
         // backwards whether a link needs a town switch.
         if (origin === FETCHED_RESPONSE) {
+          this._fetchedResponse = false;
           this._currentCity = cityBeforeResponse;
           return;
         }
@@ -632,7 +642,11 @@ export const ikariam: any = {
         if (!ikariam[formID + "Submitted"]) return false;
         var formSubmission = (function formSubmit() {
           var data = ikariam[formID + "Submitted"]();
-          return function formSubmitID(response) {
+          return function formSubmitID(response, origin?: string) {
+            // Fixed: a scan's fetched response is not the answer to the form,
+            // and it came first — the form's own answer then found nobody
+            // listening.
+            if (origin === FETCHED_RESPONSE) return;
             var len = response.length;
             var feedback = 0;
             while (len) {
@@ -703,20 +717,12 @@ export const ikariam: any = {
         case Constant.Buildings.TAVERN:
           this.parseTavern();
           break;
-        case "transport":
-        case "plunder":
-          this.transportFormSubmitted();
-          break;
         case Constant.Buildings.TEMPLE:
           this.parseTemple(tData);
           break;
         case Constant.Buildings.BARRACKS:
         case Constant.Buildings.SHIPYARD:
           this.parseBarracks(view, html, tData);
-          break;
-        case "deployment":
-        case "plunder":
-          this.parseMilitaryTransport();
           break;
         case "premium":
           this.parsePremium(view, html, tData);
@@ -748,6 +754,9 @@ export const ikariam: any = {
     $.each(html.match(/goodscity_(\d*)/g), function (i) {
       var cityID = this.split("_")[1];
       var culturalGoods = parseInt(allCulturalGoods[i].split(" ").pop());
+      // Fixed: a town the board does not have threw here, and the towns
+      // already updated were never told; it is passed over.
+      if (!database.cities[cityID]) return;
       var changed = database.cities[cityID]._culturalGoods != culturalGoods;
       if (changed) {
         database.cities[cityID]._culturalGoods = culturalGoods;
@@ -786,33 +795,6 @@ export const ikariam: any = {
     );
   },
   parseTavern: function () {},
-  resTransportObject: function () {
-    return {
-      id: null,
-      wood: 0,
-      wine: 0,
-      marble: 0,
-      glass: 0,
-      sulfur: 0,
-      gold: 0,
-      targetCityId: 0,
-      arrivalTime: 0,
-      originCityId: 0,
-      loadedTime: 0,
-      mission: "",
-    };
-  },
-  troopTransportObject: function () {
-    return {
-      id: null,
-      troops: {},
-      targetCityId: 0,
-      arrivalTime: 0,
-      originCityId: 0,
-      returnTime: 0,
-      mission: "",
-    };
-  },
   parseBarracks: function (view, html, tData) {
     var type =
       view == Constant.Buildings.BARRACKS
@@ -1080,111 +1062,6 @@ export const ikariam: any = {
     } finally {
     }
   },
-  parseMilitaryTransport: function (submit) {
-    submit = submit || false;
-    var that = this;
-    if (submit) {
-      var journeyTime = $("#journeyTime").text();
-      var returnTime = $("#returnTime").text();
-      var targetID = $("input:[name=destinationCityId]").val();
-      var troops = {};
-      var mission = "";
-      $("ul.assignUnits li input.textfield").each(function () {
-        const input = this as HTMLInputElement;
-        // The original compared the string `value` against the number 0,
-        // which is never equal — so the guard always passed, including for
-        // empty inputs. Comparing against "" is what was meant.
-        if (input.value !== "") {
-          troops[this.getAttribute("name").split("_").pop()] = parseInt(
-            input.value,
-          );
-        }
-        if (mission === "") {
-          mission = "deploy" + this.getAttribute("name").match(/_(.*)_/)[1];
-        } else {
-          mission = "plunder" + this.getAttribute("name").match(/_(.*)_/)[1];
-        }
-      });
-      var arrTime = new Date();
-      var transport = this.troopTransportObject();
-      var server = ikariam.Nationality();
-      transport.id = "XXX-" + arrTime.getTime();
-      transport.targetCityId = targetID;
-      transport.originCityId = this.CurrentCityId;
-      transport.mission = mission;
-      transport.troops = troops;
-      arrTime.setSeconds(
-        arrTime.getSeconds() +
-          (journeyTime.match(/(\d+)s/)
-            ? parseInt(journeyTime.match(/(\d+)s/)[1])
-            : 0),
-      );
-      arrTime.setMinutes(
-        arrTime.getMinutes() +
-          (journeyTime.match(/(\d+)m/)
-            ? parseInt(journeyTime.match(/(\d+)m/)[1])
-            : 0),
-      );
-      arrTime.setHours(
-        arrTime.getHours() +
-          (journeyTime.match(/(\d+)h/)
-            ? parseInt(journeyTime.match(/(\d+)h/)[1])
-            : 0),
-      );
-      arrTime.setDate(
-        arrTime.getDate() +
-          (journeyTime.match(/(\d+)D/)
-            ? parseInt(journeyTime.match(/(\d+)D/)[1])
-            : 0),
-      );
-      if (server == "de")
-        arrTime.setDate(
-          arrTime.getDate() +
-            (journeyTime.match(/(\d+)T/)
-              ? parseInt(journeyTime.match(/(\d+)T/)[1])
-              : 0),
-        );
-      transport.arrivalTime = arrTime.getTime();
-      arrTime = new Date();
-      arrTime.setSeconds(
-        arrTime.getSeconds() +
-          (returnTime.match(/(\d+)s/)
-            ? parseInt(returnTime.match(/(\d+)s/)[1])
-            : 0),
-      );
-      arrTime.setMinutes(
-        arrTime.getMinutes() +
-          (returnTime.match(/(\d+)m/)
-            ? parseInt(returnTime.match(/(\d+)m/)[1])
-            : 0),
-      );
-      arrTime.setHours(
-        arrTime.getHours() +
-          (returnTime.match(/(\d+)h/)
-            ? parseInt(returnTime.match(/(\d+)h/)[1])
-            : 0),
-      );
-      arrTime.setDate(
-        arrTime.getDate() +
-          (returnTime.match(/(\d+)D/)
-            ? parseInt(returnTime.match(/(\d+)D/)[1])
-            : 0),
-      );
-      if (server == "de")
-        arrTime.setDate(
-          arrTime.getDate() +
-            (returnTime.match(/(\d+)T/)
-              ? parseInt(returnTime.match(/(\d+)T/)[1])
-              : 0),
-        );
-      transport.returnTime = arrTime.getTime();
-      database.getGlobalData.addFleetMovement(transport);
-      render.toast(updatedPrefix() + languageText().toast_movementAdded);
-      return false;
-    } else {
-      return true;
-    }
-  },
   parseFinances: function ($elem) {
     var updateTime = $.now();
     var changed;
@@ -1239,7 +1116,9 @@ export const ikariam: any = {
         .split(database.getGlobalData.getLocalisedString("thousandSeperator"))
         .join(""),
     );
-    events("globalData").pub({ finances: true });
+    // Fixed: published as "globalData", which nothing listens to; the
+    // board's totals were not redrawn and the figures not saved.
+    events(Constant.Events.GLOBAL_UPDATED).pub({ finances: true });
     database.getGlobalData.addLocalisedString(
       "finances",
       $("#finances").find("h3#js_mainBoxHeaderTitle").text(),
@@ -1798,13 +1677,6 @@ export const ikariam: any = {
       }
     }
     database.settings.cityOrder.value = order;
-  },
-  get currentShips() {
-    if (this.$freeTransporters == undefined) {
-      this.$freeTransporters = $("#js_GlobalMenu_freeTransporters");
-    }
-    // Fixed: was a bare parseInt, which stops at the thousands separator (1,234 read as 1).
-    return readGameCount(this.$freeTransporters.text());
   },
 };
 

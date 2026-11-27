@@ -73,6 +73,9 @@ function cityBuildingOfCell(target) {
  * it is recorded, and the toast stands.
  */
 function quickUpgrade(city, building, button) {
+  const key = quickUpgradeKey(city, building);
+  if (quickUpgradesInFlight.has(key)) return;
+  quickUpgradesInFlight.add(key);
   const text = languageText();
   const label =
     database.getGlobalData.getLocalisedString(building.getName) +
@@ -111,8 +114,30 @@ function quickUpgrade(city, building, button) {
       render.toastAlert(text.quickUpgrade_failed + errorMessage(e));
     })
     .finally(function () {
+      quickUpgradesInFlight.delete(key);
       button.prop("disabled", false);
     });
+}
+
+/**
+ * Quick upgrades waiting on the game, by town and position. The lock is
+ * kept here, not on the button: a redraw of the Build tab (another tab and
+ * back, a building update) draws a new button, and the old one's
+ * `disabled` went with it — a second click then sent a second order.
+ */
+const quickUpgradesInFlight = new Set<string>();
+
+function quickUpgradeKey(city, building): string {
+  return city.getId + ":" + building.getPosition;
+}
+
+/**
+ * A town's name for a `data-tooltip` attribute. The tooltip reads the
+ * attribute (decoded) and shows it with `.html()`, so a name escaped once
+ * came back out as markup; escaped twice it still reads as text.
+ */
+function nameForTooltip(name: unknown): string {
+  return escapeHtml(escapeHtml(String(name)));
 }
 
 /** The tabs that hold one row per town. */
@@ -254,14 +279,16 @@ export const render: any = {
             ? event.target
             : $(event.target).parents("[data-tooltip]");
 
-          render.toolTip.elem.html(
-            render.toolTip.dynamicTip(
-              $(event.target).parents("tr").attr("id")
-                ? $(event.target).parents("tr").attr("id").split("_").pop()
-                : 0,
-              elem,
-            ),
+          const tip = render.toolTip.dynamicTip(
+            $(event.target).parents("tr").attr("id")
+              ? $(event.target).parents("tr").attr("id").split("_").pop()
+              : 0,
+            elem,
           );
+          // Fixed: `.html(undefined)` changes nothing in jQuery, so a figure
+          // with no tooltip (an empty building cell, the gold bar) showed
+          // the previous hover's.
+          render.toolTip.elem.html(tip == null ? "" : tip);
           return render.toolTip.elem.html();
         };
       })(event.originalEvent.shiftKey);
@@ -400,11 +427,6 @@ export const render: any = {
           break;
         case "garrisonlimit":
           return getActionPointsTip();
-          break;
-        case "wonder":
-          return city.getBuildingFromName(Constant.Buildings.TEMPLE)
-            ? getWonderTip()
-            : getNoWonderTip();
           break;
         case "prodconssubsum consumption Red":
           return getFinanceTip();
@@ -756,47 +778,6 @@ export const render: any = {
           Constant.LanguageData[lang].Sea,
         ]);
       }
-      function getWonderTip() {
-        var populationData = city.populationData;
-        var wonderTip =
-          '<table>\n    <thead>\n    <th colspan="3"><div align="center">\n <img src="cdn/all/both/wonder/w{0}.png" style="height: 25px; float: left">{1}</div></th>\n    </thead>\n    <tbody>\n ' +
-          '<tr class="data">\n        <td>{2}</td>\n        <td>« {3}</td>\n    </tr>\n' +
-          '<tr class="data">\n        <td>{4}%</td>\n       <td>« {5}</td>\n    </tr>\n' +
-          "</tbody></table>";
-        return Utils.format(wonderTip, [
-          city.getWonder,
-          "Brunnen des<br>Poseidon",
-          city._priests,
-          "Priester",
-          Utils.FormatNumToStr(
-            (city._priests * 500) / populationData.maxPop,
-            false,
-            2,
-          ),
-          "Konvertierung",
-          "100",
-          "Inselglaube",
-          "8h",
-          "Cooldown",
-        ]);
-      }
-      function getNoWonderTip() {
-        var populationData = city.populationData;
-        var size = 25;
-        /*if (city.getWonder == 4 || 5)
-		size = 30;*/
-        var noWonderTip =
-          '<table><thead><th colspan="3"><div align="center"><img src="cdn/all/both/wonder/w{0}.png" style="height: {4}px; float: left">{1}</div></th></thead>\n    <tbody>\n ' +
-          '<tr class="data">\n        <td>{2}</td>\n        <td> {3}</td>\n    </tr>\n' +
-          "</tbody></table>";
-        return Utils.format(noWonderTip, [
-          city.getWonder,
-          "Brunnen des<br>Poseidon",
-          "kein Tempel in",
-          escapeHtml(String(city._name)),
-          size,
-        ]);
-      }
       function getFinanceTip() {
         var totCity = Math.floor(city.getIncome + city.getExpenses);
         var Tip = "";
@@ -833,6 +814,14 @@ export const render: any = {
       }
       function getResearchTip(researchData?) {
         researchData = researchData || city.research.researchData;
+        // Fixed: the total's row has no town (`city` is null there), and
+        // `city.maxSci` threw on every hover — the "maxSci of null" in bug
+        // reports. The total's ceiling is the towns' added up.
+        const maxScientists = city
+          ? city.maxSci
+          : Object.keys(database.cities).reduce(function (sum, cityId) {
+              return sum + (Number(database.cities[cityId].maxSci) || 0);
+            }, 0);
         var tooltip =
           researchData.scientists > 0
             ? '<table>\n    <thead>\n  <th colspan="5"><div align="center">\n <img src="cdn/all/both/buildings/y50/y50_academy.png" style="height: 20px; float: left"><b>{0}</b></div></th>\n    </thead>\n    <tbody>\n ' +
@@ -845,7 +834,7 @@ export const render: any = {
           Constant.LanguageData[lang].academy,
           Utils.FormatNumToStr(researchData.scientists, false, 0),
           Constant.LanguageData[lang].scientists,
-          Utils.FormatNumToStr(city.maxSci, false, 0),
+          Utils.FormatNumToStr(maxScientists, false, 0),
           Constant.LanguageData[lang].scientists_max,
           "1 " + Constant.LanguageData[lang].hour,
           "1 " + Constant.LanguageData[lang].day,
@@ -1916,12 +1905,6 @@ export const render: any = {
           activeTab: "tabUnits",
         });
       })
-      .on("click", "#helpMuseum", function () {
-        ikariam.loadUrl(ikariam.viewIsCity, "city", {
-          view: "culturalPossessions_assign",
-          activeTab: "tab_culturalPossessions_assign",
-        });
-      })
       .on("click", "#helpResearch", function () {
         ikariam.loadUrl(ikariam.viewIsCity, "city", {
           view: "researchAdvisor",
@@ -1942,9 +1925,6 @@ export const render: any = {
       })
       .on("click", "#helpFinance", function () {
         ikariam.loadUrl(ikariam.viewIsCity, "city", { view: "finances" });
-      })
-      .on("click", "#helpShop", function () {
-        ikariam.loadUrl(ikariam.viewIsCity, "city", { view: "premium" });
       });
   },
   DrawSettings: function () {
@@ -2146,8 +2126,6 @@ export const render: any = {
       icons: { primary: "ui-icon-check" },
       text: true,
     });
-    $("#empire_Allianz").button({ text: true });
-    $("#empire_Allianz_einlesen").button({ text: true });
   },
   toast: function (sMessage) {
     $("<div>")
@@ -2270,6 +2248,10 @@ export const render: any = {
         index = [49, 50, 51, 52, 53].indexOf(event.which);
         if (index !== -1) {
           render.$tabs.tabs("option", "active", index);
+          // Fixed: switched without a word to the board, as a click on the
+          // tab says it (the counters, the redraw, the saved tab).
+          events(Constant.Events.TAB_CHANGED).pub(index);
+          render.SaveDisplayOptions();
           return false;
         } else {
           switch (event.which) {
@@ -2532,21 +2514,17 @@ export const render: any = {
           progSci =
             '<div class="progressbarSci ui-progressbar ui-widget ui-widget-content ui-corner-all" data-tooltip="dynamic">\n <div class="ui-progressbar-value ui-widget-header ui-corner-left" style="width: 95%"></span></div>';
         }
-        var wonder_size = 20;
-        if (city.getWonder == 7 || 1) wonder_size = 25;
         $.each(Constant.Resources, function (key, resourceName) {
           resourceCells += Utils.format(resourceCell, [resourceName]);
         });
         rows += Utils.format(resourceRow, [
           city.getId,
           resourceCells,
-          escapeHtml(String(city._name)),
+          nameForTooltip(city._name),
           city.getTradeGood,
           progSci,
           info,
           info ? Constant.LanguageData[lang].constructing : "",
-          city.getTradeGoodID,
-          wonder_size,
         ]);
       });
       return rows;
@@ -2579,7 +2557,6 @@ export const render: any = {
       '&nbsp;{2}" style="cursor:pointer;"></div>\n</td> \n <td class="empireactions">{3} <br> {4}  \n    </td>\n <td class="expenses"> {5} </td>\n   {1}\n</tr>';
     var bodyCell =
       '</td><td style="" class="army unit {0}">\n    <span>{1}</span>\n</td>\n<td style="" class="army movement {0}" data-tooltip="dynamic">\n    <span class="More Green {0}">{2}</span>\n  <br>  <span class="More Blue {0}">{3}</span>\n</td>';
-    var costCell = "";
     var footerRow =
       '<tr class="totals_row">\n    <td class="city_name"></td>\n    <td></td>\n   <td class="sigma" colspan="2">Σ</td><td>&nbsp;{1}&nbsp;</td>\n    {0}\n</tr>';
     var footerCell =
@@ -2656,7 +2633,7 @@ export const render: any = {
         body += Utils.format(bodyRow, [
           city.getId,
           rowCells,
-          escapeHtml(String(city._name)),
+          nameForTooltip(city._name),
           barracksLink,
           shipyardLink,
           cost,
@@ -2826,7 +2803,7 @@ export const render: any = {
         body += Utils.format(buildingRow, [
           city.getId,
           rowCells,
-          escapeHtml(String(city._name)),
+          nameForTooltip(city._name),
         ]);
       });
       return body;
@@ -2944,8 +2921,7 @@ export const render: any = {
     var city = database.getCityFromId(cityId);
     if (city) {
       var research = 0,
-        population = 0,
-        finance = 0;
+        population = 0;
       for (var key in changes) {
         switch (key) {
           case "research":
@@ -2954,7 +2930,6 @@ export const render: any = {
           case "priests":
             if (Constant.Government.THEOCRACY === database.getGovernmentType) {
               population += changes[key];
-              finance += changes[key];
             }
             break;
           case "culturalGoods":
@@ -2964,7 +2939,6 @@ export const render: any = {
           case "citizens":
           case "population":
             population += changes[key];
-            finance += changes[key];
             break;
           case "name":
             this.setCityName(city);
@@ -2973,8 +2947,6 @@ export const render: any = {
             break;
           case "coordinates":
             break;
-          case "finance":
-            finance += changes[key];
         }
       }
       if (!!population) {
@@ -2982,9 +2954,6 @@ export const render: any = {
       }
       if (!!research) {
         this.setResearchData(city);
-      }
-      if (!!finance) {
-        this.setFinanceData(city);
       }
     }
   },
@@ -3099,12 +3068,17 @@ export const render: any = {
         // Added (not in the original). Only where the
         // level shows as upgradable: enough resources, nothing being built.
         if (building.isUpgradable && !city.isUpgrading) {
+          const waiting = quickUpgradesInFlight.has(
+            quickUpgradeKey(city, building),
+          );
           cell.append(
             '<button class="' +
               QUICK_UPGRADE_CLASS +
               '" title="' +
               languageText().quickUpgrade +
-              '">&#9650;</button>',
+              '"' +
+              (waiting ? " disabled" : "") +
+              ">&#9650;</button>",
           );
         }
       } else {
@@ -3132,7 +3106,6 @@ export const render: any = {
 
       if (cellLevel) {
         render.cityRows.building[city.getId] = undefined;
-        $node.find("table.buildings").html(render.getBuildingTable);
 
         if (!success) {
           render.updateCitiesBuildingData();
@@ -3170,8 +3143,10 @@ export const render: any = {
           return success;
         }.bind(render),
       );
+      let rebuilt = false;
       if (!success) {
         $clone.html(render.getBuildingTable);
+        rebuilt = true;
         if (!$redraw) {
           render.updateCitiesBuildingData($clone);
         }
@@ -3179,11 +3154,15 @@ export const render: any = {
       if (!$redraw) {
         this.cityRows.building = {};
         Utils.setClone($node, $clone);
-      } else {
-        $.each(database.cities, function (cityId, city) {
-          render.setCityName(city);
-          render.setActionPoints(city);
-        });
+        // Fixed: the names, icons and action points of a rebuilt table were
+        // written from the inner call, which finds rows in the page — the
+        // old table, about to be swapped out. Written now, into the new one.
+        if (rebuilt) {
+          $.each(database.cities, function (cityId, city) {
+            render.setCityName(city);
+            render.setActionPoints(city);
+          });
+        }
       }
     } catch (e) {
       empire.error("updateCitiesBuildingData", e);
@@ -3377,7 +3356,9 @@ export const render: any = {
           .pop()
           .split("deployment")
           .pop();
-        if (ikariam.currentCityId === city.getId) {
+        // Fixed: `currentCityId` does not exist (`CurrentCityId` does), so
+        // the current town's own icon deployed from the town to itself.
+        if (ikariam.CurrentCityId === city.getId) {
           return false;
         }
         var params = {
@@ -3391,7 +3372,6 @@ export const render: any = {
     $("#empire_Tabs")
       .on("click", "td.empireactions div.worldmap", function (event) {
         var target = $(event.target);
-        var className = target.parents("td").attr("class").split(" ").pop();
         var city = database.getCityFromId(
           target.parents("tr").attr("id").split("_").pop(),
         );
@@ -3404,7 +3384,6 @@ export const render: any = {
       })
       .on("click", "td.empireactions div.island", function (event) {
         var target = $(event.target);
-        var className = target.parents("td").attr("class").split(" ").pop();
         var city = database.getCityFromId(
           target.parents("tr").attr("id").split("_").pop(),
         );
@@ -3420,7 +3399,6 @@ export const render: any = {
         var city = database.getCityFromId(
           target.parents("tr").attr("id").split("_").pop(),
         );
-        var className = target.parents("td").attr("class").split(" ").pop();
         var building = city.getBuildingFromName(Constant.Buildings.TOWN_HALL);
         var params = building.getUrlParams;
         if (unsafeWindow.ikariam.templateView)
@@ -3433,7 +3411,6 @@ export const render: any = {
         var city = database.getCityFromId(
           target.parents("tr").attr("id").split("_").pop(),
         );
-        var className = target.parents("td").attr("class").split(" ").pop();
         var building = city.getBuildingFromName(Constant.Buildings.TAVERN);
         var params = building.getUrlParams;
         if (unsafeWindow.ikariam.templateView)
@@ -3446,7 +3423,6 @@ export const render: any = {
         var city = database.getCityFromId(
           target.parents("tr").attr("id").split("_").pop(),
         );
-        var className = target.parents("td").attr("class").split(" ").pop();
         var building = city.getBuildingFromName(Constant.Buildings.ACADEMY);
         var params = building.getUrlParams;
         if (unsafeWindow.ikariam.templateView)
@@ -3459,7 +3435,6 @@ export const render: any = {
         var city = database.getCityFromId(
           target.parents("tr").attr("id").split("_").pop(),
         );
-        var className = target.parents("td").attr("class").split(" ").pop();
         var building = city.getBuildingFromName(Constant.Buildings.BARRACKS);
         var params = building.getUrlParams;
         if (unsafeWindow.ikariam.templateView)
@@ -3472,21 +3447,7 @@ export const render: any = {
         var city = database.getCityFromId(
           target.parents("tr").attr("id").split("_").pop(),
         );
-        var className = target.parents("td").attr("class").split(" ").pop();
         var building = city.getBuildingFromName(Constant.Buildings.SHIPYARD);
-        var params = building.getUrlParams;
-        if (unsafeWindow.ikariam.templateView)
-          unsafeWindow.ikariam.templateView.id = null;
-        ikariam.loadUrl(true, "city", params);
-        return false;
-      })
-      .on("click", "td.wonder", function (event) {
-        var target = $(event.target);
-        var city = database.getCityFromId(
-          target.parents("tr").attr("id").split("_").pop(),
-        );
-        var className = target.parents("td").attr("class").split(" ").pop();
-        var building = city.getBuildingFromName(Constant.Buildings.TEMPLE);
         var params = building.getUrlParams;
         if (unsafeWindow.ikariam.templateView)
           unsafeWindow.ikariam.templateView.id = null;
@@ -3681,11 +3642,6 @@ export const render: any = {
       .find("span.garrisonlimit img")
       .attr("src", "cdn/all/both/advisors/military/bang_soldier.png");
   },
-  setFinanceData: function (city, row) {
-    if (!row) {
-      row = this.getResourceRow(city);
-    }
-  },
   setPopulationData: function (city, row) {
     if (!row) {
       row = this.getResourceRow(city);
@@ -3707,7 +3663,9 @@ export const render: any = {
       .find("td.population div.progressbarPop")
       .find("div.ui-progressbar-value")
       .width(fillperc + "%")
-      .removeClass("normal, warning, full")
+      // Fixed: the class names were comma-separated, which jQuery reads as
+      // "normal," and "warning,": a bar once orange stayed orange.
+      .removeClass("normal warning full")
       .addClass(
         populationData.currentPop / populationData.maxPop == 1
           ? "full"
@@ -3755,8 +3713,10 @@ export const render: any = {
       row = this.getResourceRow(city);
     }
     var researchData = researchData || city.research.researchData;
+    // Fixed: the formatted figure ("1,234") was compared with 0, which is
+    // false from a thousand up, and the cell went blank.
     row.find("td.research span").addClass("clickbar").get(0).textContent =
-      Utils.FormatNumToStr(city.research.getResearch) > 0
+      city.research.getResearch > 0
         ? Utils.FormatNumToStr(city.research.getResearch, true, 0)
         : city.iSci;
     var fillperc = (100 * researchData.scientists) / city.maxSci;
@@ -3764,7 +3724,7 @@ export const render: any = {
       .find("td.research div.progressbarSci")
       .find("div.ui-progressbar-value")
       .width(fillperc + "%")
-      .removeClass("normal, full")
+      .removeClass("normal full")
       .addClass(
         researchData.scientists === 0
           ? ""
@@ -3836,7 +3796,6 @@ export const render: any = {
           function (cityId, city) {
             var $row = Utils.getClone(this.getResourceRow(city));
             if (force) {
-              this.setFinanceData(city, $row);
               this.setPopulationData(city, $row);
               this.setResearchData(city, $row);
               this.setActionPoints(city, $row);

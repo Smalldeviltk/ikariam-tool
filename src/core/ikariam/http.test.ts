@@ -775,3 +775,209 @@ describe("the trace of town switches that did not land", () => {
     expect(traces[0].toolRequests).toHaveLength(5);
   });
 });
+
+describe("the session token between requests", () => {
+  /** A response carrying `token`, as a view or an action answers. */
+  const answerWith = (token: string) => [
+    ["updateGlobalData", { actionRequest: token }],
+    ["changeView", ["city", ""]],
+  ];
+
+  it(
+    "REGRESSION: does not put back a token the server answered with " +
+      "unchanged - a view answered late rolled the page back over the token " +
+      "a newer action had moved it to",
+    async () => {
+      (globalThis as any).fetch = vi.fn(async () => {
+        // Meanwhile an action of the other script's moved the token on.
+        (window as any).ikariam.model.actionRequest = "token-moved-meanwhile";
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => "text/html" },
+          text: async () => JSON.stringify(answerWith("token-from-model")),
+        };
+      });
+
+      await ikariamRequest({ view: "townHall" });
+
+      expect((window as any).ikariam.model.actionRequest).toBe(
+        "token-moved-meanwhile",
+      );
+    },
+  );
+
+  it("still takes a token the server moved on", async () => {
+    mockFetch(answerWith("token-new"));
+    await ikariamRequest({ view: "townHall" });
+    expect((window as any).ikariam.model.actionRequest).toBe("token-new");
+  });
+
+  it(
+    "reads the token once its turn has come, not before the wait - it " +
+      "could be a stale one by then",
+    async () => {
+      vi.useFakeTimers();
+      try {
+        const fetchMock = mockFetch(answerWith("token-from-model"));
+        await ikariamRequest({ view: "townHall" }, { minGapMs: 500 });
+
+        const second = ikariamRequest({ view: "townHall" }, { minGapMs: 500 });
+        await vi.advanceTimersByTimeAsync(100);
+        (window as any).ikariam.model.actionRequest = "token-moved-meanwhile";
+        await vi.advanceTimersByTimeAsync(500);
+        await second;
+
+        expect(String(fetchMock.mock.calls[1][0])).toContain(
+          "actionRequest=token-moved-meanwhile",
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it(
+    "spaces out two requests started at once - each worked out the same " +
+      "wait and both went together",
+    async () => {
+      vi.useFakeTimers();
+      try {
+        const fetchMock = mockFetch(answerWith("token-from-model"));
+        await ikariamRequest({ view: "townHall" }, { minGapMs: 500 });
+
+        const both = Promise.all([
+          ikariamRequest({ view: "a" }, { minGapMs: 500 }),
+          ikariamRequest({ view: "b" }, { minGapMs: 500 }),
+        ]);
+        await vi.advanceTimersByTimeAsync(600);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        await vi.advanceTimersByTimeAsync(500);
+        await both;
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it(
+    "spaces requests out across the two scripts - each copy of this " +
+      "module kept its own last request time",
+    async () => {
+      vi.useFakeTimers();
+      try {
+        vi.resetModules();
+        const board = await import("./http");
+        vi.resetModules();
+        const sender = await import("./http");
+        board.resetHttpState();
+        sender.resetHttpState();
+        const fetchMock = mockFetch(answerWith("token-from-model"));
+
+        await board.ikariamRequest({ view: "townHall" }, { minGapMs: 500 });
+        const second = sender.ikariamRequest(
+          { view: "townHall" },
+          { minGapMs: 500 },
+        );
+        await vi.advanceTimersByTimeAsync(100);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(500);
+        await second;
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it(
+    "takes the token a refused form answer carries - a refusal comes as " +
+      "the usual response array, and its token was thrown away with it",
+    async () => {
+      mockFetch([
+        ["updateGlobalData", { actionRequest: "token-after-refusal" }],
+        [
+          "provideFeedback",
+          [{ type: 11, text: "The last action was invalid" }],
+        ],
+      ]);
+
+      await expect(
+        postIkariamForm({ action: "x" }, {}, { minGapMs: 0 }),
+      ).rejects.toThrow(/not a response object/);
+      expect((window as any).ikariam.model.actionRequest).toBe(
+        "token-after-refusal",
+      );
+    },
+  );
+
+  it(
+    "puts a moved token into the town switch form's own field - the form " +
+      "sends that field, not the model",
+    async () => {
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<form id="changeCityForm"><input type="hidden" name="actionRequest" ` +
+          `id="js_ChangeCityActionRequest" value="token-from-model"></form>`,
+      );
+      try {
+        mockFetch(answerWith("token-new"));
+        await ikariamRequest({ view: "townHall" });
+        expect(
+          (
+            document.getElementById(
+              "js_ChangeCityActionRequest",
+            ) as HTMLInputElement
+          ).value,
+        ).toBe("token-new");
+      } finally {
+        document.getElementById("changeCityForm")?.remove();
+      }
+    },
+  );
+});
+
+describe("the gap between the two scripts' requests", () => {
+  it(
+    "REGRESSION: keeps the gap when both scripts start waiting from the " +
+      "same request - each booked its slot only after its wait, so the two " +
+      "went out together",
+    async () => {
+      vi.useFakeTimers();
+      try {
+        const sentAt: number[] = [];
+        (globalThis as any).fetch = vi.fn(async () => {
+          sentAt.push(Date.now());
+          return {
+            ok: true,
+            status: 200,
+            headers: { get: () => "text/html" },
+            text: async () =>
+              JSON.stringify([["updateGlobalData", { actionRequest: "t" }]]),
+          };
+        });
+        // Each userscript bundles its own copy of this module.
+        vi.resetModules();
+        const board = await import("./http");
+        board.resetHttpState();
+        vi.resetModules();
+        const sendResources = await import("./http");
+
+        await board.ikariamRequest({ view: "townHall" });
+        await vi.advanceTimersByTimeAsync(50);
+        const boardNext = board.ikariamRequest({ view: "townHall" });
+        await vi.advanceTimersByTimeAsync(10);
+        const other = sendResources.ikariamRequest({ view: "townHall" });
+        await vi.advanceTimersByTimeAsync(1000);
+        await Promise.all([boardNext, other]);
+
+        expect(sentAt).toHaveLength(3);
+        expect(sentAt[1] - sentAt[0]).toBeGreaterThanOrEqual(300);
+        expect(sentAt[2] - sentAt[1]).toBeGreaterThanOrEqual(300);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+});

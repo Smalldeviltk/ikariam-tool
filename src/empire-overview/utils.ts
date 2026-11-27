@@ -211,9 +211,23 @@ export const Utils: any = {
     var sInDay = 86400000;
     var day = "";
     var compDate = new Date(timeString);
+    // Fixed: the days were counted in UTC, so in UTC+7 a time between
+    // midnight and 07:00 tomorrow read as today, and one this morning as
+    // tomorrow. Counted from local midnight; rounded for a day with a
+    // daylight-saving change.
+    const localMidnight = function (time) {
+      const date = new Date(time);
+      return new Date(
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate(),
+      ).getTime();
+    };
     if (precise) {
       switch (
-        Math.floor(compDate.getTime() / sInDay) - Math.floor($.now() / sInDay)
+        Math.round(
+          (localMidnight(compDate.getTime()) - localMidnight($.now())) / sInDay,
+        )
       ) {
         case 0:
           day = Constant.LanguageData[lang].today;

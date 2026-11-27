@@ -20,6 +20,7 @@ import {
   TOWN_SWITCH_TRACE_KEY,
 } from "./ikariam/http";
 import { NOTIFICATION_SETTINGS_KEY, NOTIFIED_KEY } from "./notifications";
+import { BOARD_DATA_IMPORTED_KEY } from "./storage";
 import { TRACE_STORAGE_KEY } from "../empire-overview/ajax-trace";
 
 const ACCOUNT = "Smalldevil";
@@ -362,6 +363,10 @@ describe("every key the scripts write is classified", () => {
       group: "config",
     });
     expect(classifyKey(NOTIFIED_KEY)).toMatchObject({ group: "runtime" });
+    // A signal to an open board, not something to move between browsers.
+    expect(classifyKey(BOARD_DATA_IMPORTED_KEY)).toMatchObject({
+      group: "runtime",
+    });
   });
 
   it("covers Empire Overview's response trace", () => {

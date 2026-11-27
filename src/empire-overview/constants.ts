@@ -498,7 +498,6 @@ export const Constant: any = {
       alert_toast: "Data Reset, reloading the page in a few seconds",
       alert_wine: "Warning wine > ",
       toast_updated: "Updated: ",
-      toast_movementAdded: "Movement added",
       syncIndicator: "Spins while Send Resources refreshes every town",
       // Desktop notifications (not in the original)
       notifyBuildFinished: "Building finished",

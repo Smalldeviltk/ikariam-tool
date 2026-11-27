@@ -62,7 +62,8 @@ export function Movement(
       sulfur: 0,
       gold: 0,
     };
-    this._military = id._military || new MilitaryUnits();
+    // Restored from storage it is a plain object: rebuilt, so `totals` reads.
+    this._military = new MilitaryUnits(id._military || undefined);
     this._ships = id._ships || null;
     this._updatedCity = id._updatedCity || false;
     this._complete = id._complete || false;
@@ -160,10 +161,6 @@ export function Movement(
             .increment(this.getResource(Constant.Resources[resource]));
         }
         this._updatedCity = true;
-        city = database.getCityFromId(this.originCityId);
-        if (city) {
-          city.updateActionPoints(city.getAvailableActions + 1);
-        }
         if (changes.length) {
           events(Constant.Events.MOVEMENTS_UPDATED).pub([this.getTargetCityId]);
           events(Constant.Events.RESOURCES_UPDATED).pub(

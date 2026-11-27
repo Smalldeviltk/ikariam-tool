@@ -132,17 +132,22 @@ async function boot(): Promise<void> {
 }
 
 /**
- * Every interval a test's board starts, stopped once the test is over.
+ * Every interval and timeout a test's board starts, stopped once the test is
+ * over.
  *
  * `vi.resetModules()` gives each test a fresh board but leaves the previous
  * one's timers running: each town projects its population every second and
  * redraws its row of a board that is gone by then, and throws. A throw used
  * to kill that board's topic in silence; now that subscribers are isolated
  * it is reported, and a test that checks the bug reporter would read another
- * test's board.
+ * test's board. Timeouts too: a board's debounced save (`SaveSoon`) armed
+ * late in one test wrote its storage into the next one, after that test had
+ * cleared it.
  */
 const realSetInterval = globalThis.setInterval;
 const startedIntervals: ReturnType<typeof setInterval>[] = [];
+const realSetTimeout = globalThis.setTimeout;
+const startedTimeouts: ReturnType<typeof setTimeout>[] = [];
 
 beforeEach(() => {
   globalThis.setInterval = ((...args: Parameters<typeof setInterval>) => {
@@ -150,11 +155,18 @@ beforeEach(() => {
     startedIntervals.push(id);
     return id;
   }) as typeof setInterval;
+  globalThis.setTimeout = ((...args: Parameters<typeof setTimeout>) => {
+    const id = realSetTimeout(...args);
+    startedTimeouts.push(id);
+    return id;
+  }) as typeof setTimeout;
 });
 
 afterEach(() => {
   globalThis.setInterval = realSetInterval;
   for (const id of startedIntervals.splice(0)) clearInterval(id);
+  globalThis.setTimeout = realSetTimeout;
+  for (const id of startedTimeouts.splice(0)) clearTimeout(id);
 });
 
 describe("Empire Overview startup", () => {
@@ -605,6 +617,158 @@ describe("Empire Overview startup", () => {
     },
   );
 
+  it(
+    "REGRESSION: empties the tooltip over a figure that has none - the " +
+      "last hover's figures showed over it instead (an empty building " +
+      "cell, the gold bar)",
+    async () => {
+      await boot();
+      const { render } = await import("./render");
+      const hover = (target: Element) =>
+        render.toolTip.mouseOver({
+          target,
+          originalEvent: { shiftKey: false },
+        });
+
+      hover(document.querySelector("#ResTab td.resource.wine span.current")!);
+      expect(render.toolTip.elem.html()).toContain("« In stock");
+
+      hover(
+        document.querySelector("#ResTab td.resource.gold div.progressbar")!,
+      );
+      expect(render.toolTip.elem.html()).toBe("");
+    },
+  );
+
+  it(
+    "REGRESSION: the research total's tooltip does not throw - it read " +
+      "`maxSci` of a town where there is none (bug reports of 11/11 and " +
+      "before: `maxSci` of null in getResearchTip)",
+    async () => {
+      await boot();
+      const { render } = await import("./render");
+      const total = document.querySelector("#t_research")!;
+
+      expect(() => render.toolTip.dynamicTip(0, total)).not.toThrow();
+    },
+  );
+
+  it(
+    "REGRESSION: a full rebuild of the Build tab keeps the towns' names - " +
+      "they were written into the old table, and the new one went in blank",
+    async () => {
+      await boot();
+      const { render } = await import("./render");
+      // The rows do not fit the columns: the table is rebuilt whole, as with
+      // the alternative and compressed building lists both on.
+      const row = vi
+        .spyOn(render, "updateCityBuildingRow")
+        .mockReturnValueOnce(false);
+      try {
+        render.updateCitiesBuildingData();
+      } finally {
+        row.mockRestore();
+      }
+
+      const name = document.querySelector(
+        "#BuildTab #building_297034 td.city_name",
+      );
+      expect(name?.textContent).toContain("W-Athens");
+    },
+  );
+
+  it(
+    "REGRESSION: a population bar that went orange goes back - the class " +
+      "names to remove were comma-separated, and jQuery removed none",
+    async () => {
+      await boot();
+      const { render } = await import("./render");
+      const { database } = await import("./database");
+      const city = database.getCityFromId(297034);
+      const bar = () =>
+        render
+          .getResourceRow(city)
+          .find("td.population div.progressbarPop div.ui-progressbar-value");
+      bar().addClass("warning");
+      city._citizens = 1000;
+      city._pop = { ...city._pop, currentPop: 500, maxPop: 1000 };
+
+      render.setPopulationData(city);
+
+      expect(bar().hasClass("warning")).toBe(false);
+      expect(bar().hasClass("normal")).toBe(true);
+    },
+  );
+
+  it(
+    "REGRESSION: shows a town's research from a thousand an hour up - the " +
+      "formatted figure was compared with 0, and the cell went blank",
+    async () => {
+      await boot();
+      const { render } = await import("./render");
+      const { database } = await import("./database");
+      const city = database.getCityFromId(297034);
+      Object.defineProperty(city.research, "getResearch", {
+        configurable: true,
+        get: () => 1234,
+      });
+
+      render.setResearchData(city);
+
+      const cell = render.getResourceRow(city).find("td.research span").get(0);
+      expect(cell.textContent).toContain("1,234");
+    },
+  );
+
+  it(
+    "REGRESSION: Shift+2 tells the board its tab changed, as a click on " +
+      "the tab does - it switched the tab and nothing else",
+    async () => {
+      await boot();
+      const { events } = await import("./events");
+      const seen: unknown[] = [];
+      events("tabChanged").sub((tab: unknown) => seen.push(tab));
+
+      document.body.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          keyCode: 50,
+          which: 50,
+          shiftKey: true,
+          bubbles: true,
+        } as KeyboardEventInit),
+      );
+
+      expect(seen).toEqual([1]);
+    },
+  );
+
+  it(
+    "REGRESSION: a town's name shows as text in its row's tooltips - " +
+      "escaped once into the attribute, it came back out as markup when " +
+      "the tooltip was shown",
+    async () => {
+      await boot();
+      const { render } = await import("./render");
+      const { database } = await import("./database");
+      database.getCityFromId(297034)._name = '<img id="planted" src="x">';
+      render.DrawTables();
+
+      const carrying = Array.from(
+        document.querySelectorAll("#empireBoard [data-tooltip]"),
+      ).find((element) =>
+        String(element.getAttribute("data-tooltip")).includes("planted"),
+      )!;
+      expect(carrying).toBeTruthy();
+      render.toolTip.mouseOver({
+        target: carrying,
+        originalEvent: { shiftKey: false },
+      });
+
+      expect(render.toolTip.elem.find("#planted").length).toBe(0);
+      expect(render.toolTip.elem.text()).toContain('<img id="planted"');
+    },
+  );
+
   it("summarises a resource on its stock figure, which showed no tooltip", async () => {
     await boot();
     const { render } = await import("./render");
@@ -708,6 +872,43 @@ describe("Empire Overview startup", () => {
             ),
           );
           expect(document.body.textContent).toContain("Not enough resources");
+          expect(button(row)!.disabled).toBe(false);
+        } finally {
+          vi.doUnmock("@core/ikariam/http");
+        }
+      },
+    );
+
+    it(
+      "REGRESSION: stays locked when the cell is drawn again meanwhile - the " +
+        "lock was on the button, and a redraw of the Build tab brought back a " +
+        "live one that could send a second order",
+      async () => {
+        let answer!: (outcome: unknown) => void;
+        const upgradeBuildingNow = vi.fn(
+          () => new Promise((resolve) => (answer = resolve)),
+        );
+        vi.doMock("@core/ikariam/http", async (importOriginal) => ({
+          ...(await importOriginal<typeof import("@core/ikariam/http")>()),
+          upgradeBuildingNow,
+        }));
+        try {
+          await boot();
+          const { row, draw } = await academyCell({ upgradable: true });
+
+          button(row)!.click();
+          draw();
+          expect(button(row)!.disabled).toBe(true);
+          button(row)!.click();
+          expect(upgradeBuildingNow).toHaveBeenCalledTimes(1);
+
+          answer({ started: false, reason: "Not enough resources" });
+          await vi.waitFor(() =>
+            expect(document.body.textContent).toContain(
+              "The game did not start the upgrade",
+            ),
+          );
+          draw();
           expect(button(row)!.disabled).toBe(false);
         } finally {
           vi.doUnmock("@core/ikariam/http");
@@ -1003,6 +1204,75 @@ describe("Empire Overview startup", () => {
     );
 
     it(
+      "REGRESSION: off the city view, a fetched town's data lands on that " +
+        "town - on the island view it was credited to the selected town, " +
+        "its island id overwritten with the other town's city id",
+      async () => {
+        const page = (window as any).ikariam;
+        page.model.relatedCityData.city_297035 = {
+          id: 297035,
+          name: "M-Corinth",
+          coords: "[11:20] ",
+          relationship: "ownCity",
+        };
+        page.backgroundView = { id: "island" };
+        await boot();
+        const { database } = await import("./database");
+        const athens = database.getCityFromId(297034);
+        const corinth = database.getCityFromId(297035);
+        const athensIsland = athens.getIslandID;
+
+        announceFetched([
+          [
+            "updateGlobalData",
+            {
+              backgroundData: {
+                id: 297035,
+                name: "M-Corinth",
+                islandId: "4412",
+                islandXCoord: "42",
+                islandYCoord: "97",
+                position: [],
+              },
+              headerData: {
+                currentResources: {
+                  resource: 100,
+                  1: 100,
+                  2: 100,
+                  3: 100,
+                  4: 100,
+                },
+                resourceProduction: 0,
+                producedTradegood: 1,
+                wineSpendings: 0,
+              },
+            },
+          ],
+          ["changeView", ["townHall", ""]],
+          [
+            "updateTemplateData",
+            {
+              js_TownHallSatisfactionOverviewCultureBoniTreatyBonusValue: {
+                text: "0",
+              },
+              js_TownHallPopulationGraphPriestCount: { text: "9" },
+              js_TownHallPopulationGraphScientistCount: { text: "7" },
+            },
+          ],
+        ]);
+
+        expect(corinth._priests).toBe(9);
+        expect(corinth.getIslandID).toBe(4412);
+        expect(athens._priests).not.toBe(9);
+        expect(athens.getIslandID).toBe(athensIsland);
+        // Once read, the page is the island view of the selected town again.
+        const { ikariam } = await import("./game-api");
+        expect(ikariam.viewIsIsland).toBe(true);
+        expect(ikariam.CurrentCityId).toBe(297034);
+      },
+    );
+
+    it(
       "the game's upgrade button tolerates a provideFeedback entry with " +
         "nothing in it",
       async () => {
@@ -1057,6 +1327,18 @@ describe("Empire Overview startup", () => {
 });
 
 describe("readGameCount", () => {
+  // Its own fresh board, as the other groups have: without it these tests
+  // read the previous test's modules and storage, and passed or failed by
+  // the order the file ran in.
+  beforeEach(() => {
+    vi.resetModules();
+    localStorage.clear();
+    setReadyState("loading");
+    installPage();
+    installJQuery();
+    installGrants();
+  });
+
   it("reads a count as the game writes it", async () => {
     await boot();
     const { readGameCount } = await import("./utils");
@@ -1091,6 +1373,65 @@ describe("readGameCount", () => {
     // There the comma is the decimal mark.
     expect(readGameCount("1,2k")).toBe(1200);
   });
+});
+
+describe("the day shown for a time", () => {
+  const realTimeZone = process.env.TZ;
+
+  beforeEach(() => {
+    vi.resetModules();
+    localStorage.clear();
+    setReadyState("loading");
+    installPage();
+    installJQuery();
+    installGrants();
+    process.env.TZ = "Asia/Ho_Chi_Minh";
+  });
+
+  afterEach(() => {
+    if (realTimeZone === undefined) delete process.env.TZ;
+    else process.env.TZ = realTimeZone;
+  });
+
+  /** The day word for `time`, with the clock at `now`. */
+  async function dayOf(now: string, time: string): Promise<string> {
+    await boot();
+    const { Utils } = await import("./utils");
+    const jq = (globalThis as any).jQuery;
+    const realNow = jq.now;
+    jq.now = () => Date.parse(now);
+    try {
+      return Utils.FormatFullTimeToDateString(Date.parse(time)).split(",")[0];
+    } finally {
+      jq.now = realNow;
+    }
+  }
+
+  it(
+    "REGRESSION: counts days from local midnight — in UTC+7, one in the " +
+      "early hours of tomorrow read as today",
+    async () => {
+      const { Constant } = await import("./constants");
+      const words = Constant.LanguageData.en;
+
+      expect(
+        await dayOf("2026-11-27T10:00:00+07:00", "2026-11-28T01:00:00+07:00"),
+      ).toBe(words.tomorrow);
+    },
+  );
+
+  it(
+    "REGRESSION: counts days from local midnight — in UTC+7, one this " +
+      "morning, seen before 07:00, read as tomorrow",
+    async () => {
+      const { Constant } = await import("./constants");
+      const words = Constant.LanguageData.en;
+
+      expect(
+        await dayOf("2026-11-27T05:00:00+07:00", "2026-11-27T08:00:00+07:00"),
+      ).toBe(words.today);
+    },
+  );
 });
 
 describe("responses to the game's own requests", () => {
@@ -1280,6 +1621,84 @@ describe("the wrapper around the game's updateGlobalData", () => {
     expect(gameUpdate).toHaveBeenCalledTimes(1);
   });
 
+  it(
+    "REGRESSION: starts while the game's object is not there yet — " +
+      "wrapping its update threw in the ready handler, and the handlers " +
+      "after it did not run",
+    async () => {
+      delete (window as any).ikariam.model;
+      await import("./main");
+      let laterHandlerRan = false;
+      (globalThis as any).jQuery(() => {
+        laterHandlerRan = true;
+      });
+      const errors: unknown[] = [];
+      const onError = (event: ErrorEvent) => errors.push(event.error);
+      window.addEventListener("error", onError);
+
+      let thrown: unknown = null;
+      try {
+        await boot();
+      } catch (e) {
+        thrown = e;
+      }
+      window.removeEventListener("error", onError);
+
+      expect(thrown).toBeNull();
+      expect(errors).toEqual([]);
+      expect(laterHandlerRan).toBe(true);
+    },
+  );
+
+  it(
+    "REGRESSION: starts while the game's own object is not there at all — " +
+      "checking whether its ajax could be hooked threw, and the startup " +
+      "stopped trying",
+    async () => {
+      const game = (window as any).ikariam;
+      delete (window as any).ikariam;
+      const { events } = await import("./events");
+      const { Constant } = await import("./constants");
+      const announced = vi.fn();
+      events(Constant.Events.MODEL_AVAILABLE).sub(announced);
+
+      let thrown: unknown = null;
+      try {
+        await boot();
+      } catch (e) {
+        thrown = e;
+      }
+      expect(thrown).toBeNull();
+      // Still trying: the board starts once the object is there.
+      (window as any).ikariam = game;
+      await new Promise((resolve) => realSetTimeout(resolve, 1100));
+
+      expect(announced).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it(
+    "REGRESSION: draws the board when the towns appear a moment after the " +
+      "game's object — the model counted as announced once seen, and the " +
+      "board was never drawn",
+    async () => {
+      const model = (window as any).ikariam.model;
+      const towns = model.relatedCityData;
+      delete model.relatedCityData;
+      const { events } = await import("./events");
+      const { Constant } = await import("./constants");
+      const announced = vi.fn();
+      events(Constant.Events.MODEL_AVAILABLE).sub(announced);
+
+      await boot();
+      expect(announced).not.toHaveBeenCalled();
+      model.relatedCityData = towns;
+      await new Promise((resolve) => realSetTimeout(resolve, 1100));
+
+      expect(announced).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it("calls the game's update on the model", async () => {
     let receiver: unknown;
     (window as any).ikariam.model.updateGlobalData = function (this: unknown) {
@@ -1348,6 +1767,30 @@ describe("responses fetched over http", () => {
       await fetchTown(297034);
 
       expect(seen).toContain(297034);
+    },
+  );
+
+  it(
+    "REGRESSION: a scan's response arriving after a shipment is sent does " +
+      "not stand in for the shipment's answer — the board stopped waiting " +
+      "for it, and the shipment was never recorded",
+    async () => {
+      await boot();
+      const { events } = await import("./events");
+      const { ikariam, FETCHED_RESPONSE } = await import("./game-api");
+      const recorded = vi.fn(() => "form contents");
+      ikariam.transportFormSubmitted = recorded;
+      const form = document.createElement("form");
+      form.id = "transportForm";
+
+      events("formSubmit").pub(form);
+      events("ajaxResponse").pub(
+        [["provideFeedback", [{ type: 1 }]]],
+        FETCHED_RESPONSE,
+      );
+      events("ajaxResponse").pub([["provideFeedback", [{ type: 10 }]]]);
+
+      expect(recorded).toHaveBeenLastCalledWith("form contents");
     },
   );
 });

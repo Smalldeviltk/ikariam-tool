@@ -165,13 +165,15 @@ export function City(id) {
       try {
         var baseWineConsumption = 0,
           wineConsumption = 0;
-        if (
-          $.inArray(
-            cityData.wineSpendings,
-            Constant.BuildingData[Constant.Buildings.TAVERN].wineUse,
-            Constant.BuildingData[Constant.Buildings.TAVERN].wineUse2,
-          ) > -1
-        ) {
+        // Fixed: `$.inArray`'s third argument is where to start, not a
+        // second table, so on s202 its own table (`wineUse2`) was never
+        // searched. Each server's own table, as `tavernlevel` reads it: on
+        // another server a figure that only the s202 table holds (179, say)
+        // is not one of its tavern's levels.
+        const tavernData = Constant.BuildingData[Constant.Buildings.TAVERN];
+        const servedTable =
+          ikariam.Server() == "s202" ? tavernData.wineUse2 : tavernData.wineUse;
+        if ($.inArray(cityData.wineSpendings, servedTable) > -1) {
           baseWineConsumption = cityData.wineSpendings;
           wineConsumption =
             (baseWineConsumption * (100 - winePressSavingPercent(this))) / 100;
@@ -225,9 +227,16 @@ export function City(id) {
         this.knownTime = $.now();
 
         var $actionPointElem = $("#js_GlobalMenu_maxActionPoints");
-        if (cityData.maxActionPoints) {
+        // Fixed: 0 action points left is a figure, not a missing one; it
+        // fell through to the header, which shows the town on screen — a
+        // fetched town spent out took that town's count.
+        if (
+          cityData.maxActionPoints !== undefined &&
+          cityData.maxActionPoints !== null &&
+          cityData.maxActionPoints !== ""
+        ) {
           changes.actionPoints = this.updateActionPoints(
-            cityData.maxActionPoints || 0,
+            Number(cityData.maxActionPoints) || 0,
           );
         } else {
           changes.actionPoints = this.updateActionPoints(
@@ -382,13 +391,6 @@ export function City(id) {
   getBuildingFromPosition: function (position) {
     return this._buildings[position];
   },
-  getWonder: function () {
-    // The original wrote `i = 7` with `i` never declared. Inside a sloppy-mode
-    // IIFE that silently created a global `window.i`; ES modules are always
-    // strict, so it would throw a ReferenceError. Returning the constant gives
-    // the same result without leaking a global.
-    return 7; //ikariam.wonder();
-  },
   get getTradeGood() {
     for (var resourceName in Constant.ResourceIDs) {
       if (this._tradeGoodID == Constant.ResourceIDs[resourceName]) {
@@ -466,6 +468,7 @@ export function City(id) {
   },
   get plundergold() {
     var i = 0;
+    if (!this.getBuildingFromName(Constant.Buildings.TOWN_HALL)) return 0;
     if (this.getBuildingFromName(Constant.Buildings.PALACE)) {
       i =
         Math.floor(
@@ -476,7 +479,10 @@ export function City(id) {
         Math.floor(
           this.getBuildingFromName(Constant.Buildings.TOWN_HALL).getLevel,
         ) * 950;
-    return i;
+    // Fixed (above): both branches read the Town Hall, which a town whose
+    // buildings are not known yet does not have — every resource tooltip of
+    // a one-town account threw. NaN is caught here.
+    return Number.isFinite(i) ? i : 0;
   },
   get maxculturalgood() {
     var i = 0;
@@ -508,6 +514,9 @@ export function City(id) {
           break;
         }
       }
+      // Fixed: with no level matching, the loop ran off the end and the
+      // table's length (89) was shown as the level served.
+      if (i >= wineUse.length) i = 0;
     }
     return i > 0 ? i : "";
   },
@@ -681,7 +690,12 @@ export function City(id) {
     return i - p;
   },
   get maxResourceCapacities() {
-    if (!this._capacities.invalid) {
+    // Fixed: the figures were kept until a city view reported a building
+    // change. A warehouse finished on the board's own timer, or a storage
+    // bonus starting or ending, left them at the old level. Recomputed
+    // whenever what they come from changes.
+    const inputs = this._capacityInputs;
+    if (!this._capacities.invalid && this._capacities.inputs === inputs) {
       return this._capacities;
     }
     var lang = database.settings.languageChange.value;
@@ -744,8 +758,27 @@ export function City(id) {
           ) *
             Constant.PremiumData[Constant.Premium.SAFECAPACITY_BONUS].bonus),
       buildings: ret,
+      inputs: inputs,
     };
     return this._capacities;
+  },
+  /** What the storage figures come from: the levels and the bonuses. */
+  get _capacityInputs() {
+    const levels = function (name) {
+      return $.map(this.getBuildingsFromName(name), function (building) {
+        return building.getLevel;
+      }).join(",");
+    }.bind(this);
+    return [
+      levels(Constant.Buildings.WAREHOUSE),
+      levels(Constant.Buildings.DUMP),
+      database.getGlobalData.hasPremiumFeature(
+        Constant.Premium.STORAGECAPACITY_BONUS,
+      ),
+      database.getGlobalData.hasPremiumFeature(
+        Constant.Premium.SAFECAPACITY_BONUS,
+      ),
+    ].join("|");
   },
   get _getSatisfactionData() {
     var satisfaction: any = {
@@ -818,10 +851,15 @@ export function City(id) {
       database.getCityCount == 1
         ? 50 * database.getGlobalData.getResearchTopicLevel(3010)
         : 0);
+    // Fixed: with no maximum population known yet, 0/0 gave NaN, and
+    // `NaN <= 150` is false, so the priests counted the full 150.
+    const maxPopulation = this._getMaxPopulation;
     satisfaction.priest =
-      ((this._priests * 500) / this._getMaxPopulation) *
-      Constant.GovernmentData[database.getGlobalData.getGovernmentType]
-        .happinessBonusWithTempleConversion;
+      maxPopulation > 0
+        ? ((this._priests * 500) / maxPopulation) *
+          Constant.GovernmentData[database.getGlobalData.getGovernmentType]
+            .happinessBonusWithTempleConversion
+        : 0;
     satisfaction.priest =
       satisfaction.priest <= 150 ? satisfaction.priest : 150;
     satisfaction.city = 196;
@@ -893,38 +931,6 @@ export function City(id) {
   get populationData() {
     return this._pop;
   },
-  processUnitBuildList: function () {
-    var newList = [];
-    var j;
-    for (var i = 0; i < this.unitBuildList.length; i++) {
-      var list = this.unitBuildList[i];
-      if (list.completionTime <= $.now()) {
-        for (var uID in list.units) {
-          j = this.army.length;
-        }
-        while (j) {
-          j--;
-          if (uID == this.army[j].id) {
-            this.army[uID] += list.units[uID];
-          }
-        }
-      } else {
-        newList.push(list);
-      }
-    }
-    this.unitBuildList = newList;
-  },
-  clearUnitBuildList: function (type) {
-    var newList = [];
-    if (type) {
-      for (var i = 0; i < this.unitBuildList.length; i++) {
-        if (this.unitBuildList[i].type != type) {
-          newList.push(this.unitBuildList[i]);
-        }
-      }
-    }
-    this.unitBuildList = newList;
-  },
   getUnitBuildsByUnit: function () {
     var ret = {};
     for (var i = 0; i < this.unitBuildList.length; i++) {
@@ -934,23 +940,6 @@ export function City(id) {
           count: this.unitBuildList[i].units[uID],
           completionTime: this.unitBuildList[i].completionTime,
         });
-      }
-    }
-    return ret;
-  },
-  getUnitTransportsByUnit: function () {
-    var ret = {};
-    var data = database.getGlobalData.militaryMovements[this.getId];
-    if (data) {
-      for (var row in data) {
-        for (var uID in data[row].troops) {
-          ret[uID] = ret[uID] || [];
-          ret[uID].push({
-            count: data[row].troops[uID],
-            arrivalTime: data[row].arrivalTime,
-            origin: data[row].originCityId,
-          });
-        }
       }
     }
     return ret;

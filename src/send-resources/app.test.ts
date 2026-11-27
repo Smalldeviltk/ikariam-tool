@@ -9,6 +9,7 @@ import {
   setFlag,
 } from "./state";
 import type { CrawlError } from "./diagnostics";
+import { AUTO_WINE } from "./messages";
 
 // Silence the logger, but keep its other exports (its storage key is read by
 // the data export).
@@ -1087,6 +1088,142 @@ describe("Auto Wine", () => {
     },
   );
 
+  describe("while the task queue is sending", () => {
+    /** The busy mark a runner in another tab sets while it carries out a task. */
+    function busyInAnotherTab(): void {
+      localStorage.setItem(
+        "testerikaRunnerBusy",
+        JSON.stringify({ since: Date.now() }),
+      );
+    }
+
+    const SETTINGS_FORM =
+      `<table><tr class="txtWine"><td><input type="checkbox" id="cbSender_0" checked></td>` +
+      `<td><input type="text" id="txtWine_0" value="0"></td></tr>` +
+      `<tr class="txtWine"><td><input type="checkbox" id="cbSender_1"></td>` +
+      `<td><input type="text" id="txtWine_1" value="200"></td></tr></table>`;
+
+    it(
+      "REGRESSION: Save keeps the settings and queues no new plan — it " +
+        "replaced the Auto Wine shipments, the one under way among them",
+      async () => {
+        const state = await startWithSource();
+        document.body.insertAdjacentHTML(
+          "beforeend",
+          BOARD_AFTER_SCAN + SETTINGS_FORM,
+        );
+        busyInAnotherTab();
+
+        await actions["wine.save"](document.body);
+
+        expect(state.loadReceivers()).toEqual([
+          { townNumber: "1", winePerHour: "200" },
+        ]);
+        expect(queuedWine(state)).toEqual([]);
+        expect(showToast).toHaveBeenCalledWith(AUTO_WINE.savedNotQueued);
+      },
+    );
+
+    it(
+      "Save queues no new plan while this tab's own task outlasts its busy " +
+        "mark",
+      async () => {
+        // A shipment that never finishes: the runner stays on it.
+        vi.doMock("./features/send-resources", async (importOriginal) => ({
+          ...(await importOriginal<
+            typeof import("./features/send-resources")
+          >()),
+          handleSendResource: () => new Promise(() => {}),
+        }));
+        try {
+          const state = await startWithSource();
+          state.getState().queue.push({
+            type: "sendResource",
+            data: {
+              origin: "0",
+              destination: "1",
+              resource: "wood",
+              amount: 100,
+              reserve: 0,
+            },
+          });
+          await actions["queue.toggle"](document.body);
+          await vi.advanceTimersByTimeAsync(2000);
+          expect(state.isRunnerBusyInAnyTab()).toBe(true);
+          // The mark lapses after two minutes; the task is still under way.
+          await vi.advanceTimersByTimeAsync(3 * 60 * 1000);
+          expect(state.isRunnerBusyInAnyTab()).toBe(false);
+          document.body.insertAdjacentHTML(
+            "beforeend",
+            BOARD_AFTER_SCAN + SETTINGS_FORM,
+          );
+
+          await actions["wine.save"](document.body);
+
+          expect(queuedWine(state)).toEqual(["0 -> 1: wood"]);
+          expect(showToast).toHaveBeenCalledWith(AUTO_WINE.savedNotQueued);
+        } finally {
+          vi.doUnmock("./features/send-resources");
+        }
+      },
+    );
+
+    it("a source picked in Save's popup queues no new plan either", async () => {
+      const state = await startWithSource(["0", "1"]);
+      document.body.insertAdjacentHTML("beforeend", BOARD_AFTER_SCAN);
+      const button = document.createElement("button");
+      button.dataset.ikaTown = "0";
+      busyInAnotherTab();
+
+      await actions["wine.queueFrom"](button);
+
+      expect(queuedWine(state)).toEqual([]);
+      expect(showToast).toHaveBeenCalledWith(AUTO_WINE.savedNotQueued);
+    });
+
+    it(
+      "REGRESSION: Import queues nothing — it replaced the Auto Wine " +
+        "shipments, the one under way among them",
+      async () => {
+        const state = await startWithSource();
+        busyInAnotherTab();
+        const picker = vi
+          .spyOn(HTMLInputElement.prototype, "click")
+          .mockImplementation(function (this: HTMLInputElement) {
+            Object.defineProperty(this, "files", {
+              value: [
+                new File(
+                  [
+                    JSON.stringify({
+                      kind: "ikariam-wine-transport",
+                      version: 1,
+                      account: "tester",
+                      shipments: [{ town: "M-Corinth", wine: 1234 }],
+                    }),
+                  ],
+                  "transport.json",
+                ),
+              ],
+            });
+            this.dispatchEvent(new Event("change"));
+          });
+        try {
+          await actions["wine.import"](document.body);
+          await vi.waitFor(() =>
+            expect(showToast).toHaveBeenCalledWith(
+              AUTO_WINE.importWhileSending,
+            ),
+          );
+        } finally {
+          picker.mockRestore();
+        }
+
+        expect(queuedWine(state)).toEqual([]);
+        expect(state.isAutoStart()).toBe(false);
+      },
+    );
+  });
+
   it(
     "Preview with no source ticked previews from the town a run would pick, " +
       "without ticking it — the dialog's Save writes the ticks back",
@@ -1587,8 +1724,10 @@ function savedCrawlFailure(crawl: string): SavedCrawlFile {
 
 describe("the Crawl dialog", () => {
   /** Draw the dialog the way the game's popup would. */
-  async function openCrawl(): Promise<void> {
-    await startWith({});
+  async function openCrawl(
+    flags: Parameters<typeof startWith>[0] = {},
+  ): Promise<void> {
+    await startWith(flags);
     const createPopup = (id: string, _title: string, html: string) =>
       document.body.insertAdjacentHTML(
         "beforeend",
@@ -2341,6 +2480,29 @@ describe("the Crawl dialog", () => {
       expect(lastToast()).toContain("cut short");
     });
 
+    it("saves why, with ok false, when the page cannot be read", async () => {
+      await openBox();
+      const clone = vi
+        .spyOn(document.body, "cloneNode")
+        .mockImplementation(() => {
+          throw new Error("page unreadable");
+        });
+      try {
+        await pressCrawl();
+      } finally {
+        clone.mockRestore();
+      }
+
+      expect(downloadJson).toHaveBeenCalledTimes(1);
+      const file = JSON.parse(downloadJson.mock.calls[0][1]);
+      expect(file.ok).toBe(false);
+      expect(file.error).toMatchObject({
+        stage: "unexpected",
+        message: "page unreadable",
+      });
+      expect(lastToast()).toContain("Could not crawl: page unreadable");
+    });
+
     it("Close removes the box", async () => {
       await openBox();
 
@@ -2491,8 +2653,9 @@ describe("the Crawl dialog", () => {
      */
     async function crawlResearch(
       game: Parameters<typeof fakeGame>[0] = {},
+      flags: Parameters<typeof startWith>[0] = {},
     ): Promise<void> {
-      await openCrawl();
+      await openCrawl(flags);
       fakeGame(game);
       (
         document.querySelector("#ikaCrawl_research") as HTMLInputElement
@@ -2628,6 +2791,75 @@ describe("the Crawl dialog", () => {
         String(TOWN_A),
       ]);
       expect(savedResearch().selectionMoved).toBe(true);
+    });
+
+    it("switches no track when the Research Advisor itself was not read", async () => {
+      await crawlResearch({ failView: "researchAdvisor" });
+
+      expect(asked.some((p) => p.get("view") === "noViewChange")).toBe(false);
+      const { researchAdvisor, researchTracks } = savedResearch();
+      expect(researchAdvisor.error).toContain("HTTP 500");
+      expect(researchTracks.restored).toBeNull();
+      expect(researchTracks.skipped).toContain("was not read");
+    });
+
+    it("says the open track was not put back when its request failed", async () => {
+      await crawlResearch({ failView: "noViewChange" });
+
+      const { researchTracks } = savedResearch();
+      expect(researchTracks.active).toBe("economy");
+      expect(researchTracks.restored).toBe(false);
+      expect(researchTracks.tracks.economy.error).toContain("HTTP 500");
+    });
+
+    it("refuses while a Pirate capture is out, asking nothing", async () => {
+      pirateCapture.inFlight = true;
+      try {
+        await crawlResearch();
+      } finally {
+        pirateCapture.inFlight = false;
+      }
+
+      expect(asked).toEqual([]);
+      expect(savedCrawlFailure("research").error).toMatchObject({
+        stage: "queue",
+      });
+    });
+
+    it("refuses while the task queue runs in this tab, asking nothing", async () => {
+      await crawlResearch({}, { transport: true });
+
+      expect(asked).toEqual([]);
+      expect(savedCrawlFailure("research").error).toMatchObject({
+        stage: "queue",
+      });
+    });
+
+    it("refuses on a page the tool has just clicked away from, asking nothing", async () => {
+      await openCrawl();
+      fakeGame();
+      // The town view link `backToCity` clicks; on the game, a reload.
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<div id="js_cityLink"><a href="#"></a></div>`,
+      );
+      document
+        .querySelector("#js_cityLink > a")!
+        .addEventListener("click", (event) => event.preventDefault());
+      const navigation = await import("./navigation");
+      navigation.backToCity("shipment sent");
+      expect(navigation.isPageLeaving()).toBe(true);
+      (
+        document.querySelector("#ikaCrawl_research") as HTMLInputElement
+      ).checked = true;
+
+      await actions["crawl.run"](document.body);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(asked).toEqual([]);
+      expect(savedCrawlFailure("research").error).toMatchObject({
+        stage: "queue",
+      });
     });
 
     it("refuses while the task queue is busy in another tab, asking nothing", async () => {

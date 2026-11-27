@@ -41,7 +41,11 @@ import {
 import { LOGGER_STORAGE_KEY } from "./logger";
 import { NOTIFICATION_SETTINGS_KEY, NOTIFIED_KEY } from "./notifications";
 import { IMPORT_ERRORS, IMPORT_NOTES, IMPORT_SUMMARY } from "./messages";
-import { EMPIRE_KEY_PATTERN, empireKeyPrefix } from "./storage";
+import {
+  BOARD_DATA_IMPORTED_KEY,
+  EMPIRE_KEY_PATTERN,
+  empireKeyPrefix,
+} from "./storage";
 
 /** Bumped when the envelope shape changes incompatibly. */
 export const TRANSFER_FORMAT = "ikariam-tool/data";
@@ -75,6 +79,7 @@ const GLOBAL_KEYS: Record<string, DataGroup> = {
   isAutoReload: "runtime",
   reloadedMinute: "runtime",
   [NOTIFIED_KEY]: "runtime",
+  [BOARD_DATA_IMPORTED_KEY]: "runtime",
 
   [LOGGER_STORAGE_KEY]: "diagnostics",
   [BUG_REPORT_STORAGE_KEY]: "diagnostics",

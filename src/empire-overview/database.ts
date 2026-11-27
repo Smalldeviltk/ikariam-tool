@@ -14,6 +14,10 @@ import { empire } from "./empire";
 import { events } from "./events";
 import { ikariam } from "./game-api";
 import { render } from "./render";
+import {
+  BOARD_DATA_IMPORTED_EVENT,
+  BOARD_DATA_IMPORTED_KEY,
+} from "@core/storage";
 
 /** How long to wait for more changes before writing the database out. */
 const SAVE_DEBOUNCE_MS = 1000;
@@ -33,17 +37,13 @@ export const database: any = {
       return $.mergeValues(this, objVals);
     },
   },
-  Init: function (host) {
+  Init: function () {
     $.each(
       Constant.Settings,
       function (key, value) {
         this.settings[value] = new Setting(value);
       }.bind(database),
     );
-    var prefix = host;
-    prefix = prefix.replace(".ikariam.", "-");
-    prefix = prefix.replace(".", "-");
-    this.Prefix = prefix;
     this.Load();
     this.startMonitoringChanges();
     events(Constant.Events.LOCAL_STRINGS_AVAILABLE).sub(
@@ -57,6 +57,23 @@ export const database: any = {
     // worked it would write the database straight back out and undo the reset.
     $(window).on("beforeunload", function () {
       if (typeof database.Save === "function") database.Save();
+    });
+    this.stopSavingAfterImport();
+  },
+  /**
+   * An import wrote the board's data, in this tab or another: the copy in
+   * memory is the older one now, and `Save` writes no more. Another board's
+   * own saves do not count — each tab still saves what it learns, and the
+   * last to save wins, as before.
+   */
+  stopSavingAfterImport: function () {
+    window.addEventListener("storage", function (event) {
+      if (event.key === BOARD_DATA_IMPORTED_KEY) {
+        database._saveSuspended = true;
+      }
+    });
+    document.addEventListener(BOARD_DATA_IMPORTED_EVENT, function () {
+      database._saveSuspended = true;
     });
   },
   addCity: function (id, a) {
@@ -117,6 +134,10 @@ export const database: any = {
   startMonitoringChanges: function () {
     events(Constant.Events.BUILDINGS_UPDATED).sub(this.SaveSoon.bind(this));
     events(Constant.Events.GLOBAL_UPDATED).sub(this.SaveSoon.bind(this));
+    // Whatever is learnt about a town: each response's town data, its
+    // population, and the Town Hall, Finances, Museum, Academy, Temple and
+    // cultural goods views. Debounced like the rest (`SaveSoon`).
+    events(Constant.Events.CITY_UPDATED).sub(this.SaveSoon.bind(this));
     events(Constant.Events.MOVEMENTS_UPDATED).sub(this.SaveSoon.bind(this));
     events(Constant.Events.RESOURCES_UPDATED).sub(this.SaveSoon.bind(this));
     events(Constant.Events.MILITARY_UPDATED).sub(this.SaveSoon.bind(this));
@@ -129,18 +150,27 @@ export const database: any = {
         $.mergeValues(this.settings, settings);
 
         var globalData = this.UnSerialize(empire.getVar("globalData", ""));
-        if (globalData.governmentType === "")
-          globalData.governmentType = "Ikacracy";
-        if (typeof globalData == "object") {
+        // Fixed: read only once it is known to be an object. A missing or
+        // broken entry threw here, in `Init`, and the board never started.
+        if (globalData && typeof globalData == "object") {
+          if (globalData.governmentType === "")
+            globalData.governmentType = "Ikacracy";
           $.mergeValues(this._globalData, globalData);
         }
         var cities = this.UnSerialize(empire.getVar("cities", ""));
-        if (typeof cities == "object") {
+        if (cities && typeof cities == "object") {
+          // Fixed: every town is added before any is started. Started one by
+          // one, each projected its population over the time offline with
+          // the towns loaded so far as the empire — no corruption for the
+          // first, and the one-town bonuses.
           for (var cityID in cities) {
-            (this.cities[cityID] = this.addCity(
+            this.cities[cityID] = this.addCity(
               cities[cityID]._id,
               cities[cityID],
-            )).init();
+            );
+          }
+          for (const loadedID in cities) {
+            this.cities[loadedID].init();
           }
         }
       }
@@ -186,11 +216,16 @@ export const database: any = {
       clearTimeout(this._saveTimer);
       this._saveTimer = null;
     }
+    // Fixed: the three entries are written whole from memory. After an
+    // import, that put this page's older copy back over the imported data.
+    // Not written again until the page reloads it.
+    if (this._saveSuspended) return;
     empire.setVar("cities", database.Serialize(database.cities));
     empire.setVar("settings", database.Serialize(database.settings));
     empire.setVar("globalData", database.Serialize(database._globalData));
   },
   _saveTimer: null,
+  _saveSuspended: false,
   /**
    * Save once, shortly. One ajax response can publish four of the events
    * `startMonitoringChanges` listens to, and each save serialises the whole

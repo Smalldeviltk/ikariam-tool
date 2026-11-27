@@ -83,6 +83,9 @@ $(function () {
   ResourceProduction.createSpan(3);
   ResourceProduction.createSpan(4);
   ResourceProduction.updateProd();
+  // Fixed: like `updateProd`, nothing to wrap while the game's object is
+  // missing — reading its `model` threw here.
+  if (!unsafeWindow.ikariam?.model) return;
   /**
    * FIX (not in the original): the wrapper is now transparent to the game.
    *

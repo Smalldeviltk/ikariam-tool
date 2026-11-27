@@ -72,7 +72,8 @@ if (debug) {
  * records from `events("ajaxResponse")`, and that is published from the page
  * jQuery's `ajaxSuccess` event (see `observeGameResponses`), which a plain
  * fetch does not go through. Registering here means a fetched town and a clicked one arrive by
- * the same path and are indistinguishable downstream.
+ * the same path; the fetched one is marked (`FETCHED_RESPONSE`), so what
+ * reads the page, or the town on screen, can tell the two apart.
  */
 onIkariamResponse((entries) => {
   // Marked as fetched: none of it is on the page, so the board must not read
@@ -141,24 +142,26 @@ empire.Init();
 // the script on pages where it has always run, so the guard is gone and the
 // behaviour is exactly what it has always been.
 $(function () {
-  (function init(
-    modelAnnounced,
-    cityDataAnnounced,
-    stringsAnnounced,
-    ajaxHooked,
-  ) {
+  (function init(cityDataAnnounced, stringsAnnounced, ajaxHooked) {
     var hasModel = !!unsafeWindow.ikariam && !!unsafeWindow.ikariam.model;
-    var hasCityData =
-      !!unsafeWindow.ikariam && !!unsafeWindow.ikariam.model.relatedCityData;
+    // Fixed: both read through an object that may not be there yet, which
+    // is what this function waits for — it threw instead of trying again.
+    var hasCityData = hasModel && !!unsafeWindow.ikariam.model.relatedCityData;
     var hasStrings = !!unsafeWindow.LocalizationStrings;
     var canHookAjax =
+      !!unsafeWindow.ikariam &&
       !!unsafeWindow.ikariam.controller &&
       !!unsafeWindow.ikariam.controller.executeAjaxRequest &&
       !!unsafeWindow.ajaxHandlerCallFromForm;
     if (hasCityData && !cityDataAnnounced) {
       events(Constant.Events.CITYDATA_AVAILABLE).pub();
     }
-    if (hasModel && hasCityData && !modelAnnounced && !cityDataAnnounced) {
+    // Fixed: also asked whether the model had been SEEN on the pass before
+    // (a parameter of its own, since removed), not whether this had been
+    // published. A model seen one pass before its town data meant the board
+    // was never drawn. Town data implies the model, so the first pass with
+    // it announces both.
+    if (hasCityData && !cityDataAnnounced) {
       events(Constant.Events.MODEL_AVAILABLE).pub();
     }
     if (hasStrings && !stringsAnnounced) {
@@ -184,7 +187,7 @@ $(function () {
       // Harmless while that function only added towns; destructive once it
       // also removed them. Pass them in the order the signature declares.
       events.scheduleAction(
-        init.bind(null, hasModel, hasCityData, hasStrings, canHookAjax),
+        init.bind(null, hasCityData, hasStrings, canHookAjax),
         1000,
       );
     } else {

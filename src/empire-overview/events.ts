@@ -31,6 +31,9 @@ function isolatedSubscriber(
   };
 }
 
+/** The longest delay a browser's `setTimeout` takes as it is (2^31 − 1 ms). */
+const MAX_TIMEOUT_MS = 2147483647;
+
 export const events: any = (function () {
   var _events = {};
   // Function object that also carries scheduling helpers as properties.
@@ -74,11 +77,28 @@ export const events: any = (function () {
     return clearTimeout.bind(undefined, setTimeout(callback, time || 0));
   };
 
+  /**
+   * Fixed: a browser takes a timeout's delay as a 32-bit integer, so one past
+   * about 24.8 days wrapped round and fired at once — an upgrade with a month
+   * to go was finished, with a desktop notice, the moment it was seen. Past
+   * that limit it waits the limit, then looks again.
+   */
   retEvents.scheduleActionAtTime = function (callback, time) {
-    return retEvents.scheduleAction(
-      callback,
-      time - $.now() > 0 ? time - $.now() : 0,
-    );
+    let cancelled = false;
+    let cancel = function () {};
+    function arm() {
+      if (cancelled) return;
+      const delay = time - $.now();
+      cancel =
+        delay > MAX_TIMEOUT_MS
+          ? retEvents.scheduleAction(arm, MAX_TIMEOUT_MS)
+          : retEvents.scheduleAction(callback, delay > 0 ? delay : 0);
+    }
+    arm();
+    return function () {
+      cancelled = true;
+      return cancel();
+    };
   };
 
   retEvents.scheduleActionAtInterval = function (callback, time) {

@@ -89,6 +89,21 @@ export function empireKeyPrefix(accountName: string): string {
 export const EMPIRE_KEY_PATTERN = /^\*\*\*(.*?)\*\*\*(.*)$/;
 
 /**
+ * Announced on `document` when an import has written Empire Overview keys.
+ * The board holds its data in memory and writes it all back on its next
+ * save, so it has to know: it stops writing until the page loads the
+ * imported data.
+ */
+export const BOARD_DATA_IMPORTED_EVENT = "ika:boardDataImported";
+
+/**
+ * Written with the time of such an import, so a board open in another tab
+ * hears of it too (a `storage` event). Not the board's own keys: every board
+ * saves them as it goes, and one tab's save must not silence another's.
+ */
+export const BOARD_DATA_IMPORTED_KEY = "ikaBoardDataImportedAt";
+
+/**
  * Send Resources' table of every account, in `globalStore`. Spelled here
  * because the Empire Overview board reads one field of it (below), and the two
  * scripts share no module — only storage.

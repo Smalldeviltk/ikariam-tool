@@ -60,9 +60,6 @@ export function GlobalData() {
     this.premium[feature] = { endTime: endTime, continuous: continuous };
     return ret;
   },
-  getPremiumTimeRemaining: function (feature) {
-    return this.premium[feature] ? this.premium[feature].endTime > $.now() : 0;
-  },
   getPremiumTimeContinuous: function (feature) {
     return this.premium[feature] ? this.premium[feature].continuous : false;
   },
@@ -123,16 +120,15 @@ export function GlobalData() {
       }
     });
   },
+  // Fixed: the original asked for a mission that was both "plunder" and
+  // "deploy", which none is, and from the town rather than to it, so the
+  // incoming army was always none. Troops and fleets deployed to the town.
   getMilitaryMovementsToCity: function (cityID) {
     return this.fleetMovements.filter(function (el) {
-      if (el.getOriginCityId == cityID) {
-        return (
-          el.getMission != "trade" &&
-          el.getMission != "transport" &&
-          el.getMission == "plunder" &&
-          el.getMission == "deploy"
-        );
-      }
+      return (
+        el.getTargetCityId == cityID &&
+        (el.getMission == "deployarmy" || el.getMission == "deployfleet")
+      );
     });
   },
   getResearchTopicLevel: function (research) {

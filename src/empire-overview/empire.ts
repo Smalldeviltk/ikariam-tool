@@ -87,7 +87,7 @@ export const empire: any = {
   Init: function () {
     ikariam.Init();
     render.Init();
-    database.Init(ikariam.Host());
+    database.Init();
   },
 
   // REMOVED (not in the original): `CheckForUpdates`, with its Settings

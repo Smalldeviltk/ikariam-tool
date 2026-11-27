@@ -18,6 +18,11 @@ import {
 } from "@core/data-transfer";
 import { errorMessage } from "@core/format";
 import { logInfo } from "@core/logger";
+import {
+  BOARD_DATA_IMPORTED_EVENT,
+  BOARD_DATA_IMPORTED_KEY,
+  EMPIRE_KEY_PATTERN,
+} from "@core/storage";
 import { showToast } from "@core/ui/window";
 import { DATA_TRANSFER } from "../messages";
 import { forgetBuildListBase } from "../queue-note";
@@ -164,6 +169,23 @@ export function importDataFromFile(): void {
           bundle.entries.some((entry) => entry?.key === KEY.listAutoBuild)
         ) {
           forgetBuildListBase();
+        }
+        // A board open in this tab, or in another, would otherwise write its
+        // copy in memory back over what was just imported.
+        if (
+          result.imported > 0 &&
+          bundle.entries.some(
+            (entry) =>
+              typeof entry?.key === "string" &&
+              EMPIRE_KEY_PATTERN.test(entry.key),
+          )
+        ) {
+          document.dispatchEvent(new Event(BOARD_DATA_IMPORTED_EVENT));
+          try {
+            localStorage.setItem(BOARD_DATA_IMPORTED_KEY, String(Date.now()));
+          } catch {
+            // Storage full: the other tabs are not told; this one was.
+          }
         }
         logInfo(
           `Imported ${result.imported} entries (${result.skipped} skipped)`,

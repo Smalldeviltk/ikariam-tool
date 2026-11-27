@@ -9,8 +9,9 @@
  * grouped nothing, and showed no state beyond two button labels.
  *
  * Now: the launcher opens a window whose controls are grouped by feature, and
- * whose footer carries live status. The window remembers where it was left,
- * and whether it was left open.
+ * whose footer carries live status. The window remembers where it was left
+ * and whether it was folded; it is always open (`alwaysOpen`), and Escape or
+ * the launcher folds it to its title bar.
  *
  * The buttons themselves are unchanged — same `data-ika-action` names, same
  * handlers. This is a layout change, not a behaviour change.
@@ -269,24 +270,6 @@ function watchNotificationSwitches(root: HTMLElement): void {
 }
 
 /**
- * Put a way in on the page: an entry in the game's left city menu
- * (`.menu_slots`), like Empire Overview's, or a small fixed button on a page
- * without that menu.
- *
- * The entry carries NO `expandable` class, and that is what keeps the game
- * working. An entry with it broke the header: after a manual shipment the
- * resource and idle-ship counts stayed stale. The game's `updateGlobalData`
- * updates this menu (`updateCurrentCityLeftMenu` -> `cityMenu.update`) before
- * it redraws the header, and a foreign `expandable` entry stops it there.
- * Measured on the live page (03/10) with Empire Overview's entry present: a
- * second `expandable` entry broke the header whether placed before or after
- * Empire Overview's `slot99`, and whatever its `slotNN`; an entry shaped like
- * IkaEasy V4's (`slot<index>`, no `expandable` — its `addToLeftMenu`) did not.
- *
- * Without `expandable` the game's slide-out on hover does not apply, so the
- * stylesheet does it instead, as IkaEasy's does (`buildStyles`).
- */
-/**
  * The menu entry's slide-out on hover, taken from IkaEasy V4
  * (`css/ikaeasy.css`, `li.ikaeasy_slot`): only the icon shows until the
  * pointer is over it, as with the game's own entries.
@@ -313,6 +296,24 @@ ${collapsed} > .ika-group-body { display: none; }
 `;
 }
 
+/**
+ * Put a way in on the page: an entry in the game's left city menu
+ * (`.menu_slots`), like Empire Overview's, or a small fixed button on a page
+ * without that menu.
+ *
+ * The entry carries NO `expandable` class, and that is what keeps the game
+ * working. An entry with it broke the header: after a manual shipment the
+ * resource and idle-ship counts stayed stale. The game's `updateGlobalData`
+ * updates this menu (`updateCurrentCityLeftMenu` -> `cityMenu.update`) before
+ * it redraws the header, and a foreign `expandable` entry stops it there.
+ * Measured on the live page (03/10) with Empire Overview's entry present: a
+ * second `expandable` entry broke the header whether placed before or after
+ * Empire Overview's `slot99`, and whatever its `slotNN`; an entry shaped like
+ * IkaEasy V4's (`slot<index>`, no `expandable` — its `addToLeftMenu`) did not.
+ *
+ * Without `expandable` the game's slide-out on hover does not apply, so the
+ * stylesheet does it instead, as IkaEasy's does (`buildStyles`).
+ */
 function buildLauncher(onClick: () => void): void {
   const menu = qs(SEL.menuSlots);
   if (menu) {

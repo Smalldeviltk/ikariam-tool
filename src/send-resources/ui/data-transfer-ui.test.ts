@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { exportData } from "@core/data-transfer";
 import { IMPORT_ERRORS } from "@core/messages";
+import {
+  BOARD_DATA_IMPORTED_EVENT,
+  BOARD_DATA_IMPORTED_KEY,
+} from "@core/storage";
 import { DATA_TRANSFER } from "../messages";
 import { initState } from "../state";
 import {
@@ -166,6 +170,44 @@ describe("importDataFromFile", () => {
       expect(localStorage.getItem(`${ME}listSender`)).toBeNull();
     },
   );
+
+  it(
+    "REGRESSION: tells the board an import wrote its data — the board " +
+      "wrote its own copy back over it on its next save",
+    async () => {
+      localStorage.clear();
+      localStorage.setItem(`***${ME}***cities`, "{}");
+      const json = JSON.stringify(exportData());
+      localStorage.clear();
+      pickFile(json);
+      answer(true);
+      const told = vi.fn();
+      document.addEventListener(BOARD_DATA_IMPORTED_EVENT, told);
+
+      importDataFromFile();
+      await imported();
+      document.removeEventListener(BOARD_DATA_IMPORTED_EVENT, told);
+
+      expect(localStorage.getItem(`***${ME}***cities`)).toBe("{}");
+      expect(told).toHaveBeenCalledTimes(1);
+      // And a board in another tab, through a storage event.
+      expect(localStorage.getItem(BOARD_DATA_IMPORTED_KEY)).not.toBeNull();
+    },
+  );
+
+  it("leaves the board alone when an import has none of its data", async () => {
+    pickFile(bundleOf(ME));
+    answer(true);
+    const told = vi.fn();
+    document.addEventListener(BOARD_DATA_IMPORTED_EVENT, told);
+
+    importDataFromFile();
+    await imported();
+    document.removeEventListener(BOARD_DATA_IMPORTED_EVENT, told);
+
+    expect(told).not.toHaveBeenCalled();
+    expect(localStorage.getItem(BOARD_DATA_IMPORTED_KEY)).toBeNull();
+  });
 
   it("writes nothing when the import is not confirmed", async () => {
     pickFile(bundleOf(ME));

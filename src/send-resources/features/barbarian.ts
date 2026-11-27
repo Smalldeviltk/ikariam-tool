@@ -21,7 +21,9 @@ function annotate(containerSelector: string, addOne: boolean): void {
 
   const items = qsa("li", container);
   let total = 0;
-  // Skip the first item (the label) and sum the numeric cells.
+  // Skip the first item and sum the rest. In the village's list the first
+  // item is the gold (`li.gold`, then wood, wine, marble, glass, sulfur —
+  // measured 25/11), which needs no ship; the fleet's list is not captured.
   for (let i = 1; i < items.length; i++) {
     total += parseGameNumber(items[i].textContent) ?? 0;
   }

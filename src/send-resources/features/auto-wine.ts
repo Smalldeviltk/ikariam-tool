@@ -63,8 +63,8 @@ interface WineBoardRow {
  * keyed by town name.
  *
  * Returns an empty map when the board has not rendered (the Empire Overview script is
- * not running, or the board is closed); callers then fall back to the manually
- * entered `winePerHour`.
+ * not running, or the board is closed); callers then fall back to the town
+ * cache (`measuredStats`), and only then to the manually entered `winePerHour`.
  */
 export function readWineBoard(): Map<string, WineBoardRow> {
   const result = new Map<string, WineBoardRow>();
@@ -306,8 +306,9 @@ export function getSourceReserve(
  * Reads the source town's stock FROM THE BOARD rather than from the global
  * menu bar. The menu bar shows whichever town is currently open, which is not
  * necessarily the source town — using it would compute the plan against the
- * wrong town's stock. The menu bar is only used as a fallback when the source
- * town happens to be the one on screen.
+ * wrong town's stock. Without a board row, the town on screen is read live
+ * when it is the source (the model's figure, the menu bar's only without
+ * one: `readCurrentWine`), and any other source from the town cache.
  */
 export function getSourceSupply(
   fromTown: string,
@@ -609,8 +610,10 @@ export function parseWineTransportFile(text: string): WineTransportFile {
  * Queue a wine transport file's shipments from `fromTown`, as a wine run:
  * pending Auto Wine shipments are replaced, each amount of one merchant
  * ship or more is rounded down to whole ships, and the source keeps one hour
- * of its own consumption. The file's order is kept. A town not in this
- * account's town list, and the source's own row, are skipped and named.
+ * of its own consumption. The file's order is kept. Each amount is first cut
+ * to the room left in that town's storage, as the town cache knows it; a
+ * town already full is skipped. A town not in this account's town list, and
+ * the source's own row, are skipped and named; so is every cut.
  * Returns how many shipments were queued; with none, nothing in the queue
  * changes.
  */
@@ -620,7 +623,10 @@ export function enqueueWineTransport(
 ): number {
   const towns = getTownList();
   const cargo = getPerShipCapacity();
+  const store = getState().account;
   const unknown: string[] = [];
+  const capped: string[] = [];
+  const full: string[] = [];
   const skipped: string[] = [];
   const shipments: { destination: string; amount: number }[] = [];
 
@@ -635,11 +641,29 @@ export function enqueueWineTransport(
       skipped.push(AUTO_WINE.importSourceInFile(shipment.town));
       continue;
     }
+    // Never more than the town's storage has room for, as the split made
+    // here is capped; the rest stays at the source. The room is what the
+    // town cache knows: a town whose capacity it does not know is not capped.
+    let wine = shipment.wine;
+    const known = projectedStats(store, town.townName);
+    if (known?.capacity !== undefined) {
+      const room = Math.max(0, Math.floor(known.capacity - known.stock));
+      if (room === 0) {
+        full.push(shipment.town);
+        continue;
+      }
+      if (wine > room) {
+        capped.push(`${shipment.town} ${shipment.wine} → ${room}`);
+        wine = room;
+      }
+    }
     shipments.push({
       destination,
-      amount: roundToWholeShips(shipment.wine, cargo),
+      amount: roundToWholeShips(wine, cargo),
     });
   }
+  if (capped.length > 0) skipped.push(AUTO_WINE.importCappedToStorage(capped));
+  if (full.length > 0) skipped.push(AUTO_WINE.importFullStorage(full));
   if (unknown.length > 0) skipped.push(AUTO_WINE.importUnknownTowns(unknown));
   const skippedText = skipped.join("\n");
 

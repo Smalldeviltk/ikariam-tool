@@ -1042,6 +1042,79 @@ describe("enqueueWineTransport", () => {
     );
   });
 
+  it(
+    "REGRESSION: cuts a shipment to the room left in the town's storage, " +
+      "then to whole ships — the file's amount was queued whole, and what " +
+      "the store could not take was lost",
+    () => {
+      saveTownStats(getState().account, {
+        "S-District3": {
+          stock: 70_000,
+          consume: 0,
+          capacity: 72_345,
+          at: Date.now(),
+        },
+      });
+
+      enqueueWineTransport(
+        { account: "Saigon", shipments: [{ town: "S-District3", wine: 5000 }] },
+        "0",
+      );
+
+      // Room 2,345: four ships at 500, the rest kept at the source.
+      expect(queuedWineShipments()).toEqual([
+        `0 -> 5: 2000 (${AUTO_WINE_LABEL})`,
+      ]);
+      expect(String(showToast.mock.calls[0][0])).toContain(
+        "Cut to the room left in storage, the rest kept at the source: " +
+          "S-District3 5000 → 2345.",
+      );
+    },
+  );
+
+  it("skips and names a town whose storage is already full", () => {
+    saveTownStats(getState().account, {
+      "S-District3": {
+        stock: 72_345,
+        consume: 0,
+        capacity: 72_345,
+        at: Date.now(),
+      },
+    });
+
+    expect(
+      enqueueWineTransport(
+        {
+          account: "Saigon",
+          shipments: [
+            { town: "S-District3", wine: 5000 },
+            { town: "M-District7", wine: 321 },
+          ],
+        },
+        "0",
+      ),
+    ).toBe(1);
+    expect(queuedWineShipments()).toEqual([`0 -> 4: 321 (${AUTO_WINE_LABEL})`]);
+    expect(String(showToast.mock.calls[0][0])).toContain(
+      "Storage already full, so skipped: S-District3.",
+    );
+  });
+
+  it("does not cut a shipment to a town whose capacity is not known", () => {
+    saveTownStats(getState().account, {
+      "S-District3": { stock: 70_000, consume: 0, at: Date.now() },
+    });
+
+    enqueueWineTransport(
+      { account: "Saigon", shipments: [{ town: "S-District3", wine: 5000 }] },
+      "0",
+    );
+
+    expect(queuedWineShipments()).toEqual([
+      `0 -> 5: 5000 (${AUTO_WINE_LABEL})`,
+    ]);
+  });
+
   it("changes nothing in the queue when there is nothing to queue", () => {
     const { queue } = getState();
     queue.push({

@@ -442,6 +442,15 @@ function toggleQueueRunner(): void {
 }
 
 /**
+ * A task is being carried out, in this tab or another. Auto Wine's plan is
+ * not replaced then: the shipment under way is one of the tasks a new plan
+ * takes out and queues again.
+ */
+function isQueueSending(): boolean {
+  return runner.isBusy || isRunnerBusyInAnyTab();
+}
+
+/**
  * Plan a wine run and put it in the queue, without starting the runner.
  * Returns whether anything was queued.
  *
@@ -581,6 +590,10 @@ async function queueWineTransport(fromTown: string | null): Promise<void> {
       return;
     }
   }
+  if (isQueueSending()) {
+    showToast(AUTO_WINE.importWhileSending);
+    return;
+  }
   if (enqueueWineTransport(file, source) === 0) return;
   refreshQueueView();
   releaseCaptchaHoldOnStart();
@@ -656,9 +669,10 @@ async function crawlPirate(): Promise<void> {
  * as they came (`collectResearchViews`).
  *
  * Refused while the task queue runs or is busy in any tab, while a page is
- * leaving, or while a Pirate capture is out: each request rotates the
- * session token, which would race the runner's open building or shipment
- * form, as the scan's do.
+ * leaving, or while a Pirate capture is out. A defensive choice: an action
+ * moves the session token and a view was measured not to, but whether a
+ * research track switch (`noViewChange`) does is not measured, and a moved
+ * token would race the runner's open building or shipment form.
  */
 async function crawlResearch(): Promise<void> {
   if (
@@ -1017,6 +1031,10 @@ function registerUiActions(): void {
       saveSenders(senders);
       saveReceivers(receivers);
       closeDialog();
+      if (isQueueSending()) {
+        showToast(AUTO_WINE.savedNotQueued);
+        return;
+      }
       withWineSource("wine.queueFrom", queueWineRun);
     },
     "wine.load": loadConsumedWine,
@@ -1056,6 +1074,10 @@ function registerUiActions(): void {
       const town = element.dataset.ikaTown;
       if (!town) return;
       closeDialog();
+      if (isQueueSending()) {
+        showToast(AUTO_WINE.savedNotQueued);
+        return;
+      }
       queueWineRun(town);
     },
 

@@ -26,8 +26,10 @@ export function Resource(city, name) {
     return this._name;
   },
   update: function (current, production, consumption) {
+    // Fixed: was `current % this._current > 10`. From 0 that is NaN, and a
+    // stock that doubled leaves no remainder: neither read as a change.
     var changed =
-      current % this._current > 10 ||
+      Math.abs(current - this._current) > 10 ||
       production != this._production ||
       consumption != this._consumption;
     this._current = current;

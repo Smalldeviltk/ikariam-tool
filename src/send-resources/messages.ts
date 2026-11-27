@@ -228,6 +228,13 @@ export const AUTO_WINE = {
   importOtherAccount: (fileAccount: string, account: string) =>
     `This wine transport file is for the account "${fileAccount}", not ` +
     `"${account}": nothing was queued.`,
+  savedNotQueued:
+    "Settings saved. The run was not queued: the task queue is sending " +
+    "right now, and a new plan would replace the one it is on.\n\n" +
+    "Save again once it is idle.",
+  importWhileSending:
+    "Nothing queued: the task queue is sending right now, and the file's " +
+    "plan would replace the one it is on.\n\nImport again once it is idle.",
   importNothingToQueue: (skipped: string) =>
     "Nothing to queue from this wine transport file." +
     (skipped ? `\n\n${skipped}` : ""),
@@ -242,6 +249,11 @@ export const AUTO_WINE = {
     (skipped ? `\n\n${skipped}` : ""),
   importUnknownTowns: (towns: readonly string[]) =>
     `Not in this account's town list, so skipped: ${towns.join(", ")}.`,
+  importCappedToStorage: (towns: readonly string[]) =>
+    "Cut to the room left in storage, the rest kept at the source: " +
+    `${towns.join(", ")}.`,
+  importFullStorage: (towns: readonly string[]) =>
+    `Storage already full, so skipped: ${towns.join(", ")}.`,
   importSourceInFile: (town: string) =>
     `${town} is the source town, so its row was skipped.`,
   noFigures:
