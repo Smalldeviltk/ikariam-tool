@@ -48,7 +48,7 @@ game page automatically — no rebuild-and-reinstall cycle.
 
 Where things stand, round by round, lives in `docs/`:
 [improvement-plan.md](docs/improvement-plan.md) (Vietnamese; one section per
-round, §2.A–§2.AJ, each with what was measured on the live game and what is
+round, §2.A–§2.AR, each with what was measured on the live game and what is
 still unverified) and [session-handover.md](docs/session-handover.md) (English;
 the measured facts about the game in its §2, and the traps already fallen
 into). [project-summary.md](project-summary.md) is the overview. This README
@@ -117,7 +117,8 @@ src/
 │   ├── ship-capacity.ts        cargo capacity + Calibrate Cargo
 │   ├── queue-note.ts           the queue copied into the game's notepad, merged
 │   │                           three ways so a second computer carries on with it
-│   ├── diagnostics.ts          Bug Report context: queue, town, selectors, gameData
+│   ├── diagnostics.ts          Bug Report context: queue, town, selectors, gameData;
+│   │                           the By id, Page and Research crawls
 │   ├── messages.ts             every user-facing string
 │   ├── types.ts
 │   ├── features/
@@ -126,6 +127,7 @@ src/
 │   │   ├── wine-distribution.ts THE ALGORITHM (pure, no DOM)  + unit tests
 │   │   ├── wine-warning.ts     hours of wine left per town
 │   │   ├── auto-build.ts       building upgrades, one lap per run
+│   │   ├── build-queue-validation.ts  which saved levels are already built (pure)
 │   │   ├── sync-towns.ts       Scan: every town over ajax, no walking
 │   │   ├── pirate.ts           capture runs from a Pirate Fortress on a timer;
 │   │                           captcha detection
@@ -137,6 +139,7 @@ src/
 │       ├── actions.ts          event dispatch (replaces inline onclick)
 │       ├── panel.ts            the control window: groups, launcher, notice switches
 │       ├── dialogs.ts          the settings popups (send, wine, build, pirate, crawl)
+│       │                       and the crawl boxes (By id, Page)
 │       ├── queue-view.ts       see and edit the queue
 │       ├── data-transfer-ui.ts export/import/file-picker UI
 │       └── styles.ts           CSS
@@ -171,12 +174,13 @@ tools/
 docs/
 ├── improvement-plan.md         the round-by-round record (Vietnamese)
 ├── session-handover.md         the same in English, plus the measured facts
+├── prompts/                    review-source-workflow.md, the review prompt
 └── wiki/                       the game's building-help pages as captured
 ```
 
 Import aliases: `@core/*`, `@send/*`, `@empire/*`. Non-test code is about
-27k lines (core 4.1k, send-resources 10k, empire-overview 12.8k) with 16.7k
-lines of tests in 40 files.
+29.7k lines (core 4.2k, send-resources 12.6k, empire-overview 12.7k) with
+22.6k lines of tests in 41 files (measured 28/11).
 
 > **Naming:** this used to be called "Quan ly Ika Perseus". Perseus is just one
 > game world, which made a poor name for a script that runs on all of them — and
@@ -235,7 +239,8 @@ Replaced with: **one queue, one runner, exactly one task touching the DOM.**
 ```ts
 runner = new TaskRunner(queue, {
   intervalMs,
-  canRun, // the tab lock, the notepad, no Pirate capture in flight
+  canRun, // the tab lock, the notepad, no Pirate capture out or captcha
+  // hold, not on a page the tool has just clicked away from
   allowsType, // each Start Timer lets only its own task type run
   isUiReady,
   onDrain,
@@ -332,7 +337,7 @@ Moving to TypeScript and ESM strict mode surfaced a number of genuine defects:
 | `Utils.cacheFunction`              | Read `$.now` (the **function**) instead of `$.now()`. Comparing a function to a number is always false, so **no cache ever expired** — army totals, research data, corruption and training totals went stale permanently. Affects 5 call sites.                                                                                                                                                                                                                                              | Call the function                                                                                  |
 | old `auto-wine`                    | The "hours to send" loop read `cargoSpace`, a variable **declared nowhere in the file**, and nothing between the inline `onclick` and that line catches. `checkAndProcessAutoWine` therefore threw before reaching its `gotoTown(fromTown, ...)` call: Auto Wine never shipped anything at all. With NO receiver configured the loop body never runs, so no throw — and `totalShips` stays 0, `availableShips >= 0` always holds, and `while (canIncrease)` spins forever, freezing the tab. | Replaced by the new algorithm; the empty-receiver case now explains itself instead of hanging      |
 | `Utils.FormatFullTimeToDateString` | Called `Date.prototype.toLocaleFormat`, a Firefox-only API removed from every engine — it threw on non-Chrome browsers.                                                                                                                                                                                                                                                                                                                                                                      | Use the portable branch for all                                                                    |
-| `City.getWonder`                   | `i = 7` with `i` undeclared, creating an implicit global. ESM is always strict, so this would throw.                                                                                                                                                                                                                                                                                                                                                                                         | `return 7`                                                                                         |
+| `City.getWonder`                   | `i = 7` with `i` undeclared, creating an implicit global. ESM is always strict, so this would throw.                                                                                                                                                                                                                                                                                                                                                                                         | `return 7`; removed on 27/11, when its last reader (the wonder tooltips) went as dead code         |
 | `Building.getCompletionDate`       | Empty `get` accessor body, always returned undefined.                                                                                                                                                                                                                                                                                                                                                                                                                                        | Made explicit                                                                                      |
 | `render.ts` tooltip                | `if ($(this).css(...));` — a stray semicolon made the `if` body empty.                                                                                                                                                                                                                                                                                                                                                                                                                       | Dropped the `if`                                                                                   |
 | `render.ts` growth                 | `Math.floor(<boolean comparison>)`.                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Use the comparison directly                                                                        |
@@ -653,12 +658,12 @@ file (and copies it to the clipboard); import takes that file back.
 
 `src/core/data-transfer.ts` classifies every key this project writes:
 
-| Group          | Contents                                                                                                                  | Exported by default |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------- |
-| `config`       | wine senders/receivers, build list, cargo calibration, notification switches, Pirate settings, Empire Overview's own keys | **yes**             |
-| `measurements` | town cache, route times, multi-account summary, Pirate capture points                                                     | **yes**             |
-| `runtime`      | the task queue, the notepad base, "is automation running" flags, Pirate's schedule, notices already shown                 | **no**              |
-| `diagnostics`  | log, bug reports, crawler captures, the quick-upgrade / town-switch / request / failed-capture / board ajax traces        | no                  |
+| Group          | Contents                                                                                                                             | Exported by default |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------- |
+| `config`       | wine senders/receivers, build list, cargo calibration, notification switches, Pirate settings, Empire Overview's own keys            | **yes**             |
+| `measurements` | town cache, route times, multi-account summary, Pirate capture points                                                                | **yes**             |
+| `runtime`      | the task queue, the notepad base, "is automation running" flags, Pirate's schedule, notices already shown, the board's import marker | **no**              |
+| `diagnostics`  | log, bug reports, crawler captures, the quick-upgrade / town-switch / request / failed-capture / board ajax traces                   | no                  |
 
 Keys belonging to the game itself are never touched. A test fails when a key
 this project writes is missing from the classification, so a new key cannot
@@ -685,6 +690,13 @@ storage that nothing ever reads.
 
 The bundle carries a format tag and a version, so a file from somewhere else — or
 from a future build — is rejected with an explanation rather than half-applied.
+
+**An open Empire Overview board stops saving after an import** that wrote its
+keys, until its page is reloaded: it holds its data in memory and writes all of
+it back on every save, which put its older copy over the imported data. The
+board in the same tab hears of the import through a DOM event, boards in other
+tabs through the `storage` event of the `ikaBoardDataImportedAt` marker. Two
+boards open side by side still save over each other, the last one winning.
 
 ## Runtime bug tracking
 
@@ -741,6 +753,13 @@ and a health check of the selectors whose absence explains a whole class of
   the town switches that did not land, the tool's last requests, and Pirate's
   failed captures. Session tokens are redacted.
 - Console: `ikaBugs()` for a summary, `ikaBugReport()` to copy, `ikaClearBugs()`.
+- **Crawl** on the panel, for what a report does not carry: Building (the
+  game's help page), Wine, Pirate, **By id** (an element's HTML and CSS, or
+  what a piece of JS returns), **Page** (the screen open now, every form with
+  all its fields) and **Research** (each town's Town Hall, Academy and Temple,
+  the Palace, the Research Advisor and each track, Finances — the game's own
+  answers, kept raw). A crawl that cannot be done saves a file with the error
+  instead; session tokens are taken out of every file.
 
 ### Design constraints
 
@@ -863,6 +882,13 @@ Still open:
 - **Why a town switch sometimes does not land** (four times on 30/10; once on
   02/11 the game answered without a reload). Not reproducible at will; the
   trace in every Bug Report is what the fix waits on.
+- **Whether `wineSpendings` is gross or net of the Wine Press.** The model
+  read gross on 26/09; a fetched Town Hall answer's `headerData` read net in
+  six towns on 25/11. `modelWineConsumption` assumes gross.
+- **Whether both scripts see the same page `window`.** The gap between
+  requests is booked on it (`ikaToolLastRequestAt`) so that the board's and
+  Send Resources' requests stay apart; with two different objects, each
+  script keeps only its own gap.
 
 ## Type strictness
 
@@ -928,8 +954,10 @@ V2.js`) were at the repository root until `888dc29` (20/09/2026) and can be
   read from any earlier commit. `legacy/` is a gitignored name for a local
   copy; nothing builds from it and it has never been tracked.
 - **Measured facts first.** Before changing how anything talks to the game,
-  read §2 of `docs/session-handover.md`: the token rotation, the view-scoped
-  model, the gross wine figure, the `expandable` menu class and the reload on
+  read §2 of `docs/session-handover.md`: the token rotation (an action moves
+  it, a view does not; the tool puts each new one into the page's model), the
+  view-scoped model, the wine figure (gross or net — two measurements
+  disagree), the `expandable` menu class and the reload on
   a town switch each cost rounds to find, and the code is shaped by them.
 - **A new stored key** goes into `core/data-transfer.ts`'s classification, or
   its test fails. **A new user-facing string** goes into `messages.ts`.

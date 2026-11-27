@@ -1,10 +1,14 @@
 # Kế hoạch cải thiện — UI và tính năng
 
-> Trạng thái: **đang thực hiện.** Cập nhật 25/11/2026.
+> Trạng thái: **đang thực hiện.** Cập nhật 28/11/2026.
 >
-> **Mới nhất (§2.AP — 25/11, CHƯA commit: 6 file `src` + hai tài liệu; có trong `dist/` người dùng build 25/11 17:01–17:02 (grep `ikaPageCrawl` 1 / 1, `researchTracks` 5 / 5); người dùng đã chạy cả hai crawl trên game):** Crawl có thêm **Page** (box riêng: mở màn hình của game rồi bấm Crawl — lưu mọi form kèm đủ trường, cả trường ẩn, control đang hiện, HTML trang không có phần của tool) và **Research** (tự gửi request: Town Hall, Academy, Temple từng town; Palace, Research Advisor, **mọi nhánh research**, Finances một lần; lưu response thô, lọc mọi token). **V đối chiếu trên 1 account (6 town): code khớp game** ở dân số tối đa, vàng scientist, hài lòng (tavern, phục vụ rượu, museum, hiệp ước, research, capital) — không cần sửa. **Lỗi của mình:** báo nhầm board thiếu 250 hài lòng ở town không có Palace — dòng "+250 capital" có class `invisible` ở đó, game không cộng. **L: không làm** (người dùng: cần chiến thuật, tự điền); **P: bỏ** (game đã bắt nhập captcha khi phá thuộc địa). **Còn mở:** `wineSpendings` — số đo 26/09 (model, gộp) và 25/11 (`headerData` của response fetch, đã trừ press) ngược nhau. 1116 → 1127 test.
+> **Mới nhất (§2.AR — 26–27/11; commit 28/11: code `3a7d2ae`, tài liệu ở commit ngay sau; chưa push):** review toàn tool bằng 4 agent (người dùng đồng ý), **sửa mọi phát hiện trừ `parseFinances`** (cần Crawl Research mới — file cũ không còn). 🔴 dữ liệu town do tool fetch ghi vào town đang hiện khi không ở city view — đã sửa. Token giữ đồng bộ giữa hai bundle; Import không còn bị board ghi đè; Save / Import của Auto Wine chờ task đang chạy dở, Import cắt theo kho; ▲, upgrade dài, tooltip, khởi động thiếu model, số liệu models; comment và code chết. 1133 → 1187 test, 41 file. Rồi review thay đổi theo workflow (phần 10): `wineUse2` chỉ cho s202, đặt chỗ request trước khi chờ, thêm 3 test thiếu, 9 mục chất lượng code — 1192 test.
 >
-> **§2.AO — 24/11, chỉ `build/build-extension.mjs` +4 dòng, CHƯA commit; `dist/` lúc viết chưa build lại cho thay đổi này — người dùng build 25/11 17:01, §2.AP):** người dùng hỏi vì sao file `dist` càng ngày càng dài. Đo: **code thật** của Send Resources + core (đã bỏ comment) tăng 162 → 272 KB từ 04/10 (+68%), userscript đã bỏ comment nên `dist` tăng theo gần 1:1 (151 → 260 KB); Empire Overview gần như đứng yên (~505 KB). Hai userscript trong `dist/` của người dùng còn **bị prettier format lại** (+11% / +7.6%, chưa biết do đâu). Bản extension giữ toàn bộ JSDoc. Người dùng chọn **A: extension bỏ comment** (`comments: false`) — đo trên bản copy: `send-resources.js` 408.595 → 261.589 byte (−36%), `empire-overview.js` 563.848 → 509.513 (−10%). Không chọn minify (stack trace trong bug report sẽ không đọc được). 1116 test vẫn xanh. **Sửa lời mình 23/11:** `dist/` hiện tại (23/11 16:00, thay bản 15:40) **đã có** `+ −` căn phải — các bước thử của §2.AN dùng bản này.
+> **Trước đó (§2.AQ — 26/11; commit 28/11 cùng §2.AR):** làm các việc không cần game cũng không cần người dùng quyết. **`8d0293d` (03/11) có mục riêng** (§2.AQ phần 1): mã phiên mới của tool ghi vào model của trang, lệnh đổi town bị từ chối "The last action was invalid" (`provideFeedback` type 11) gửi lại một lần — thay hai quyết định cũ (29/10, §2.AF) ghi là "không ghi token vào model". **Sửa comment của Research**: không phải "mỗi response đổi token" — `8d0293d` đo được view **không** đổi token; việc từ chối và gom token giữ nguyên như biện pháp phòng. **+5 test Crawl** (1127 → 1132, 5/5 đã thấy đỏ). Sửa comment sai ở `barbarian.ts` (`li` đầu là vàng). **`README.md` và `project-summary.md` cập nhật tới §2.AP.** Chưa làm: phần review còn lại của §2.AN (~12k dòng Empire Overview) — cần agent, phải hỏi trước.
+>
+> **§2.AP — 25/11, commit `6ad3365` (code + test) và `b3c960f` (tài liệu), đã push (kiểm 26/11); lúc viết: CHƯA commit: 6 file `src` + hai tài liệu; có trong `dist/` người dùng build 25/11 17:01–17:02 (grep `ikaPageCrawl` 1 / 1, `researchTracks` 5 / 5); người dùng đã chạy cả hai crawl trên game):** Crawl có thêm **Page** (box riêng: mở màn hình của game rồi bấm Crawl — lưu mọi form kèm đủ trường, cả trường ẩn, control đang hiện, HTML trang không có phần của tool) và **Research** (tự gửi request: Town Hall, Academy, Temple từng town; Palace, Research Advisor, **mọi nhánh research**, Finances một lần; lưu response thô, lọc mọi token). **V đối chiếu trên 1 account (6 town): code khớp game** ở dân số tối đa, vàng scientist, hài lòng (tavern, phục vụ rượu, museum, hiệp ước, research, capital) — không cần sửa. **Lỗi của mình:** báo nhầm board thiếu 250 hài lòng ở town không có Palace — dòng "+250 capital" có class `invisible` ở đó, game không cộng. **L: không làm** (người dùng: cần chiến thuật, tự điền); **P: bỏ** (game đã bắt nhập captcha khi phá thuộc địa). **Còn mở:** `wineSpendings` — số đo 26/09 (model, gộp) và 25/11 (`headerData` của response fetch, đã trừ press) ngược nhau. 1116 → 1127 test.
+>
+> **§2.AO — 24/11, chỉ `build/build-extension.mjs` +4 dòng, commit `d66a890` (tài liệu `b3c960f`), đã push (kiểm 26/11); lúc viết CHƯA commit; `dist/` lúc viết chưa build lại cho thay đổi này — người dùng build 25/11 17:01, §2.AP):** người dùng hỏi vì sao file `dist` càng ngày càng dài. Đo: **code thật** của Send Resources + core (đã bỏ comment) tăng 162 → 272 KB từ 04/10 (+68%), userscript đã bỏ comment nên `dist` tăng theo gần 1:1 (151 → 260 KB); Empire Overview gần như đứng yên (~505 KB). Hai userscript trong `dist/` của người dùng còn **bị prettier format lại** (+11% / +7.6%, chưa biết do đâu). Bản extension giữ toàn bộ JSDoc. Người dùng chọn **A: extension bỏ comment** (`comments: false`) — đo trên bản copy: `send-resources.js` 408.595 → 261.589 byte (−36%), `empire-overview.js` 563.848 → 509.513 (−10%). Không chọn minify (stack trace trong bug report sẽ không đọc được). 1116 test vẫn xanh. **Sửa lời mình 23/11:** `dist/` hiện tại (23/11 16:00, thay bản 15:40) **đã có** `+ −` căn phải — các bước thử của §2.AN dùng bản này.
 >
 > **§2.AN — 22–23/11, commit `1c62a7c` (code + test, 30 file `src`) và `7105b25` (tài liệu + prompt mới), rồi `349d8f3` (căn phải `+ −`) và `4560372` (tài liệu chi tiết) — tất cả đã push (xem dòng Git 23/11); có trong `dist/` 23/11 15:40 của người dùng (grep `isPageLeaving`, `forgetBuildListBase`, `readGameCount` — §2.AN đầu mục); chưa thử trên game):** list building một hàng (lỗi 3.521 px do float của chính tool, đã sửa); Transport Settings bảng bên phải cao bằng form (`clear: both` sau số đo người dùng gửi), block Amount ≤ 520 px; Clear All ở hai dialog (Auto Build: town chọn ở dropdown); Crawl by id (HTML/JS) và file lỗi cho mọi crawl, file đã lọc token; khung popup rộng theo nội dung; prompt `docs/prompts/review-source-workflow.md`; review toàn `src` và sửa F1–F5, R1–R3, Q1–Q5; mục tên tạm từ notepad đặt theo tên building; scan Wine bị từ chối chỉ còn một toast; Empire Overview đọc đúng số ≥ 1.000 (`readGameCount`); bug report 23/11: không bắt đầu gì trên trang vừa bấm về town view (đổi town hỏng 4/4 lần sau thao tác đó). 1044 → 1116 test.
 >
@@ -50,6 +54,12 @@
 > phần U còn thiếu số (§2.U phần 4) · R: kênh cập nhật riêng (chờ người
 > dùng). **Không làm lúc này** (người dùng chọn 04/10): F, G, I, M, N, O, Q.
 > **Không làm** (người dùng chọn 25/11, §2.AP): L (tự điền tàu khi tấn công — cần chiến thuật), P (bỏ — game đã có captcha).
+>
+> Git (28/11): người dùng yêu cầu commit — code + test `3a7d2ae` (36 file trong `src`, `tools`), tài liệu + README + summary ở commit ngay sau. **Chưa push.**
+>
+> Git (27/11): **chưa commit §2.AQ và §2.AR** — 35 file trong `src` và `tools` sau phần 10 (`git diff --shortstat -- src tools`: +1788/−477; phần 10 thêm `src/core/data-transfer.test.ts`, `src/empire-overview/empire.ts`, `constants.ts`), file mới `src/empire-overview/models/city.test.ts`, `README.md`, `project-summary.md`, hai tài liệu này. Chưa fetch lại.
+>
+> Git (26/11, đã kiểm): `git fetch` rồi `origin/refactor` = `HEAD` = `b3c960f`, ahead 0 / behind 0 — §2.AO, §2.AP đã commit (`d66a890`, `6ad3365`, `b3c960f`) và **đã push (ngoài phiên này)**. **Chưa commit: §2.AQ** — `src/send-resources/app.ts`, `diagnostics.ts` (comment), `app.test.ts` (+5 test), `features/barbarian.ts` (comment), `README.md`, `project-summary.md`, hai tài liệu này.
 >
 > Git (25/11, đã kiểm): `git fetch` rồi `origin/refactor` = `HEAD` = `07275df`, ahead 0 / behind 0 — mọi commit của §2.AN đã push. **Chưa commit: §2.AO** — `build/build-extension.mjs` (`git diff --stat`: 1 file, +4) và hai tài liệu này. **Sau đó cùng ngày (không fetch lại): §2.AP cũng chưa commit** — `src/core/ikariam/http.ts`, `src/send-resources/app.ts` (+ `app.test.ts`), `diagnostics.ts`, `messages.ts`, `ui/dialogs.ts` (`git diff --shortstat -- src`: 6 file, +1048/−31).
 >
@@ -705,7 +715,7 @@ cuối giữ nguyên.
 - Bảng `Constant.LanguageData` của Empire Overview chỉ có `en`. Ba key mới
   (`toast_updated`, `toast_movementAdded`, `toast_remoteVersionUnreadable`) chỉ
   được thêm vào đó. *05/10: `toast_remoteVersionUnreadable` đã xoá — không
-  còn chỗ dùng từ khi bỏ `CheckForUpdates` (§2.T phần 3).*
+  còn chỗ dùng từ khi bỏ `CheckForUpdates` (§2.T phần 3). 27/11: `toast_movementAdded` cũng đã xoá — chỗ đọc duy nhất (`parseMilitaryTransport`) là code chết, gỡ ở §2.AR.*
 - `tools/collect-dom-report.js` viết thẳng key `"ikaAjaxTrace"`; trong `src/`
   giờ là `TRACE_STORAGE_KEY` (`empire-overview/ajax-trace.ts`). Crawler không
   nằm trong build nên không import được — đổi tên thì phải sửa cả hai.
@@ -3499,7 +3509,7 @@ Giữ nguyên: hai bảng lỗi lịch sử (40 dòng), "The bug that took four 
 
 ### 2.AO Kích thước `dist`: vì sao tăng, và bản extension bỏ comment (24/11/2026)
 
-**Chưa commit:** `build/build-extension.mjs` (+4 dòng) và hai tài liệu này. `git fetch` 25/11: `origin/refactor` = `HEAD` = `07275df`. `dist/` thật **chưa build lại** (project: hỏi trước khi build lại `dist/`; sau đó người dùng build 25/11 17:01 — §2.AP). Mọi phép đo dưới đây build vào thư mục tạm (bản copy `git archive` của từng commit, `node_modules` link sang), không đụng `dist/` của người dùng.
+**Lúc viết chưa commit; sau đó commit `d66a890` (tài liệu `b3c960f`), đã push (kiểm 26/11).** `build/build-extension.mjs` (+4 dòng) và hai tài liệu này. `git fetch` 25/11: `origin/refactor` = `HEAD` = `07275df`. `dist/` thật **chưa build lại** (project: hỏi trước khi build lại `dist/`; sau đó người dùng build 25/11 17:01 — §2.AP). Mọi phép đo dưới đây build vào thư mục tạm (bản copy `git archive` của từng commit, `node_modules` link sang), không đụng `dist/` của người dùng.
 
 **Người dùng hỏi:** "Tại sao cứ càng viết thì file dist build ra càng dài vậy, dù source thêm ko nhiều, double check lại cho tôi, xem có thể tối ưu ko". Sau báo cáo, người dùng chọn: "A".
 
@@ -3574,7 +3584,7 @@ Build lại 6 mốc bằng đúng config của project (chỉ đổi `outDir`):
 
 ### 2.AP Crawl Page và Crawl Research; số liệu V; quyết định L và P (25/11/2026)
 
-**Chưa commit:** `src/core/ikariam/http.ts`, `src/send-resources/app.ts` (+ `app.test.ts`), `diagnostics.ts`, `messages.ts`, `ui/dialogs.ts` (`git diff --shortstat -- src`: 6 file, +1048/−31) và hai tài liệu này; §2.AO cũng còn chưa commit. Có trong `dist/` người dùng build 25/11 17:01:52–17:02:00, sau lần sửa nguồn cuối 16:57:23 (grep userscript / extension: `ikaPageCrawl` 1 / 1, `researchTracks` 5 / 5, `noViewChange` 1 / 1; extension có cả §2.AO: `/**` 0 / 0). Người dùng đã chạy cả hai crawl trên game. Bản tiếng Anh: handover §40. Mọi `file:line` dưới đây tính theo working tree chưa commit lúc 25/11 17:12. 1116 → 1125 → 1127 test, 40 file; `tsc` cả `tsconfig.json` và `tsconfig.strict.json` exit 0; prettier sạch trên các file đã sửa; `grep -rn "§" src tools` = 0.
+**Lúc viết chưa commit; sau đó commit `6ad3365` (code + test) và `b3c960f` (tài liệu), đã push (kiểm 26/11).** `src/core/ikariam/http.ts`, `src/send-resources/app.ts` (+ `app.test.ts`), `diagnostics.ts`, `messages.ts`, `ui/dialogs.ts` (`git diff --shortstat -- src`: 6 file, +1048/−31) và hai tài liệu này; §2.AO cũng còn chưa commit. Có trong `dist/` người dùng build 25/11 17:01:52–17:02:00, sau lần sửa nguồn cuối 16:57:23 (grep userscript / extension: `ikaPageCrawl` 1 / 1, `researchTracks` 5 / 5, `noViewChange` 1 / 1; extension có cả §2.AO: `/**` 0 / 0). Người dùng đã chạy cả hai crawl trên game. Bản tiếng Anh: handover §40. Mọi `file:line` dưới đây tính tại `6ad3365`. 1116 → 1125 → 1127 test, 40 file; `tsc` cả `tsconfig.json` và `tsconfig.strict.json` exit 0; prettier sạch trên các file đã sửa; `grep -rn "§" src tools` = 0.
 
 #### 1. Yêu cầu và lựa chọn
 
@@ -3597,7 +3607,7 @@ Sau khi xem file đầu: **"tiếp tục"** với ba việc — thêm các nhán
 | `collectResearchViews`: mỗi town (`ownTownIds`) Town Hall (đúng request của Scan), rồi `academy`, `temple` nếu `slotOfBuilding` thấy trong `position`; một lần `palace`, `researchAdvisor`, mọi nhánh research, `finances`; request lỗi ghi lỗi và chạy tiếp; trả town đang chọn nếu bị đổi; gom token của mọi response để lọc. **Temple và Palace thêm ở đây** (cho priest và chính thể; đã báo người dùng, người dùng chưa xác nhận riêng) | `diagnostics.ts:999`, `:971` |
 | `researchTracksOf` đọc tab của Research Advisor; `askEveryResearchTrack` gửi `view=noViewChange&researchType=<nhánh>&templateView=researchAdvisor`, **nhánh đang mở gửi cuối** (người dùng chọn thêm nhánh), không có nhánh đang mở thì không đổi nhánh nào (chọn ở đây) | `diagnostics.ts:927`, `:1092` |
 | `crawlFileText(payload, moreTokens)`; `saveCrawlFile(…, moreTokens)` | `diagnostics.ts:1147`, `app.ts:812` |
-| `crawlResearch`: **từ chối** khi queue đang chạy / bận ở bất kỳ tab nào, trang đang rời đi, hay Pirate đang gửi capture (chọn ở đây — mỗi response đổi token); file + toast số view và số lỗi. `runPageCrawl`; mục `CRAWLS`; action `crawl.page.run` / `crawl.page.close` | `app.ts:663`, `:714`, `:764`, `:1221` |
+| `crawlResearch`: **từ chối** khi queue đang chạy / bận ở bất kỳ tab nào, trang đang rời đi, hay Pirate đang gửi capture (chọn ở đây, phòng xa — *sửa 26/11:* lúc viết ghi "mỗi response đổi token", nhưng `8d0293d` đo được view không đổi token; đổi nhánh `noViewChange` thì chưa đo); file + toast số view và số lỗi. `runPageCrawl`; mục `CRAWLS`; action `crawl.page.run` / `crawl.page.close` | `app.ts:663`, `:714`, `:764`, `:1221` |
 | `tokenInEntries` export | `core/ikariam/http.ts:218` |
 
 File Research `ikariam-crawl-research-<account>-<UTC>.json`: `server`, `towns[]` (`cityId`, `name`, `townHall`, `buildings.academy`, `buildings.temple`), `palace`, `researchAdvisor`, `researchTracks` (`tracks`, `active`, `restored`, `skipped`), `finances`, `selectionMoved`; mỗi view là `{ request, response }` hoặc `{ request, error }`. File Page `ikariam-crawl-page-<account>-<UTC>.json`.
@@ -3635,7 +3645,7 @@ Số đo chi tiết ở handover §2 ("Added 25/11"). Tóm tắt:
 
 - 26/09 (handover §2): `ikariam.model.wineSpendings` = 933 = `wineUse[42]` — **gộp**.
 - 25/11: `updateGlobalData.headerData.wineSpendings` trong response Town Hall do tool fetch là **đã trừ Wine Press** ở 6/6 town: 153 với press cấp 40 và mức phục vụ `wineUse[24]` = 255 (153 = 255 × 0,6); tương tự 166 / press 35, 173 / 20, 130 / 40, 145 / 27, 179 / 1.
-- Hai nguồn khác nhau, cách nhau hai tháng; chưa biết cái nào giải thích cái nào. Nếu model giờ cũng là số đã trừ, `modelWineConsumption` (`core/ikariam/model.ts`) trừ press **hai lần** → Auto Wine và town cache tính thiếu đúng bằng % của press (tới ~40% ở các town này) — **chưa đo**. Board không bị: nó kiểm `inArray(wineUse)` nên chịu được cả hai.
+- Hai nguồn khác nhau, cách nhau hai tháng; chưa biết cái nào giải thích cái nào. Nếu model giờ cũng là số đã trừ, `modelWineConsumption` (`core/ikariam/model.ts`) trừ press **hai lần** → Auto Wine và town cache tính thiếu đúng bằng % của press (tới ~40% ở các town này) — **chưa đo**. ~~Board không bị: nó kiểm `inArray(wineUse)` nên chịu được cả hai.~~ **Sửa 27/11 (review 26/11): câu này sai.** Số đã trừ mà trùng một ô của bảng (150 = `wineUse[18]`, 300 = `wineUse[26]`) bị board coi là số gộp và trừ press thêm một lần (`models/city.ts`, `updateCityDataFromAjax`). Tần suất chưa đo.
 - **Cách kiểm:** ở một town có Wine Press, cùng lúc: Crawl by id JS `ikariam.model.wineSpendings` trên city view, và Crawl Research — so với `headerData.wineSpendings` của town đó.
 
 #### 6. L và P
@@ -3661,7 +3671,135 @@ Số đo chi tiết ở handover §2 ("Added 25/11"). Tóm tắt:
 - Kích thước file Research ở account khác (account này: 2.102.024 byte, 20 request).
 - Scan chạy song song với Research không bị từ chối.
 
+### 2.AQ Việc không cần game cũng không cần người dùng quyết: `8d0293d`, test Crawl, README và summary (26/11/2026)
+
+**Đã commit 28/11 cùng §2.AR** (code `3a7d2ae`, tài liệu ở commit ngay sau; chưa push). Lúc viết, chưa commit: `src/send-resources/app.ts`, `diagnostics.ts` (comment), `app.test.ts` (+5 test), `features/barbarian.ts` (comment), `README.md`, `project-summary.md` và hai tài liệu này. §2.AO, §2.AP đã commit và người dùng đã push (`git fetch` 26/11: `origin/refactor` = `HEAD` = `b3c960f`). Bản tiếng Anh: handover §41. 1127 → 1132 test, 40 file. Mọi `file:line` tính theo working tree chưa commit 26/11.
+
+Người dùng hỏi "còn gì trong plan chưa làm dc ko", rồi: **"cái gì làm ngay thì làm đi"**.
+
+#### 1. `8d0293d` (03/11) — giờ mới có mục
+
+`fix: put the tool's new session token into the page, and send a refused town switch again once` — `core/ikariam/http.ts`, `send-resources/navigation.ts` + test, +250/−16, 882 → 888 test. Đã commit và push 03/11, chưa từng có mục trong hai tài liệu.
+
+- **Vì sao:** một action của tool (▲ trên board, ghi notepad) đổi `actionRequest` trên server, còn trang giữ mã cũ; lệnh đổi town tiếp theo của trang bị trả "The last action was invalid" và đứng yên.
+- **Theo ghi chép trong commit `8d0293d` (đo trên game ngày 03/11, hôm nay không đo lại):** action đổi token, **view thì không**; câu từ chối là `provideFeedback` **type 11**, không reload; gửi lại đúng lệnh đó bằng tay 5 s sau thì reload vào town.
+- **`adoptToken`** (`core/ikariam/http.ts`): mọi token request của tool nhận được ghi vào cả `ikariam.model.actionRequest`; `actionRequestToken()` giờ ưu tiên token của model (`pageModelToken() ?? latestToken`). Model bị khoá thì bắt lỗi, dùng bản của module.
+- **Lệnh đổi town bị từ chối gửi lại một lần** (`resendRefusedSwitch`, `navigation.ts`): chỉ lệnh `gotoTown` gửi (`ika_pendingTownSwitch` giờ có `cityId`, cờ `resent`), trong 30 s, trang chưa tới town; chờ 300 ms rồi gửi lại form. Lệnh người chơi tự gửi thì không đụng.
+- **Thay hai quyết định cũ:** §2.AE ("không ghi token mới vào `ikariam.model`") và §2.AF (người dùng chọn chỗ claim thay vì "đưa mã mới vào trang") — đã ghi chú ở handover §5.
+
+#### 2. Sửa comment token của Research
+
+§2.AP và code ghi "mỗi response của Research đổi token" và lấy đó làm lý do từ chối. `8d0293d` đo được view **không** đổi token; đổi nhánh `noViewChange` thì chưa đo. Comment của `crawlResearch` (`app.ts:658`) và `collectResearchViews` (`diagnostics.ts:994`) viết lại; việc từ chối và gom mọi token **giữ nguyên** như biện pháp phòng. Không đổi hành vi.
+
+#### 3. +5 test Crawl (1127 → 1132)
+
+`app.test.ts`, nhóm "the Crawl dialog": Research từ chối khi Pirate đang gửi capture, và khi queue đang chạy ở tab này (`openCrawl` và helper Research giờ nhận cờ timer); không đổi nhánh nào khi chính Research Advisor không đọc được (`skipped` ghi lý do); `restored: false` khi request trả nhánh về bị lỗi; Page lưu `ok: false` kèm lỗi khi không đọc được trang. **Đã thấy đỏ 5/5** (`break-gaps.mjs` trong scratchpad, chạy với `-t` — chạy một phần; `md5sum -c` OK): bỏ điều kiện Pirate, bỏ điều kiện runner, `catch` của Page ném lại, `skipped` để trống, `restored` luôn `true`. **Còn thiếu test:** từ chối khi trang đang rời đi.
+
+#### 4. `barbarian.ts`
+
+Comment ở `features/barbarian.ts:24` gọi `li` đầu là "the label" — thật ra là **vàng** (đo 25/11); bỏ qua nó vẫn đúng. Viết lại comment, ghi rõ danh sách của Barbarian Fleet chưa capture. Không đổi hành vi.
+
+#### 5. `README.md` và `project-summary.md` tới §2.AP
+
+Số đo 26/11: 29.619 dòng TypeScript ngoài test (core 4.133 · send-resources 12.471 · empire-overview 12.867 · extension 148), 21.151 dòng test trong 40 file (file thứ 40 là `tools/collect-dom-report.test.ts`), 92 commit, 79 từ sau port; phiên bản không đổi; prettier vẫn 5 file lệch sẵn như cũ. Cả hai file đã chạy `prettier --check` — sạch.
+
+- **`project-summary.md`:** cập nhật theo `b3c960f`; số commit, kích thước, cây thư mục (`build-queue-validation`, `docs/prompts/`); mục "sau khi port" tới 26/11 (§2.A–§2.AQ, handover §1–§41) — thêm Pirate (đổi town trước khi mở fortress, gỡ cờ khi start queue), Auto Build Settings theo town, 22–23/11, extension bỏ comment, Crawl By id / Page / Research; câu "model là số gộp" thêm số đo 25/11; "đã chạy trên game" thêm GET của Pirate được nhận, form captcha trong response của tool, đối chiếu V; bỏ hai điểm Pirate khỏi "chưa từng thấy"; thêm các lỗi 11/11, 21/11, 23/11 và review 22–23/11; Status 26/11 (1.132 test, `dist/` 25/11); Remaining work viết lại (bỏ P, L, `8d0293d`, README drift; thêm `wineSpendings`, phần review còn lại).
+- **`README.md`:** §2.A–§2.AQ; cây thư mục (`build-queue-validation.ts`, các crawl trong `diagnostics.ts`, box crawl trong `dialogs.ts`, `docs/prompts/`); kích thước 26/11; comment `canRun` theo `mayRunQueue` hiện tại (Pirate gửi capture / cờ captcha, trang đang rời đi); mục Crawl trong "Getting a report out"; "Still unverified" thêm `wineSpendings`; "Measured facts first": token (action đổi, view không; tool ghi token mới vào model) và số rượu gộp / đã trừ còn tranh cãi.
+
+#### 6. Chưa làm, vì sao
+
+- **Phần review `src` còn lại** (§2.AN phần 10: đọc kỹ ~12k dòng Empire Overview và các file chỉ quét theo lớp) — đủ lớn để cần agent; phải hỏi người dùng trước.
+- Mọi việc cần game hoặc người dùng giữ nguyên (§5).
+
 ---
+
+### 2.AR Review toàn tool bằng 4 agent, sửa mọi phát hiện trừ `parseFinances` (26–27/11/2026)
+
+**Đã commit 28/11** (code + test `3a7d2ae`, tài liệu ở commit ngay sau; chưa push). Lúc viết, chưa commit (cùng các file của §2.AQ): 32 file trong `src` và `tools` (`git diff --shortstat -- src tools`: +1687/−458; **sau phần 10: 35 file, +1788/−477, 1192 test**), file test mới `src/empire-overview/models/city.test.ts` (người dùng đồng ý), và hai tài liệu này. Bản tiếng Anh: handover §42. 1133 → 1187 test, 40 → 41 file. Mọi `file:line` tính theo working tree chưa commit 27/11.
+
+**Cách kiểm:** `npx vitest run` 41 file, 1187 pass; `tsc` cả hai cấu hình exit 0; `prettier --check` mọi file code đã sửa trừ `http.test.ts` (lệch sẵn từ HEAD — test mới nối vào bản HEAD, +162/−0); `grep -rn "§" src tools` = 0. ~~**Mỗi bản sửa hành vi trong `src` đã thấy đỏ**~~ **Sửa 27/11 (phần 10): chưa phải mọi bản** — hai nhánh vẫn xanh khi làm hỏng, tới khi thêm test ở phần 10. Mỗi bản sửa: làm hỏng có chủ ý, chạy test với `-t` (chạy một phần), trả file, `md5sum -c` OK. Thay đổi trong `tools/collect-dom-report.js` không có test riêng (file test của nó vẫn pass nhưng không chạm tới phần toạ độ và `actionRequestRotated`); sửa comment và gỡ code chết chỉ dựa vào cả suite và hai `tsc`. Chưa thử trên game, `dist/` chưa build lại.
+
+#### 1. Review
+
+Người dùng đồng ý chạy 4 agent chỉ đọc: Send Resources + core; đường response của Empire Overview (`game-api.ts`, `main.ts`, `database.ts`); `render.ts`; models. Khoảng 965k token. Mỗi phát hiện mình kiểm lại tại dòng trước khi báo. Agent sai 2 chỗ (`iSci` có tồn tại; bộ lọc quân đang tới nằm ở `global-data.ts`). Một agent in 160 ký tự của `sample/1/response.txt` (có token thật) vào transcript trong `/tmp` — **người dùng chọn để nguyên**.
+
+Người dùng: **"fix hết đi"**; rồi chọn: Import **chặn theo kho lúc Import**; town rời đế chế **để nguyên**; được tạo `models/city.test.ts`; token trong `/tmp` để nguyên. 27/11 thêm: hai tab board cùng mở thì tab lưu sau thắng — **giữ nguyên**; khoá đánh dấu Import dùng chung mọi account — **giữ chung**.
+
+#### 2. 🔴 Dữ liệu town do tool fetch ghi vào town đang hiện
+
+Khi trang không ở city view (đảo, bản đồ), response tool fetch cho town khác (▲, Pirate đổi town, Crawl Research) bị đọc như của town đang hiện: `islandId` thành city id của town kia, toạ độ NaN, priest / scientist của Town Hall ghi nhầm town rồi lưu vào storage. Response fetch là city view của chính town đó (`backgroundView=city`). Giờ `ikariam._fetchedResponse` bật trong lúc xử lý response đó (`game-api.ts:526`): `viewIsCity` true, `viewIsIsland` / `viewIsWorld` false, `CurrentCityId` là town được fetch; tắt trước khi trả. Test trong `startup.test.ts`, kiểm cả view và town sau response.
+
+#### 3. Token (`core/ikariam/http.ts`)
+
+- Chỉ nhận token khác token đã gửi (`absorbToken`, `:256`) — response đến muộn không đưa token cũ trở lại.
+- `adoptToken` (`:219`) ghi cả ô ẩn `#js_ChangeCityActionRequest` của form đổi town (form này gửi ô của chính nó — §2.AQ chưa tính tới).
+- ~~Các request lần lượt chờ tới lượt theo khoảng cách, khoảng cách giữ chung cho cả hai bundle~~ **Sửa 27/11 (phần 10): mốc chỉ ghi sau khi chờ, nên hai script cùng chờ từ một mốc vẫn gửi cùng lúc; giờ đặt chỗ trước khi chờ** — khoảng cách giữa hai bundle (`waitForRequestSlot`, `:283`; mốc `pageWindow.ikaToolLastRequestAt`, `:88`); token đọc **sau** khi chờ.
+- `postIkariamForm`: response dạng mảng vẫn lấy token và ghi trace trước khi báo lỗi.
+- Test: `describe("the session token between requests")` (`http.test.ts:779`), 6 regression + 1 đối chứng.
+
+#### 4. Empire Overview (⚠️)
+
+- **Import bị board ghi đè.** Sau một lần Import có khoá board, board **ngừng lưu tới khi reload** (`database.ts:222`): tab hiện tại qua `BOARD_DATA_IMPORTED_EVENT`, tab khác qua sự kiện `storage` của khoá `ikaBoardDataImportedAt` (`core/storage.ts:104`) mà Import ghi (`ui/data-transfer-ui.ts:185`); khoá thuộc nhóm `runtime` nên không export mặc định. **Thiết kế đầu của mình nghe chính các khoá của board** → một lần lưu bình thường ở tab này làm mọi board khác ngừng lưu hẳn; advisor phát hiện, có test chứng minh (đỏ) rồi mới đổi. **Giữ như cũ (người dùng 27/11):** hai board cùng mở thì tab lưu sau thắng.
+- `Load`: kiểm `globalData` là object trước khi đọc (thiếu thì `Init` ném lỗi, board không chạy); thêm đủ town rồi mới `init` (`:172`).
+- ▲ khoá suốt lúc nâng cấp đang gửi, kể cả khi ô vẽ lại (`render.ts:130`).
+- Upgrade dài hơn 2^31−1 ms (24,8 ngày) không còn xong ngay (`events.ts:35`, hẹn lại từng đoạn); response trong 5 s cuối không kéo level về (`building.ts:137`).
+- Tooltip không còn hiện số của lần trước; tooltip tổng research không ném lỗi (`maxSci` khi không có town) — **chính là lỗi trong bug report thật ngày 11/11 và trước đó**.
+- Xây lại toàn bộ tab Build giữ tên town và AP.
+- Models: town 0 AP giữ 0; ~~tra cả `wineUse2`~~ **sửa 27/11 (phần 10): đã tra trên mọi server — ở s303 số 179 (đã trừ press cấp 1) bị trừ thêm lần nữa; giờ chỉ s202 dùng bảng của s202**; `plundergold`, `tavernlevel`, priest khi chưa biết dân số tối đa; sức chứa kho theo warehouse xong theo timer hoặc bonus đổi (`models/city.ts:766`); quân đang tới được đếm; movement reload vẫn đọc được quân; `Resource.update` so độ chênh.
+- "Hôm nay / ngày mai" tính từ nửa đêm giờ địa phương (`utils.ts:218`).
+- `formSubmit` bỏ qua response fetch (`game-api.ts:649`).
+- Khởi động khi `ikariam.model` chưa có: `resource-production.ts:88`, `main.ts:149` hết ném lỗi; `MODEL_AVAILABLE` vẫn phát khi danh sách town tới sau model (`main.ts:164`).
+- Finances phát đúng `GLOBAL_UPDATED` (`game-api.ts:1121`); `CITY_UPDATED` kích hoạt lưu; `parseCulturalPossessions` bỏ qua town lạ (`:759`).
+
+#### 5. Send Resources
+
+- **Save, popup chọn nguồn và Import của Auto Wine không nạp kế hoạch mới khi có task đang chạy dở ở bất kỳ tab nào** (`isQueueSending`, `app.ts:449`: `runner.isBusy || isRunnerBusyInAnyTab()`). Save vẫn lưu settings, toast nói lý do. Timer bật mà đang rảnh thì vẫn nạp như cũ (một test cũ dựa vào điều này).
+- **Import cắt mỗi chuyến theo phần kho còn trống** (sức chứa − tồn kho trong town cache, `features/auto-wine.ts:650`), rồi làm tròn xuống theo tàu; phần cắt ở lại town nguồn; kho đầy thì bỏ town; chưa biết sức chứa thì không cắt; toast nêu từng chỗ cắt.
+
+#### 6. 💡
+
+Sửa comment: `ui/panel.ts` (cửa sổ luôn mở; doc block chuyển về `buildLauncher`), `features/auto-wine.ts` (hai đường dự phòng), `core/ikariam/http.ts` (probe cũ không thể thấy token đổi), `main.ts`, `tools/collect-dom-report.js` — `actionRequestRotated` giờ so với token trong response (`:772`), kết luận đổi town bỏ toạ độ khỏi tên (`:827`). Sửa thêm: `removeClass` có dấu phẩy, guard deployment (`ikariam.CurrentCityId`), Shift+1…5 báo board, research từ 1.000/giờ, tên town trong tooltip của dòng. Gỡ code chết (mỗi mục grep 0 chỗ gọi): `render.ts` (`#helpMuseum`, `#helpShop`, `#empire_Allianz`, tooltip và click wonder, `wonder_size`, `setFinanceData` và bộ đếm, `className` / `costCell`, `.html` vô tác dụng trên `<tr>`), `game-api.ts` (`case "plunder"` thứ hai, `parseMilitaryTransport`, hai factory object transport, `currentShips`, nhánh dự phòng của `getLocalizationStrings`), `database.Prefix`, models (`processUnitBuildList`, `clearUnitBuildList`, `getUnitTransportsByUnit`, `subtractUpgradeResourcesFromCity`, `getPremiumTimeRemaining`). Cố ý giữ: `getUnitBuildsByUnit` (`render.ts` còn đọc), `removeUnit` (đã sửa, có test).
+
+**Đính chính:** §2.AP phần 5 ghi "board chịu được cả số gộp lẫn số đã trừ" — sai; đã gạch và ghi chú tại chỗ.
+
+#### 7. Chưa làm, vì sao
+
+- **`parseFinances` vẫn gán dòng bảng cho town theo thứ tự khoá.** File Crawl Research có view Finances không còn trong `sample/`; chưa biết cấu trúc ô. Cần chạy lại **Crawl Research**, hoặc Crawl Page ở màn hình Finances.
+- Không sửa theo thoả thuận: `wineSpendings` bị trừ press hai lần (cần đo), town rời đế chế, model `Population` vẫn serialize vào mỗi lần lưu.
+- ~~`README.md` và `project-summary.md` chưa cập nhật cho §2.AR.~~ Đã làm 28/11 (phần 10).
+
+#### 8. Lỗi của chính mình
+
+Thiết kế nghe sự kiện `storage` ở trên. Sai số trong test (code đúng): test tavern dùng 7 (khớp mức 2 ±1); 2.345 chỗ trống là 4 tàu chứ không phải 2. Một lần làm hỏng không đổi gì (sức chứa `undefined` → NaN, không cắt) nên test vẫn xanh — đã làm lại cho đúng. Test `Load` đầu tiên thiếu settings nên sẽ xanh cả khi không sửa. Gỡ `.html` vô tác dụng trước khi kiểm `$node` (kiểm sau: luôn là `<tr>` không có table bên trong).
+
+#### 9. Chưa đo
+
+Mọi thứ trên game: hành vi token, cửa sổ 5 s, chuyến chở vượt sức chứa kho, hai tab thật, `setTimeout` tràn trên trình duyệt. Thay đổi của `collect-dom-report.js`: test của nó pass nhưng không chạm tới, chưa chạy trong trình duyệt. Khi DOM ready mà chưa có `ikariam.model`, wrapper của production span không được cài và không thử lại (trước đây thì ném lỗi).
+
+
+#### 10. 27/11: review thay đổi theo workflow, và sửa hết
+
+Người dùng: "đọc kĩ lại rules / sau đó review source change theo docs/prompts/review-source-workflow.md, run lần lượt, cho phép tạo agent mới cho p10", rồi **"Fix hết đi"**.
+
+**Review:** Phase 0 so với `b3c960f` (= `origin/refactor`, 0/0); P1–P9 làm tại chỗ, P10 một agent mới chỉ đọc; REFUTE là một lượt riêng. Candidate: P1 3 · P2 1 · P3 0 · P4 2 (bỏ 1) · P5 1 · P6 0 · P7 0 · P8 0 · P9 3 (hệ quả) · P10 10 (bỏ 1).
+
+**Đã sửa:**
+- **`wineUse2` tra trên mọi server** — lỗi của mình ở phần 4 (agent review đã ghi "chỉ s202"). Đo 25/11 ở s303: 179 (đã trừ press cấp 1) có trong `wineUse2`, không có trong `wineUse` → board trừ press lần nữa (177,21). Giờ mỗi server dùng bảng của mình như `tavernlevel` (`models/city.ts`, `updateCityDataFromAjax`). Test cũ khẳng định hành vi sai trên s303; giờ chạy như s202 (`ikariam._Server`, trả về trong `finally`), thêm test s303 giữ 179.
+- **Khoảng cách giữa hai script** — đặt chỗ trước khi chờ (`core/ikariam/http.ts`, `waitForRequestSlot`); chuỗi `requestTurn` thành thừa (bỏ đi vẫn xanh) nên đã gỡ. Test với hai bản module (`vi.resetModules()` giữa hai lần import): hai lần gửi cách nhau ≥ 300 ms. Hai script có thấy cùng một `window` của trang không — **chưa đo** trên trình duyệt.
+- **Ba test còn thiếu:** phân loại khoá đánh dấu (`data-transfer.test.ts`); `plundergold` cho thủ đô và cho thuộc địa của đế chế nhiều town; Save của Auto Wine khi task của chính tab này kéo dài quá mốc bận (`vi.doMock` `handleSendResource` trong đúng một test).
+- **Chất lượng code (P10):** doc của `queueWineRun` về đúng chỗ; `database.Init` bỏ `host`; `init` của `main.ts` bỏ tham số đầu không đọc, cùng đối số tương ứng trong `bind`; gỡ `getWonder` và `toast_movementAdded`; `var` mới đổi thành `const`/`let`; comment chỗ lưu liệt kê đủ nguồn `CITY_UPDATED`; `stopSavingAfterOutsideWrites` đổi tên thành `stopSavingAfterImport`.
+
+**Bỏ sau REFUTE:** khoá đánh dấu bị ghi khi từ chối chuyển account (quyết định 27/11 của người dùng đã bao); đoạn chữ toast ghép trong `auto-wine.ts` (giống code xung quanh); tên test nhắc "bug reports of 11/11" (nó nêu chính lỗi).
+
+**Người dùng chọn để nguyên (28/11, "Leave it"):** `militaryMovements` của `GlobalData` không còn chỗ đọc nhưng được lưu cùng `globalData`, giống `Population`; save cũ vẫn đưa nó trở lại khi load.
+
+**28/11: `README.md` và `project-summary.md` cập nhật tới §2.AR.** Số đo theo cách 26/11: 29.673 dòng ngoài test (core 4.226 · send-resources 12.552 · empire-overview 12.747 · extension 148), 22.612 dòng test trong 41 file; 92 commit, 79 từ sau port, phiên bản không đổi. README: khoá đánh dấu Import và việc board ngừng lưu sau Import; dòng `City.getWonder` (gỡ 27/11); "Still unverified" thêm việc hai script có thấy cùng một `window` của trang không. Summary: hai đợt 26–27/11 và các lỗi đã sửa, `parseFinances` còn mở, Status 28/11 (1.192 test; `dist/` 25/11 chưa có gì của đợt này; hai userscript build được từ cây hiện tại, build vào thư mục tạm). Cả hai qua `prettier --check`.
+
+`parseFinances` vẫn chặn: `sample/` chưa có capture bảng Finances (chỉ có link menu).
+
+**Đã kiểm:** `npx vitest run` 41 file, 1192 pass; `npm run typecheck` exit 0; prettier trên file đã chạm: chỉ `http.test.ts` (lệch từ HEAD; output prettier chỉ khác ở dòng 293 cũ); build hai userscript vào scratchpad; `dist/` chưa có thay đổi này. Chạy lại mọi tripwire trên cây cuối (sao lưu `cp`, `cmp` sau): mỗi bản sửa và mỗi test mới đều đỏ; spec cũ bị thay (`isBoardDataKey`, `wineUse2`, `requestTurn`, no-op) đều có spec mới đã đỏ; đổi chỗ hai đối số `bind` của `main.ts` → 2/3 test retry đỏ.
+
+**Lỗi của mình trong lượt review:** `-t "2^31"` không khớp test nào (`-t` là regex); một lần làm hỏng `* 950` trúng nhánh Palace chưa có test; một filter không khớp tên test mới — chạy lại cho đúng, đều đỏ.
 
 ## 3. Phase 2 — UI
 
@@ -4056,15 +4194,17 @@ thêm, phải áp giảm giá theo bảng này.
 ✅ 29/10 tối §2.AF                  bug report máy 2: giữ chỗ nâng cấp trước khi mở công trình; bỏ khoá; định dạng `Q2` — commit `94d359e` (tài liệu `71d5379`), có trong `dist/` 30/10 10:26, chưa thử trên game
 ◐ 30/10     §2.AG                  Transport Settings: tồn kho town From (dữ liệu Empire Overview) cạnh ô nhập, trừ các dòng queue — commit `ba2fb35` (tài liệu `6deabe9`), có trong `dist/` 30/10 10:26, chưa thử trên game; town chưa có số hiện `0` (chờ người dùng)
 ◐ 02/11     §2.AH                  bug report 02/11: đổi town không tới nơi (M-Eretria; trả lời không reload); ghi log gọn: `provideFeedback`, tag `actionRequest`, 5 bản ghi `ikaTownSwitchTrace` + 10 dòng `ikaToolRequestTrace` vào Bug Report — commit `9cfdc97` (tài liệu `d643967`), có trong `dist/` 05/11; chờ một Bug Report có bản ghi để tìm nguyên nhân
-◐ 03/11     `8d0293d`               mã phiên mới của tool được ghi vào model của trang; lệnh đổi town bị từ chối "invalid action" gửi lại một lần — commit và push, **chưa có mục trong tài liệu này**
+◐ 03/11     `8d0293d`               mã phiên mới của tool được ghi vào model của trang; lệnh đổi town bị từ chối "invalid action" gửi lại một lần — commit và push; **mục riêng ở §2.AQ phần 1 (viết 26/11)**; chưa thử trên game như một lượt
 ✅ 05/11     §2.AI                  Crawl Wine ghi mọi town trừ town nguồn; `tools/wine-transport.js` chia rượu giữa các account (mốc chung = mức thấp nhất); Auto Wine Settings có nút Import — commit `8bf7308` (tài liệu `7816bdf`), có trong `dist/` 05/11 19:37, chưa thử trên game
 ✅ 05/11 tối §2.AJ                  Pirate: capture định kì, captcha (báo ngay, dừng, mở fortress, queue + keep-alive chờ tới Start Pirate), Capture Points trên panel, dialog rộng 400px — commit `7981e7d` (tài liệu `9a03cca`), có trong `dist/` 05/11 19:37, chưa thử trên game
 ✅ 10/11     §2.AK                  chỉ tài liệu: `project-summary.md` viết lại theo hiện trạng, `README.md` sửa 19 chỗ theo số đo trong code — commit `cda5ff0` (tài liệu `32300fb`)
 ◐ 11/11     §2.AL                  bug report 11/11: Start Auto Wine không chạy queue vì cờ captcha của Pirate còn giữ — bấm bắt đầu queue giờ gỡ cờ, panel có dòng "Queue held"; Pirate đổi town trước khi mở Pirate Fortress — commit `58c3da4` (tài liệu `b4e420d`), chưa thử trên game
 ◐ 21/11     §2.AM                  Auto Build Settings theo town, level dự kiến, kiểm queue, notepad không ghi khi building đang mở — commit `d9e42ac` + `44eb873`, chưa thử trên game
 ◐ 22–23/11  §2.AN                  giao diện Auto Build / Transport, Clear All, Crawl by id, review toàn `src` và sửa, bug report 23/11 — commit `1c62a7c`, `7105b25`, `349d8f3`, `4560372`, chưa thử trên game (trừ số đo người dùng gửi)
-◐ 24/11     §2.AO                  extension bỏ comment (`comments: false`) — chưa commit; có trong `dist/` 25/11
-◐ 25/11     §2.AP                  Crawl Page + Crawl Research (mọi nhánh research); V khớp game trên 1 account; L không làm, P bỏ — chưa commit; có trong `dist/` 25/11 17:01–17:02; người dùng đã chạy crawl
+◐ 24/11     §2.AO                  extension bỏ comment (`comments: false`) — commit `d66a890`, đã push; có trong `dist/` 25/11; load trong Chrome chưa xác nhận
+◐ 25/11     §2.AP                  Crawl Page + Crawl Research (mọi nhánh research); V khớp game trên 1 account; L không làm, P bỏ — commit `6ad3365`, `b3c960f`, đã push; có trong `dist/` 25/11 17:01–17:02; người dùng đã chạy crawl
+◐ 26/11     §2.AQ                  viết `8d0293d`; sửa comment token của Research; +5 test Crawl; comment `barbarian.ts`; README + summary tới §2.AP — commit `3a7d2ae` (28/11), chưa push
+◐ 26–27/11  §2.AR                  review 4 agent, sửa mọi phát hiện trừ `parseFinances` (chờ Crawl Research mới); review theo workflow và sửa (phần 10); 1192 test — commit `3a7d2ae` + tài liệu (28/11), chưa push, chưa thử trên game
 ⬜ Chờ người dùng thử:     *(25/11: bản cần cài giờ là `dist/` 25/11 17:01, có tới §2.AP; chưa có lượt thử theo danh sách này)* §2.R → §2.AB trên game (cài lại cả hai userscript từ `dist/` build 22/10 — bản 05/10 02:03 không có §2.Y trở đi); riêng E: một lần thành công (ô phải tự chuyển sang đang nâng), một lần bị từ chối, rồi Bug Report (file không còn token); danh sách thử của §2.X ở cuối mục đó
 ⬜ Lượt sau của review:    các mục 💡 trong `sample/review-source/review-src-2026-10-04.md` (22/10: ba mục đã sửa ở §2.Z; còn lại cần số đo hoặc người dùng chọn — handover §7)
 ⬜ Chờ người dùng thử:     §2.W — load lại `dist/extension` trong Chrome (tắt hai userscript trước); bản extension chưa từng chạy trên game

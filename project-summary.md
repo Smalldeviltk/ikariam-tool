@@ -1,7 +1,8 @@
 # Project summary — ikariam-tool
 
 > Written after the TypeScript refactor (20/09/2026); brought up to date on
-> 10/11/2026 against the tree at `9a03cca`. For build and development detail
+> 28/11/2026 against `3a7d2ae` (the 26–27/11 rounds, §2.AQ and §2.AR,
+> committed that day with this file in the commit after it; not pushed). For build and development detail
 > see [README.md](README.md). The round-by-round record of everything done
 > since the port — what was asked, what was measured on the live game, what
 > was changed and what is still unverified — is
@@ -32,7 +33,7 @@ listed in `.gitignore` for a local copy; it has never been tracked and is not
 on this checkout.
 
 Versions (`build/versions.json`): Send Resources **21.0.0**, Empire Overview
-**2.1.0**, extension **2.1.0**. 78 commits, 69 of them since the port.
+**2.1.0**, extension **2.1.0**. 92 commits, 79 of them since the port.
 
 ## Structure
 
@@ -45,7 +46,8 @@ src/core/               shared: dom, async, storage, format, logger, messages,
 src/send-resources/     app, state, navigation, game-state, town-cache,
                         ship-capacity, queue-note, diagnostics, messages, types,
                         features/{send-resources, auto-wine, wine-distribution,
-                                  auto-build, sync-towns, pirate, wine-warning,
+                                  auto-build, build-queue-validation,
+                                  sync-towns, pirate, wine-warning,
                                   transport-buttons, summary-account, barbarian,
                                   building-help-crawler}
                         ui/{panel, dialogs, queue-view, actions,
@@ -60,15 +62,17 @@ tools/                  collect-dom-report.js  — live-page selector audit
                         wine-transport.js      — wine split across accounts
                         input-wine-transport/, output-wine-transport/ (ignored)
 docs/                   improvement-plan.md, session-handover.md,
+                        prompts/review-source-workflow.md (the review
+                        prompt for this project),
                         wiki/ (62 captured building-help pages, the
                         levels past 50 under wiki/s303/)
 dist/                   built output (ignored)
 sample/                 reference material and captures (ignored)
 ```
 
-Sizes: 27,104 lines of TypeScript outside tests (core 4,131 · send-resources
-9,978 · empire-overview 12,803 · extension 148) and 16,740 lines of tests, in
-40 test files. Import aliases: `@core/*`, `@send/*`, `@empire/*`.
+Sizes: 29,619 lines of TypeScript outside tests (core 4,133 · send-resources
+12,471 · empire-overview 12,867 · extension 148) and 21,151 lines of tests, in
+40 test files (one of them, `tools/collect-dom-report.test.ts`, outside `src/`). Import aliases: `@core/*`, `@send/*`, `@empire/*`.
 
 ## Main changes made by the port
 
@@ -141,10 +145,10 @@ them entirely and `empire.Init()` threw. A startup smoke test now evaluates the
 entry point against a synthetic page and asserts that the menu button, the
 board and the Resource tab all appear.
 
-## What was built after the port (21/09 → 05/11/2026)
+## What was built after the port (21/09 → 28/11/2026)
 
-Each item has a numbered section in the plan (§2.A–§2.AJ) and the handover
-(§1–§34) with the measurements behind it.
+Each item has a numbered section in the plan (§2.A–§2.AR) and the handover
+(§1–§42) with the measurements behind it.
 
 - **An AJAX data layer** (`core/ikariam/http.ts`). The game answers
   `?view=townHall&cityId=…&ajax=1` with the same JSON the page uses, in
@@ -165,7 +169,8 @@ Each item has a numbered section in the plan (§2.A–§2.AJ) and the handover
   in multiples of the _calibrated_ capacity (620 / 53,000 on the test account,
   not the game's base 500 / 50,000).
 - **Auto Wine, several rounds**: net of the Wine Press (the model's figure is
-  gross — measured 40% too high), whole ships, wine drunk during transit, the
+  gross — measured 40% too high on 26/09; a fetched answer's `headerData`
+  read net on 25/11, and which one holds is still open), whole ships, wine drunk during transit, the
   driest town first, a source town picked by itself when none is ticked, towns
   that make their own wine left out, a plan preview, a one-press Start
   (scan → load → save → queue → timer on).
@@ -194,8 +199,13 @@ Each item has a numbered section in the plan (§2.A–§2.AJ) and the handover
   last ten requests). Along the way: an action of ours moves the session
   token on the server, so the token the server answers with now goes into the
   page's model, and a switch refused as "invalid action" is sent again once.
-- **A Crawl dialog** (Building / Wine / Pirate) that saves measurements to
-  files, and **`tools/wine-transport.js`**: reads every account's Crawl Wine
+- **A Crawl dialog** that saves measurements to files — Building, Wine,
+  Pirate; **By id** (an element's HTML and CSS, or what a piece of JS
+  returns); **Page** (the game screen open now, every form with all its
+  fields); **Research** (each town's Town Hall, Academy and Temple, the
+  Palace, the Research Advisor and each research track, Finances, kept raw).
+  A crawl that cannot be done saves its error instead; session tokens are
+  taken out of every file. And **`tools/wine-transport.js`**: reads every account's Crawl Wine
   file, levels wine so that every town of every account runs dry at the same
   moment (the lowest account sets the target; surplus stays at each source),
   and writes one JSON plan per account, which Auto Wine Settings **imports**
@@ -203,8 +213,28 @@ Each item has a numbered section in the plan (§2.A–§2.AJ) and the handover
 - **Pirate**: capture runs from a Pirate Fortress on a timer (the fortress's
   own request, re-sent when the mission is over plus 10 s), the capture points
   shown in the panel, a captcha detected from the game's form — on which Pirate
-  stops, notifies, opens the fortress for the word to be typed, and holds the
-  task queue and the keep-alive reload until Start Pirate is pressed again.
+  stops, notifies, opens the fortress for the word to be typed (switching town
+  first when needed), and holds the task queue and the keep-alive reload until
+  Pirate or the queue is started again; the panel shows the hold.
+- **Auto Build Settings per town** (21/11): a town dropdown, other towns read
+  over ajax; the planned level beside each building; removing a level removes
+  the later ones; levels already built leave the saved list
+  (`build-queue-validation.ts`); the notepad is not written while the runner
+  has a building open, in any tab.
+- **22–23/11**: the building list on one row, Transport Settings' table beside
+  its form, Clear All in both dialogs, the tool's popup sized to its content;
+  a review of all of `src` by this project's own prompt
+  (`docs/prompts/review-source-workflow.md`) and its fixes; nothing started on
+  a page the tool has just clicked away from (switches were lost there).
+- **24/11**: the extension bundle without comments (−36% / −10%); the
+  userscripts are not minified, so stack traces stay readable.
+- **26–27/11**: a review of the whole tool by four read-only agents, every
+  finding fixed but one (below); then a review of that change by the
+  project's prompt, and its findings fixed. An open board now stops saving
+  after an Import that wrote its keys; Auto Wine's Save and Import wait while
+  a task is under way in any tab, and Import cuts each shipment to the room
+  left in the town's storage; the two scripts book the gap between their
+  requests on the page.
 
 ## Verification
 
@@ -225,8 +255,12 @@ Four kinds of evidence, in order of strength.
   second computer (29/10, refused by the game until the notepad claim moved
   before the building is opened), one successful upgrade on 30/10. Auto Wine's
   Start on 02/11: nine towns scanned in 8.3 s, four shipments sailed. The
-  notepad sync: one run, one computer.
-- **959 unit tests in 40 files** (10/11/2026), most anchored to markup or
+  notepad sync: one run, one computer. Pirate (11/11 bug report): captures
+  sent as GET are accepted, and the tool's own capture answer carries the
+  captcha form. Crawl Page and Research (25/11, one account, six towns): the
+  board's max population, scientists' gold and satisfaction formulas match
+  the game's figures part by part.
+- **1,192 unit tests in 41 files** (28/11/2026), most anchored to markup or
   strings copied from live captures, including the startup smoke test that
   boots Empire Overview end to end. Each round's new rules were checked by
   breaking them on purpose and watching the matching tests fail (the counts
@@ -240,15 +274,18 @@ Four kinds of evidence, in order of strength.
 
 - **The Chrome extension.** Its manifest was invalid from the toolchain commit
   until 04/10 (`exclude_matches` with a wildcard inside the host, which Chrome
-  refuses — now `exclude_globs`); it has not been loaded since. Every test on
-  the game so far was the userscripts.
+  refuses — now `exclude_globs`); it has not been loaded since (it was
+  rebuilt on 25/11, without comments). Every test on the game so far was the
+  userscripts.
 - **Everything from 04/10's §2.R onward as a round**: the ten-row lists, the
-  Crawl dialog, the collapsible panel, the always-open window, Auto Wine's
-  self-picked source, the From town's stock in Transport Settings, the town
-  switch trace, the Crawl Wine fix, `wine-transport.js` on anything but crawl
-  files, Import, and all of Pirate — in particular whether the server accepts
-  the capture sent as GET (the game sends POST) and whether the tool's own
-  capture answer carries the captcha form.
+  collapsible panel, the always-open window, Auto Wine's self-picked source,
+  the From town's stock in Transport Settings, the town switch trace, the
+  Crawl Wine fix, `wine-transport.js` on anything but crawl files, Import,
+  Pirate as a whole, Auto Build Settings per town, the 22–23/11 layouts and
+  fixes, and the 26–27/11 rounds (the board's stop after an Import, the
+  booked request gap, Auto Wine's waits and its storage cut, the fetched
+  town kept apart from the one on screen). (Single pieces were seen through bug reports and crawl files — see
+  above.)
 
 ## Bugs found and fixed
 
@@ -278,7 +315,7 @@ undefined on every non-`en` world; a status-poll IIFE bound to `undefined`;
 assumed the wrong starting view and could send the same cargo twice; the
 model's `0` beating the DOM fallback for the global counters.
 
-**After the port (from the bug reports, 21/09 → 05/11):**
+**After the port (from the bug reports and reviews, 21/09 → 27/11):**
 
 - The runner never dropped a failing task: its catch called `console.error`,
   which is not a function on the game's page, and threw before counting.
@@ -295,22 +332,57 @@ model's `0` beating the DOM fallback for the global counters.
   button still carried the old one, so Auto Build clicked Upgrade ten laps in
   a row and the game refused each; the claim now comes before the building
   is opened, and the token goes into the page's model.
+- A Pirate captcha hold that Start Auto Wine did not lift, shown only in the
+  log under a button reading "Stop Timer" (11/11); any start of the queue
+  lifts it now, and the panel shows it.
+- A notepad claim that did not cancel the sync armed a moment before, which
+  then wrote the claimed entry back (21/11).
+- Town switches sent within a second of "Back to the town view" were lost
+  with the reload that click causes (4 of 4 in the 23/11 report); nothing
+  starts on such a page now.
+- The 22–23/11 review: Pirate waited for its own tab's runner only; an
+  upgrade task dropped after five throws while its town switch was still
+  pending (not sent again within 30 s); crawl files carrying the session
+  token; an Import deleting build entries on other computers; Empire
+  Overview reading counts only up to the thousands separator (1,234 → 1).
+- The 26–27/11 reviews:
+  - A town the tool fetched, read off the city view, landed on the town on
+    screen: its island id, coordinates, priests and scientists, then saved.
+  - A late answer put an old session token back; the change-city form's own
+    token field was never updated; the two scripts' requests had no gap
+    between them.
+  - An open board wrote its older copy back over an Import.
+  - ▲ came back enabled while its upgrade was in flight.
+  - Tooltips showed the previous hover's figures, and the research total's
+    threw (`maxSci` of null) — the error in the bug reports of 11/11 and
+    before.
+  - An upgrade longer than 24.8 days would have finished at once (the
+    `setTimeout` overflow is not measured in a browser).
+  - Armies on the way to a town were never counted.
+  - Auto Wine re-planned under a shipment in flight.
 - **My own, reverted the same day:** a 10 s wait after a shipment's click back
-  to the town view sent one shipment eight times.
+  to the town view sent one shipment eight times. **Another, fixed the same
+  day:** the first fix for the s202 wine table searched it on every server,
+  so on s303 a net figure of 179 had the Wine Press taken off twice. The
+  review by the project's prompt caught it.
 
 Still open: the town switch that does not land (M-Eretria four times on
 30/10; once on 02/11 the game answered a switch without a reload). It cannot
 be reproduced at will; the trace is in place and the next bug report after an
-occurrence is what the fix waits on.
+occurrence is what the fix waits on. Also open: whether `wineSpendings` is
+gross or net (above); if the model is net now, Auto Wine under-counts by the
+Wine Press's percentage. And the board's Finances figures are matched to the
+towns by the order of its stored towns, not by name; the table's layout is
+needed (a new Crawl Research, or a Crawl Page of the Finances screen).
 
-## Status (10/11/2026)
+## Status (28/11/2026)
 
 - `npm run typecheck` — green on both the base and the full-strict config
-- `npm run test` — **959 tests passing in 40 files** (9.6 s)
+- `npm run test` — **1,192 tests passing in 41 files**
 - `npm run build` — two userscripts + the extension; the user's last build is
-  `dist/` of 05/11 19:37, made after the last source change (19:36) and
-  before the commit of that same tree — grepped for the newest markers, not
-  compared byte for byte
+  `dist/` of 25/11 17:01–17:16, which has none of the 26–27/11 changes
+  (`ikaBoardDataImportedAt`: 0 in all four bundles); both userscripts build
+  from the current tree (checked in a scratch directory, not in `dist/`)
 - No `@ts-nocheck`, `@ts-ignore` or `@ts-expect-error` anywhere
 - `src/core/**` and `src/send-resources/**` pass **full strict mode**;
   `src/empire-overview/**` is held to the base config (see README, "Type
@@ -319,29 +391,29 @@ occurrence is what the fix waits on.
   was applied and are left alone: `core/ikariam/http.test.ts`,
   `features/transport-buttons.test.ts`, `town-cache.test.ts`, and the two
   Vite configs in `build/`
-- `refactor` is the working branch; `origin/refactor` = `HEAD` = `9a03cca`,
-  nothing unpushed
+- `refactor` is the working branch; `origin/refactor` = `b3c960f` (checked
+  28/11); `3a7d2ae` and the documents commit after it are not pushed
 
 ## Remaining work
 
-1. **Try the post-04/10 rounds on the game**, with the 05/11 19:37 `dist/`
-   installed in place of whatever is in the browser. Each plan section ends
-   with a "what to try" list; Pirate (§2.AJ) and the cross-account wine plan
-   (§2.AI) are the newest and least verified. Press Bug Report after any
-   failure and put the file in `sample/`.
+1. **Try the post-04/10 rounds on the game**, with `dist/` rebuilt (the
+   25/11 build lacks the 26–27/11 rounds) and installed in place of whatever
+   is in the browser. Each plan section ends
+   with a "what to try" list; §2.AN's six steps are the newest. Press Bug
+   Report after any failure and put the file in `sample/`.
 2. **Load the Chrome extension once**, with the two userscripts switched off,
    or each script runs twice.
 3. **Find the cause of the town switch that does not land.** The trace
    (`ikaTownSwitchTrace`, the last five, in every Bug Report) is what the next
    report needs to carry.
-4. **Plan items waiting on the user**: P and L (captures of the colony-demolish
-   and barbarian screens), R (an update channel — a public URL for the builds),
-   the rest of U and V (research effects beyond the construction-cost reduction).
-5. **Write up `8d0293d`** (03/11, the token-into-page fix) in the plan and the
-   handover; it is committed and pushed but has no section of its own.
-6. **README drift.** Its layout tree, the `legacy/` note and the "Still
-   unverified" list predate the later rounds (the dropdown click it lists as
-   assumed to switch town was measured on 25/09 _not_ to). The plan and the
-   handover are the current references until the README is revised.
+4. **Settle `wineSpendings`**: in one town with a Wine Press, at the same
+   moment, Crawl by id `ikariam.model.wineSpendings` and Crawl Research.
+5. **Plan items waiting on the user**: R (an update channel — a public URL
+   for the builds), the rest of U (levels past the crawled windows), and what
+   V still lacks (priests, a government malus, another account). P and L
+   were settled on 25/11: L stays the player's, P is dropped.
+6. **Match the Finances rows to towns by name**, once a capture shows the
+   table's layout (above). The review of `src` begun on 22–23/11 was
+   finished on 26–27/11.
 7. Optionally extend full strict mode over `src/empire-overview/**`; the README
    explains why this was not done wholesale.
